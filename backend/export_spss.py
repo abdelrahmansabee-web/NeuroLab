@@ -29,11 +29,14 @@ from kinematics_analyzer import analyze_reach_and_wipe
 
 GLOBAL_VARS = [
     "total_duration_s", "total_peak_velocity", "total_mean_velocity",
-    "total_path_ratio", "total_lat_range_norm", "total_trunk_palm_ratio",
+    "total_path_length", "total_lat_range_norm", "total_trunk_palm_ratio",
     "total_max_elbow_deg", "smoothness_pause_pct",
     "trunk_lat_norm", "trunk_vert_norm", "trunk_rot_norm",
     "arm_length_norm", "shoulder_width_norm", "baseline_elbow_deg",
-    "phases_detected",
+    "phases_detected", "side_analyzed", "active_hand_path", "inactive_hand_path",
+    "rest_velocity", "idle_threshold",
+    "shoulder_width_cm", "arm_length_cm", "total_path_length_cm",
+    "total_lat_range_cm", "trunk_lat_cm", "trunk_vert_cm", "trunk_rot_cm",
 ]
 
 PHASE_NAMES = ["forward", "wipe_right", "wipe_left", "return"]

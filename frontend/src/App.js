@@ -1562,8 +1562,8 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
                 </div>
 
                 {hasResult && (
-                  <button onClick={() => toggleResult(ph.k)} className="mx-3 mb-3 w-full text-[10px] text-white/40 hover:text-white/70 flex items-center justify-center gap-1 py-1" title={expandedResults[ph.k] ? "Hide" : "Show"}>
-                    {expandedResults[ph.k] ? "\u25B4" : "\u25BE"}
+                  <button onClick={() => toggleResult(ph.k)} className="mx-3 mb-3 w-full text-xs text-white/50 hover:text-white/80 flex items-center justify-center gap-2 py-2 font-medium tracking-wide" title={expandedResults[ph.k] ? "Hide chart" : "Show movement chart"}>
+                    {expandedResults[ph.k] ? "\u25B2 Hide" : "Show movement chart \u25BC"}
                   </button>
                 )}
 
@@ -2207,25 +2207,56 @@ const ReportSection = ({ fd }) => {
   const exportPDF = () => {
     const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
 
-    // Header
-    doc.setFillColor(10, 14, 40);
-    doc.rect(0, 0, 210, 40, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
+    // Helper: render velocity profile to a canvas data URL
+    const renderVelProfile = (profile, label) => {
+      if (!profile || !profile.t || profile.t.length < 2) return null;
+      const pts = profile.t.map((t, i) => ({ t, v: profile.v[i] }));
+      const w = 1800, h = 400, pad = 60;
+      const tMin = pts[0].t, tMax = pts[pts.length - 1].t;
+      const vMax = Math.max(...pts.map(p => p.v), 0.01);
+      const xp = (t) => pad + ((t - tMin) / (tMax - tMin || 1)) * (w - 2 * pad);
+      const yp = (v) => h - pad - (v / vMax) * (h - 2 * pad);
+      const path = pts.map((p, i) => `${i === 0 ? "M" : "L"}${xp(p.t).toFixed(1)},${yp(p.v).toFixed(1)}`).join(" ");
+      const peak = pts.reduce((a, b) => a.v > b.v ? a : b);
+
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+        <rect width="${w}" height="${h}" fill="white"/>
+        <text x="${pad}" y="${pad - 10}" font-family="Helvetica,Arial,sans-serif" font-size="28" font-weight="bold" fill="#333">${label}</text>
+        <line x1="${pad}" y1="${h - pad}" x2="${w - pad}" y2="${h - pad}" stroke="#ddd" stroke-width="2"/>
+        <path d="${path}" fill="none" stroke="#3b82f6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="${xp(peak.t)}" cy="${yp(peak.v)}" r="8" fill="#3b82f6" stroke="white" stroke-width="3"/>
+        <text x="${xp(peak.t)}" y="${yp(peak.v) - 20}" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="24" fill="#2563eb" font-weight="bold">${peak.v.toFixed(2)}</text>
+        <text x="${pad}" y="${h - pad + 40}" font-family="Helvetica,Arial,sans-serif" font-size="22" fill="#999">${tMin.toFixed(1)}s</text>
+        <text x="${w - pad}" y="${h - pad + 40}" text-anchor="end" font-family="Helvetica,Arial,sans-serif" font-size="22" fill="#999">${tMax.toFixed(1)}s</text>
+        <text x="${w/2}" y="${h - pad + 40}" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="22" fill="#999">Time (s)</text>
+        <text x="${pad - 40}" y="${h/2}" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="22" fill="#999" transform="rotate(-90,${pad - 40},${h/2})">Velocity (norm/s)</text>
+      </svg>`;
+      return "data:image/svg+xml;base64," + btoa(svg);
+    };
+
+    // White modern header
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, 210, 42, "F");
+    doc.setDrawColor(59, 130, 246);
+    doc.setLineWidth(2);
+    doc.line(0, 42, 210, 42);
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text("Stroke Rehabilitation Research Platform", 14, 14);
+    doc.text("Stroke Rehabilitation Research Platform", 14, 18);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("Clinical Assessment Report — v6.4", 14, 21);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Clinical Assessment Report", 14, 26);
     doc.setFontSize(8);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
-    doc.text(`Participant: ${d.name || "—"} | ID: ${d.participantId || "—"}`, 14, 34);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 34);
+    doc.text(`Participant: ${d.name || "—"} | ID: ${d.participantId || "—"}`, 14, 38);
 
     // Demographics
-    doc.setTextColor(30, 30, 60);
-    doc.setFontSize(11);
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("Demographics", 14, 50);
+    doc.text("Demographics", 14, 54);
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
 
@@ -2247,28 +2278,30 @@ const ReportSection = ({ fd }) => {
 
     demo.forEach((row, i) => {
       const col = i % 2 === 0 ? 14 : 110;
-      const yy = 56 + Math.floor(i / 2) * 6;
+      const yy = 60 + Math.floor(i / 2) * 6;
       doc.setFont("helvetica", "bold");
+      doc.setTextColor(71, 85, 105);
       doc.text(`${row[0]}:`, col, yy);
       doc.setFont("helvetica", "normal");
+      doc.setTextColor(30, 41, 59);
       doc.text(String(row[1]), col + 36, yy);
     });
 
-    const startY = 56 + Math.ceil(demo.length / 2) * 6 + 8;
+    const startY = 60 + Math.ceil(demo.length / 2) * 6 + 8;
 
     // Summary Table
-    doc.setFontSize(11);
+    doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(30, 30, 60);
-    doc.text("Clinical Summary — All Assessment Tools", 14, startY);
+    doc.setTextColor(30, 41, 59);
+    doc.text("Clinical Summary", 14, startY);
 
     autoTable(doc, {
       startY: startY + 4,
-      head: [["Tool", "Metric / Task", "Pre-Assessment", "Post-Assessment", "Δ Change"]],
+      head: [["Tool", "Metric / Task", "Pre", "Post", "Δ Change"]],
       body: rows.map((r) => [r.tool, r.metric, r.pre, r.post, r.delta]),
       styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
-      headStyles: { fillColor: [10, 14, 60], textColor: [255, 255, 255], fontStyle: "bold" },
-      alternateRowStyles: { fillColor: [245, 246, 250] },
+      headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
         0: { fontStyle: "bold", cellWidth: 28 },
         1: { cellWidth: 75 },
@@ -2286,17 +2319,14 @@ const ReportSection = ({ fd }) => {
       },
     });
 
-    // Kinematics table (if manual data uploaded)
+    // Kinematics results from AI analysis — via kinRows (manual upload to fd.kinematics)
     if (kinRows.length > 0) {
       let y = (doc.lastAutoTable?.finalY || 20) + 10;
-      if (y > 245) {
-        doc.addPage();
-        y = 18;
-      }
+      if (y > 245) { doc.addPage(); y = 18; }
 
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(30, 30, 60);
+      doc.setTextColor(30, 41, 59);
       doc.text("Kinematics AI Lab — Generated Results", 14, y);
 
       autoTable(doc, {
@@ -2304,25 +2334,21 @@ const ReportSection = ({ fd }) => {
         head: [["Variable", "Unit", "Pre", "During", "Post", "Δ"]],
         body: kinRows.map((r) => [r.name || "—", r.unit || "", r.pre || "", r.during || "", r.post || "", calcKinDelta(r.pre, r.post)]),
         styles: { fontSize: 7, cellPadding: 2 },
-        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255] },
-        alternateRowStyles: { fillColor: [245, 246, 250] },
+        headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255] },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
       });
 
-      // Kinematics charts (if uploaded)
       if (kinCharts.length > 0) {
         doc.addPage();
         doc.setFontSize(11);
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(30, 30, 60);
+        doc.setTextColor(30, 41, 59);
         doc.text("Kinematics AI Lab — Movement Charts", 18, 18);
 
         let yImg = 26;
         kinCharts.slice(0, 6).forEach((img, i) => {
           try {
-            if (yImg > 225) {
-              doc.addPage();
-              yImg = 18;
-            }
+            if (yImg > 225) { doc.addPage(); yImg = 18; }
             const format = img.includes("image/png") ? "PNG" : "JPEG";
             doc.addImage(img, format, 14, yImg, 85, 48);
             doc.text(`Chart ${i + 1}`, 104, yImg + 6);
@@ -2521,14 +2547,19 @@ const ReportSection = ({ fd }) => {
     codebook.push(["", "── GLOBAL KINEMATICS ──", "", ""]);
     const kinGlobLabels = {
       total_duration_s:"Duration (sec)", total_peak_velocity:"Peak Velocity (norm/s)",
-      total_mean_velocity:"Mean Velocity (norm/s)", total_path_ratio:"Path Ratio (ratio)",
+      total_mean_velocity:"Mean Velocity (norm/s)", total_path_length:"Total Path Length (norm)",
       total_lat_range_norm:"Lateral Range (norm)", total_trunk_palm_ratio:"Trunk/Palm Ratio (ratio)",
       total_max_elbow_deg:"Max Elbow Extension (deg)", smoothness_pause_pct:"Pause % (%)",
       trunk_lat_norm:"Trunk Lateral (norm)", trunk_vert_norm:"Trunk Vertical (norm)",
       trunk_rot_norm:"Trunk Rotation (norm)", arm_length_norm:"Arm Length (norm)",
       shoulder_width_norm:"Shoulder Width (norm)", ref_scale:"Reference Scale (norm)",
       phases_detected:"Phases Detected (count)", rest_velocity:"Rest Velocity (norm/s)",
-      baseline_elbow_deg:"Baseline Elbow Angle (deg)",
+      baseline_elbow_deg:"Baseline Elbow Angle (deg)", side_analyzed:"Side Analyzed",
+      active_hand_path:"Active Hand Path (norm)", inactive_hand_path:"Inactive Hand Path (norm)",
+      shoulder_width_cm:"Shoulder Width (cm)", arm_length_cm:"Arm Length (cm)",
+      total_path_length_cm:"Total Path Length (cm)", total_lat_range_cm:"Lateral Range (cm)",
+      trunk_lat_cm:"Trunk Lateral (cm)", trunk_vert_cm:"Trunk Vertical (cm)",
+      trunk_rot_cm:"Trunk Rotation (cm)",
     };
     ["pre","during","post","baseline"].forEach((tp) => {
       Object.entries(kinGlobLabels).forEach(([k, lbl]) => {
@@ -2764,7 +2795,7 @@ const ReportSection = ({ fd }) => {
       <Glass className="p-5">
         <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Professional Export Options</p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* PDF */}
           <motion.button
             whileHover={{ scale: 1.01 }}
@@ -2786,27 +2817,6 @@ const ReportSection = ({ fd }) => {
             </p>
           </motion.button>
 
-          {/* Excel */}
-          <motion.button
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={exportExcel}
-            className="flex flex-col gap-3 p-5 rounded-xl bg-emerald-500/10 border border-emerald-400/25 hover:bg-emerald-500/15 hover:border-emerald-400/40 transition-all text-left"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center flex-shrink-0">
-                <FileSpreadsheet className="w-5 h-5 text-emerald-300" />
-              </div>
-              <div>
-                <p className="font-extrabold text-emerald-200 text-sm">Export Excel</p>
-                <p className="text-[10px] text-emerald-300/60">Research Data Spreadsheet</p>
-              </div>
-            </div>
-            <p className="text-xs text-white/45 leading-relaxed">
-              Multi-sheet .xlsx with Demographics, VAS, VAMS-4, KVIQ, Clinical Summary, and Kinematics.
-            </p>
-          </motion.button>
-
           {/* SPSS */}
           <motion.button
             whileHover={{ scale: 1.01 }}
@@ -2824,7 +2834,7 @@ const ReportSection = ({ fd }) => {
               </div>
             </div>
             <p className="text-xs text-white/45 leading-relaxed">
-              Excel file with flat data row + codebook sheet (variable labels, types, value ranges) ready to import into SPSS.
+              Excel file with flat data row + codebook sheet ready to import into SPSS.
             </p>
           </motion.button>
         </div>
