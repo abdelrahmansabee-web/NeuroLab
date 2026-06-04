@@ -427,6 +427,7 @@ def analyze_reach_and_wipe(
     cutoff_frequency: float = FILTER_CUTOFF_HZ,
     filter_order:     int   = FILTER_ORDER,
     affected_side:    str   = "right",
+    metric_scale:     float = 0.0,      # shoulder width in meters (0 = use normalized)
 ) -> dict:
     """
     Full-recording kinematic analysis for reach-and-wipe task.
@@ -600,7 +601,7 @@ def analyze_reach_and_wipe(
             vp_t = [round(float(t), 3) for t in g_time]
             vp_v = [round(float(v), 4) for v in gv]
 
-        return {
+        result = {
             # QC / metadata
             "side_analyzed":        side,
             "active_hand_path":     round(right_path if side == "right" else left_path, 4),
@@ -639,6 +640,24 @@ def analyze_reach_and_wipe(
             # Calibration
             "baseline_elbow_deg": round(baseline_elbow, 2),
         }
+
+        # ── Metric (cm) values when metric_scale is available ──
+        if metric_scale > 0:
+            m2cm = metric_scale * 100.0  # meters → cm (times shoulder_width factor)
+            # ref_scale is in pixels; shoulder_width is also in pixels.
+            # normalized value = value_px / shoulder_width_px
+            # metric value = value_px * (shoulder_width_m / shoulder_width_px) = norm * shoulder_width_m
+            # In cm: metric_cm = norm * shoulder_width_m * 100
+            result["shoulder_width_cm"]    = round(metric_scale * 100, 1)
+            result["arm_length_cm"]        = round(arm_len * m2cm, 1)
+            result["total_path_length_cm"] = round(g_pathlen * m2cm, 1)
+            result["total_lat_range_cm"]   = round(g_lat * m2cm, 2)
+            result["trunk_lat_cm"]         = round(g_trunk_lat * m2cm, 2)
+            result["trunk_vert_cm"]        = round(g_trunk_vert * m2cm, 2)
+            result["trunk_rot_cm"]         = round(g_trunk_rot * m2cm, 2)
+            result["metric_scale_m"]       = round(metric_scale, 4)
+
+        return result
 
     except KeyError as ke:
         return {"error": f"Missing CSV column: {ke}"}

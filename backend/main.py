@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 # Local imports
 from pose_extractor import extract_pose_from_video
 from kinematics_analyzer import analyze_reach_and_wipe
+from depth_estimator import estimate_shoulder_width_m
 # from viz_3d import create_3d_animation  # replaced by frontend interactive viewer
 
 # ─── Paths ──────────────────────────────────────────────────────────────
@@ -120,13 +121,25 @@ async def analyze_video(
 
         print(f"✅ Pose extraction done — {frames_detected}/{total_frames} frames\n")
 
-        # ── 4. Kinematic analysis ──────────────────────────────────
+        # ── 4. Metric depth estimation ─────────────────────────────
+        print("📏 Estimating metric scale via ZoeDepth...")
+        try:
+            metric_scale = estimate_shoulder_width_m(str(video_path))
+        except Exception:
+            metric_scale = 0.0
+        if metric_scale > 0:
+            print(f"   shoulder_width = {metric_scale:.3f} m ({metric_scale*100:.1f} cm)")
+        else:
+            print("   WARNING: metric scale unavailable, using normalized values")
+
+        # ── 5. Kinematic analysis ──────────────────────────────────
         print(f"🔬 Running kinematic analysis (affected_side={affected_side})...")
         analysis = analyze_reach_and_wipe(
             file_path=csv_path,
             cutoff_frequency=cutoff,
             filter_order=order,
             affected_side=affected_side,
+            metric_scale=metric_scale,
         )
 
         if isinstance(analysis, dict) and analysis.get("error"):
