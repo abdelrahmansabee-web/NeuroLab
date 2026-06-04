@@ -8,8 +8,9 @@ venv/
 node_modules/
 build/
 
-# Outputs
+# Outputs / Uploads
 backend/outputs/
+backend/uploads/
 backend/__pycache__/
 
 # OS
