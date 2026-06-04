@@ -66,17 +66,14 @@ def extract_pose_from_video(video_path, output_dir, base_name, model_dir):
         if not model_path.exists():
             return {"success": False, "error": f"Model not found at {model_path}"}
 
-        # MediaPipe C++ backend cannot open paths with Unicode characters on some systems
-        model_asset_path = str(model_path)
-        try:
-            model_asset_path.encode('ascii')
-        except UnicodeEncodeError:
-            import shutil, tempfile
-            alt = Path(tempfile.gettempdir()) / 'opencode_model' / 'pose_landmarker_heavy.task'
-            alt.parent.mkdir(parents=True, exist_ok=True)
-            if not alt.exists():
-                shutil.copy2(str(model_path), str(alt))
-            model_asset_path = str(alt)
+        # MediaPipe C++ on Windows has a known bug resolving absolute file paths.
+        # Load the model into memory and pass it as a buffer to bypass path handling.
+        src = Path(model_dir) / 'pose_landmarker_heavy.task'
+        if not src.exists():
+            return {"success": False, "error": f"Model not found at {src}"}
+        with open(str(src), 'rb') as f:
+            model_buffer = f.read()
+        base_options = mp.tasks.BaseOptions(model_asset_buffer=model_buffer)
 
         csv_path = output_dir / f"{base_name}.csv"
         trc_path = output_dir / f"{base_name}.trc"
@@ -88,7 +85,7 @@ def extract_pose_from_video(video_path, output_dir, base_name, model_dir):
         VisionRunningMode = mp.tasks.vision.RunningMode
 
         options = PoseLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=model_asset_path),
+            base_options=base_options,
             running_mode=VisionRunningMode.IMAGE
         )
 

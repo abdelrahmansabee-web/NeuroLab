@@ -309,6 +309,7 @@ const calculateClinicalDelta = (pre, post, metricName) => {
     n.includes("duration")       ||   // faster = better
     n.includes("pause")          ||   // less pause = smoother
     n.includes("bve")            ||   // lower BVE = smoother
+    n.includes("path")           ||   // shorter path = more direct
     n.includes("path ratio")     ||   // closer to 1.0 = straighter
     n.includes("trunk lat")      ||   // less trunk compensation
     n.includes("trunk vert")     ||
@@ -1436,7 +1437,7 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
 
     // 🥈 Secondary — Performance
 
-    { group: "Secondary", name: "Lateral Wiping Range (norm)",   key: "total_lat_range_norm",   unit: "ratio", tip: "Width of wiping motion, normalized to arm length. Higher = fuller reach" },
+    { group: "Secondary", name: "Lateral Wiping Range (norm)",   key: "total_lat_range_norm",   unit: "ratio", tip: "Width of wiping motion, normalized to shoulder width. Higher = fuller reach" },
     { group: "Secondary", name: "Peak Velocity",                 key: "total_peak_velocity",    unit: "norm/s", tip: "Maximum hand speed. Higher = more explosive movement" },
     { group: "Secondary", name: "Total Path Length",             key: "total_path_length",      unit: "norm",   tip: "Total distance traveled by the hand (body-proportional units). Most robust overall activity metric" },
     { group: "Secondary", name: "Mean Velocity",                 key: "total_mean_velocity",    unit: "norm/s", tip: "Average hand speed across whole movement" },
@@ -1524,7 +1525,7 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
 
                   {hasResult && (
                     <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-400/20 border border-emerald-400/30 text-emerald-300">
-                      ✓ Done
+                      \u2713
                     </span>
                   )}
                 </div>
@@ -1539,34 +1540,30 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
                 </div>
 
                 <div className="mx-3 mb-3 flex flex-wrap gap-1.5">
-                  <GBtn variant={ph.c} onClick={() => analyzeVideo(ph.k)} disabled={status === "analyzing" || !data[vidKey(ph.k)]} className="flex-1 text-xs py-2 min-w-[80px]">
-                    {status === "analyzing" ? "..." : "Analyze"}
+                  <GBtn variant={ph.c} onClick={() => analyzeVideo(ph.k)} disabled={status === "analyzing" || !data[vidKey(ph.k)]} className="flex-1 text-xs py-2 min-w-[80px]" title="Analyze">
+                    {status === "analyzing" ? <span className="animate-pulse">...</span> : <Play className="w-4 h-4 mx-auto" />}
                   </GBtn>
                   {hasResult && (
                     <div className="flex gap-1">
-                      <GBtn variant="default" onClick={() => downloadFile(ph.k, "csv")} className="text-[10px] py-2 px-2.5 flex flex-col items-center gap-0.5 leading-tight" title="CSV data">
+                      <GBtn variant="default" onClick={() => downloadFile(ph.k, "csv")} className="text-[10px] py-2 px-2.5 flex items-center justify-center" title="CSV data">
                         <FileSpreadsheet className="w-3.5 h-3.5" />
-                        <span>CSV</span>
                       </GBtn>
-                      <GBtn variant="default" onClick={() => downloadFile(ph.k, "trc")} className="text-[10px] py-2 px-2.5 flex flex-col items-center gap-0.5 leading-tight" title="OpenSim TRC">
+                      <GBtn variant="default" onClick={() => downloadFile(ph.k, "trc")} className="text-[10px] py-2 px-2.5 flex items-center justify-center" title="OpenSim TRC">
                         <Database className="w-3.5 h-3.5" />
-                        <span>TRC</span>
                       </GBtn>
-                      <GBtn variant="default" onClick={() => downloadFile(ph.k, "video")} className="text-[10px] py-2 px-2.5 flex flex-col items-center gap-0.5 leading-tight" title="2D Skeleton Video">
+                      <GBtn variant="default" onClick={() => downloadFile(ph.k, "video")} className="text-[10px] py-2 px-2.5 flex items-center justify-center" title="2D Skeleton Video">
                         <Play className="w-3.5 h-3.5" />
-                        <span>2D</span>
                       </GBtn>
-                      <GBtn variant="danger" onClick={() => clearPhase(ph.k)} className="text-[10px] py-2 px-2.5 flex flex-col items-center gap-0.5 leading-tight" title="Remove">
+                      <GBtn variant="danger" onClick={() => clearPhase(ph.k)} className="text-[10px] py-2 px-2.5 flex items-center justify-center" title="Remove">
                         <X className="w-3.5 h-3.5" />
-                        <span>Clear</span>
                       </GBtn>
                     </div>
                   )}
                 </div>
 
                 {hasResult && (
-                  <button onClick={() => toggleResult(ph.k)} className="mx-3 mb-3 w-full text-[10px] text-white/40 hover:text-white/70 flex items-center justify-center gap-1 py-1">
-                    {expandedResults[ph.k] ? "Hide Results ▲" : "Show Results ▼"}
+                  <button onClick={() => toggleResult(ph.k)} className="mx-3 mb-3 w-full text-[10px] text-white/40 hover:text-white/70 flex items-center justify-center gap-1 py-1" title={expandedResults[ph.k] ? "Hide" : "Show"}>
+                    {expandedResults[ph.k] ? "\u25B4" : "\u25BE"}
                   </button>
                 )}
 
