@@ -1,0 +1,63 @@
+PDF FILE SIZE: 729,954 bytes | 11 pages | extract: 32280 chars
+FILLED (manuscript f forms_completed): 105,472 bytes | extract: 7807 chars
+TEMPLATE (09.03.2026): 127,488 bytes | extract: 2985 chars
+NeuroLab verify_irb_filled.txt: 7632 chars (may differ copy)
+
+PDF SECTION OUTLINE (numbered headings detected):
+   1. PROJENİN ADI:
+   2. BAŞVURU BİLGİLERİ
+   3. PROJE DANIŞMANI ÖĞRETİM ÜYESİ
+   4. SORUMLU ARAŞTIRMACI
+   5. YARDIMCI ARAŞTIRMACILAR
+   6. ARAŞTIRMANIN GEREKÇESİ, AMACI:VE KAYNAKLARI (Ayrıntılı olarak yazılmalıdır.)
+   7. Holmes PS, Collins DJ. The PETTLEP Approach to Motor Imagery: A Functional Equivalence
+   8. Uhlrich SD, Falisse A, Kidziński Ł, Muccini J, Ko M, Chaudhari AS, et al. OpenCap: 3D human
+   9. Mathiowetz V, Volland G, Kashman N, Weber K. Adult norms for the Box and Block Test of
+  10. Caires TA, Fernandes LFRM, Patrizzi LJ, de Almeida Oliveira R, de Souza LAPS. Immediate
+  11. Bijur PE, Silver W, Gallagher EJ. Reliability of the visual analog scale for measurement of acute
+  12. Williams SE, Cumming J, Ntoumanis N, Nordin-Bates SM, Ramsey R, Hall C. Further validation
+  13. Uğur Y, Coşkun H, Şenyurt AY. The Movement Imagery Questionnaire-3: Reliability and Validity
+
+CONTENT SIGNAL CHECKS:
+  [Y] Filled has phone placeholder [CEP TELEFONU
+  [N] Filled has signature blocks empty
+  [Y] PDF has full rationale section (OpenCap)
+  [N] Filled has OpenCap in rationale
+  [Y] PDF has BBT (Kutu ve Blok)
+  [Y] Filled uses WMFT-4 not BBT
+  [Y] Filled has multi-center Biruni revision
+  [Y] PDF project title Turkish long
+  [N] Filled title English
+  [Y] Filled date 15/06/2026
+  [Y] PDF has references section numbered 1-9+
+  [Y] Filled has abbreviated references/literature line
+  [Y] Template is mostly empty shell
+
+Numbered PDF section titles weak/absent in filled extract:
+  - PROJENİN ADI:
+  - BAŞVURU BİLGİLERİ
+  - PROJE DANIŞMANI ÖĞRETİM ÜYESİ
+  - ARAŞTIRMANIN GEREKÇESİ, AMACI:VE KAYNAKLARI (Ayrıntılı olarak yazılmalıdır.)
+  - Holmes PS, Collins DJ. The PETTLEP Approach to Motor Imagery: A Functional Equivalence
+  - Uhlrich SD, Falisse A, Kidziński Ł, Muccini J, Ko M, Chaudhari AS, et al. OpenCap: 3D human
+  - Mathiowetz V, Volland G, Kashman N, Weber K. Adult norms for the Box and Block Test of
+  - Caires TA, Fernandes LFRM, Patrizzi LJ, de Almeida Oliveira R, de Souza LAPS. Immediate
+  - Bijur PE, Silver W, Gallagher EJ. Reliability of the visual analog scale for measurement of acute
+  - Williams SE, Cumming J, Ntoumanis N, Nordin-Bates SM, Ramsey R, Hall C. Further validation
+  - Uğur Y, Coşkun H, Şenyurt AY. The Movement Imagery Questionnaire-3: Reliability and Validity
+
+LIKELY GAPS (filled vs PDF reference):
+  * Full numbered KAYNAKLAR bibliography from PDF (WSO, Facciorusso, Schwarz, etc.) — filled has short literature line only
+  * Formal Hipotezler block (H0/H1 null/alternate) as in PDF — filled may use different outcomes section
+  * Supervisor mobile phone filled in PDF (0535 572 00 21) but filled form still has [CEP TELEFONU – doldurunuz] for advisor and PI
+  * PI phone in PDF (+90 537 960 05 20) missing in filled placeholders
+  * PDF lists co-investigator Prof. Dr. Yakup Krespi — filled lists Doç. Dr. Çiğdem Çınar instead (revision team change)
+  * Anahtar Kelimeler line from PDF section 6
+  * Explicit Araştırma Sorusu paragraph from PDF
+  * Section 7 (Holmes PS, Collins DJ. The PETTLEP Approach to Mot): PDF body not matched in filled
+  * Section 8 (Uhlrich SD, Falisse A, Kidziński Ł, Muccini J, Ko ): PDF body not matched in filled
+  * Section 9 (Mathiowetz V, Volland G, Kashman N, Weber K. Adult): PDF body not matched in filled
+  * Section 10 (Caires TA, Fernandes LFRM, Patrizzi LJ, de Almeida): PDF body not matched in filled
+  * Section 11 (Bijur PE, Silver W, Gallagher EJ. Reliability of t): PDF body not matched in filled
+  * Section 12 (Williams SE, Cumming J, Ntoumanis N, Nordin-Bates ): PDF body not matched in filled
+  * Section 13 (Uğur Y, Coşkun H, Şenyurt AY. The Movement Imagery): PDF body not matched in filled

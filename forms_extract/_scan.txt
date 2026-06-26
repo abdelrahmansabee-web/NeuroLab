@@ -1,0 +1,109 @@
+0|Immediate Effects of a Single Session of PETTLEP-Based Action Observation and Motor Imagery (AOMI) on Upper Limb Kinematics in Stroke Surviv
+7|Background:
+Stroke ranks as the second leading cause of death and a principal cause of adult disability worldwide, with persistent upper lim
+8|Objective:
+This study aimed to investigate whether a single session of PETTLEP-based AOMI produces immediate improvements in movement smooth
+9|Methods:
+A single-blind, pretest–posttest, prospective randomized controlled trial (RCT) was designed for conduct at the Neurorehabilitation
+10|Expected Results:
+It was hypothesized that the PETTLEP-based AOMI group would demonstrate significantly greater reductions in movement inter
+11|Conclusion:
+This study was designed to provide novel, objectively measured kinematic evidence for the immediate neuromotor effects of a sing
+12|Keywords:
+Action observation; motor imagery; AOMI; PETTLEP; stroke; upper limb rehabilitation; kinematics; MediaPipe; movement smoothness; m
+19|A particularly clinically relevant manifestation of these deficits is the quality of voluntary upper limb movement. Whereas healthy individu
+22|To understand why the upper limb movement quality deteriorates after stroke, and why cognitively mediated interventions such as AOMI may be 
+23|In healthy individuals, voluntary reaching is not initiated simply by activating the prime movers of the arm. Rather, normal reaching follow
+24|The neural substrates of this feedforward organization are well established. The supplementary motor area (SMA) plays a central role in the 
+25|This hierarchical architecture — feedforward trunk stabilization preceding distal movement execution — has direct relevance to the present s
+26|Understanding this proximal-to-distal principle further informed the sequential structure of the PETTLEP-based AOMI protocol employed in the
+30|This spinal-level dysregulation has direct kinematic consequences during reaching. When a stroke survivor attempts elbow extension — a prere
+31|It is important, however, to recognize that not all resistance to movement in post-stroke patients represents neural spasticity. With chroni
+38|When AO is combined with MI in a sequential AOMI paradigm — observation followed immediately by mental rehearsal — the resulting neural acti
+39|1.5 The PETTLEP Model: Maximizing Functional Equivalence in Motor Imagery
+40|The effectiveness of motor imagery as a neuroplasticity-inducing intervention depends heavily on the quality and ecological validity of the 
+41|PETTLEP encompasses seven dimensions along which motor imagery should be individualized and structured:
+49|Despite its strong theoretical foundation, the application of the PETTLEP model in stroke rehabilitation remains limited, particularly withi
+56|Trunk-to-Palm Displacement Ratio (total_trunk_palm_ratio): Ratio of cumulative trunk displacement to cumulative palm displacement within the
+60|The present study addressed several gaps in the existing literature simultaneously. First, while multi-session AOMI protocols have demonstra
+61|The present study addressed these gaps by delivering a single session of PETTLEP-based AOMI — incorporating a sensorimotor transfer calibrat
+63|Primary Research Question:
+Does one session of PETTLEP-based AOMI lead to immediate improvements in movement smoothness (smoothness_pause_pc
+64|Secondary Research Questions:
+Does one session of PETTLEP-based AOMI lead to immediate improvements in:
+65|Total movement duration (total_duration_s) of the Reach & Wipe task?
+66|Trunk-to-palm displacement ratio (total_trunk_palm_ratio) during reaching?
+67|Shoulder vertical displacement range (shoulder_vert_norm) during reaching?
+68|Peak hand velocity (total_peak_velocity) during the reaching task?
+71|H₀: One session of PETTLEP-based AOMI will not produce significant changes in kinematic parameters (smoothness_pause_pct, total_duration_s, 
+72|H₁: One session of PETTLEP-based AOMI will produce significant improvements in kinematic parameters (smoothness_pause_pct, total_duration_s,
+76|This study employed a single-blind, pretest–posttest, prospective randomized controlled trial (RCT) design with two parallel arms: an experi
+90|Ability to perform the brief cognitive-motor exercises required by the protocol.
+95|Uncontrolled seizures, severe cardiovascular instability, or any contraindication to imagery-based interventions.
+100|The effect size was based on comparable single-session motor imagery studies reporting Cohen's d values of 1.0–1.4 for kinematic outcomes, c
+103|Due to the nature of the intervention, participants could not be blinded. However, the outcome assessor was to remain blinded to group alloc
+105|All assessments were to be conducted in a standardized environment at the Neurorehabilitation Unit. Each participant was to be assessed imme
+107|Task Execution Protocol
+108|The assessment and intervention task was the Reach & Wipe — an in-air reaching and wiping motion using the affected upper limb. This task wa
+120|Movement smoothness (smoothness_pause_pct) was calculated as the percentage of frames within the active movement window where instantaneous 
+132|Motor Difference Rating Scale (post-intervention only)
+134|2.7 Intervention Protocol
+136|The intervention consisted of a single 22-minute session comprising a 2-minute sensorimotor transfer calibration phase followed by five 4-mi
+137|2.7.2 Experimental Group: PETTLEP-Based AOMI
+138|The experimental protocol employed an AOMI paradigm — observation followed immediately by imagery, without interleaved physical execution. T
+139|The intervention began with a 2-minute Sensorimotor Transfer Calibration phase, during which participants were taught a "notice–name–transfe
+140|Following calibration, the intervention proceeded through five 4-minute blocks, each structured as follows:
+141|Minute 1 — Action Observation: The participant watched a mirror-reversed, first-person perspective video of their own unaffected upper limb 
+142|Minutes 2–3 — Corrective Motor Imagery: The participant closed their eyes and performed guided kinesthetic motor imagery of the same Reach &
+146|Block 2 — Trunk Stability Transfer: The participant observed the video with attention directed toward the quiet, stable trunk. During imager
+147|Block 3 — Shoulder Girdle Control Transfer: The participant observed the video with attention directed toward the low, relaxed shoulder posi
+149|Block 5 — Integrated Smooth Movement: The participant observed the video once more. During imagery, all corrective elements were integrated:
+150|This structure produced a total intervention dose of:
+154|2 minutes of sensorimotor transfer calibration
+155|Total: 22 minutes
+156|Intervention Fidelity:
+All audio cues were to be delivered via pre-recorded standardized digital audio files to ensure exact replication acr
+159|The control condition was designed to match the AOMI protocol in: (a) total session duration (22 minutes); (b) physical setup (same room, ch
+160|The control protocol consisted of 5 blocks × 4 minutes = 20 minutes, preceded by a 2-minute introductory relaxation phase, alternating betwe
+164|2.7.4 Implementation of the PETTLEP Framework: Detailed Exposition
+165|The seven PETTLEP dimensions were operationalized in the present protocol as summarized in Table 1.
+166|Table 1. Operationalization of PETTLEP dimensions in the present intervention protocol.
+175|Within-subject factor: Time (Pre-intervention vs. Post-intervention)
+176|Between-subject factor: Group (Experimental [AOMI] vs. Control)
+177|The primary analysis focused on the Group × Time interaction effect, which tested whether the magnitude of change from pre- to post-interven
+186|Additionally, the relationship between pre–post changes in VAMS-4 mood scores and kinematic change scores was to be explored to determine wh
+193|Analyses were to be conducted on an intention-to-treat (ITT) basis, including all randomized participants regardless of protocol adherence. 
+198|Note: As this is a prospective study protocol, actual results are not yet available. The following section presents the analytical framework
+201|The AOMI group would demonstrate a statistically significant reduction in smoothness_pause_pct from pre- to post-intervention (within-group 
+204|A reduction in smoothness_pause_pct would indicate that the AOMI session facilitated a shift toward smoother, more continuous reaching traje
+207|Total Movement Duration: The AOMI group would demonstrate a significant reduction in total_duration_s, reflecting more efficient movement ex
+208|Trunk-to-Palm Ratio: The AOMI group would demonstrate a significant reduction in total_trunk_palm_ratio during reaching, reflecting reduced 
+209|Shoulder Vertical Displacement Range: The AOMI group would demonstrate a significant reduction in shoulder_vert_norm (and its cm equivalent,
+210|Peak Hand Velocity: A significant increase in total_peak_velocity was anticipated in the AOMI group, reflecting more confident motor output 
+212|Given the acute, single-session nature of the intervention, any WMFT-4 changes were expected to be modest. However, a trend toward improveme
+214|It was hypothesized that participants with higher baseline KVIQ scores (greater motor imagery ability) would demonstrate larger kinematic im
+215|Additionally, participants reporting greater positive mood (VAMS-4 happy/calm subscales) post-intervention may have demonstrated larger kine
+220|First, this was the first study designed to investigate the immediate, within-session kinematic effects of a single AOMI intervention in str
+221|Second, this was the first study to employ a custom markerless motion capture pipeline based on MediaPipe Pose Landmarker as the primary out
+222|Third, the present study employed an AOMI paradigm without interleaved physical practice — allowing isolation of the specific cognitive-moto
+223|Fourth, the application of the PETTLEP framework to AOMI delivery in stroke represented a theoretical advance over existing AOMI protocols, 
+225|The expected kinematic improvements in the AOMI group could be interpreted within a coherent neurophysiological framework:
+226|Action Observation activates motor representations: The mirror-reversed video of the unaffected limb performing a smooth Reach & Wipe engage
+227|Motor Imagery consolidates and refines the motor plan: Immediately following observation, the participant mentally rehearsed the movement th
+228|Sensorimotor transfer enhances cortical specificity: The notice–name–transfer strategy was designed to strengthen functional equivalence by 
+229|Imagery of trunk stability reinstates feedforward postural control: The trunk stability imagery in Block 2 was specifically designed to rein
+231|Real-time timing preserves temporal motor coding: The PETTLEP timing component — imagining the movement in real time — preserved the tempora
+232|4.3 The Role of Emotional State in Intervention Response
+233|The inclusion of the VAMS-4 as an affective outcome measure reflected recognition that emotional state may serve as an important moderator o
+234|The PETTLEP model's emotion dimension — operationalized in this study through audio cues emphasizing ease, fluidity, and relaxation — was sp
+237|Sample Size and Statistical Power: The target sample of 28 participants was powered for a medium-to-large Group × Time interaction effect (f
+238|Single-Session Design: The acute design was both a strength (enabling isolation of immediate neuromotor effects) and a potential limitation 
+240|Control Condition Selection: The cognitive and somatic control condition (body scanning + spatial navigation) was designed to control for no
+241|Blinding Limitations: Participants could not be blinded to their group assignment due to the fundamentally different nature of the experimen
+244|Integration into Early Rehabilitation: A 22-minute, single-session PETTLEP-based AOMI intervention requiring only a tablet and headphones is
+246|The markerless motion capture pipeline requires only a single smartphone or webcam and a standard laptop for offline processing, making it f
+247|Dosing and Optimization: This trial's findings regarding the magnitude and specificity of acute kinematic effects would inform the optimal d
+248|Patient-Reported Outcomes: The inclusion of the Motor Difference Rating Scale provided a patient-reported measure of perceived benefit, whic
+251|The present randomized controlled trial protocol described a methodologically rigorous, theoretically grounded, and clinically relevant inve
+252|The study was designed to provide the first direct, objective kinematic evidence addressing whether a single AOMI session could induce measu
+254|Establish proof-of-concept for the kinematic measurability of acute AOMI effects in stroke, enabling sample size planning for future multi-s

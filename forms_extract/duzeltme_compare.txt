@@ -1,0 +1,52 @@
+=== REVIZYON exists=True ===
+1: …/…./2023
+2: T.C
+3: İSTİNYE ÜNİVERSİTESİ
+4: İNSAN ARAŞTIRMALARI ETİK KURULU BAŞKANLIĞINA
+5: İnsan Araştırmaları Etik Kurulu'na 16/06/2026 tarihli başvurumuzda "İnme Sonrası Tek Seans PETTLEP Temelli Eylem Gözlemi ve Motor İmgeleme (AOMI) Uygulamasının Üst Ekstremite Kinematiği Üzerindeki Anlık Etkileri: Randomize Kontrollü Çalışma" başlıklı çalışmamızda düzeltilmesi için önerilen hususlarla ilgili cevaplar aşağıda bilgilerinize sunulmuştur.
+6: Onaylanmış tez protokolümüzde talep edilen revizyon kapsamında aşağıdaki düzenlemeler yapılmıştır:
+
+1) Çok merkezli (multisentrik) çalışma: Biruni Üniversitesi Hastanesi, Fiziksel Tıp ve Rehabilitasyon Polikliniği ikinci veri toplama merkezi olarak protokole eklenmiştir. İlgili kurum izin belgesi (Biruni Üniversitesi Hastanesi) dosyaya eklenmiştir.
+
+2) Araştırma ekibi: Biruni Üniversitesi Hastanesi Fiziksel Tıp ve Rehabilitasyon Uzmanı Doç. Dr. Çiğdem Çınar yardımcı araştırmacı olarak eklenmiştir. Güncel imzalı özgeçmiş formu dosyaya eklenmiştir.
+
+3) Etik Kurul başvuru formu: "Onaylanan Projede Değişiklik Bildirimi" seçeneği işaretlenmiş; yapılan eklemeler kırmızı renkle belirtilmiştir.
+
+4) Veri toplama merkezleri bölümü, yardımcı araştırmacılar tablosu ve gerekçe/amaç bölümü revizyonları yansıtacak şekilde güncellenmiştir.
+
+5) Video kayıt standardizasyonu: Tüm katılımcılarda ve her iki merkezde kinematik veri toplama, 1080p çözünürlükte ve sabit 30 kare/saniye (fps) olacak şekilde standardize edilmiştir. Kayıt hızı (fps) katılımcılar veya merkezler arasında değiştirilmeyecektir; karşılaştırılabilirlik için aynı kamera kurulumu (tripod, mesafe, aydınlatma) ve NeuroLab (MediaPipe) işleme parametreleri kullanılacaktır.
+
+Protokolün bilimsel tasarımı, örneklem büyüklüğü (n=28), birincil sonuç (smoothness_pause_pct) ve istatistiksel analiz planı değiştirilmemiştir.
+
+Saygılarımla,
+Abdelrahman Walid Hamza Mohamed Elsayed Sabee
+Sorumlu Araştırmacı
+16/06/2026
+7: Saygılarımla.
+8: Sorumlu Araştırmacı
+=== FORMS exists=True ===
+1: …/…./2023
+2: T.C
+3: İSTİNYE ÜNİVERSİTESİ
+4: İNSAN ARAŞTIRMALARI ETİK KURULU BAŞKANLIĞINA
+5: İnsan Araştırmaları Etik Kurulu'na 16/06/2026 tarihli başvurumuzda "İnme Sonrası Tek Seans PETTLEP Temelli Eylem Gözlemi ve Motor İmgeleme (AOMI) Uygulamasının Üst Ekstremite Kinematiği Üzerindeki Anlık Etkileri: Randomize Kontrollü Çalışma" başlıklı çalışmamızda düzeltilmesi için önerilen hususlarla ilgili cevaplar aşağıda bilgilerinize sunulmuştur.
+6: Onaylanmış tez protokolümüzde talep edilen revizyon kapsamında aşağıdaki düzenlemeler yapılmıştır:
+
+1) Çok merkezli (multisentrik) çalışma: Biruni Üniversitesi Hastanesi, Fiziksel Tıp ve Rehabilitasyon Polikliniği ikinci veri toplama merkezi olarak protokole eklenmiştir. İlgili kurum izin belgesi (Biruni Üniversitesi Hastanesi) dosyaya eklenmiştir.
+
+2) Araştırma ekibi: Biruni Üniversitesi Hastanesi Fiziksel Tıp ve Rehabilitasyon Uzmanı Doç. Dr. Çiğdem Çınar yardımcı araştırmacı olarak eklenmiştir. Güncel imzalı özgeçmiş formu dosyaya eklenmiştir.
+
+3) Etik Kurul başvuru formu: "Onaylanan Projede Değişiklik Bildirimi" seçeneği işaretlenmiş; yapılan eklemeler kırmızı renkle belirtilmiştir.
+
+4) Veri toplama merkezleri bölümü, yardımcı araştırmacılar tablosu ve gerekçe/amaç bölümü revizyonları yansıtacak şekilde güncellenmiştir.
+
+5) Video kayıt standardizasyonu: Tüm katılımcılarda ve her iki merkezde kinematik veri toplama, 1080p çözünürlükte ve sabit 30 kare/saniye (fps) olacak şekilde standardize edilmiştir. Kayıt hızı (fps) katılımcılar veya merkezler arasında değiştirilmeyecektir; karşılaştırılabilirlik için aynı kamera kurulumu (tripod, mesafe, aydınlatma) ve NeuroLab (MediaPipe) işleme parametreleri kullanılacaktır.
+
+Protokolün bilimsel tasarımı, örneklem büyüklüğü (n=28), birincil sonuç (smoothness_pause_pct) ve istatistiksel analiz planı değiştirilmemiştir.
+
+Saygılarımla,
+Abdelrahman Walid Hamza Mohamed Elsayed Sabee
+Sorumlu Araştırmacı
+16/06/2026
+7: Saygılarımla.
+8: Sorumlu Araştırmacı

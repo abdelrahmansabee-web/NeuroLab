@@ -1,0 +1,30 @@
+0|ÖĞRENCİ BİLGİLERİ (Student’ Information):
+1|EMPTY
+2|Adı Soyadı (Name Surname): Abdelrahman Walid Hamza Mohamed Elsayed Sabee
+3|EMPTY
+4|No (Number): 2433095024
+5|EMPTY
+6|Anabilim Dalı (Department): Physiotherapy and Rehabilitation
+7|EMPTY
+8|Program Adı (Program): Physiotherapy and Rehabilitation Master's Degree Program with Thesis
+9|EMPTY
+10|Danışmanı (Advisor): Asst. Prof. Begüm Kara Kaya
+11|EMPTY
+12|☒TEZ KONUSU ÖNERİSİ (THESIS TOPIC PROPOSAL):
+13|EMPTY
+14|Tezin Başlığı /Adı (Thesis Title/Name):
+15|EMPTY
+16|Immediate Effects of a Single Session of PETTLEP-Based Action Observation and Motor Imagery (AO
+17|EMPTY
+18|EMPTY
+19|Tezin Konusu ve Amacı
+20|(Thesis’s Subject and Purpose):
+21|EMPTY
+22|Stroke is the third leading cause of adult disability globally, and long-term motor, muscle ton
+23|EMPTY
+24|In conventional treatments, emphasis is put on task practice; but a large number of stroke surv
+25|EMPTY
+26|But the quality and rigor of the mental simulation in MI will determine how powerful it will be
+27|EMPTY
+28|EMPTY
+29|For this purpose, the integration of MediaPipe, a recently developed markerless motion capture 

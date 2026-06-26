@@ -1,0 +1,3 @@
+İnme Sonrası Tek Seans PETTLEP Temelli Eylem Gözlemi ve Motor İmgeleme (AOMI) Uygulamasının Üst Ekstremite Kinematiği Üzerindeki Anlık Etkileri: Randomize Kontrollü Çalışma
+IS_TURKISH=True
+IS_ENGLISH=False

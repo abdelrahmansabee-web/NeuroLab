@@ -1,0 +1,6 @@
+Source backup: D:\Thesis app\manuscript f\Abdelrahman Sabee Proposal _BACKUP.docx
+Updated: D:\Thesis app\manuscript f\Abdelrahman Sabee Proposal .docx
+Paragraphs changed: 85
+Words before: 4631
+Words after: 4659
+Target: 4631 (delta +28)

@@ -1,5 +1,5 @@
 // ============================================================
-// Stroke Rehabilitation Platform — Frontend v6.4
+// Stroke Rehabilitation Platform — Frontend v6.5
 // ============================================================
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
@@ -9,14 +9,86 @@ import {
   User, Activity, Sliders, TrendingUp, Heart, Timer, Cpu, FileText,
   Menu, X, ChevronRight, Play, Square, RotateCcw, Copy, Check,
   Info, Save, BarChart3, Stethoscope, Brain, Image as ImageIcon,
-  RefreshCw, FileSpreadsheet,
-  Database, Search, Edit3, Trash2, Plus,
+  RefreshCw, FileSpreadsheet, Upload, FileUp,
+  Database, Search, Edit3, Trash2, Plus, PlusCircle,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import {
+  STUDY_DESIGN, SPSS_WORKFLOW, KINEMATIC_VARS, orderedKinematicVars, CLINICAL_VARS,
+  buildMasterDataset, buildMasterRow, generateStudySPSSSyntax, analyzeAllOutcomes,
+  fmtP, sigStars,   getPatientKinPhase, pickKinField,
+  calcImprovement, calcGap, formatKinPrePostPct, formatKinPostHealthyPct,
+  RECOVERY_SUMMARY_KEYS, kinCrossPhaseComparable,
+} from "./analysisPlan";
+import {
+  PROGRAM_GAPS, generateLiteratureReviewMarkdown, generateConsortSapMarkdown,
+} from "./thesisDocs";
+import { importPatientFile, buildImportRecord } from "./patientImport";
+
+const APP_VERSION = "7.2.0-kinematics-60hz";
+const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
+
+/* ── Glassmorphism (all Glass containers) ── */
+const GLASS_CLS = "bg-white/[0.08] backdrop-blur-xl border border-white/12";
+const SIDEBAR_CLS = "bg-white/[0.08] backdrop-blur-xl border border-white/12";
+const INPUT_CLS = "bg-white/[0.09] border border-white/12";
+
+const GSELECT_MENU_BOX = {
+  backgroundColor: "#0e1120",
+  border: "1px solid rgba(255, 255, 255, 0.25)",
+  boxShadow: "0 10px 40px rgba(0, 0, 0, 0.7)",
+  borderRadius: "12px",
+};
+
+const BG_FILTER = "blur(16px) brightness(0.48) saturate(0.70)";
+const BG_SCALE = "scale(1.08)";
+const BG_OVERLAY = "rgba(4, 6, 18, 0.32)";
+
+function isIOSDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function isStandalonePWA() {
+  return window.matchMedia("(display-mode: standalone)").matches
+    || window.navigator.standalone === true;
+}
+
+const SIDEBAR_W = 255;
+const SIDEBAR_X_HIDDEN = -280;
+const SIDEBAR_SPRING = { type: "spring", stiffness: 420, damping: 36, mass: 0.82 };
+
+function sidebarPushWidth() {
+  if (typeof window === "undefined") return SIDEBAR_W;
+  if (window.matchMedia("(min-width: 768px)").matches) return SIDEBAR_W;
+  return window.innerWidth;
+}
+
+const MOBILE_TOPBAR_PT = "4.75rem";
+const PTR_THRESHOLD = 72;
+const PTR_MAX_PULL = 118;
+
+const FLOAT_L = "0 36px 80px -40px rgba(0,0,0,0.06)";
+const FLOAT_M = "0 20px 48px -30px rgba(0,0,0,0.04)";
+
+const GLASS_FIELD = {
+  backgroundColor: "rgba(255,255,255,0.09)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  boxShadow: "none",
+};
+
+const SLIDER_GRAD = {
+  sky:     ["rgba(14,165,233,0.8)",  "rgba(56,189,248,0.5)"],
+  emerald: ["rgba(16,185,129,0.8)",  "rgba(52,211,153,0.5)"],
+  amber:   ["rgba(245,158,11,0.8)",  "rgba(251,191,36,0.5)"],
+  violet:  ["rgba(139,92,246,0.8)",  "rgba(167,139,250,0.5)"],
+  rose:    ["rgba(244,63,94,0.8)",   "rgba(251,113,133,0.5)"],
+  cyan:    ["rgba(6,182,212,0.8)",   "rgba(34,211,238,0.5)"],
+};
 
 const IPAQ_ACTS = [
   { id:"high", en:"High intensity (running, heavy work)", tr:"Yüksek yoğunluklu (koşma, ağır iş)", met:8 },
@@ -122,7 +194,6 @@ const NAV_ITEMS = [
   { id:"wmft", icon:Timer, en:"Wolf Motor Function", tr:"Motor Fonksiyon (WMFT)" },
   { id:"kinematics", icon:Cpu, en:"Kinematics AI Lab", tr:"Kinematik AI Laboratuvarı" },
   { id:"report", icon:FileText, en:"Export Report", tr:"Rapor Dışa Aktarma" },
-  { id:"database", icon:Database, en:"Patient Database", tr:"Hasta Veritabanı" },
   { id:"analysis", icon:BarChart3, en:"Analysis Dashboard", tr:"Analiz Paneli" },
 ];
 
@@ -135,12 +206,118 @@ function savePatients(list) {
   localStorage.setItem(LS_KEY, JSON.stringify(list));
 }
 
+/** Drop heavy kinematic arrays before server sync (keep summary metrics). */
+function stripKinPhaseForSync(phase) {
+  if (!phase || typeof phase !== "object") return phase;
+  const { velocity_profile, phases, ...rest } = phase;
+  return rest;
+}
+function stripKinResultsForSync(kin) {
+  if (!kin || typeof kin !== "object") return kin;
+  return Object.fromEntries(
+    Object.entries(kin).map(([k, v]) => [k, stripKinPhaseForSync(v)])
+  );
+}
+function patientsForServerSync(list) {
+  return list.map((p) => {
+    if (!p?.kinematics?.analysisResults) return p;
+    return {
+      ...p,
+      kinematics: {
+        ...p.kinematics,
+        analysisResults: stripKinResultsForSync(p.kinematics.analysisResults),
+      },
+    };
+  });
+}
+async function postPatientsSync(patients) {
+  return fetch("/api/patients", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ patients: patientsForServerSync(patients) }),
+  });
+}
+
+const PATIENTS_SYNC_EVENT = "neurolab-patients-synced";
+const SYNC_FETCH_MS = 90000;
+
+async function fetchWithTimeout(url, options = {}, ms = SYNC_FETCH_MS) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function mergePatientLists(serverPts, localPts) {
+  const merged = Array.isArray(serverPts) ? [...serverPts] : [];
+  localPts.forEach((lp) => {
+    const id = lp._id || lp.demographics?.participantId;
+    if (id && !merged.some((sp) => (sp._id || sp.demographics?.participantId) === id)) {
+      merged.push(lp);
+    }
+  });
+  return merged;
+}
+
+/** Push local patients to server, pull merge, persist to localStorage. */
+async function syncPatientsWithServer({ showToast, silent = false } = {}) {
+  const localPts = loadPatients();
+  try {
+    const push = await fetchWithTimeout("/api/patients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patients: patientsForServerSync(localPts) }),
+    });
+    if (!push.ok) {
+      const detail = await push.text().catch(() => "");
+      if (!silent) showToast?.(`Server save failed (${push.status})`, "error");
+      console.warn("Patient push sync failed:", push.status, detail);
+      return { ok: false, patients: localPts, pushed: false };
+    }
+
+    const r = await fetchWithTimeout("/api/patients");
+    if (!r.ok) {
+      if (!silent) showToast?.(`Could not load server records (${r.status})`, "error");
+      return { ok: false, patients: localPts, pushed: true };
+    }
+
+    const serverPts = await r.json();
+    const merged = mergePatientLists(serverPts, localPts);
+    savePatients(merged);
+    window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: merged.length } }));
+
+    if (!silent) {
+      if (merged.length === 0) {
+        showToast?.("Sync OK — no records yet. Save a session first.", "info");
+      } else {
+        showToast?.(`✓ Synced — ${merged.length} record(s)`, "success");
+      }
+    }
+    return { ok: true, patients: merged, pushed: true };
+  } catch (err) {
+    const timedOut = err?.name === "AbortError";
+    if (!silent) {
+      showToast?.(
+        timedOut
+          ? "Sync timed out — server may be waking up. Wait ~1 min and retry."
+          : "Sync failed — data kept on this device only",
+        "error"
+      );
+    }
+    console.warn("Patient sync error:", err);
+    return { ok: false, patients: localPts, pushed: false, timedOut };
+  }
+}
+
 // ─── Shared UI ────────────────────────────────────────────────────────────────
 
-const Glass = ({ children, className = "", style = {}, ...r }) => (
+const Glass = ({ children, className = "", style = {}, soft = false, ...r }) => (
   <div
-    className={`bg-white/[0.08] backdrop-blur-xl border border-white/[0.08] shadow-2xl rounded-2xl ${className}`}
-    style={{ overflow:"visible", ...style }}
+    className={`glass-float rounded-2xl ${GLASS_CLS} ${className}`}
+    style={{ overflow: "visible", boxShadow: soft ? FLOAT_M : FLOAT_M, ...style }}
     {...r}
   >
     {children}
@@ -154,16 +331,18 @@ const BL = ({ en, tr, className = "" }) => (
 );
 
 const SH = ({ icon: Icon, en, tr, badge }) => (
-  <div className="flex items-center gap-3 mb-6">
-    <div className="w-11 h-11 rounded-xl bg-white/10 border border-white/[0.06] flex items-center justify-center flex-shrink-0">
+  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 mb-5 sm:mb-6">
+    <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={GLASS_FIELD}>
       <Icon className="w-5 h-5 text-white/80" />
     </div>
     <div className="min-w-0 flex-1">
-      <h2 className="text-xl font-extrabold text-white leading-tight">{en}</h2>
-      <p className="text-xs font-light text-white/35 uppercase tracking-widest truncate">{tr}</p>
+        <h2 className="text-base sm:text-xl font-extrabold text-white leading-snug">{en}</h2>
+        <p className="text-[10px] sm:text-xs font-light text-white/35 uppercase tracking-wide sm:tracking-widest mt-0.5">{tr}</p>
+      </div>
     </div>
     {badge && (
-      <span className="ml-auto flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold bg-white/[0.06] border border-white/[0.04] text-white/50">
+      <span className="sm:ml-auto flex-shrink-0 self-start sm:self-center px-3 py-1 rounded-full text-xs font-semibold text-white/50" style={GLASS_FIELD}>
         {badge}
       </span>
     )}
@@ -178,7 +357,8 @@ const GI = ({ en, tr, type = "text", value, onChange, placeholder = "", classNam
       value={value ?? ""}
       onChange={onChange}
       placeholder={placeholder}
-      className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white placeholder-white/15 text-sm font-light focus:outline-none focus:bg-white/[0.06] transition-all"
+      className={`glass-field w-full px-3 py-2.5 rounded-xl text-white placeholder-white/30 text-sm font-light focus:outline-none transition-all ${INPUT_CLS}`}
+      style={GLASS_FIELD}
       {...r}
     />
   </div>
@@ -213,7 +393,8 @@ const GSelect = ({ en, tr, value, onChange, options, className = "" }) => {
           ref={btnRef}
           type="button"
           onClick={() => setOpen((p) => !p)}
-          className="w-full px-3 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white text-sm font-light text-left flex items-center justify-between gap-2"
+          className={`w-full px-3 py-2.5 rounded-xl text-white text-sm font-light text-left flex items-center justify-between gap-2 ${INPUT_CLS}`}
+          style={GLASS_FIELD}
         >
           <span className={`truncate ${sel ? "text-white" : "text-white/30"}`}>
             {sel ? sel.label : "Select\u2026"}
@@ -235,20 +416,37 @@ const GSelect = ({ en, tr, value, onChange, options, className = "" }) => {
               zIndex: 999999,
             }}
           >
-            <div style={{ backgroundColor: "rgba(30,35,45,0.6)", backdropFilter: "blur(30px) saturate(150%)", WebkitBackdropFilter: "blur(30px) saturate(150%)", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 8px 32px 0 rgba(0,0,0,0.37)" }} className="rounded-xl overflow-hidden py-1">
-              {options.map((o) => (
+            <div className="overflow-hidden py-1" style={GSELECT_MENU_BOX}>
+              {options.map((o) => {
+                const selected = value === o.value;
+                const optStyle = {
+                  backgroundColor: selected ? "rgba(255,255,255,0.10)" : "transparent",
+                  color: selected ? "#ffffff" : "rgba(255,255,255,0.75)",
+                  fontWeight: selected ? 700 : 400,
+                  transition: "background-color 0.15s",
+                };
+                return (
                 <button
                   key={o.value}
                   type="button"
                   onClick={() => { onChange({ target: { value: o.value } }); setOpen(false); }}
-                  className={`w-full text-left px-3 py-2.5 text-sm block ${value === o.value ? "text-white font-bold" : "text-white/90"}`}
-                  style={{ backgroundColor: value === o.value ? "rgba(255,255,255,0.12)" : "transparent" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = value === o.value ? "rgba(255,255,255,0.12)" : "transparent"; }}
+                  className="w-full text-left px-3 py-2.5 text-sm block"
+                  style={optStyle}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.10)";
+                    e.currentTarget.style.color = "#ffffff";
+                    e.currentTarget.style.fontWeight = "700";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = selected ? "rgba(255,255,255,0.10)" : "transparent";
+                    e.currentTarget.style.color = selected ? "#ffffff" : "rgba(255,255,255,0.75)";
+                    e.currentTarget.style.fontWeight = selected ? "700" : "400";
+                  }}
                 >
                   {o.label}
                 </button>
-              ))}
+                );
+              })}
             </div>
           </div>,
           document.body
@@ -266,7 +464,7 @@ const GBtn = ({ children, onClick, disabled, className = "", variant = "default"
     amber: "bg-amber-500/20 border-amber-400/30 text-amber-200 hover:bg-amber-500/30",
     violet: "bg-violet-500/20 border-violet-400/30 text-violet-200 hover:bg-violet-500/30",
     rose: "bg-rose-500/20 border-rose-400/30 text-rose-200 hover:bg-rose-500/30",
-    danger: "bg-red-500/20 border-red-400/30 text-red-200 hover:bg-red-500/30",
+    danger: "bg-rose-500/20 border-rose-400/30 text-rose-200 hover:bg-rose-500/30",
   };
 
   return (
@@ -282,6 +480,96 @@ const GBtn = ({ children, onClick, disabled, className = "", variant = "default"
   );
 };
 
+const PullToRefresh = ({ scrollRef }) => {
+  const pullRef = useRef(0);
+  const tracking = useRef(false);
+  const refreshingRef = useRef(false);
+  const startY = useRef(0);
+  const enabled = isIOSDevice() || isStandalonePWA();
+
+  const paint = useCallback((el, y, state) => {
+    pullRef.current = y;
+    const inner = el.querySelector(".ptr-inner");
+    const spinner = inner?.querySelector(".ptr-spinner-anchor");
+    if (inner) {
+      if (y > 0 || state === "refreshing") {
+        inner.style.paddingTop = `${y}px`;
+        inner.style.transform = "";
+      } else {
+        inner.style.paddingTop = "0px";
+        inner.style.transform = "";
+      }
+      inner.style.transition = state === "idle"
+        ? "padding-top 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+        : "none";
+    }
+    if (!spinner) return;
+    const show = y >= 10 || state === "refreshing";
+    spinner.style.opacity = show
+      ? String(state === "refreshing" ? 1 : Math.min((y - 10) / 14, 1))
+      : "0";
+    const ring = spinner.querySelector(".ptr-ring");
+    if (ring) {
+      if (state === "refreshing") {
+        ring.classList.add("ptr-ring-active");
+        ring.style.transform = "";
+      } else {
+        ring.classList.remove("ptr-ring-active");
+        const p = Math.min(y / PTR_THRESHOLD, 1);
+        ring.style.transform = `rotate(${-90 + p * 360}deg) scale(${0.45 + p * 0.55})`;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const el = scrollRef?.current;
+    if (!el) return;
+
+    const onStart = (e) => {
+      if (refreshingRef.current || el.scrollTop > 1) return;
+      startY.current = e.touches[0].clientY;
+      tracking.current = true;
+    };
+
+    const onMove = (e) => {
+      if (!tracking.current || refreshingRef.current) return;
+      const dy = e.touches[0].clientY - startY.current;
+      if (el.scrollTop <= 0 && dy > 0) {
+        paint(el, Math.min(dy * 0.52, PTR_MAX_PULL), "pulling");
+        if (dy > 4 && e.cancelable) e.preventDefault();
+      } else if (dy <= 0 && el.scrollTop <= 0) {
+        paint(el, 0, "idle");
+      }
+    };
+
+    const finish = () => {
+      if (!tracking.current) return;
+      tracking.current = false;
+      if (pullRef.current >= PTR_THRESHOLD && !refreshingRef.current) {
+        refreshingRef.current = true;
+        paint(el, 48, "refreshing");
+        window.location.reload();
+      } else {
+        paint(el, 0, "idle");
+      }
+    };
+
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", finish, { passive: true });
+    el.addEventListener("touchcancel", finish, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", finish);
+      el.removeEventListener("touchcancel", finish);
+    };
+  }, [enabled, scrollRef, paint]);
+
+  return null;
+};
+
 const Toast = ({ msg, visible, variant = "success" }) => (
   <AnimatePresence>
     {visible && (
@@ -292,6 +580,8 @@ const Toast = ({ msg, visible, variant = "success" }) => (
         className={`fixed bottom-8 right-8 z-[99999] flex items-center gap-2.5 px-5 py-3 rounded-2xl backdrop-blur-xl border text-sm font-semibold shadow-2xl ${
           variant === "success"
             ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+            : variant === "info"
+            ? "bg-sky-500/20 border-sky-400/30 text-sky-200"
             : "bg-rose-500/20 border-rose-400/30 text-rose-200"
         }`}
       >
@@ -301,7 +591,7 @@ const Toast = ({ msg, visible, variant = "success" }) => (
   </AnimatePresence>
 );
 
-const calculateClinicalDelta = (pre, post, metricName) => {
+const calculateClinicalDelta = (pre, post, direction) => {
   if (pre === undefined || post === undefined || pre === "" || post === "")
     return { text: "\u2014", colorClass: "text-slate-500 bg-slate-500/10" };
 
@@ -318,32 +608,7 @@ const calculateClinicalDelta = (pre, post, metricName) => {
   const sign = delta > 0 ? "+" : "-";
   const text = `${sign}${pct.toFixed(1)}%`;
 
-  // Metrics where a LOWER post value = clinical improvement
-  const n = (metricName || "").toLowerCase();
-  const lowerIsBetter =
-    n.includes("pain")           ||   // VAS pain: higher = worse
-    n.includes("anxiety")        ||   // VAMS: higher = more anxious
-    n.includes("distress")       ||   // VAMS: higher = more distressed
-    n.includes("fear")           ||
-    n.includes("confusion")      ||
-    n.includes("sad")            ||
-    n.includes("fatigue")        ||
-    n.includes("tension")        ||
-    n.includes("tense")          ||
-    n.includes("duration")       ||   // faster = better
-    n.includes("pause")          ||   // less pause = smoother
-    n.includes("bve")            ||   // lower BVE = smoother
-    n.includes("path")           ||   // shorter path = more direct
-    n.includes("path ratio")     ||   // closer to 1.0 = straighter
-    n.includes("trunk lat")      ||   // less trunk compensation
-    n.includes("trunk vert")     ||
-    n.includes("trunk rot")      ||
-    n.includes("shoulder vert");
-
-  // Peak velocity: higher = better → higherIsBetter
-  // Elbow extension: higher degrees = better → higherIsBetter
-  // Displacement norm: not directional → treat as higher=better (neutral)
-
+  const lowerIsBetter = direction === "lower";
   const isImprovement = lowerIsBetter ? delta < 0 : delta > 0;
 
   return {
@@ -354,66 +619,125 @@ const calculateClinicalDelta = (pre, post, metricName) => {
   };
 };
 
-const ThickSlider = ({ value, min = 0, max = 10, step = 0.5, color = "sky", onChange, label }) => {
-  const trackRef = useRef(null);
-  const dragging = useRef(false);
-  const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
-
-  const accent = {
-    sky: "#38bdf8",
-    emerald: "#34d399",
-    violet: "#a78bfa",
-    cyan: "#22d3ee",
-    amber: "#fbbf24",
-    rose: "#fb7185",
+const kinPrePostBadge = (pre, post, direction) => {
+  const pct = calcImprovement(pre, post, direction);
+  const text = formatKinPrePostPct(pct);
+  if (!text) return null;
+  return {
+    text,
+    colorClass:
+      pct >= 0
+        ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20"
+        : "text-rose-400 bg-rose-400/10 border-rose-400/20",
   };
+};
 
-  const clr = accent[color] || accent.sky;
+const kinPostHealthyBadge = (post, healthy, direction) => {
+  const pct = calcGap(post, healthy, direction);
+  const text = formatKinPostHealthyPct(pct);
+  if (!text) return null;
+  return {
+    text,
+    colorClass: "text-amber-300/90 bg-amber-400/10 border-amber-400/25",
+  };
+};
+
+const ThickSlider = ({ value, min = 0, max = 10, step = 0.5, color = "sky", onChange, label, formatLabel }) => {
+  const trackRef = useRef(null);
+  const fillRef = useRef(null);
+  const dragging = useRef(false);
+  const rafId = useRef(null);
+  const pendingX = useRef(null);
+  const displayRef = useRef(parseFloat(value) || min);
+
   const decimals = Math.max(0, (String(step).split(".")[1] || "").length);
   const clamp = (n) => Math.min(max, Math.max(min, n));
   const snap = (raw) => Number((Math.round((raw - min) / step) * step + min).toFixed(decimals));
+  const toPct = (v) => Math.max(0, Math.min(100, ((v - min) / (max - min)) * 100));
 
-  const rafId = useRef(null);
-  const setFromClientX = useCallback((clientX) => {
+  const [display, setDisplay] = useState(() => clamp(snap(parseFloat(value) || min)));
+
+  useEffect(() => {
+    if (!dragging.current) {
+      const v = clamp(snap(parseFloat(value) || min));
+      setDisplay(v);
+    }
+  }, [value, min, max, step]);
+
+  const paint = useCallback((v) => {
+    if (fillRef.current) fillRef.current.style.width = `${toPct(v)}%`;
+  }, [min, max]);
+
+  useEffect(() => {
+    paint(display);
+  }, [display, paint]);
+
+  const valueFromClientX = useCallback((clientX) => {
     const rect = trackRef.current?.getBoundingClientRect();
-    if (!rect || rect.width <= 0) return;
+    if (!rect || rect.width <= 0) return displayRef.current;
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    onChange(String(clamp(snap(min + ratio * (max - min)))));
-  }, [min, max, step, onChange, clamp, snap]);
+    return clamp(snap(min + ratio * (max - min)));
+  }, [min, max, step, clamp, snap]);
+
+  const applyClientX = useCallback((clientX, commit) => {
+    const v = valueFromClientX(clientX);
+    displayRef.current = v;
+    paint(v);
+    setDisplay(v);
+    if (commit) onChange(String(v));
+  }, [valueFromClientX, paint, onChange]);
+
+  const scheduleApply = useCallback((clientX, commit = false) => {
+    pendingX.current = { x: clientX, commit };
+    if (rafId.current != null) return;
+    rafId.current = requestAnimationFrame(() => {
+      rafId.current = null;
+      const p = pendingX.current;
+      if (p) applyClientX(p.x, p.commit);
+    });
+  }, [applyClientX]);
 
   const onPointerDown = (e) => {
     e.preventDefault();
     dragging.current = true;
+    trackRef.current?.classList.add("is-dragging");
     e.currentTarget.setPointerCapture?.(e.pointerId);
-    setFromClientX(e.clientX);
+    scheduleApply(e.clientX, false);
   };
 
   const onPointerMove = (e) => {
     if (!dragging.current) return;
     e.preventDefault();
-    if (rafId.current != null) return;
-    rafId.current = requestAnimationFrame(() => {
-      rafId.current = null;
-      setFromClientX(e.clientX);
-    });
+    scheduleApply(e.clientX, false);
   };
 
   const endDrag = (e) => {
+    if (!dragging.current) return;
     dragging.current = false;
+    trackRef.current?.classList.remove("is-dragging");
     if (rafId.current != null) { cancelAnimationFrame(rafId.current); rafId.current = null; }
+    const x = e.clientX || pendingX.current?.x;
+    if (x != null) applyClientX(x, true);
+    else onChange(String(displayRef.current));
     e.currentTarget.releasePointerCapture?.(e.pointerId);
   };
 
   const onKeyDown = (e) => {
-    let next = value;
-    if (e.key === "ArrowRight" || e.key === "ArrowUp") next = +value + step;
-    else if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = +value - step;
+    let next = display;
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") next = display + step;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = display - step;
     else if (e.key === "Home") next = min;
     else if (e.key === "End") next = max;
     else return;
     e.preventDefault();
-    onChange(String(clamp(snap(next))));
+    const v = clamp(snap(next));
+    setDisplay(v);
+    onChange(String(v));
   };
+
+  const grad = SLIDER_GRAD[color] || SLIDER_GRAD.sky;
+  const [gradFrom, gradTo] = grad;
+  const pct = toPct(display);
 
   return (
     <div style={{ touchAction: "none" }}>
@@ -423,23 +747,28 @@ const ThickSlider = ({ value, min = 0, max = 10, step = 0.5, color = "sky", onCh
         tabIndex={0}
         aria-valuemin={min}
         aria-valuemax={max}
-        aria-valuenow={value}
+        aria-valuenow={display}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         onKeyDown={onKeyDown}
-        className="relative h-8 rounded-full cursor-pointer focus:outline-none select-none"
-        style={{ touchAction: "none", background: "rgba(255,255,255,0.06)", userSelect: "none", WebkitUserSelect: "none" }}
+        className="glass-slider-track relative h-8 rounded-full cursor-pointer focus:outline-none select-none bg-white/[0.08] border border-white/12"
+        style={{ touchAction: "none", userSelect: "none", WebkitUserSelect: "none" }}
       >
         <div
-          className="absolute inset-y-0 left-0 rounded-full"
-          style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${clr}55, ${clr}33)`, transition: "width 0.05s linear" }}
+          ref={fillRef}
+          className="glass-slider-fill absolute inset-y-0 left-0 rounded-full"
+          style={{
+            width: `${pct}%`,
+            background: `linear-gradient(90deg, ${gradFrom}, ${gradTo})`,
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.28)",
+          }}
         />
       </div>
-      {label && (
+      {(formatLabel || label) && (
         <div className="text-center mt-2">
-          <span className="text-xs font-bold text-white/60">{label}</span>
+          <span className="text-xs font-bold text-white/60">{formatLabel ? formatLabel(display) : label}</span>
         </div>
       )}
     </div>
@@ -489,7 +818,12 @@ const VASSlider = ({ value, onChange, color = "sky" }) => {
         step={0.5}
         color={c}
         onChange={onChange}
-        label={`${n.toFixed(1)} / 10 — ${closestFace.en} / ${closestFace.tr}`}
+        formatLabel={(v) => {
+          const face = VAS_FACES.reduce((prev, curr) =>
+            Math.abs(curr.val - v) < Math.abs(prev.val - v) ? curr : prev
+          );
+          return `${v.toFixed(1)} / 10 — ${face.en} / ${face.tr}`;
+        }}
       />
     </div>
   );
@@ -538,7 +872,12 @@ const VAMSSlider = ({ value, onChange, color = "sky" }) => {
         step={0.5}
         color={c}
         onChange={onChange}
-        label={`${n.toFixed(1)} / 10 — ${closestFace.en} / ${closestFace.tr}`}
+        formatLabel={(v) => {
+          const face = VAMS_FACES.reduce((prev, curr) =>
+            Math.abs(curr.val - v) < Math.abs(prev.val - v) ? curr : prev
+          );
+          return `${v.toFixed(1)} / 10 — ${face.en} / ${face.tr}`;
+        }}
       />
     </div>
   );
@@ -569,7 +908,7 @@ const MotorSlider = ({ value, onChange, color = "sky" }) => {
         step={0.5}
         color={color}
         onChange={onChange}
-        label={`${n.toFixed(1)} / 10 — ${getLabel(n)}`}
+        formatLabel={(v) => `${v.toFixed(1)} / 10 — ${getLabel(v)}`}
       />
     </div>
   );
@@ -607,7 +946,10 @@ const KVIQSlider = ({ value, onChange, labels, color = "cyan" }) => {
         step={1}
         color={color}
         onChange={onChange}
-        label={curr ? `${n} — ${curr.en} / ${curr.tr}` : "Select / Seçin"}
+        formatLabel={(v) => {
+          const item = labels.find((l) => l.val === v);
+          return item ? `${v} — ${item.en} / ${item.tr}` : "Select / Seçin";
+        }}
       />
     </div>
   );
@@ -762,7 +1104,7 @@ const SWBlock = ({ phase, taskData, onUpdate }) => {
           step={1}
           color={isPost ? "emerald" : "sky"}
           onChange={(v) => onUpdate("rating", v)}
-          label={`${rv} — ${ratingLabels[rv]}`}
+          formatLabel={(v) => `${v} — ${ratingLabels[v]}`}
         />
       </div>
     </div>
@@ -848,8 +1190,8 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
           <div className="flex flex-col gap-1.5">
             <BL en="Treatment Duration" tr="Tedavi Süresi" />
             <div className="flex gap-2">
-              <input type="number" value={data.treatValue ?? ""} onChange={(e) => s("treatValue", e.target.value)} placeholder="0" className="flex-1 min-w-0 px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white text-sm font-light focus:outline-none transition-all" />
-              <select value={data.treatUnit ?? "week"} onChange={(e) => s("treatUnit", e.target.value)} className="w-24 flex-shrink-0 px-2 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white text-sm font-light focus:outline-none transition-all appearance-none" style={{ colorScheme:"dark" }}>{["day","week","month","year"].map((u) => <option key={u} value={u} className="bg-[#1a1a2e]">{u}</option>)}</select>
+              <input type="number" value={data.treatValue ?? ""} onChange={(e) => s("treatValue", e.target.value)} placeholder="0" className="flex-1 min-w-0 px-3 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light focus:outline-none transition-all" />
+              <select value={data.treatUnit ?? "week"} onChange={(e) => s("treatUnit", e.target.value)} className="w-24 flex-shrink-0 px-2 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light focus:outline-none transition-all appearance-none" style={{ colorScheme:"dark" }}>{["day","week","month","year"].map((u) => <option key={u} value={u} className="bg-[#0e1120]">{u}</option>)}</select>
             </div>
           </div>
         </div>
@@ -882,10 +1224,10 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
       <Glass className="p-5">
         <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Clinical Notes / Klinik Notlar</p>
         <div className="flex flex-col gap-3">
-          <textarea rows={2} value={data.notes ?? ""} onChange={(e) => s("notes", e.target.value)} placeholder="Medical history, comorbidities, assessment context…" className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white text-sm font-light placeholder-white/15 resize-none focus:outline-none transition-all" />
+          <textarea rows={2} value={data.notes ?? ""} onChange={(e) => s("notes", e.target.value)} placeholder="Medical history, comorbidities, assessment context…" className="w-full px-3 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light placeholder-white/15 resize-none focus:outline-none transition-all" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <textarea rows={2} value={data.antispasticDrugs ?? ""} onChange={(e) => s("antispasticDrugs", e.target.value)} placeholder="Antispastic drugs: Baclofen, Tizanidine…" className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white text-sm font-light placeholder-white/15 resize-none focus:outline-none transition-all" />
-            <textarea rows={2} value={data.otherDrugs ?? ""} onChange={(e) => s("otherDrugs", e.target.value)} placeholder="Other medications: Aspirin, Warfarin…" className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white text-sm font-light placeholder-white/15 resize-none focus:outline-none transition-all" />
+            <textarea rows={2} value={data.antispasticDrugs ?? ""} onChange={(e) => s("antispasticDrugs", e.target.value)} placeholder="Antispastic drugs: Baclofen, Tizanidine…" className="w-full px-3 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light placeholder-white/15 resize-none focus:outline-none transition-all" />
+            <textarea rows={2} value={data.otherDrugs ?? ""} onChange={(e) => s("otherDrugs", e.target.value)} placeholder="Other medications: Aspirin, Warfarin…" className="w-full px-3 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light placeholder-white/15 resize-none focus:outline-none transition-all" />
           </div>
         </div>
       </Glass>
@@ -898,7 +1240,7 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
 const IPAQSection = ({ data, onChange }) => {
   const sv = (id, f, v) => onChange({ ...data, [id]: { ...(data[id] || {}), [f]: v } });
   const tot = (id) => ((parseFloat(data[id]?.sure) || 0) * (parseFloat(data[id]?.gun) || 0)).toFixed(0);
-  const ic = "w-full px-2 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white text-sm font-bold text-center placeholder-white/15 focus:outline-none focus:bg-white/[0.06] transition-all";
+  const ic = `glass-field w-full px-2 py-1.5 rounded-lg text-white text-sm font-bold text-center placeholder-white/15 focus:outline-none transition-all ${INPUT_CLS}`;
 
   const totalMET = IPAQ_ACTS.reduce((sum, a) => sum + ((parseFloat(tot(a.id)) || 0) * a.met), 0);
 
@@ -927,8 +1269,35 @@ const IPAQSection = ({ data, onChange }) => {
     <div className="space-y-5">
       <SH icon={Activity} en="International Physical Activity Questionnaire (IPAQ)" tr="Uluslararası Fiziksel Aktivite Anketi" />
 
-      <Glass className="p-5">
-        <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
+      <Glass className="p-4 sm:p-5">
+        {/* Mobile — stacked cards (no horizontal squeeze) */}
+        <div className="md:hidden space-y-3">
+          {IPAQ_ACTS.map((a) => (
+            <div key={a.id} className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 space-y-3">
+              <div>
+                <p className="text-sm font-extrabold text-white/90 leading-snug">{a.en}</p>
+                <p className="text-[10px] text-white/35 italic mt-0.5">{a.tr}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] font-extrabold text-sky-300/90 uppercase mb-1.5">Min/day · Dk/gün</p>
+                  <input type="number" min="0" value={data[a.id]?.sure ?? ""} onChange={(e) => sv(a.id, "sure", e.target.value)} className={ic} placeholder="—" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-extrabold text-violet-300/90 uppercase mb-1.5">Days/wk · Gün</p>
+                  <input type="number" min="0" max="7" value={data[a.id]?.gun ?? ""} onChange={(e) => sv(a.id, "gun", e.target.value)} className={ic} placeholder="—" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
+                <span className="text-[10px] font-extrabold text-emerald-300/80 uppercase">Total min/wk</span>
+                <div className="px-3 py-1.5 rounded-lg bg-emerald-400/10 border border-emerald-400/20 text-emerald-300 font-extrabold text-sm min-w-[3rem] text-center">{tot(a.id)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop — table */}
+        <div className="hidden md:block glass-float overflow-x-auto rounded-xl border border-white/[0.08]">
           <table className="w-full text-sm min-w-[580px]">
             <thead>
               <tr className="bg-white/[0.06] border-b border-white/[0.04]">
@@ -974,7 +1343,7 @@ const IPAQSection = ({ data, onChange }) => {
         </div>
       </Glass>
 
-      <Glass className="p-5 border-l-2 border-amber-400/40">
+      <Glass className="p-4 sm:p-5 border-l-2 border-amber-400/40">
         <div className="flex items-start gap-3 mb-4">
           <BarChart3 className="w-5 h-5 text-amber-300 flex-shrink-0 mt-0.5" />
           <div>
@@ -984,7 +1353,7 @@ const IPAQSection = ({ data, onChange }) => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+          <div className="glass-float px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08]">
             <p className="text-[10px] font-extrabold text-white/40 uppercase mb-1">Total MET-minutes/week</p>
             <p className="text-2xl font-extrabold text-white">{totalMET.toFixed(0)}</p>
             <p className="text-xs text-white/50 mt-1">Metabolic Equivalent of Task</p>
@@ -1064,20 +1433,30 @@ const VASSection = ({ data, onChange }) => {
             { label:"Pain+", val:"PAIN=increased during session" },
             { label:"Motivated", val:"NOTES=patient motivated, good effort" },
             { label:"Tired", val:"NOTES=patient tired, low energy" },
-          ].map((btn) => (
-            <button
-              key={btn.val}
-              type="button"
-              onClick={() => {
-                const existing = data?.notes || "";
-                const sep = existing ? "\n" : "";
-                onChange({ ...data, notes: existing + sep + btn.val });
-              }}
-              className="text-[9px] font-bold px-2 py-1 rounded-lg bg-amber-400/10 border border-amber-400/20 text-amber-300 hover:bg-amber-400/20 transition-all whitespace-nowrap"
-            >
-              + {btn.label}
-            </button>
-          ))}
+          ].map((btn) => {
+            const exists = (data?.notes || "").split("\n").includes(btn.val);
+            return (
+              <button
+                key={btn.val}
+                type="button"
+                onClick={() => {
+                  const lines = (data?.notes || "").split("\n").filter(Boolean);
+                  if (exists) {
+                    onChange({ ...data, notes: lines.filter(l => l !== btn.val).join("\n") });
+                  } else {
+                    onChange({ ...data, notes: [...lines, btn.val].join("\n") });
+                  }
+                }}
+                className={`text-[9px] font-bold px-2 py-1 rounded-lg border transition-all whitespace-nowrap ${
+                  exists
+                    ? "bg-amber-400/20 border-amber-400/30 text-amber-200"
+                    : "bg-amber-400/10 border-amber-400/20 text-amber-300 hover:bg-amber-400/20"
+                }`}
+              >
+                {exists ? "✕ " : "+ "}{btn.label}
+              </button>
+            );
+          })}
         </div>
 
         <textarea
@@ -1310,9 +1689,47 @@ const FD_LS_KEY = "neuro_fd_data";
 const NEXT_ID_LS_KEY = "neuro_next_id";
 const API_BASE = "";
 
-function getNextStudyId() {
-  const id = parseInt(localStorage.getItem(NEXT_ID_LS_KEY)) || 100;
-  return id + 1;
+// Cross-platform file download — never window.open on iOS PWA (no back button)
+function downloadBlob(blob, filename) {
+  const tryShare = async () => {
+    if (!navigator.share) return false;
+    try {
+      const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  };
+
+  const linkDownload = () => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
+
+  if (isIOSDevice()) {
+    tryShare().then((shared) => { if (!shared) linkDownload(); });
+    return;
+  }
+  linkDownload();
+}
+
+function nextStudyId() {
+  const patients = loadPatients();
+  let maxId = 100;
+  patients.forEach((p) => {
+    const id = parseInt(p.demographics?.participantId);
+    if (!isNaN(id) && id > maxId) maxId = id;
+  });
+  return maxId + 1;
 }
 
 function smoothVelPath(pts, xFn, yFn) {
@@ -1334,33 +1751,349 @@ function smoothVelPath(pts, xFn, yFn) {
   return d;
 }
 
-function incrementStudyId() {
-  const id = parseInt(localStorage.getItem(NEXT_ID_LS_KEY)) || 100;
-  localStorage.setItem(NEXT_ID_LS_KEY, id + 1);
+function buildCombinedVelChart(profiles, isPdf, compact) {
+  const colors = { pre:"#38bdf8", during:"#a78bfa", post:"#34d399", baseline:"#fbbf24" };
+  const labels = { pre:"Pre", during:"During", post:"Post", baseline:"Healthy side" };
+  const entries = Object.entries(profiles).filter(([_, p]) => p?.t?.length >= 2);
+  if (!entries.length) return "";
+  const normalized = entries.map(([key, p]) => {
+    const t0 = p.t[0];
+    return [key, { t: p.t.map((ti) => +(ti - t0).toFixed(3)), v: p.v }];
+  });
+  const allT = normalized.flatMap(([_, p]) => p.t);
+  const allV = normalized.flatMap(([_, p]) => p.v);
+  const tMin = Math.min(...allT), tMax = Math.max(...allT);
+  const vMax = Math.max(...allV, 0.01);
+
+  const isPrint = !!isPdf && !compact;
+  const cfg = compact
+    ? { w: 320, h: 140, pad: 28, topPad: 14, bottomPad: 24, fs: 9, sw: 2, dotR: 3, dotSw: 1.5, bg: false, legend: false, theme: "dark" }
+    : isPrint
+    ? { w: 900, h: 300, pad: 62, topPad: 52, bottomPad: 38, fs: 12, sw: 2.5, dotR: 4.5, dotSw: 2, bg: true, legend: entries.length > 1, theme: "print" }
+    : { w: 900, h: 260, pad: 56, topPad: entries.length > 1 ? 44 : 28, bottomPad: 34, fs: 11, sw: 2.5, dotR: 4, dotSw: 2, bg: false, legend: entries.length > 1, theme: "dark" };
+
+  const { w, h, pad, topPad, bottomPad, fs, sw, dotR, dotSw, bg, legend, theme } = cfg;
+  const plotW = w - 2 * pad;
+  const plotH = h - topPad - bottomPad;
+  const xp = (t) => pad + ((t - tMin) / (tMax - tMin || 1)) * plotW;
+  const yp = (v) => topPad + plotH - (v / vMax) * plotH;
+  const lines = normalized.map(([key, prof]) => {
+    const pts = prof.t.map((t, i) => ({ t, v: prof.v[i] }));
+    const path = smoothVelPath(pts, xp, yp);
+    const peak = pts.reduce((a, b) => a.v > b.v ? a : b);
+    const color = colors[key] || "#94a3b8";
+    return { key, path, peak, color, label: labels[key] || key };
+  });
+
+  const labelFill = theme === "print" ? "#64748b" : "#64748b";
+  const axisStroke = theme === "print" ? "#94a3b8" : "#334155";
+  const legendFill = theme === "print" ? "#475569" : "#94a3b8";
+  const peakStroke = theme === "print" ? "#ffffff" : "#ffffff";
+  const svgSize = isPrint
+    ? ` width="${w}" height="${h}"`
+    : compact
+    ? ' width="100%" height="100%" preserveAspectRatio="xMidYMid meet"'
+    : ' width="100%"';
+  let svg = `<svg viewBox="0 0 ${w} ${h}"${svgSize} xmlns="http://www.w3.org/2000/svg">`;
+
+  if (bg && theme === "print") {
+    svg += `<rect width="${w}" height="${h}" fill="#f8fafc" rx="10"/>`;
+    svg += `<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" fill="none" stroke="#e2e8f0" stroke-width="1" rx="10"/>`;
+  } else if (bg) {
+    svg += `<rect width="${w}" height="${h}" fill="#1e2433" rx="10"/>`;
+  }
+
+  if (legend) {
+    const itemW = isPrint ? 132 : 118;
+    const legendW = lines.length * itemW - 8;
+    const legendStart = (w - legendW) / 2;
+    lines.forEach((l, i) => {
+      const lx = legendStart + i * itemW;
+      const ly = topPad - (isPrint ? 26 : 22);
+      svg += `<circle cx="${lx + 5}" cy="${ly}" r="${isPrint ? 5 : 4}" fill="${l.color}"/>`;
+      svg += `<text x="${lx + 16}" y="${ly + (isPrint ? 5 : 4)}" font-family="Arial,Helvetica,sans-serif" font-size="${fs}" fill="${legendFill}" font-weight="600">${l.label}</text>`;
+    });
+  }
+
+  svg += `<text x="${pad + plotW / 2}" y="${h - (isPrint ? 12 : 8)}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fs}" fill="${labelFill}">Time (s)</text>`;
+  svg += `<text x="${compact ? 10 : isPrint ? 18 : 14}" y="${topPad + plotH / 2}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fs}" fill="${labelFill}" transform="rotate(-90,${compact ? 10 : isPrint ? 18 : 14},${topPad + plotH / 2})">Velocity (SW/s)</text>`;
+  svg += `<line x1="${pad}" y1="${topPad}" x2="${pad}" y2="${topPad + plotH}" stroke="${axisStroke}" stroke-width="${isPrint ? 1.2 : 1}"/>`;
+  svg += `<line x1="${pad}" y1="${topPad + plotH}" x2="${pad + plotW}" y2="${topPad + plotH}" stroke="${axisStroke}" stroke-width="${isPrint ? 1.2 : 1}"/>`;
+  if (theme === "print") {
+    for (let i = 1; i <= 4; i++) {
+      const gy = topPad + (plotH * i) / 5;
+      svg += `<line x1="${pad}" y1="${gy}" x2="${pad + plotW}" y2="${gy}" stroke="#e2e8f0" stroke-width="0.8"/>`;
+    }
+  }
+  lines.forEach((l) => {
+    svg += `<path d="${l.path}" fill="none" stroke="${l.color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    svg += `<circle cx="${xp(l.peak.t)}" cy="${yp(l.peak.v)}" r="${dotR}" fill="${l.color}" stroke="${peakStroke}" stroke-width="${dotSw}"/>`;
+  });
+  svg += `</svg>`;
+  return svg;
 }
+
+function svgToDataUrl(svg) {
+  const xml = svg.includes("xmlns=") ? svg : svg.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+}
+
 
 // ─── Kinematics AI Lab Section ────────────────────────────────────────────────
 
 const KIN_LS_KEY = "neuro_kin_results";
 const KIN_LS_EXP_KEY = "neuro_kin_expanded";
 
-const KinSection = ({ data, demographics, onChange, showToast }) => {
+const KIN_PHASE_ACCENT = {
+  sky: { bar: "bg-sky-400", ring: "border-t-sky-400", glow: "shadow-sky-500/10", top: "border-t-sky-400/80 from-sky-500/14" },
+  emerald: { bar: "bg-emerald-400", ring: "border-t-emerald-400", glow: "shadow-emerald-500/10", top: "border-t-emerald-400/80 from-emerald-500/14" },
+  amber: { bar: "bg-amber-400", ring: "border-t-amber-400", glow: "shadow-amber-500/10", top: "border-t-amber-400/80 from-amber-500/14" },
+};
+
+const KIN_FILM_ACCENT = {
+  sky: { stroke: "#38bdf8", glow: "rgba(56,189,248,0.45)" },
+  emerald: { stroke: "#34d399", glow: "rgba(52,211,153,0.45)" },
+  amber: { stroke: "#fbbf24", glow: "rgba(251,191,36,0.45)" },
+};
+
+function kinBone(stroke, w = 1.35) {
+  return { stroke, strokeWidth: w, strokeLinecap: "round", strokeLinejoin: "round", fill: "none" };
+}
+
+function KinSkeletonJoint({ cx, cy, stroke, r = 0.85 }) {
+  return <circle cx={cx} cy={cy} r={r} fill={stroke} opacity="0.88" />;
+}
+
+const KIN_SKELETON_VIEWS = ["front", "posterior", "right", "left"];
+
+function KinSkeletonFront({ stroke }) {
+  const b = kinBone(stroke);
+  const bThin = kinBone(stroke, 1.05);
+  return (
+    <g>
+      <circle cx="16" cy="4.2" r="2.35" {...b} />
+      <line x1="16" y1="6.5" x2="16" y2="8" {...b} />
+      <line x1="11" y1="8.6" x2="21" y2="8.6" {...b} />
+      <line x1="16" y1="8" x2="16" y2="13.6" {...b} />
+      <line x1="13.2" y1="10.2" x2="18.8" y2="10.2" {...bThin} />
+      <line x1="13.2" y1="11.8" x2="18.8" y2="11.8" {...bThin} />
+      <line x1="11" y1="8.6" x2="9.2" y2="12.2" {...b} />
+      <line x1="21" y1="8.6" x2="22.8" y2="12.2" {...b} />
+      <KinSkeletonJoint cx={9.2} cy={12.2} stroke={stroke} r={0.72} />
+      <KinSkeletonJoint cx={22.8} cy={12.2} stroke={stroke} r={0.72} />
+      <line x1="13.2" y1="13.6" x2="18.8" y2="13.6" {...b} />
+      <line x1="14" y1="13.6" x2="13.2" y2="19.8" {...b} />
+      <line x1="18" y1="13.6" x2="18.8" y2="19.8" {...b} />
+      <KinSkeletonJoint cx={13.2} cy={19.8} stroke={stroke} r={0.68} />
+      <KinSkeletonJoint cx={18.8} cy={19.8} stroke={stroke} r={0.68} />
+    </g>
+  );
+}
+
+function KinSkeletonPosterior({ stroke }) {
+  const b = kinBone(stroke);
+  const bThin = kinBone(stroke, 1.05);
+  return (
+    <g>
+      <circle cx="16" cy="4.2" r="2.35" {...b} />
+      <line x1="16" y1="6.5" x2="16" y2="8" {...b} />
+      <line x1="11" y1="8.6" x2="21" y2="8.6" {...b} />
+      <line x1="16" y1="8" x2="16" y2="13.6" {...b} strokeWidth="1.55" />
+      <line x1="13.2" y1="10.2" x2="18.8" y2="10.2" {...bThin} />
+      <line x1="13.2" y1="11.8" x2="18.8" y2="11.8" {...bThin} />
+      <line x1="16" y1="9.4" x2="10.6" y2="8.2" {...bThin} />
+      <line x1="16" y1="9.4" x2="21.4" y2="8.2" {...bThin} />
+      <line x1="11" y1="8.6" x2="9.2" y2="12.2" {...b} />
+      <line x1="21" y1="8.6" x2="22.8" y2="12.2" {...b} />
+      <KinSkeletonJoint cx={9.2} cy={12.2} stroke={stroke} r={0.72} />
+      <KinSkeletonJoint cx={22.8} cy={12.2} stroke={stroke} r={0.72} />
+      <line x1="13.2" y1="13.6" x2="18.8" y2="13.6" {...b} />
+      <line x1="14" y1="13.6" x2="13.2" y2="19.8" {...b} />
+      <line x1="18" y1="13.6" x2="18.8" y2="19.8" {...b} />
+      <KinSkeletonJoint cx={13.2} cy={19.8} stroke={stroke} r={0.68} />
+      <KinSkeletonJoint cx={18.8} cy={19.8} stroke={stroke} r={0.68} />
+    </g>
+  );
+}
+
+function KinSkeletonProfile({ stroke, facing = "right" }) {
+  const b = kinBone(stroke);
+  const bThin = kinBone(stroke, 1.05);
+  const body = (
+    <g>
+      <circle cx="12.5" cy="4.2" r="2.35" {...b} />
+      <line x1="12.3" y1="6.5" x2="11.8" y2="8" {...b} />
+      <line x1="11.8" y1="8" x2="11.4" y2="13.6" {...b} />
+      <line x1="11.6" y1="10.2" x2="15.4" y2="10.5" {...bThin} />
+      <line x1="11.5" y1="11.8" x2="15.5" y2="11.3" {...bThin} />
+      <line x1="11.8" y1="8.6" x2="9" y2="9.4" {...b} />
+      <line x1="11.8" y1="8.8" x2="14.6" y2="8.2" {...b} />
+      <line x1="11.8" y1="9" x2="15.4" y2="8.4" {...b} />
+      <line x1="15.4" y1="8.4" x2="19" y2="9.2" {...b} />
+      <KinSkeletonJoint cx={19} cy={9.2} stroke={stroke} r={0.72} />
+      <line x1="11.6" y1="9.2" x2="8.2" y2="11.4" {...b} />
+      <line x1="8.2" y1="11.4" x2="7.2" y2="13.2" {...b} />
+      <KinSkeletonJoint cx={7.2} cy={13.2} stroke={stroke} r={0.68} />
+      <line x1="12" y1="13.6" x2="14.4" y2="13.8" {...b} />
+      <line x1="12.2" y1="13.8" x2="11.5" y2="16.4" {...b} />
+      <line x1="11.5" y1="16.4" x2="12.2" y2="19.8" {...b} />
+      <KinSkeletonJoint cx={12.2} cy={19.8} stroke={stroke} r={0.68} />
+      <line x1="13.6" y1="13.8" x2="14.4" y2="16.4" {...b} />
+      <line x1="14.4" y1="16.4" x2="15.2" y2="19.8" {...b} />
+      <KinSkeletonJoint cx={15.2} cy={19.8} stroke={stroke} r={0.68} />
+    </g>
+  );
+  if (facing === "left") {
+    return <g transform="translate(32,0) scale(-1,1)">{body}</g>;
+  }
+  return body;
+}
+
+function KinSkeletonFigure({ view, stroke }) {
+  if (view === "posterior") return <KinSkeletonPosterior stroke={stroke} />;
+  if (view === "right") return <KinSkeletonProfile stroke={stroke} facing="right" />;
+  if (view === "left") return <KinSkeletonProfile stroke={stroke} facing="left" />;
+  return <KinSkeletonFront stroke={stroke} />;
+}
+
+function KinFilmFrame({ viewIndex, accent = "amber" }) {
+  const col = KIN_FILM_ACCENT[accent] || KIN_FILM_ACCENT.amber;
+  const view = KIN_SKELETON_VIEWS[viewIndex % KIN_SKELETON_VIEWS.length];
+  return (
+    <div className="kin-film-frame">
+      <svg viewBox="0 0 32 24" aria-hidden>
+        <KinSkeletonFigure view={view} stroke={col.stroke} />
+      </svg>
+    </div>
+  );
+}
+
+function KinFilmStripLoop({ accent = "amber" }) {
+  const frames = [...KIN_SKELETON_VIEWS, ...KIN_SKELETON_VIEWS];
+  const holes = Array.from({ length: 11 });
+
+  return (
+    <div className="kin-film-strip" aria-hidden>
+      <div className="kin-film-strip__holes">
+        {holes.map((_, i) => (
+          <span key={`t-${i}`} className="kin-film-strip__hole" />
+        ))}
+      </div>
+      <div className="kin-film-strip__body">
+        <div className="kin-film-strip__track">
+          {frames.map((_, i) => (
+            <KinFilmFrame key={i} viewIndex={i} accent={accent} />
+          ))}
+        </div>
+      </div>
+      <div className="kin-film-strip__holes">
+        {holes.map((_, i) => (
+          <span key={`b-${i}`} className="kin-film-strip__hole" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function KinPhaseAnalyzingOverlay({ accent = "amber" }) {
+  const blur = {
+    backdropFilter: "blur(80px) saturate(180%)",
+    WebkitBackdropFilter: "blur(80px) saturate(180%)",
+  };
+  return (
+    <motion.div
+      key="kin-analyzing"
+      className="kin-analyzing-overlay absolute inset-0 z-30 flex items-center justify-center rounded-2xl overflow-hidden"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <div className="absolute inset-0 z-0 rounded-2xl" style={blur} />
+      <div className="relative z-20 w-full px-3 flex justify-center">
+        <KinFilmStripLoop accent={accent} />
+      </div>
+    </motion.div>
+  );
+}
+
+const kinPhaseCardCls = (c, status, hasResult) => {
+  const a = KIN_PHASE_ACCENT[c] || KIN_PHASE_ACCENT.amber;
+  const base = `relative flex flex-col rounded-2xl border border-t-[3px] bg-gradient-to-b ${a.top} to-white/[0.02] min-h-[240px] transition-all duration-300 overflow-hidden`;
+  if (status === "analyzing") return `${base} border-amber-400/35 ring-1 ring-amber-400/20 kin-analyzing-ring`;
+  if (hasResult) return `${base} border-emerald-400/35 ring-1 ring-emerald-400/20`;
+  return `${base} border-white/[0.07] hover:border-white/12`;
+};
+
+const kinUploadZoneCls = (c, hasFile) => {
+  const base = "group relative flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed px-3 py-5 cursor-pointer transition-all duration-200";
+  if (hasFile) {
+    if (c === "sky") return `${base} border-sky-400/30 bg-sky-400/[0.06] hover:bg-sky-400/10`;
+    if (c === "emerald") return `${base} border-emerald-400/30 bg-emerald-400/[0.06] hover:bg-emerald-400/10`;
+    return `${base} border-amber-400/30 bg-amber-400/[0.06] hover:bg-amber-400/10`;
+  }
+  return `${base} border-white/10 bg-white/[0.02] hover:border-white/18 hover:bg-white/[0.04]`;
+};
+
+const kinShortFileName = (name, max = 22) => {
+  if (!name) return "";
+  if (name.length <= max) return name;
+  const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+  const stem = ext ? name.slice(0, name.length - ext.length) : name;
+  const keep = Math.max(6, max - ext.length - 1);
+  return `${stem.slice(0, keep)}…${ext}`;
+};
+
+const armSideLabel = (side) => (side === "left" ? "Left" : side === "right" ? "Right" : "—");
+
+const analyzedArmForPhase = (kinematicsResults, phaseKey) => {
+  const s = (kinematicsResults[phaseKey]?.side_analyzed || kinematicsResults[phaseKey]?.side || "").toString().toLowerCase();
+  return s === "left" || s === "right" ? s : null;
+};
+
+const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => {
   const [kinematicsResults, setKinematicsResults] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {}; } catch { return {}; }
+    try {
+      const ls = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {};
+      const fd = data?.analysisResults || {};
+      const merged = { ...fd, ...ls };
+      delete merged.during;
+      return merged;
+    } catch {
+      return data?.analysisResults || {};
+    }
   });
   const [settings, setSettings] = useState({
-    cutoffFrequency: 6.0,
+    cutoffFrequency: 4.0,
     filterOrder: 4,
   });
   const [expandedResults, setExpandedResults] = useState(() => {
     try { return JSON.parse(localStorage.getItem(KIN_LS_EXP_KEY)) || {}; } catch { return {}; }
   });
+  const [kinResultsTab, setKinResultsTab] = useState("compare");
+  const [mediaPreview, setMediaPreview] = useState(null);
+  const [analysisStatus, setAnalysisStatus] = useState({});
 
   const abortRef = useRef({});
 
   useEffect(() => {
     localStorage.setItem(KIN_LS_KEY, JSON.stringify(kinematicsResults));
   }, [kinematicsResults]);
+
+  // Reload kinematics when switching patient session
+  useEffect(() => {
+    if (!sessionKey) return;
+    const fromFd = data?.analysisResults;
+    if (fromFd && typeof fromFd === "object" && Object.keys(fromFd).length > 0) {
+      const cleaned = { ...fromFd };
+      delete cleaned.during;
+      setKinematicsResults(cleaned);
+      localStorage.setItem(KIN_LS_KEY, JSON.stringify(cleaned));
+    } else {
+      setKinematicsResults({});
+      localStorage.removeItem(KIN_LS_KEY);
+    }
+  }, [sessionKey]);
 
   useEffect(() => {
     localStorage.setItem(KIN_LS_EXP_KEY, JSON.stringify(expandedResults));
@@ -1370,17 +2103,14 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
   useEffect(() => {
     if (!data || Object.keys(kinematicsResults).length > 0) return;
     const kinMap = {
-      movementDuration: "total_duration_s",
-      peakVelocity: "total_peak_velocity",
-      meanVelocity: "total_mean_velocity",
-      totalPathLength: "total_path_length",
-      lateralRange: "total_lat_range_norm",
-      trunkPalmRatio: "total_trunk_palm_ratio",
-      maxElbowAngle: "total_max_elbow_deg",
-      pauseSmoothness: "smoothness_pause_pct",
-      shoulderVertExcursion: "shoulder_vert_norm",
-      trunkLateralFlexion: "trunk_lat_norm",
-      trunkForwardFlexion: "trunk_vert_norm",
+      sparc: "sparc",
+      trunkRatio: "trunk_ratio",
+      shoulderVertNorm: "shoulder_vert_norm",
+      handDisplacementNorm: "hand_displacement_norm",
+      movementTimeSec: "movement_time_sec",
+      peakVelocityPxS: "peak_velocity_px_s",
+    peakVelocityCmS: "peak_velocity_cm_s",
+      duration: "movement_time_sec",
     };
     const converted = {};
     const phaseMap = { pre: "pre", post: "post", healthy: "baseline" };
@@ -1398,7 +2128,6 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
 
   const phases = [
     { k:"pre", l:"Pre", c:"sky" },
-    { k:"during", l:"During", c:"violet" },
     { k:"post", l:"Post", c:"emerald" },
     { k:"baseline", l:"Healthy side", c:"amber" },
   ];
@@ -1413,7 +2142,10 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
     // Clear old result when new video selected
     if (kinematicsResults[phase]) {
       delete upd[resultKey(phase)];
-      setKinematicsResults((prev) => { const n = { ...prev }; delete n[phase]; return n; });
+      const nextResults = { ...kinematicsResults };
+      delete nextResults[phase];
+      setKinematicsResults(nextResults);
+      upd.analysisResults = nextResults;
     }
     upd[statusKey(phase)] = "uploaded";
     onChange(upd);
@@ -1436,10 +2168,36 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
     delete upd[`${vidKey(phase)}_file`];
     delete upd[resultKey(phase)];
     upd[statusKey(phase)] = "idle";
-    onChange(upd);
-    setKinematicsResults((prev) => { const n = { ...prev }; delete n[phase]; return n; });
+    const nextResults = { ...kinematicsResults };
+    delete nextResults[phase];
+    setKinematicsResults(nextResults);
+    onChange({ ...upd, analysisResults: nextResults });
     setExpandedResults((prev) => { const n = { ...prev }; delete n[phase]; return n; });
     showToast(`Cleared ${phase}`);
+  };
+
+  const clearAllKin = () => {
+    phases.forEach((ph) => {
+      if (abortRef.current[ph.k]) {
+        abortRef.current[ph.k].abort();
+        delete abortRef.current[ph.k];
+      }
+    });
+    const upd = { ...data };
+    phases.forEach((ph) => {
+      delete upd[vidKey(ph.k)];
+      delete upd[`${vidKey(ph.k)}_file`];
+      delete upd[resultKey(ph.k)];
+      upd[statusKey(ph.k)] = "idle";
+    });
+    upd.analysisResults = {};
+    setKinematicsResults({});
+    setExpandedResults({});
+    setKinResultsTab("compare");
+    localStorage.removeItem(KIN_LS_KEY);
+    localStorage.removeItem(KIN_LS_EXP_KEY);
+    onChange(upd);
+    showToast("All kinematics cleared");
   };
 
   const analyzeVideo = async (phase) => {
@@ -1458,14 +2216,19 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
       const isCsv = file.name.endsWith(".csv");
       fd.append(isCsv ? "csv" : "video", file);
       fd.append("phase", phase);
-      fd.append("affected_side", "auto");
+      const strokeSideRaw = (demographics?.side || demographics?.affectedSide || demographics?.strokeSide || "auto").toString();
+      const strokeSide = strokeSideRaw === "1" ? "left" : strokeSideRaw === "2" ? "right" : strokeSideRaw.toLowerCase();
+      fd.append("stroke_side", strokeSide.includes("left") ? "left" : strokeSide.includes("right") ? "right" : "auto");
+      fd.append("affected_side", strokeSide.includes("left") ? "left" : strokeSide.includes("right") ? "right" : "auto");
       fd.append("cutoff_frequency", settings.cutoffFrequency.toString());
       fd.append("filter_order", settings.filterOrder.toString());
       fd.append("patient_height_cm", demographics?.height || "auto");
       fd.append("shoulder_width_cm", demographics?.shoulderWidth || "auto");
+      const sexRaw = (demographics?.sex || demographics?.gender || "unknown").toString().toLowerCase();
+      fd.append("patient_sex", sexRaw.includes("female") || sexRaw === "2" ? "female" : sexRaw.includes("male") || sexRaw === "1" ? "male" : "unknown");
       if (!isCsv) {
         fd.append("arm_type", "paretic");
-        fd.append("trial_count", "3");
+        fd.append("trial_count", "1");
         fd.append("best_trial_metric", "sparc");
       }
 
@@ -1486,9 +2249,15 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
         return;
       }
 
-      setKinematicsResults((prev) => ({ ...prev, [phase]: result }));
-      onChange({ ...data, [resultKey(phase)]: result, [statusKey(phase)]: "completed" });
-      showToast(`✓ Analysis complete for ${phase}`);
+      const nextResults = { ...kinematicsResults, [phase]: { ...result, video_filename: result.video_filename || file.name } };
+      setKinematicsResults(nextResults);
+      onChange({
+        ...data,
+        analysisResults: nextResults,
+        [resultKey(phase)]: result,
+        [statusKey(phase)]: "completed",
+      });
+      showToast(`✓ Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials → mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
     } catch (err) {
       if (err.name === "AbortError") {
         showToast(`✕ Analysis cancelled for ${phase}`, "info");
@@ -1513,12 +2282,57 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
     if (type === "trc") filename = result.trc_filename;
     if (type === "mot") filename = result.mot_filename;
     if (type === "video") filename = result.validation_video;
-    if (!filename) return;
+    if (type === "unified") filename = result.unified_validation_video;
+    if (!filename) {
+      if (type === "video") showToast("Skeleton validation video not available — re-analyze the video file", "error");
+      if (type === "unified") showToast("Unified validation video not available — generate it first", "error");
+      return;
+    }
 
-    const a = document.createElement("a");
-    a.href = `${API_BASE}/download-${type}/${encodeURIComponent(filename)}`;
-    a.download = filename;
-    a.click();
+    const url = `${API_BASE}/download/${encodeURIComponent(filename)}`;
+
+    // Play video inside app — iOS PWA has no back button if we navigate away
+    if (type === "video" || type === "unified") {
+      const title = type === "unified" ? "Unified Validation Video" : "Skeleton Video";
+      setMediaPreview({ url, title: `${phases.find((p) => p.k === phase)?.l || phase} — ${title}` });
+      return;
+    }
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Download failed (${res.status})`);
+      const blob = await res.blob();
+      downloadBlob(blob, filename);
+    } catch (err) {
+      console.error("Download error:", err);
+    }
+  };
+
+  const generateUnifiedValidation = async (phase) => {
+    const result = kinematicsResults[phase];
+    if (!result || !result.csv_filename || !result.video_filename) {
+      showToast("Analyze the video first", "error");
+      return;
+    }
+    setAnalysisStatus((prev) => ({ ...prev, [phase]: "generating_unified" }));
+    try {
+      const formData = new FormData();
+      formData.append("csv_filename", result.csv_filename);
+      formData.append("video_filename", result.video_filename);
+      const res = await fetch(`${API_BASE}/unified-validation`, { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || `Failed (${res.status})`);
+      setKinematicsResults((prev) => ({
+        ...prev,
+        [phase]: { ...prev[phase], unified_validation_video: data.unified_validation_video },
+      }));
+      showToast("Unified validation video ready", "success");
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || "Failed to generate unified validation video", "error");
+    } finally {
+      setAnalysisStatus((prev) => ({ ...prev, [phase]: "idle" }));
+    }
   };
 
   const toggleResult = (phase) => {
@@ -1527,210 +2341,426 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
 
   const getMetricValue = (phase, key) => {
     const result = kinematicsResults[phase];
-    if (!result || result[key] == null) return "—";
-    const val = result[key];
-    if (typeof val === "object" && val !== null) {
-      return val.best ?? val.mean ?? "—";
+    if (!result) return "—";
+    const num = pickKinField(result, key);
+    if (num !== null) return num;
+    if (key === "side_analyzed" || key === "side") {
+      return result.side_analyzed ?? result.side ?? "—";
     }
-    return val ?? "—";
+    const direct = result[key];
+    if (direct != null && typeof direct !== "object") return direct;
+    return "—";
   };
 
-  const variables = [
-    // 🥇 Primary — Smoothness & Compensation
-
-    { group: "Primary", name: "Smoothness (Pause %)",           key: "smoothness_pause_pct",    unit: "%",     tip: "Pause Ratio = % time velocity below 10% of peak. Lower = more continuous movement (smoother). Healthy ~5–10%, Impaired >25%" },
-    { group: "Primary", name: "Trunk/Palm Ratio",                key: "total_trunk_palm_ratio", unit: "ratio", tip: "Total trunk path / total hand path. Higher = more trunk compensation" },
-
-    // 🥈 Secondary — Performance
-
-    { group: "Secondary", name: "Lateral Wiping Range (norm)",   key: "total_lat_range_norm",   unit: "ratio", tip: "Width of wiping motion, normalized to shoulder width. Higher = fuller reach" },
-    { group: "Secondary", name: "Peak Velocity",                 key: "total_peak_velocity",    unit: "norm/s", tip: "Maximum hand speed. Higher = more explosive movement" },
-    { group: "Secondary", name: "Total Path Length",             key: "total_path_length",      unit: "norm",   tip: "Total distance traveled by the hand (body-proportional units). Most robust overall activity metric" },
-    { group: "Secondary", name: "Mean Velocity",                 key: "total_mean_velocity",    unit: "norm/s", tip: "Average hand speed across whole movement" },
-
-    // 🥉 Tertiary — Supporting details
-
-    { group: "Tertiary", name: "Trunk Lateral Disp. (norm)",     key: "trunk_lat_norm",         unit: "ratio", tip: "Side-to-side trunk displacement. Lower = better trunk stability" },
-    { group: "Tertiary", name: "Trunk Vertical Disp. (norm)",    key: "trunk_vert_norm",        unit: "ratio", tip: "Up-down trunk displacement" },
-    { group: "Tertiary", name: "Trunk Rotation (norm)",          key: "trunk_rot_norm",         unit: "ratio", tip: "Shoulder separation change. Lower = less rotation of upper body" },
-    { group: "Tertiary", name: "Arm Length (norm)",                 key: "arm_length_norm",       unit: "ratio", tip: "Normalized arm length (pixel arm length / shoulder width)" },
-    { group: "Tertiary", name: "Ref Scale (Shoulder)",              key: "ref_scale",             unit: "px",    tip: "The reference scale used for normalization (shoulder width in pixels)" },
-    { group: "Tertiary", name: "Shoulder Vertical Excursion",   key: "shoulder_vert_norm",     unit: "ratio", tip: "Vertical shoulder movement. Lower = less compensatory shoulder elevation" },
-    { group: "Tertiary", name: "Max Elbow Extension",            key: "total_max_elbow_deg",    unit: "deg",   tip: "Maximum elbow extension angle. Higher = better ability to extend arm" },
-    { group: "Tertiary", name: "Duration",                       key: "total_duration_s",       unit: "sec",   tip: "Total movement time from onset to offset" },
-    { group: "Tertiary", name: "Code Version",                 key: "_code_version",        unit: "",      tip: "Diagnostic: which code version is running" },
-    { group: "Tertiary", name: "Side Analyzed",                key: "side_analyzed",        unit: "",      tip: "Which side was analyzed (left/right)" },
-  ];
-
-  const phaseInfo = {
-    forward:    { label: "Forward Reach",   color: "sky" },
-    wipe_right: { label: "Wipe Right",      color: "violet" },
-    wipe_left:  { label: "Wipe Left",       color: "amber" },
-    return:     { label: "Return",          color: "rose" },
+  const displayMetricValue = (phase, key) => {
+    const val = getMetricValue(phase, key);
+    if (val === "—" || typeof val === "string") return val;
+    if (typeof val !== "number") return val;
+    if (key === "sparc") return val.toFixed(3);
+    if (key === "trunk_ratio") return (val * 100).toFixed(1);
+    if (key === "shoulder_vert_norm") return (val * 100).toFixed(1);
+    if (key === "hand_displacement_norm") return `${val.toFixed(1)} cm`;
+    if (key === "movement_time_sec") return val.toFixed(2);
+    if (key === "peak_velocity_px_s") return val.toFixed(1);
+    if (key === "peak_velocity_cm_s") return `${val.toFixed(1)} cm/s`;
+    if (key.includes("ratio") || key.includes("trunk") || key.includes("_sw") || key.includes("path_eff")) return val.toFixed(3);
+    return val.toFixed(2);
   };
 
-  const phaseMetrics = [
-    { key: "distance_norm",        name: "Distance",        unit: "norm" },
-    { key: "lateral_range_norm",   name: "Lateral Range",   unit: "norm" },
-    { key: "forward_range_norm",   name: "Forward Range",   unit: "norm" },
-    { key: "peak_velocity",        name: "Peak Vel.",       unit: "norm/s" },
-    { key: "pause_pct",            name: "Pause %",         unit: "%" },
-    { key: "path_ratio",           name: "Path Ratio",      unit: "ratio" },
-    { key: "trunk_palm_ratio",     name: "Trunk/Palm",      unit: "ratio" },
-  ];
-
-  const getPhaseMetricValue = (phaseKey, phaseName, metricKey) => {
-    const result = kinematicsResults[phaseKey];
-    if (!result || !result.phases || !result.phases[phaseName] || !result.phases[phaseName].present) return "\u2014";
-    const val = result.phases[phaseName][metricKey];
-    return val != null ? val : "\u2014";
+  const KIN_TIPS = {
+    sparc: "SPARC — less negative (closer to 0) = smoother movement. Pose trajectories upsampled to 60 Hz before FFT (Balasubramanian 2012/2015).",
+    trunk_ratio: "Trunk displacement / palm displacement. Lower = less compensation.",
+    shoulder_vert_norm: "Shoulder elevation (method adapts to camera: frontal=rest-to-peak, side=range norm).",
+    hand_displacement_norm: "Peak hand reach relative to trunk (anti-compensation), calibrated to 60 cm table width (cm). Trunk compensation tracked via trunk_ratio.",
+    movement_time_sec: "Active movement duration (onset to offset).",
+    peak_velocity_px_s: "Peak tangential hand velocity during reach (px/s).",
+    peak_velocity_cm_s: "Peak tangential hand velocity during reach (cm/s).",
   };
 
-  // Collect phase names present in at least one recording
-  const presentPhases = (() => {
-    const names = new Set();
-    Object.values(kinematicsResults).forEach((r) => {
-      if (r.phases) {
-        Object.entries(r.phases).forEach(([pn, pd]) => {
-          if (pd?.present) names.add(pn);
-        });
-      }
-    });
-    return names;
+  const CARD_PREVIEW_KEYS = ["sparc", "trunk_ratio", "shoulder_vert_norm", "peak_velocity_px_s"];
+
+  const variables = orderedKinematicVars().map((v) => ({
+    group: v.tier === "primary" ? "Primary" : v.tier === "secondary" ? "Secondary" : "Exploratory",
+    name: v.label,
+    key: v.key,
+    unit: v.unit || "—",
+    direction: v.dir === "lower" ? "lower" : v.dir === "higher" ? "higher" : "none",
+    tip: KIN_TIPS[v.key] || "",
+  }));
+
+  const activeResultPhases = phases.filter((ph) => kinematicsResults[ph.k]);
+  const kinViewWarning = (() => {
+    const lowSparc = activeResultPhases.filter((ph) => kinematicsResults[ph.k]?.sparc_comparable === false);
+    if (lowSparc.length) {
+      return `Reach amplitude low in ${lowSparc.map((ph) => ph.label).join(", ")} — SPARC may be less reliable`;
+    }
+    return null;
   })();
+  const hasKinTriple =
+    kinematicsResults.pre && kinematicsResults.post && kinematicsResults.baseline;
+  const recoverySummaryRows = hasKinTriple
+    ? RECOVERY_SUMMARY_KEYS.map((key) => {
+        const meta = KINEMATIC_VARS.find((v) => v.key === key);
+        if (!meta) return null;
+        const preV = getMetricValue("pre", key);
+        const postV = getMetricValue("post", key);
+        const helV = getMetricValue("baseline", key);
+        if (!kinCrossPhaseComparable(kinematicsResults, key, analyzedArmForPhase)) return null;
+        if (preV === "—" || postV === "—" || helV === "—") return null;
+        return {
+          key,
+          label: meta.label,
+          prePost: kinPrePostBadge(preV, postV, meta.dir),
+          postHealthy: kinPostHealthyBadge(postV, helV, meta.dir),
+        };
+      }).filter(Boolean)
+    : [];
+  const phaseChipCls = (c, on) => {
+    if (c === "sky") return on ? "bg-sky-400/20 border-sky-400/40 text-sky-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
+    if (c === "violet") return on ? "bg-violet-400/20 border-violet-400/40 text-violet-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
+    if (c === "emerald") return on ? "bg-emerald-400/20 border-emerald-400/40 text-emerald-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
+    return on ? "bg-amber-400/20 border-amber-400/40 text-amber-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
+  };
+  const phaseValueCls = (c) =>
+    c === "sky" ? "border-sky-400/25 bg-sky-400/10" :
+    c === "violet" ? "border-violet-400/25 bg-violet-400/10" :
+    c === "emerald" ? "border-emerald-400/25 bg-emerald-400/10" :
+    "border-amber-400/25 bg-amber-400/10";
+  const phaseLabelCls = (c) =>
+    c === "sky" ? "text-sky-300" : c === "violet" ? "text-violet-300" :
+    c === "emerald" ? "text-emerald-300" : "text-amber-300";
 
-  const hasPrePost = kinematicsResults.pre && kinematicsResults.post;
-  const recordingColumns = phases.filter((ph) => kinematicsResults[ph.k]);
+  const kinDirArrow = (dir) => {
+    if (dir === "higher") return { sym: "↑", tip: "↑ زيادة = تحسّن" };
+    if (dir === "lower") return { sym: "↓", tip: "↓ نقص = تحسّن" };
+    return null;
+  };
+
+  const renderKinMetricRow = (metric, idx, prevGroup) => {
+    const showGroupHeader = metric.group !== prevGroup;
+    const preVal = getMetricValue("pre", metric.key);
+    const postVal = getMetricValue("post", metric.key);
+    const baselineVal = getMetricValue("baseline", metric.key);
+    const kinComparable = kinCrossPhaseComparable(kinematicsResults, metric.key, analyzedArmForPhase);
+    const deltaPrePost = kinComparable && preVal !== "—" && postVal !== "—"
+      ? kinPrePostBadge(preVal, postVal, metric.direction) : null;
+    const deltaPostHealthy = kinComparable && postVal !== "—" && baselineVal !== "—"
+      ? kinPostHealthyBadge(postVal, baselineVal, metric.direction) : null;
+    const arrow = kinDirArrow(metric.direction);
+
+    return (
+      <React.Fragment key={metric.key}>
+        {showGroupHeader && (
+          <p className={`text-[10px] font-extrabold uppercase tracking-widest text-white/30 ${idx === 0 ? "mt-0" : "mt-4"} mb-2`}>
+            {metric.group}
+          </p>
+        )}
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="min-w-0">
+              <p className="text-sm font-extrabold text-white/90 whitespace-nowrap flex items-center gap-1">
+                {metric.name}
+                {arrow && (
+                  <span className="text-emerald-400/90 text-xs font-bold" title={arrow.tip}>{arrow.sym}</span>
+                )}
+              </p>
+              <p className="text-[10px] text-white/35 mt-0.5">{metric.unit}</p>
+            </div>
+            {metric.tip && (
+              <span className="text-[10px] text-white/25 leading-snug max-w-[40%] text-right hidden sm:block">{metric.tip}</span>
+            )}
+          </div>
+          {kinResultsTab === "compare" ? (
+            <div className={`grid gap-2 ${activeResultPhases.length <= 2 ? "grid-cols-2" : "grid-cols-2"}`}>
+              {activeResultPhases.map((ph) => (
+                <div key={ph.k} className={`rounded-lg border px-2.5 py-2 ${phaseValueCls(ph.c)}`}>
+                  <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>{ph.l}</p>
+                  <p className="text-base font-mono font-bold text-white/90 mt-0.5">
+                    {displayMetricValue(ph.k, metric.key)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-2xl font-mono font-extrabold text-white/90">
+              {displayMetricValue(kinResultsTab, metric.key)}
+            </p>
+          )}
+          {kinResultsTab === "compare" && (deltaPrePost || deltaPostHealthy) && (
+            <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-white/[0.06]">
+              {deltaPrePost && (
+                <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md border ${deltaPrePost.colorClass}`}>
+                  Pre → Post: {deltaPrePost.text}
+                </span>
+              )}
+              {deltaPostHealthy && (
+                <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md border ${deltaPostHealthy.colorClass}`}>
+                  Post → Healthy: {deltaPostHealthy.text}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </React.Fragment>
+    );
+  };
+
+
 
   return (
     <div className="space-y-5">
-      <SH icon={Cpu} en="Kinematics AI Laboratory" tr="Kinematik Yapay Zeka Laboratuvarı" badge="Pre / During / Post / Healthy side" />
+      <SH icon={Cpu} en="Kinematics AI Laboratory" tr="Kinematik Yapay Zeka Laboratuvarı" badge="Pre · Post · Healthy side" />
 
-      <Glass className="p-5">
-        <p className="text-sm font-extrabold text-white/80 mb-4">Video Upload & Analysis</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <Glass className="p-5 sm:p-6">
+        <p className="text-sm font-extrabold text-white/80 mb-3 text-center sm:text-left">Video Upload & Analysis</p>
+        <div className="mb-4 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[11px] text-white/55">
+          <span className="font-bold text-white/70">Auto arm:</span>{" "}
+          The more active arm during the reach is detected and analyzed automatically for each video.
+        </div>
+        <div className="flex justify-center">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 w-full max-w-3xl">
           {phases.map((ph) => {
             const status = data[statusKey(ph.k)] || "idle";
             const hasResult = !!kinematicsResults[ph.k];
 
             return (
-              <div key={ph.k} className={`flex flex-col rounded-xl border transition-all overflow-hidden ${status === "analyzing" ? "border-amber-400/40" : hasResult ? "border-emerald-400/30" : "border-white/[0.04]"}`}>
-                <div className="flex items-center justify-between px-3 pt-3 pb-2">
-                  <div className="flex items-center gap-2">
+              <div key={ph.k} className={kinPhaseCardCls(ph.c, status, hasResult)}>
+                <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-2">
+                  <span className={`text-xs font-extrabold uppercase tracking-widest ${phaseLabelCls(ph.c)}`}>{ph.l}</span>
+                  <div className="flex items-center gap-2 shrink-0">
                     {(hasResult || status === "analyzing") && (
-                      <GBtn variant="default" onClick={() => clearPhase(ph.k)} className="text-[10px] py-1 px-1.5 flex items-center justify-center bg-red-500/15 border-white/[0.06] text-red-300 hover:bg-red-500/25" title={status === "analyzing" ? "Cancel analysis" : "Remove"}>
-                        <X className="w-3 h-3" />
-                      </GBtn>
-                    )}
-                    <span className={`text-xs font-extrabold uppercase tracking-wider ${
-                      ph.c === "sky" ? "text-sky-300" : ph.c === "violet" ? "text-violet-300" : ph.c === "emerald" ? "text-emerald-300" : "text-amber-300"
-                    }`}>{ph.l}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {status === "analyzing" && (
-                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-400/30 text-amber-300">Processing...</span>
-                    )}
-                    {hasResult && (
-                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-400/20 border border-emerald-400/30 text-emerald-300">\u2713</span>
+                      <button
+                        type="button"
+                        onClick={() => clearPhase(ph.k)}
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-white/40 hover:text-red-300 hover:bg-red-500/10 border border-transparent hover:border-red-400/20 transition-colors"
+                        title={status === "analyzing" ? "Cancel analysis" : "Remove"}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     )}
                   </div>
                 </div>
 
-                <div className="mx-3 mb-2">
+                <div className="px-4 py-2 flex flex-col flex-1 min-h-0">
+                  <label htmlFor={`kin-file-${ph.k}`} className={`${kinUploadZoneCls(ph.c, !!data[vidKey(ph.k)])} relative mb-3 min-h-[130px] overflow-hidden ${status === "analyzing" ? "pointer-events-none" : ""}`}>
+                  <AnimatePresence>
+                    {status === "analyzing" && <KinPhaseAnalyzingOverlay accent={ph.c} />}
+                  </AnimatePresence>
+                  <div className={status === "analyzing" ? "invisible" : "flex flex-col items-center justify-center gap-1.5 w-full"}>
                   <input
+                      id={`kin-file-${ph.k}`}
                     type="file"
                     accept="video/*,.csv"
                     onChange={(e) => handleFile(ph.k, e.target.files?.[0])}
-                    className="w-full text-xs text-white/50 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/15"
-                  />
+                      disabled={status === "analyzing"}
+                      className="sr-only"
+                    />
+                    <Upload className={`w-5 h-5 transition-colors ${data[vidKey(ph.k)] ? "text-white/55" : "text-white/30 group-hover:text-white/50"}`} />
+                    {data[vidKey(ph.k)] ? (
+                      <>
+                        <span className="text-[11px] font-semibold text-white/80 truncate max-w-full px-1" title={data[vidKey(ph.k)]}>
+                          {kinShortFileName(data[vidKey(ph.k)])}
+                        </span>
+                        <span className="text-[9px] text-white/35">Tap to replace</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-[11px] font-semibold text-white/55 group-hover:text-white/70">Video or CSV</span>
+                        <span className="text-[9px] text-white/30">Browse files</span>
+                      </>
+                    )}
                 </div>
+                  </label>
 
-                <div className="mx-3 mb-3 flex flex-wrap gap-1.5">
-                  <GBtn variant={ph.c} onClick={() => analyzeVideo(ph.k)} disabled={status === "analyzing" || !data[vidKey(ph.k)]} className="flex-1 text-xs py-2 min-w-[80px]" title="Analyze">
-                    {status === "analyzing" ? <span className="animate-pulse">...</span> : <Play className="w-4 h-4 mx-auto" />}
+                  <div className="mt-auto flex flex-col gap-2">
+                    <GBtn variant={ph.c} onClick={() => analyzeVideo(ph.k)} disabled={status === "analyzing" || !data[vidKey(ph.k)]} className="w-full text-xs py-2.5" title="Analyze">
+                      {status === "analyzing" ? (
+                        <span className="font-bold opacity-70">Analyzing…</span>
+                      ) : (
+                        <Play className="w-4 h-4 mx-auto" />
+                      )}
                   </GBtn>
+
                   {hasResult && (
-                    <div className="flex gap-1">
-                      <GBtn variant="default" onClick={() => downloadFile(ph.k, "csv")} className="text-[10px] py-2 px-2.5 flex items-center justify-center" title="CSV data">
+                      <div className="flex justify-center gap-1">
+                        <GBtn variant="default" onClick={() => downloadFile(ph.k, "csv")} className="!py-1.5 !px-2 min-w-[2.25rem] shrink-0" title="CSV data">
                         <FileSpreadsheet className="w-3.5 h-3.5" />
                       </GBtn>
-                      <GBtn variant="default" onClick={() => downloadFile(ph.k, "trc")} className="text-[10px] py-2 px-2.5 flex items-center justify-center" title="OpenSim TRC">
+                        <GBtn variant="default" onClick={() => downloadFile(ph.k, "trc")} className="!py-1.5 !px-2 min-w-[2.25rem] shrink-0" title="OpenSim TRC">
                         <Database className="w-3.5 h-3.5" />
                       </GBtn>
-                      <GBtn variant="default" onClick={() => downloadFile(ph.k, "mot")} className="text-[10px] py-2 px-2.5 flex items-center justify-center" title="OpenSim MOT (IK)">
+                        <GBtn variant="default" onClick={() => downloadFile(ph.k, "mot")} className="!py-1.5 !px-2 min-w-[2.25rem] shrink-0" title="OpenSim MOT (IK)">
                         <Activity className="w-3.5 h-3.5" />
                       </GBtn>
-                      <GBtn variant="default" onClick={() => downloadFile(ph.k, "video")} className="text-[10px] py-2 px-2.5 flex items-center justify-center whitespace-nowrap" title="2D Skeleton Video">
-                        <span className="text-[10px] font-bold">2D</span>
+                        <GBtn variant="default" onClick={() => downloadFile(ph.k, "video")} disabled={!kinematicsResults[ph.k]?.validation_video} className="!py-1.5 !px-2 min-w-[2.25rem] shrink-0" title={kinematicsResults[ph.k]?.validation_video ? "2D Skeleton Video" : "Re-analyze video to generate skeleton overlay"}>
+                          <span className="text-[10px] font-bold leading-none">2D</span>
+                      </GBtn>
+                        <GBtn variant="default" onClick={() => kinematicsResults[ph.k]?.unified_validation_video ? downloadFile(ph.k, "unified") : generateUnifiedValidation(ph.k)} disabled={analysisStatus[ph.k] === "generating_unified"} className="!py-1.5 !px-2 min-w-[2.25rem] shrink-0" title={kinematicsResults[ph.k]?.unified_validation_video ? "Unified Validation Video" : "Generate Unified Validation Video"}>
+                          {analysisStatus[ph.k] === "generating_unified" ? (
+                            <span className="text-[10px] font-bold leading-none">…</span>
+                          ) : (
+                            <span className="text-[10px] font-bold leading-none">UV</span>
+                          )}
                       </GBtn>
                     </div>
                   )}
+
+                  {hasResult && (
+                      <div className="sm:hidden grid grid-cols-2 gap-1.5">
+                        {CARD_PREVIEW_KEYS.map((key) => {
+                          const meta = KINEMATIC_VARS.find((v) => v.key === key);
+                          if (!meta) return null;
+                          return (
+                            <div key={key} className={`rounded-lg border px-2 py-1.5 ${phaseValueCls(ph.c)}`}>
+                              <p className="text-[9px] font-bold text-white/45 leading-tight">{meta.label}</p>
+                              <p className="text-sm font-mono font-extrabold text-white/90 mt-0.5">
+                                {displayMetricValue(ph.k, key)}
+                                <span className="text-[9px] font-normal text-white/35 ml-0.5">{meta.unit}</span>
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {hasResult && kinematicsResults[ph.k]?.velocity_profile && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => toggleResult(ph.k)}
+                          className="w-full text-[11px] text-white/45 hover:text-white/75 py-1.5 font-medium tracking-wide border border-white/[0.06] rounded-lg bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
+                          title={expandedResults[ph.k] ? "Hide chart" : "Show movement chart"}
+                        >
+                          {expandedResults[ph.k] ? "▲ Hide chart" : "▼ Movement chart"}
+                  </button>
+
+                        <AnimatePresence>
+                          {expandedResults[ph.k] && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.25 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="rounded-xl border border-white/[0.08] bg-black/30 overflow-hidden">
+                                <div
+                                  className="w-full h-[140px] p-2 kin-phase-chart"
+                                  dangerouslySetInnerHTML={{
+                                    __html: buildCombinedVelChart({ [ph.k]: kinematicsResults[ph.k].velocity_profile }, false, true),
+                                  }}
+                                />
+                  </div>
+                            </motion.div>
+                )}
+                        </AnimatePresence>
+                      </>
+                    )}
+                  </div>
                 </div>
 
-                {hasResult && (
-                  <div className="mx-3 mb-3 flex justify-center">
-                    <button onClick={() => toggleResult(ph.k)} className="text-xs text-white/50 hover:text-white/80 flex items-center justify-center gap-2 py-2 font-medium tracking-wide" title={expandedResults[ph.k] ? "Hide chart" : "Show movement chart"}>
-                    {expandedResults[ph.k] ? "\u25B2 Hide" : "Show movement chart \u25BC"}
-                  </button>
-                  </div>
-                )}
-
-                {hasResult && expandedResults[ph.k] && kinematicsResults[ph.k]?.velocity_profile && (
-                  <div className="mx-3 mb-3 p-3 rounded-xl bg-white/[0.03]">
-                    <p className="text-[9px] font-extrabold uppercase tracking-widest text-white/40 mb-2">Velocity Profile / Hız Profili</p>
-                    {(() => {
-                      const prof = kinematicsResults[ph.k].velocity_profile;
-                      const pts = prof.t.map((t, i) => ({ t, v: prof.v[i] }));
-                      const w = 260, h = 60, pad = 4;
-                      const tMin = pts[0].t, tMax = pts[pts.length - 1].t, vMax = Math.max(...pts.map(p => p.v), 0.01);
-                      const x = (t) => pad + ((t - tMin) / (tMax - tMin || 1)) * (w - 2 * pad);
-                      const y = (v) => h - pad - (v / vMax) * (h - 2 * pad);
-                      const path = smoothVelPath(pts, x, y);
-                      const peak = pts.reduce((a, b) => a.v > b.v ? a : b);
-                      return (
-                        <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-[280px] h-auto" preserveAspectRatio="xMidYMid meet">
-                          <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-                          <path d={path} fill="none" stroke="rgba(148,163,184,0.6)" strokeWidth="1.5" />
-                          <circle cx={x(peak.t)} cy={y(peak.v)} r="3" fill="rgba(148,163,184,0.9)" />
-                          <text x={x(peak.t)} y={y(peak.v) - 6} textAnchor="middle" fill="rgba(148,163,184,0.7)" fontSize="7">{peak.v.toFixed(2)}</text>
-                          <text x={pad} y={h - 2} fill="rgba(255,255,255,0.15)" fontSize="6">{tMin.toFixed(1)}s</text>
-                          <text x={w - pad} y={h - 2} textAnchor="end" fill="rgba(255,255,255,0.15)" fontSize="6">{tMax.toFixed(1)}s</text>
-                        </svg>
-                      );
-                    })()}
-                  </div>
-                )}
               </div>
             );
           })}
+          </div>
         </div>
       </Glass>
 
       {Object.keys(kinematicsResults).length > 0 && (
-        <Glass className="p-5">
-          <div className="flex items-center justify-between mb-4">
+        <Glass className="p-4 sm:p-5">
+          {hasKinTriple && recoverySummaryRows.length > 0 && (
+            <div className="mb-5 rounded-xl border border-cyan-400/20 bg-cyan-500/5 p-4">
+              <p className="text-xs font-extrabold uppercase tracking-widest text-cyan-300/90 mb-1">
+                Pre → Post · Post → Healthy
+              </p>
+              <p className="text-[11px] text-white/45 leading-relaxed mb-3">
+                calc_improvement / calc_gap — same formulas as manuscript table.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {recoverySummaryRows.map(({ key, label, prePost, postHealthy }) => (
+                  <div key={key} className="rounded-lg border border-white/[0.08] bg-black/20 px-2.5 py-2">
+                    <p className="text-[9px] font-bold text-white/45 leading-tight">{label}</p>
+                    <p className={`text-sm font-mono font-extrabold mt-1 ${prePost?.colorClass?.split(" ")[0] || "text-white/80"}`}>
+                      {prePost?.text || "—"}
+                    </p>
+                    <p className={`text-sm font-mono font-extrabold mt-0.5 ${postHealthy?.colorClass?.split(" ")[0] || "text-white/70"}`}>
+                      {postHealthy?.text || "—"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex items-center justify-between mb-3 gap-2">
             <p className="text-sm font-extrabold text-white/80">Kinematic Results</p>
-            <GBtn variant="danger" onClick={() => {
-              phases.forEach((ph) => clearPhase(ph.k));
-              localStorage.removeItem(KIN_LS_KEY);
-              localStorage.removeItem(KIN_LS_EXP_KEY);
-            }} className="text-[10px] py-1.5 px-3" title="Remove all results">
+            <GBtn variant="danger" onClick={clearAllKin} className="text-[10px] py-1.5 px-3 flex-shrink-0" title="Remove all results">
               <X className="w-3 h-3 mr-1" />
               Clear All
             </GBtn>
           </div>
+          {kinViewWarning && (
+            <div className="mb-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2.5 text-[11px] text-amber-100/90">
+              {kinViewWarning}
+            </div>
+          )}
 
-          <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
-            <table className="w-full text-sm min-w-[900px]">
+          {/* Mobile / tablet — tabs + vertical cards (no horizontal swipe) */}
+          <div className="lg:hidden">
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              <button
+                type="button"
+                onClick={() => setKinResultsTab("compare")}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                  kinResultsTab === "compare" ? "bg-white/12 border-white/20 text-white" : "bg-white/[0.04] border-white/[0.08] text-white/50"
+                }`}
+              >
+                Compare All
+              </button>
+              {activeResultPhases.map((ph) => (
+                <button
+                  key={ph.k}
+                  type="button"
+                  onClick={() => setKinResultsTab(ph.k)}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${phaseChipCls(ph.c, kinResultsTab === ph.k)}`}
+                >
+                  {ph.l}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-2">
+              {variables.map((metric, idx) =>
+                renderKinMetricRow(metric, idx, idx > 0 ? variables[idx - 1].group : null)
+              )}
+              {activeResultPhases.length > 0 && (
+                <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 mt-4">
+                  <p className="text-sm font-extrabold text-white/70 mb-2">Analyzed arm</p>
+                  <div className={`grid gap-2 ${activeResultPhases.length <= 2 ? "grid-cols-2" : "grid-cols-2"}`}>
+                    {activeResultPhases.map((ph) => (
+                      <div key={ph.k} className={`rounded-lg border px-2.5 py-2 ${phaseValueCls(ph.c)}`}>
+                        <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>{ph.l}</p>
+                        <p className="text-base font-mono font-bold text-white/90 mt-0.5">
+                          {armSideLabel(analyzedArmForPhase(kinematicsResults, ph.k))}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Desktop — full comparison table */}
+          <div className="hidden lg:block glass-float rounded-xl border border-white/[0.08] overflow-hidden">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/[0.08] bg-white/[0.04]">
-                  <th className="text-left px-3 py-3 font-extrabold text-white/40 text-[10px] uppercase w-24">Group</th>
-                  <th className="text-left px-4 py-3 font-extrabold text-white/60 text-xs uppercase">Variable</th>
-                  <th className="text-left px-3 py-3 font-extrabold text-white/60 text-xs uppercase w-20">Unit</th>
+                  <th className="text-left px-3 py-3 font-extrabold text-white/40 text-[10px] uppercase w-16">Group</th>
+                  <th className="text-left px-4 py-3 font-extrabold text-white/60 text-xs uppercase whitespace-nowrap">Variable</th>
+                  <th className="text-left px-3 py-3 font-extrabold text-white/60 text-xs uppercase w-16 whitespace-nowrap">Unit</th>
                   {phases.filter((ph) => kinematicsResults[ph.k]).map((ph) => (
                     <th
                       key={ph.k}
-                      className={`text-center px-3 py-3 font-extrabold text-xs uppercase ${
+                      className={`text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap ${
                         ph.c === "sky"
                           ? "text-sky-300"
                           : ph.c === "violet"
@@ -1743,14 +2773,14 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
                       {ph.l}
                     </th>
                   ))}
-                  {kinematicsResults.pre && kinematicsResults.baseline && (
-                    <th className="text-center px-3 py-3 font-extrabold text-amber-300 text-xs uppercase">
-                      vs Healthy side
+                  {kinematicsResults.pre && kinematicsResults.post && (
+                    <th className="text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap">
+                      <span className="text-sky-300">Pre</span> <span className="text-white/60">→</span> <span className="text-emerald-300">Post</span>
                     </th>
                   )}
-                  {kinematicsResults.pre && kinematicsResults.post && (
-                    <th className="text-center px-3 py-3 font-extrabold text-emerald-300 text-xs uppercase">
-                      \u0394 Pre\u2192Post
+                  {kinematicsResults.post && kinematicsResults.baseline && (
+                    <th className="text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap">
+                      <span className="text-emerald-300">Post</span> <span className="text-white/60">→</span> <span className="text-amber-300">Healthy</span>
                     </th>
                   )}
                 </tr>
@@ -1765,13 +2795,14 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
                   const preVal      = getMetricValue("pre",      metric.key);
                   const postVal     = getMetricValue("post",     metric.key);
                   const baselineVal = getMetricValue("baseline", metric.key);
+                  const kinComparable = kinCrossPhaseComparable(kinematicsResults, metric.key, analyzedArmForPhase);
 
-                  const deltaPrePost = preVal !== "\u2014" && postVal !== "\u2014"
-                    ? calculateClinicalDelta(preVal, postVal, metric.name)
+                  const deltaPrePost = kinComparable && preVal !== "—" && postVal !== "—"
+                    ? kinPrePostBadge(preVal, postVal, metric.direction)
                     : null;
 
-                  const deltaVsBaseline = preVal !== "\u2014" && baselineVal !== "\u2014"
-                    ? calculateClinicalDelta(baselineVal, preVal, metric.name)
+                  const deltaPostHealthy = kinComparable && postVal !== "—" && baselineVal !== "—"
+                    ? kinPostHealthyBadge(postVal, baselineVal, metric.direction)
                     : null;
 
                   return (
@@ -1782,8 +2813,8 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
                             colSpan={
                               3 +
                               phases.filter((ph) => kinematicsResults[ph.k]).length +
-                              (kinematicsResults.pre && kinematicsResults.baseline ? 1 : 0) +
-                              (kinematicsResults.pre && kinematicsResults.post ? 1 : 0)
+                              (kinematicsResults.pre && kinematicsResults.post ? 1 : 0) +
+                              (kinematicsResults.post && kinematicsResults.baseline ? 1 : 0)
                             }
                             className="px-4 pt-5 pb-1"
                           >
@@ -1796,47 +2827,56 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
 
                       <tr className="border-b border-white/[0.05] hover:bg-white/[0.03]">
                         <td className="px-3 py-2.5" />
-                        <td className="px-4 py-2.5 font-bold text-white/80 text-sm">
+                        <td className="px-4 py-2.5 font-bold text-white/80 text-sm whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1">
                           {metric.name}
+                            {kinDirArrow(metric.direction) && (
+                              <span className="text-emerald-400/90 text-xs font-bold" title={kinDirArrow(metric.direction).tip}>
+                                {kinDirArrow(metric.direction).sym}
+                              </span>
+                            )}
+                          </span>
                           {metric.tip && (
                             <span className="group relative inline-flex ml-1.5 align-middle cursor-help">
                               <Info className="w-3 h-3 text-white/30 hover:text-white/60 transition-colors" />
                               <span className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-72 px-3 py-2 text-[11px] leading-relaxed text-white bg-slate-800/95 border border-white/[0.04] rounded-lg shadow-xl pointer-events-none">
+                                {metric.direction === "higher" && <span className="text-emerald-400 font-bold block mb-1">\u2191 Higher = Better</span>}
+                                {metric.direction === "lower" && <span className="text-emerald-400 font-bold block mb-1">\u2193 Lower = Better</span>}
                                 ▸ {metric.tip}
                               </span>
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-2.5 font-light text-white/40 text-xs">{metric.unit}</td>
+                        <td className="px-3 py-2.5 font-light text-white/40 text-xs whitespace-nowrap">{metric.unit}</td>
 
                         {phases.filter((ph) => kinematicsResults[ph.k]).map((ph) => (
-                          <td key={ph.k} className="px-3 py-2.5 text-center">
-                            <span className="text-white/80 font-mono text-sm">
-                              {getMetricValue(ph.k, metric.key)}
+                          <td key={ph.k} className="px-2 py-2.5 text-center whitespace-nowrap">
+                            <span className="text-white/80 font-mono text-xs">
+                              {displayMetricValue(ph.k, metric.key)}
                             </span>
                           </td>
                         ))}
 
-                        {kinematicsResults.pre && kinematicsResults.baseline && (
-                          <td className="px-3 py-2.5 text-center">
-                            {deltaVsBaseline ? (
-                              <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${deltaVsBaseline.colorClass}`}>
-                                {deltaVsBaseline.text}
-                              </span>
-                            ) : (
-                              <span className="text-white/20 text-xs">\u2014</span>
-                            )}
-                          </td>
-                        )}
-
                         {kinematicsResults.pre && kinematicsResults.post && (
-                          <td className="px-3 py-2.5 text-center">
+                          <td className="px-2 py-2.5 text-center whitespace-nowrap">
                             {deltaPrePost ? (
                               <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${deltaPrePost.colorClass}`}>
                                 {deltaPrePost.text}
                               </span>
                             ) : (
-                              <span className="text-white/20 text-xs">\u2014</span>
+                              <span className="text-white/20 text-xs">—</span>
+                            )}
+                          </td>
+                        )}
+
+                        {kinematicsResults.post && kinematicsResults.baseline && (
+                          <td className="px-2 py-2.5 text-center whitespace-nowrap">
+                            {deltaPostHealthy ? (
+                              <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${deltaPostHealthy.colorClass}`}>
+                                {deltaPostHealthy.text}
+                              </span>
+                            ) : (
+                              <span className="text-white/20 text-xs">—</span>
                             )}
                           </td>
                         )}
@@ -1844,104 +2884,83 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
                     </React.Fragment>
                   );
                 })}
+                {activeResultPhases.length > 0 && (
+                  <tr className="border-t border-white/[0.12] bg-white/[0.02]">
+                    <td className="px-3 py-2.5" />
+                    <td className="px-4 py-2.5 font-bold text-white/60 text-sm whitespace-nowrap">Analyzed arm</td>
+                    <td className="px-3 py-2.5 font-light text-white/40 text-xs whitespace-nowrap">side</td>
+                    {phases.filter((ph) => kinematicsResults[ph.k]).map((ph) => (
+                      <td key={ph.k} className="px-2 py-2.5 text-center whitespace-nowrap">
+                        <span className="text-white/75 font-mono text-xs font-semibold">
+                          {armSideLabel(analyzedArmForPhase(kinematicsResults, ph.k))}
+                        </span>
+                      </td>
+                    ))}
+                    {kinematicsResults.pre && kinematicsResults.baseline && (
+                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">—</td>
+                    )}
+                    {kinematicsResults.pre && kinematicsResults.post && (
+                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">—</td>
+                    )}
+                    {hasKinTriple && (
+                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">—</td>
+                    )}
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </Glass>
       )}
 
-      {/* ─── Phase-by-Phase Comparison ─── */}
-      {presentPhases.size > 0 && recordingColumns.length >= 2 && (
-        <Glass className="p-5 mt-5">
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="w-4 h-4 text-violet-300" />
-            <p className="text-sm font-extrabold text-white/80">Phase-by-Phase Comparison</p>
-            <span className="text-[9px] px-2 py-0.5 rounded-full bg-violet-400/15 border border-violet-400/25 text-violet-300">
-              Avoids Simpson&apos;s Paradox
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {['forward', 'wipe_right', 'wipe_left', 'return']
-              .filter((pn) => presentPhases.has(pn))
-              .map((pn) => {
-                const pi = phaseInfo[pn];
-                return (
-                  <div key={pn} className="rounded-xl border border-white/[0.08] overflow-hidden">
-                    <div className={`px-3 py-2 text-xs font-extrabold uppercase tracking-wider bg-white/[0.03] border-b border-white/[0.08] ${
-                      pi.color === "sky" ? "text-sky-300" :
-                      pi.color === "violet" ? "text-violet-300" :
-                      pi.color === "amber" ? "text-amber-300" : "text-rose-300"
-                    }`}>
-                      {pi.label}
-                    </div>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-white/[0.05] bg-white/[0.02]">
-                          <th className="text-left px-3 py-2 font-bold text-white/40 text-[10px] uppercase">Metric</th>
-                          {recordingColumns.map((ph) => (
-                            <th key={ph.k} className={`text-center px-2 py-2 font-extrabold text-[10px] uppercase ${
-                              ph.c === "sky" ? "text-sky-300" :
-                              ph.c === "violet" ? "text-violet-300" :
-                              ph.c === "emerald" ? "text-emerald-300" : "text-amber-300"
-                            }`}>
-                              {ph.l}
-                            </th>
-                          ))}
-                          {hasPrePost && (
-                            <th className="text-center px-2 py-2 font-extrabold text-[10px] uppercase text-emerald-300">
-                              \u0394
-                            </th>
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {phaseMetrics.map((pm) => {
-                          const vals = recordingColumns.map((ph) => getPhaseMetricValue(ph.k, pn, pm.key));
-
-                          let delta = null;
-                          if (hasPrePost) {
-                            const preVal = parseFloat(getPhaseMetricValue("pre", pn, pm.key));
-                            const postVal = parseFloat(getPhaseMetricValue("post", pn, pm.key));
-                            if (!isNaN(preVal) && !isNaN(postVal)) {
-                              const lowerBetter = pm.key === "pause_pct" || pm.key === "path_ratio" || pm.key === "trunk_palm_ratio";
-                              const pctChange = preVal !== 0 ? ((postVal - preVal) / Math.abs(preVal)) * 100 : 0;
-                              const improved = lowerBetter ? pctChange < 0 : pctChange > 0;
-                              delta = { text: `${pctChange > 0 ? "+" : ""}${pctChange.toFixed(1)}%`, improved };
-                            }
-                          }
-
-                          return (
-                            <tr key={pm.key} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
-                              <td className="px-3 py-1.5 text-xs font-bold text-white/70">{pm.name}</td>
-                              <td className="px-2 py-1.5 text-center text-xs font-mono text-white/80">{vals[0]}</td>
-                              {vals.length > 1 && <td className="px-2 py-1.5 text-center text-xs font-mono text-white/80">{vals[1] || "\u2014"}</td>}
-                              {vals.length > 2 && <td className="px-2 py-1.5 text-center text-xs font-mono text-white/80">{vals[2] || "\u2014"}</td>}
-                              {vals.length > 3 && <td className="px-2 py-1.5 text-center text-xs font-mono text-white/80">{vals[3] || "\u2014"}</td>}
-                              {hasPrePost && (
-                                <td className="px-2 py-1.5 text-center">
-                                  {delta ? (
-                                    <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${
-                                      delta.improved ? "text-emerald-300 bg-emerald-400/10" : "text-red-300 bg-red-400/10"
-                                    }`}>
-                                      {delta.text}
-                                    </span>
-                                  ) : (
-                                    <span className="text-white/20 text-xs">\u2014</span>
-                                  )}
-                                </td>
-                              )}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })}
-          </div>
+      {Object.keys(kinematicsResults).filter(k => kinematicsResults[k]?.velocity_profile).length >= 1 && (
+        <Glass className="p-4 sm:p-5">
+          <p className="text-sm font-extrabold text-white/80 mb-3">Combined Velocity Profile / Birleşik Hız Profili</p>
+          <div
+            className="w-full overflow-hidden rounded-xl border border-white/[0.08] bg-black/30 p-3 kin-phase-chart"
+            dangerouslySetInnerHTML={{ __html: buildCombinedVelChart({
+              pre: kinematicsResults.pre?.velocity_profile,
+              post: kinematicsResults.post?.velocity_profile,
+              baseline: kinematicsResults.baseline?.velocity_profile,
+            }) }}
+          />
         </Glass>
       )}
+
+      {/* In-app video viewer — stay inside PWA on iOS/iPad */}
+      <AnimatePresence>
+        {mediaPreview && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[99998] flex flex-col bg-black/95 backdrop-blur-sm"
+            onClick={() => setMediaPreview(null)}
+          >
+            <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+              <p className="text-sm font-bold text-white/80 truncate">{mediaPreview.title}</p>
+              <GBtn variant="default" onClick={() => setMediaPreview(null)} className="!py-1.5 !px-3 text-xs shrink-0">
+                <X className="w-4 h-4 mr-1" /> Close
+              </GBtn>
+            </div>
+            <div className="flex-1 flex items-center justify-center px-3 pb-6 min-h-0" onClick={(e) => e.stopPropagation()}>
+              <video
+                key={mediaPreview.url}
+                src={mediaPreview.url}
+                controls
+                playsInline
+                autoPlay
+                className="w-full max-h-full rounded-xl bg-black"
+                style={{ maxHeight: "calc(100dvh - 5rem)" }}
+                onError={() => {
+                  showToast("Could not load validation video — try re-analyzing the video", "error");
+                  setMediaPreview(null);
+                }}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
@@ -1949,14 +2968,27 @@ const KinSection = ({ data, demographics, onChange, showToast }) => {
 
 // ─── Patient Database ─────────────────────────────────────────────────────────
 
-const DatabaseSection = ({ onLoadSession, showToast }) => {
+const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
   const [patients, setPatients] = useState([]);
   const [search, setSearch] = useState("");
   const [confirm, setConfirm] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+
+  const refreshPatients = useCallback(() => setPatients(loadPatients()), []);
 
   useEffect(() => {
-    setPatients(loadPatients());
-  }, []);
+    refreshPatients();
+  }, [refreshPatients]);
+
+  useEffect(() => {
+    if (isActive) refreshPatients();
+  }, [isActive, refreshPatients]);
+
+  useEffect(() => {
+    const onSynced = () => refreshPatients();
+    window.addEventListener(PATIENTS_SYNC_EVENT, onSynced);
+    return () => window.removeEventListener(PATIENTS_SYNC_EVENT, onSynced);
+  }, [refreshPatients]);
 
   const filtered = patients.filter((p) => {
     const q = search.toLowerCase();
@@ -1972,6 +3004,7 @@ const DatabaseSection = ({ onLoadSession, showToast }) => {
     setPatients(updated);
     setConfirm(null);
     showToast("Patient record deleted");
+    postPatientsSync(updated).catch(() => {});
   };
 
   return (
@@ -1995,8 +3028,30 @@ const DatabaseSection = ({ onLoadSession, showToast }) => {
             )}
           </div>
 
-          <GBtn variant="default" onClick={() => setPatients(loadPatients())}>
-            <RefreshCw className="w-4 h-4" /> Refresh
+          <GBtn variant="default" disabled={syncing} onClick={async () => {
+            setSyncing(true);
+            try {
+              const { ok, patients: merged } = await syncPatientsWithServer({ showToast });
+              if (ok) {
+                setPatients(merged);
+                const curId = fd._loadedId || fd.demographics?.participantId;
+                if (curId) {
+                  const cur = merged.find((p) => (p._id || p.demographics?.participantId) === curId);
+                  if (cur) {
+                    setFd((prev) => ({ ...prev, ...cur }));
+                    if (cur.kinematics?.analysisResults) {
+                      localStorage.setItem(KIN_LS_KEY, JSON.stringify(cur.kinematics.analysisResults));
+                    }
+                  }
+                }
+              } else {
+                refreshPatients();
+              }
+            } finally {
+            setSyncing(false);
+            }
+          }}>
+            <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} /> {syncing ? "Syncing..." : "Sync"}
           </GBtn>
         </div>
       </Glass>
@@ -2007,7 +3062,7 @@ const DatabaseSection = ({ onLoadSession, showToast }) => {
           <p className="text-white/50 font-semibold text-lg mb-2">
             {search ? "No patients match your search" : "No patient records yet"}
           </p>
-          <p className="text-white/25 text-sm">Save a session from any assessment tab to create a record.</p>
+          <p className="text-white/25 text-sm">Save a session from any assessment tab, then tap Sync to share across devices.</p>
         </Glass>
       ) : (
         <div className="space-y-3">
@@ -2040,13 +3095,13 @@ const DatabaseSection = ({ onLoadSession, showToast }) => {
 
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
-                        hasPre ? "bg-sky-500/15 border-sky-400/25 text-sky-300" : "bg-white/[0.05] border-white/[0.04] text-white/25"
+                        hasPre ? "bg-sky-500/20 border-sky-400/30 text-sky-300" : "bg-white/[0.05] border-white/[0.04] text-white/25"
                       }`}>
                         {hasPre ? "✓ Pre-Assessment" : "○ Pre missing"}
                       </span>
 
                       <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
-                        hasPost ? "bg-emerald-500/15 border-emerald-400/25 text-emerald-300" : "bg-white/[0.05] border-white/[0.04] text-white/25"
+                        hasPost ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-300" : "bg-white/[0.05] border-white/[0.04] text-white/25"
                       }`}>
                         {hasPost ? "✓ Post-Assessment" : "○ Post missing"}
                       </span>
@@ -2102,7 +3157,8 @@ function buildSummaryRows(fd) {
     const q = parseFloat(post);
     if (isNaN(p) || isNaN(q)) return "—";
     const d = q - p;
-    return (d >= 0 ? "+" : "") + d.toFixed(2);
+    if (d === 0) return "0.00";
+    return (d > 0 ? "+" : "") + d.toFixed(2);
   };
 
   const v = (x) => (x !== undefined && x !== null && x !== "" ? String(x) : "—");
@@ -2116,8 +3172,9 @@ function buildSummaryRows(fd) {
   ].forEach((item) => {
     const pre = v(vas[item.k]?.pre);
     const post = v(vas[item.k]?.post);
+    const pNum = parseFloat(pre), qNum = parseFloat(post);
     const improving = (pre !== "—" && post !== "—")
-      ? (lowerIsBetter(item.en) ? parseFloat(pre) > parseFloat(post) : parseFloat(post) > parseFloat(pre))
+      ? (pNum === qNum ? null : (lowerIsBetter(item.en) ? pNum > qNum : qNum > pNum))
       : null;
     rows.push({ tool:"VAS", metric:item.en, pre, post, delta:calcDelta(pre, post, item.en), improving });
   });
@@ -2132,8 +3189,9 @@ function buildSummaryRows(fd) {
   ].forEach((item) => {
     const pre = v(vams[item.k]?.pre);
     const post = v(vams[item.k]?.post);
+    const pNum = parseFloat(pre), qNum = parseFloat(post);
     const improving = (pre !== "—" && post !== "—")
-      ? (lowerIsBetter(item.en) ? parseFloat(pre) > parseFloat(post) : parseFloat(post) > parseFloat(pre))
+      ? (pNum === qNum ? null : (lowerIsBetter(item.en) ? pNum > qNum : qNum > pNum))
       : null;
     rows.push({ tool:"VAMS", metric:item.en, pre, post, delta:calcDelta(pre, post, item.en), improving });
   });
@@ -2157,7 +3215,7 @@ function buildSummaryRows(fd) {
     KGIA_TYPES.forEach((t) => {
       const pre = v(kgia[`${mi}_${t.key}`]?.once);
       const post = v(kgia[`${mi}_${t.key}`]?.sonra);
-      const improving = (pre !== "—" && post !== "—") ? parseFloat(post) > parseFloat(pre) : null;
+      const improving = (pre !== "—" && post !== "—") ? (parseFloat(pre) === parseFloat(post) ? null : parseFloat(post) > parseFloat(pre)) : null;
       rows.push({ tool:"KVIQ", metric:`${t.en}: ${mov.en}`, pre, post, delta:calcDelta(pre, post), improving });
     })
   );
@@ -2170,33 +3228,28 @@ function buildSummaryRows(fd) {
     const preR = v(wmft[t.id]?.pre?.rating);
     const postR = v(wmft[t.id]?.post?.rating);
 
-    const improvingT = (preT !== "—" && postT !== "—") ? parseFloat(preT) > parseFloat(postT) : null;
-    const improvingR = (preR !== "—" && postR !== "—") ? parseFloat(postR) > parseFloat(preR) : null;
+    const improvingT = (preT !== "—" && postT !== "—") ? (parseFloat(preT) === parseFloat(postT) ? null : parseFloat(preT) > parseFloat(postT)) : null;
+    const improvingR = (preR !== "—" && postR !== "—") ? (parseFloat(preR) === parseFloat(postR) ? null : parseFloat(postR) > parseFloat(preR)) : null;
     rows.push({ tool:"WMFT", metric:`${t.en} — Time (sec)`, pre:preT, post:postT, delta:calcDelta(preT, postT), improving: improvingT });
     rows.push({ tool:"WMFT", metric:`${t.en} — Ability Rating (0–5)`, pre:preR, post:postR, delta:calcDelta(preR, postR), improving: improvingR });
   });
 
   // Kinematics
-  const kin = fd.kinematics || {};
-  const kinDisplay = [
-    { k:"movementDuration", en:"Movement Duration (s)" },
-    { k:"peakVelocity", en:"Peak Velocity (norm/s)" },
-    { k:"meanVelocity", en:"Mean Velocity (norm/s)" },
-    { k:"totalPathLength", en:"Total Path Length (norm)" },
-    { k:"lateralRange", en:"Lateral Range (norm)" },
-    { k:"trunkPalmRatio", en:"Trunk/Palm Ratio" },
-    { k:"maxElbowAngle", en:"Max Elbow Angle (deg)" },
-    { k:"pauseSmoothness", en:"Pause % (Smoothness)" },
-    { k:"armLength", en:"Arm Length (norm)" },
-    { k:"shoulderVertExcursion", en:"Shoulder Vertical Excursion (norm)" },
-    { k:"trunkLateralFlexion", en:"Trunk Lateral Flexion (norm)" },
-    { k:"trunkForwardFlexion", en:"Trunk Forward Flexion (norm)" },
-  ];
+  let kin = fd.kinematics || {};
+  if (!kin.pre && !kin.post) {
+    try { const kr = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {}; kin = { pre: kr.pre, post: kr.post }; } catch {}
+  }
+  const kinDisplay = orderedKinematicVars().map((v) => ({
+    k: v.key,
+    en: v.label,
+    dir: v.dir,
+  }));
   kinDisplay.forEach((item) => {
     const pre = v(kin.pre?.[item.k]);
     const post = v(kin.post?.[item.k]);
+    const pNum = parseFloat(pre), qNum = parseFloat(post);
     const improving = (pre !== "—" && post !== "—")
-      ? (lowerIsBetter(item.en) ? parseFloat(pre) > parseFloat(post) : parseFloat(post) > parseFloat(pre))
+      ? (pNum === qNum ? null : (item.dir === "lower" ? pNum > qNum : qNum > pNum))
       : null;
     rows.push({ tool:"Kinematics", metric:item.en, pre, post, delta:calcDelta(pre, post, item.en), improving });
   });
@@ -2207,119 +3260,13 @@ function buildSummaryRows(fd) {
 // ─── SPSS Export Helper ───────────────────────────────────────────────────────
 
 function buildSPSSData(fd) {
-  const d = fd.demographics || {};
-  if (!d.participantId && !d.name) return [];
-
-  const row = {};
-
-  // ── Demographics ──
-  row.ID = d.participantId || "";
-  row.Group = d.group || "";
-  row.Age = d.age || "";
-  row.Sex = d.sex || "";
-  row.TimeSinceStroke = d.timeSinceStroke || "";
-  row.StrokeType = d.strokeType || "";
-  row.AffectedSide = d.side || "";
-  row.MAS = d.mas ?? "";
-  row.MRC = d.mrc ?? "";
-
-  // ── Kinematics: Pre + Post only ──
-  const kin = fd.kinematics || {};
-  const kinMap = {
-    smoothness: "smoothness_pause_pct",
-    duration: "total_duration_s",
-    peakVel: "total_peak_velocity",
-    meanVel: "total_mean_velocity",
-    pathLen: "total_path_length",
-    latRange: "total_lat_range_norm",
-    trunkPalm: "total_trunk_palm_ratio",
-    elbow: "total_max_elbow_deg",
-    shoulderDep: "total_depression_cm",
-    trunkLat: "trunk_lat_norm",
-    trunkVert: "trunk_vert_norm",
-  };
-  ["pre", "post"].forEach((tp) => {
-    const result = kin[`result_${tp}`] || {};
-    Object.entries(kinMap).forEach(([newName, oldKey]) => {
-      row[`${newName}_${tp === "pre" ? "Pre" : "Post"}`] = result[oldKey] ?? "";
-    });
-  });
-
-  // ── WMFT total (sum of ratings) ──
-  const wmft = fd.wmft || {};
-  let wmftPre = 0, wmftPost = 0, wmftC = 0;
-  WMFT_ITEMS.forEach((t) => {
-    const pre = parseFloat(wmft[t.id]?.pre?.rating);
-    const post = parseFloat(wmft[t.id]?.post?.rating);
-    if (!isNaN(pre)) { wmftPre += pre; wmftC++; }
-    if (!isNaN(post)) { wmftPost += post; }
-  });
-  row.WMFT_Pre = wmftC > 0 ? wmftPre : "";
-  row.WMFT_Post = wmftC > 0 ? wmftPost : "";
-
-  const vams = fd.vams || {};
-  ["happy", "sad", "calm", "tense"].forEach((k) => {
-    row[`VAMS_${k.charAt(0).toUpperCase() + k.slice(1)}_Pre`] = vams[k]?.pre ?? "";
-    row[`VAMS_${k.charAt(0).toUpperCase() + k.slice(1)}_Post`] = vams[k]?.post ?? "";
-  });
-
-  // ── KVIQ Visual & Kinesthetic totals ──
-  const kgia = fd.kgia || {};
-  let visPre = 0, visPost = 0, kinPre = 0, kinPost = 0;
-  let visC = 0, kinC = 0;
-  KGIA_MOVEMENTS.forEach((_, mi) => {
-    const v = kgia[`${mi}_gorsel`];
-    if (v) {
-      const p = parseFloat(v.once);
-      const q = parseFloat(v.sonra);
-      if (!isNaN(p)) { visPre += p; visC++; }
-      if (!isNaN(q)) { visPost += q; }
-    }
-    const k = kgia[`${mi}_kinestetik`];
-    if (k) {
-      const p = parseFloat(k.once);
-      const q = parseFloat(k.sonra);
-      if (!isNaN(p)) { kinPre += p; kinC++; }
-      if (!isNaN(q)) { kinPost += q; }
-    }
-  });
-  row.KVIQ_Vis_Pre = visC > 0 ? visPre : "";
-  row.KVIQ_Vis_Post = visC > 0 ? visPost : "";
-  row.KVIQ_Kin_Pre = kinC > 0 ? kinPre : "";
-  row.KVIQ_Kin_Post = kinC > 0 ? kinPost : "";
-
-  // ── IPAQ total MET ──
-  const ipaq = fd.ipaq || {};
-  let totalMET = 0;
-  IPAQ_ACTS.forEach((a) => {
-    const mins = parseFloat(ipaq[a.id]?.sure) || 0;
-    const days = parseFloat(ipaq[a.id]?.gun) || 0;
-    totalMET += mins * days * a.met;
-  });
-  row.IPAQ_Pre = totalMET > 0 ? totalMET.toFixed(0) : "";
-
-  // ── VAS Pain (average of rest/activity/night) ──
-  const vas = fd.vas || {};
-  let vasPre = 0, vasPost = 0, vasPreC = 0, vasPostC = 0;
-  ["rest", "activity", "night"].forEach((k) => {
-    const p = parseFloat(vas[k]?.pre);
-    const q = parseFloat(vas[k]?.post);
-    if (!isNaN(p)) { vasPre += p; vasPreC++; }
-    if (!isNaN(q)) { vasPost += q; vasPostC++; }
-  });
-  row.VAS_Pre = vasPreC > 0 ? (vasPre / vasPreC).toFixed(1) : "";
-  row.VAS_Post = vasPostC > 0 ? (vasPost / vasPostC).toFixed(1) : "";
-
-  // ── MDRS (post only) ──
-  const mc = fd.motorchange || {};
-  row.MDRS_Post = mc.difference ?? "";
-
-  return [row];
+  const row = buildMasterRow(fd, WMFT_ITEMS, KGIA_MOVEMENTS, IPAQ_ACTS);
+  return row ? [row] : [];
 }
 
 // ─── Report Section ───────────────────────────────────────────────────────────
 
-const ReportSection = ({ fd }) => {
+const ReportSection = ({ fd, onChange, showToast }) => {
   const d = fd.demographics || {};
   const rows = buildSummaryRows(fd);
   const tools = Array.from(new Set(rows.map((r) => r.tool)));
@@ -2331,23 +3278,14 @@ const ReportSection = ({ fd }) => {
     let kr;
     try { kr = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {}; } catch { kr = {}; }
     if (Object.keys(kr).length === 0) return null;
-    const phaseLabels = { pre: "Pre", during: "During", post: "Post", baseline: "Healthy side" };
-    const vars = [
-      { key: "total_duration_s", label: "Movement Duration", unit: "s" },
-      { key: "total_peak_velocity", label: "Peak Velocity", unit: "norm/s" },
-      { key: "total_mean_velocity", label: "Mean Velocity", unit: "norm/s" },
-      { key: "total_path_length", label: "Total Path Length", unit: "norm" },
-      { key: "total_lat_range_norm", label: "Lateral Range", unit: "norm" },
-      { key: "total_trunk_palm_ratio", label: "Trunk/Palm Ratio", unit: "" },
-      { key: "total_max_elbow_deg", label: "Max Elbow Angle", unit: "deg" },
-      { key: "smoothness_pause_pct", label: "Pause % (Smoothness)", unit: "%" },
-      { key: "arm_length_norm", label: "Arm Length", unit: "norm" },
-      { key: "shoulder_width_norm", label: "Shoulder Width", unit: "norm" },
-      { key: "shoulder_vert_norm", label: "Shoulder Vertical Excursion", unit: "norm" },
-      { key: "trunk_lat_norm", label: "Trunk Lateral Flexion", unit: "norm" },
-      { key: "trunk_vert_norm", label: "Trunk Forward Flexion", unit: "norm" },
-    ];
-    const phases = ["pre", "post", "during", "baseline"].filter((p) => kr[p]);
+    const phaseLabels = { pre: "Pre", post: "Post", baseline: "Healthy side" };
+    const vars = orderedKinematicVars().map((v) => ({
+      key: v.key,
+      label: `${v.label}${v.dir === "higher" ? " ↑" : v.dir === "lower" ? " ↓" : ""}`,
+      unit: v.unit === "count" ? "" : v.unit,
+      dir: v.dir,
+    }));
+    const phases = ["pre", "post", "baseline"].filter((p) => kr[p]);
     if (phases.length === 0) return null;
 
     const headers = ["Variable", "Unit", ...phases.map((p) => phaseLabels[p] || p)];
@@ -2359,9 +3297,27 @@ const ReportSection = ({ fd }) => {
       });
       return row;
     });
-    return { headers, body };
+    return { headers, body, varMeta: vars, phases };
   };
 
+  const kinDirectionMap = (name) => {
+    const n = (name || "").toLowerCase();
+    if (n.includes("pause")) return "lower";
+    if (n.includes("nsub")) return "lower";
+    if (n.includes("sparc")) return "higher";
+    if (n.includes("trunk") && !n.includes("palm")) return "lower";
+    if (n.includes("trunk") && n.includes("palm")) return "lower";
+    if (n.includes("path") && n.includes("eff")) return "lower";
+    if (n.includes("duration")) return "lower";
+    if (n.includes("shoulder")) return "none";
+    if (n.includes("lateral")) return "higher";
+    if (n.includes("peak")) return "higher";
+    if (n.includes("mean")) return "higher";
+    if (n.includes("elbow")) return "higher";
+    if (n.includes("range")) return "higher";
+    return "higher";
+  };
+  
   const calcKinDelta = (pre, post) => {
     const p = parseFloat(pre);
     const q = parseFloat(post);
@@ -2403,8 +3359,11 @@ const ReportSection = ({ fd }) => {
         if (negDown) { en.push("Negative mood decreased"); tr.push("Olumsuz ruh hali azaldı"); }
         if (!en.length) { en.push("Mood stable"); tr.push("Ruh hali sabit"); }
       } else if (tool === "Muscle Control") {
-        if (items.some((r) => r.improving)) { en.push("Muscle control improved"); tr.push("Kas kontrolü iyileşti"); }
-        else { en.push("Muscle control stable"); tr.push("Kas kontrolü sabit"); }
+        const preVal = trows.find(r => r.pre !== "—")?.pre;
+        const postVal = trows.find(r => r.post !== "—")?.post;
+        if (preVal && postVal && parseFloat(postVal) > parseFloat(preVal)) { en.push("Muscle control improved"); tr.push("Kas kontrolü iyileşti"); }
+        else if (preVal && postVal && parseFloat(postVal) < parseFloat(preVal)) { en.push("Muscle control declined"); tr.push("Kas kontrolü azaldı"); }
+        else if (preVal || postVal) { en.push("Muscle control stable"); tr.push("Kas kontrolü sabit"); }
       } else if (tool === "KVIQ") {
         const imp = items.filter((r) => r.improving).length;
         const tot = items.length;
@@ -2418,6 +3377,13 @@ const ReportSection = ({ fd }) => {
         if (time.some((r) => r.improving === false)) { en.push("Slower task time"); tr.push("Daha yavaş görev süresi"); }
         if (rate.some((r) => r.improving)) { en.push("Functional ability improved"); tr.push("Fonksiyonel yetenek iyileşti"); }
         if (rate.some((r) => r.improving === false)) { en.push("Functional ability declined"); tr.push("Fonksiyonel yetenek azaldı"); }
+        if (!en.length && items.length) { en.push("No notable change in WMFT"); tr.push("WMFT'de kayda değer değişiklik yok"); }
+      } else if (tool === "Kinematics") {
+        const imp = items.filter((r) => r.improving).length;
+        const tot = items.length;
+        if (imp > tot / 2) { en.push("Kinematics improved"); tr.push("Kinematik iyileşti"); }
+        else if (imp > 0) { en.push("Kinematics partially improved"); tr.push("Kinematik kısmen iyileşti"); }
+        else if (tot > 0) { en.push("Kinematics stable"); tr.push("Kinematik sabit"); }
       }
       if (!en.length) return "";
       return `<div class="tool-interp">${en.join(", ")} / ${tr.join(", ")}</div>`;
@@ -2429,6 +3395,7 @@ const ReportSection = ({ fd }) => {
       "Muscle Control": { label: "Muscle Control Scale / Kas Kontrolü",        color: "#10b981", bg: "#ecfdf5" },
       "KVIQ":           { label: "Motor Imagery (KVIQ) / Motor İmgeleme",      color: "#0d9488", bg: "#f0fdfa" },
       "WMFT":           { label: "Wolf Motor Function (WMFT) / Motor Fonksiyon",color: "#0ea5e9", bg: "#ecfeff" },
+      "Kinematics":     { label: "Kinematic Analysis / Kinematik Analiz",        color: "#f43f5e", bg: "#fff1f2" },
     };
 
     // group rows
@@ -2445,6 +3412,111 @@ const ReportSection = ({ fd }) => {
       return `<div class="singlecol pagebreak"><div class="card" style="border-left:6px solid #0d9488"><div class="badge" style="background:#0d948888;font-size:11px;padding:5px 18px">Summary / Özet</div>${all.join("")}</div></div>`;
     };
 
+    const buildNarrativeSummary = () => {
+      const sections = [];
+      const trendWord = (v, better, worse) => v > 0 ? better : v < 0 ? worse : "remained stable";
+
+      Object.entries(grouped).forEach(([tool, trows]) => {
+        if (tool === "VAS") {
+          const items = trows.filter(r => r.delta !== "—" && r.delta !== "\u2014" && r.pre !== "—" && r.post !== "—");
+          if (!items.length) return;
+          const parts = items.map(r => {
+            const p = parseFloat(r.pre), q = parseFloat(r.post);
+            const d = q - p;
+            const trend = trendWord(-d, "decreased (improvement)", "increased (worsening)");
+            return `${esc(r.metric)} went from ${r.pre} to ${r.post} (Δ${r.delta}), indicating pain ${trend}`;
+          });
+          sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#0d9488">Pain Scale (VAS):</strong> ${parts.join("; ")}.</p>`);
+          return;
+        }
+
+        if (tool === "VAMS") {
+          const items = trows.filter(r => r.delta !== "—" && r.delta !== "\u2014" && r.pre !== "—" && r.post !== "—");
+          if (!items.length) return;
+          const positive = ["Happy","Calm"]; const negative = ["Sad","Tense"];
+          const posItems = items.filter(r => positive.some(n => r.metric.includes(n)));
+          const negItems = items.filter(r => negative.some(n => r.metric.includes(n)));
+          const parts = [];
+          if (posItems.length) {
+            const trends = posItems.map(r => `${r.pre}→${r.post} (Δ${r.delta})`).join(", ");
+            parts.push(`positive moods (${trends})`);
+          }
+          if (negItems.length) {
+            const trends = negItems.map(r => `${r.pre}→${r.post} (Δ${r.delta})`).join(", ");
+            parts.push(`negative moods (${trends})`);
+          }
+          sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#0ea5e9">Mood Scale (VAMS-4):</strong> ${parts.join("; ")}.</p>`);
+          return;
+        }
+
+        if (tool === "Muscle Control") {
+          const preRow = trows.find(r => r.pre !== "—");
+          const postRow = trows.find(r => r.post !== "—");
+          const preVal = preRow?.pre, postVal = postRow?.post;
+          if (!preVal || !postVal) return;
+          const d = parseFloat(postVal) - parseFloat(preVal);
+          const trend = trendWord(d, "improved", "declined");
+          sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#10b981">Muscle Control:</strong> The participant's perceived muscle control changed from ${preVal} to ${postVal} (Δ${d > 0 ? "+" : ""}${d.toFixed(2)}), indicating the feeling of control has ${trend}.</p>`);
+          return;
+        }
+
+        if (tool === "KVIQ") {
+          const items = trows.filter(r => r.delta !== "—" && r.delta !== "\u2014" && r.pre !== "—" && r.post !== "—");
+          if (!items.length) return;
+          const imp = items.filter(r => r.improving === true).length;
+          const wors = items.filter(r => r.improving === false).length;
+          const total = items.length;
+          let summary;
+          if (imp > total / 2) summary = `Most imagery items improved`;
+          else if (imp > 0 && wors > 0) summary = `Mixed imagery results`;
+          else summary = `Imagery remained stable`;
+          const vis = items.filter(r => r.metric.startsWith("Visual"));
+          const kin = items.filter(r => r.metric.startsWith("Kinesthetic"));
+          const visImp = vis.filter(r => r.improving === true).length;
+          const kinImp = kin.filter(r => r.improving === true).length;
+          const details = [];
+          if (vis.length) details.push(`visual imagery: ${visImp}/${vis.length} items improved`);
+          if (kin.length) details.push(`kinesthetic imagery: ${kinImp}/${kin.length} items improved`);
+          sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#0d9488">Motor Imagery (KVIQ):</strong> ${summary}. In detail, ${details.join("; ")}.</p>`);
+          return;
+        }
+
+        if (tool === "WMFT") {
+          const items = trows.filter(r => r.delta !== "—" && r.delta !== "\u2014" && r.pre !== "—" && r.post !== "—");
+          if (!items.length) return;
+          const timeItems = items.filter(r => r.metric.includes("Time"));
+          const rateItems = items.filter(r => r.metric.includes("Rating"));
+          const parts = [];
+          if (timeItems.length) {
+            const faster = timeItems.filter(r => r.improving === true).length;
+            const slower = timeItems.filter(r => r.improving === false).length;
+            parts.push(`task time: ${faster} faster, ${slower} slower`);
+          }
+          if (rateItems.length) {
+            const up = rateItems.filter(r => r.improving === true).length;
+            const down = rateItems.filter(r => r.improving === false).length;
+            parts.push(`functional rating: ${up} improved, ${down} declined`);
+          }
+          sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#0ea5e9">Wolf Motor Function (WMFT):</strong> ${parts.join("; ")}.</p>`);
+          return;
+        }
+
+        if (tool === "Kinematics") {
+          const items = trows.filter(r => r.delta !== "—" && r.delta !== "\u2014" && r.pre !== "—" && r.post !== "—");
+          if (!items.length) return;
+          const improved = items.filter(r => r.improving === true).map(r => r.metric);
+          const worsened = items.filter(r => r.improving === false).map(r => r.metric);
+          const parts = [];
+          if (improved.length) parts.push(`improved metrics: ${improved.join(", ")}`);
+          if (worsened.length) parts.push(`declining metrics: ${worsened.join(", ")}`);
+          sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#f43f5e">Kinematic Analysis:</strong> ${improved.length} of ${items.length} kinematic variables showed improvement. ${parts.join("; ")}.</p>`);
+          return;
+        }
+      });
+
+      if (!sections.length) return "";
+      return `<div class="singlecol pagebreak"><div class="card" style="border-left:6px solid #0d9488"><div class="badge" style="background:#0d948888;font-size:11px;padding:5px 18px">Clinical Narrative / Klinik Anlatım</div><div style="padding:4px 0">${sections.join("")}</div></div></div>`;
+    };
     const deltaCell = (r) => {
       if (!r.delta || r.delta === "\u2014") return `<span class="delta neutral">\u2014</span>`;
       const cls = r.improving === true ? "up" : r.improving === false ? "down" : "neutral";
@@ -2452,16 +3524,30 @@ const ReportSection = ({ fd }) => {
     };
 
     let toolSections = "";
-    Object.entries(grouped).forEach(([tool, trows]) => {
+    Object.entries(grouped).filter(([tool]) => tool !== "Kinematics").forEach(([tool, trows]) => {
+      const hasData = trows.some(r => r.pre !== "—" || r.post !== "—");
+      if (!hasData) return;
       const meta = toolMeta[tool] || { label: tool, color: "#0d9488" };
-      const body = trows.map((r) => `
+      const interp = buildToolInterp(tool, trows);
+      let body;
+      if (tool === "Muscle Control") {
+        const preRow = trows.find(r => r.pre !== "—");
+        const postRow = trows.find(r => r.post !== "—");
+        const preVal = preRow ? preRow.pre : "—";
+        const postVal = postRow ? postRow.post : "—";
+        const delta = preVal !== "—" && postVal !== "—"
+          ? (parseFloat(postVal) - parseFloat(preVal)).toFixed(2)
+          : "—";
+        body = `<tr><td class="metric">Felt Difference</td><td class="num">${preVal}</td><td class="num">${postVal}</td><td class="num">${delta}</td></tr>`;
+      } else {
+        body = trows.map((r) => `
         <tr>
           <td class="metric">${esc(r.metric)}</td>
           <td class="num">${esc(r.pre)}</td>
           <td class="num">${esc(r.post)}</td>
           <td class="num">${deltaCell(r)}</td>
         </tr>`).join("");
-      const interp = buildToolInterp(tool, trows);
+      }
       toolSections += `
         <div class="card" style="background:${meta.bg}cc;backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border:1px solid rgba(255,255,255,0.3);border-radius:1rem;box-shadow:0 20px 40px -8px rgba(0,0,0,0.08);padding:18px 22px;margin-bottom:20px;">
           <div class="badge" style="background:${meta.color}88">${esc(meta.label)}</div>
@@ -2477,37 +3563,77 @@ const ReportSection = ({ fd }) => {
         </div>`;
     });
 
-    // velocity profiles — MUST be defined before videoSection below
+    // combined velocity profile chart
     let kr2; try { kr2 = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {}; } catch { kr2 = {}; }
-    const velImgs = ["pre","post","baseline"]
-      .filter((p) => kr2[p]?.velocity_profile)
-      .map((p) => {
-        const lbl = { pre:"Pre", post:"Post", baseline:"Healthy side" }[p];
-        const prof = kr2[p].velocity_profile;
-        if (!prof?.t || prof.t.length < 2) return "";
-        const w = 800, h = 220, pad = 40;
-        const tMin = prof.t[0], tMax = prof.t[prof.t.length - 1];
-        const vMax = Math.max(...prof.v, 0.01);
-        const xp = (t) => pad + ((t - tMin) / (tMax - tMin || 1)) * (w - 2 * pad);
-        const yp = (v) => h - pad - (v / vMax) * (h - 2 * pad);
-        const path = prof.t.map((t, i) => `${i === 0 ? "M" : "L"}${xp(t).toFixed(1)},${yp(prof.v[i]).toFixed(1)}`).join(" ");
-        return `<div class="velcard" style="flex:1">
-          <div class="vellabel">${esc(lbl)}</div>
-          <svg viewBox="0 0 ${w} ${h}" width="100%">
-            <line x1="${pad}" y1="${h-pad}" x2="${w-pad}" y2="${h-pad}" stroke="#e2e8f0" stroke-width="2"/>
-            <path d="${path}" fill="none" stroke="#0d9488" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>`;
-      }).join("");
-    let velSection = velImgs ? `<div class="singlecol"><div class="card"><div class="badge" style="background:#0d948888">Velocity Profiles</div><div class="velrow">${velImgs}</div></div></div>` : "";
+    const velChart = buildCombinedVelChart({
+      pre: kr2.pre?.velocity_profile,
+      post: kr2.post?.velocity_profile,
+      baseline: kr2.baseline?.velocity_profile,
+    }, true);
+    let velSection = velChart ? `<div class="singlecol"><div class="card vel-chart-card"><div class="badge" style="background:#0d948888">Combined Velocity Profile</div><div class="vel-chart-wrap">${velChart}</div></div></div>` : "";
 
     // video kinematics
     const videoKin = buildVideoKinRows();
     let videoSection = "";
     if (videoKin) {
       const fBody = videoKin.body.filter((row) => !String(row[0]).toLowerCase().includes("shoulder width"));
-      const head = videoKin.headers.map((h) => `<th>${esc(h)}</th>`).join("");
-      const body = fBody.map((row) => `<tr>${row.map((c, i) => `<td class="${i < 2 ? "metric" : "num"}">${esc(c)}</td>`).join("")}</tr>`).join("");
+      const preIdx = videoKin.headers.indexOf("Pre");
+      const postIdx = videoKin.headers.indexOf("Post");
+      const healthyIdx = videoKin.headers.indexOf("Healthy side");
+      const head = videoKin.headers.map((h) => `<th>${esc(h)}</th>`).join("")
+        + (preIdx >= 0 && postIdx >= 0 ? '<th style="text-align:center">Pre → Post</th>' : "")
+        + (postIdx >= 0 && healthyIdx >= 0 ? '<th style="text-align:center">Post → Healthy</th>' : "");
+      const body = fBody.map((row, ri) => {
+        const dir = videoKin.varMeta?.[ri]?.dir || kinDirectionMap(row[0]);
+        let prePostHtml = "";
+        let postHealthyHtml = "";
+        if (preIdx >= 0 && postIdx >= 0) {
+          const preVal = parseFloat(row[preIdx]);
+          const postVal = parseFloat(row[postIdx]);
+          if (!isNaN(preVal) && !isNaN(postVal)) {
+            const badge = kinPrePostBadge(preVal, postVal, dir);
+            prePostHtml = `<td class="num">${esc(badge?.text || "—")}</td>`;
+          } else {
+            prePostHtml = '<td class="num">—</td>';
+          }
+        }
+        if (postIdx >= 0 && healthyIdx >= 0) {
+          const postVal = parseFloat(row[postIdx]);
+          const helVal = parseFloat(row[healthyIdx]);
+          if (!isNaN(postVal) && !isNaN(helVal)) {
+            const badge = kinPostHealthyBadge(postVal, helVal, dir);
+            postHealthyHtml = `<td class="num">${esc(badge?.text || "—")}</td>`;
+          } else {
+            postHealthyHtml = '<td class="num">—</td>';
+          }
+        }
+        return `<tr>${row.map((c, i) => `<td class="${i < 2 ? "metric" : "num"}">${esc(c)}</td>`).join("")}${prePostHtml}${postHealthyHtml}</tr>`;
+      }).join("");
+      let videoInterp = "";
+      if (preIdx >= 0 && postIdx >= 0) {
+        const imp = fBody.filter((row, ri) => {
+          const preVal = parseFloat(row[preIdx]), postVal = parseFloat(row[postIdx]);
+          if (isNaN(preVal) || isNaN(postVal)) return false;
+          const dir = videoKin.varMeta?.[ri]?.dir || kinDirectionMap(row[0]);
+          const pct = calcImprovement(preVal, postVal, dir);
+          return pct != null && pct > 0;
+        }).length;
+        const wors = fBody.filter((row, ri) => {
+          const preVal = parseFloat(row[preIdx]), postVal = parseFloat(row[postIdx]);
+          if (isNaN(preVal) || isNaN(postVal)) return false;
+          const dir = videoKin.varMeta?.[ri]?.dir || kinDirectionMap(row[0]);
+          const pct = calcImprovement(preVal, postVal, dir);
+          return pct != null && pct < 0;
+        }).length;
+        const total = fBody.filter((row) => {
+          const preVal = parseFloat(row[preIdx]), postVal = parseFloat(row[postIdx]);
+          return !isNaN(preVal) && !isNaN(postVal);
+        }).length;
+        if (total > 0) {
+          const impLabel = imp > total / 2 ? "Most kinematic metrics improved" : imp > 0 ? "Some kinematic metrics improved" : "No kinematic improvement";
+          videoInterp = `<div class="tool-interp">${impLabel} (${imp} improved, ${wors} worsened, ${total - imp - wors} stable)</div>`;
+        }
+      }
       videoSection = `
         <div class="singlecol">
         <div class="card">
@@ -2515,11 +3641,9 @@ const ReportSection = ({ fd }) => {
           <div class="tblwrap">
           <table><thead><tr style="background:#0d948888;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)">${head}</tr></thead><tbody>${body}</tbody></table>
           </div>
+          ${videoInterp}
         </div>
-        ${velImgs ? `<div class="card"><div class="badge" style="background:#0d948888">Velocity Profiles</div><div class="velrow">${velImgs}</div></div>` : ""}
         </div>`;
-      // remove velSection since it's now inside videoSection
-      velSection = "";
     }
 
     const demoItems = [
@@ -2532,11 +3656,62 @@ const ReportSection = ({ fd }) => {
       ["MRC", d.mrc || "\u2014"],
     ].map(([k, v]) => `<div class="demoitem"><span class="demok">${esc(k)}</span><span class="demov">${esc(v)}</span></div>`).join("");
 
+    const ipaq = fd.ipaq || {};
+    const ipaqRows = IPAQ_ACTS.filter(a => ipaq[a.id]?.gun || ipaq[a.id]?.sure).map(a => {
+      const gun = ipaq[a.id]?.gun || "0";
+      const sure = ipaq[a.id]?.sure || "0";
+      const totMin = (parseFloat(gun) * parseFloat(sure)) || 0;
+      const metVal = totMin * a.met;
+      return `<tr><td class="metric">${esc(a.en)}</td><td class="num">${esc(gun)}</td><td class="num">${esc(sure)}</td><td class="num">${totMin.toFixed(0)}</td><td class="num">${a.met}</td><td class="num">${metVal.toFixed(0)}</td></tr>`;
+    }).join("");
+    const ipaqTotalMET = IPAQ_ACTS.reduce((s, a) => {
+      const gun = parseFloat(ipaq[a.id]?.gun) || 0;
+      const sure = parseFloat(ipaq[a.id]?.sure) || 0;
+      return s + gun * sure * a.met;
+    }, 0);
+    let ipaqSection = "";
+    if (ipaqRows) {
+      const highDays = parseInt(ipaq.high?.gun) || 0;
+      const medDays = parseInt(ipaq.medium?.gun) || 0;
+      const lightDays = parseInt(ipaq.light?.gun) || 0;
+      const medTotal = ((parseFloat(ipaq.medium?.sure)||0)*(parseFloat(ipaq.medium?.gun)||0)) || 0;
+      const lightTotal = ((parseFloat(ipaq.light?.sure)||0)*(parseFloat(ipaq.light?.gun)||0)) || 0;
+      let clsLevel, clsColor, clsText;
+      if (highDays >= 3 && ipaqTotalMET >= 1500) { clsLevel="High"; clsColor="#10b981"; clsText="Vigorous activity ≥3 days & ≥1500 MET-min/week"; }
+      else if ((medDays+lightDays) >= 7 && ipaqTotalMET >= 3000) { clsLevel="High"; clsColor="#10b981"; clsText="Mixed activities 7 days & ≥3000 MET-min/week"; }
+      else if (ipaqTotalMET >= 600 || (medDays+lightDays >= 5 && (medTotal+lightTotal) >= 150)) { clsLevel="Moderate"; clsColor="#f59e0b"; clsText="≥600 MET-min/week or 5+ days moderate/walking"; }
+      else { clsLevel="Low"; clsColor="#f43f5e"; clsText="Not meeting moderate or high criteria"; }
+      ipaqSection = '<div class="singlecol"><div class="card"><div class="badge" style="background:#0ea5e988">Physical Activity (IPAQ) / Fiziksel Aktivite</div><div class="tblwrap"><table><thead><tr style="background:#0ea5e988;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)"><th>Activity</th><th>Days/wk</th><th>Min/day</th><th>Total min/wk</th><th>MET</th><th>MET-min/wk</th></tr></thead><tbody>' + ipaqRows + '</tbody></table></div>'
+        + '<hr style="border:none;border-top:1px solid rgba(0,0,0,0.06);margin:14px 0">'
+        + '<p style="font-size:9px;color:#94a3b8;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 2px">Physical Activity Level Interpretation</p>'
+        + '<p style="font-size:11px;color:#64748b;margin:0 0 10px">Based on IPAQ scoring guidelines</p>'
+        + '<div style="display:flex;gap:10px">'
+        + '<div style="flex:1;padding:10px 14px;background:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.3);border-radius:0.75rem">'
+        + '<p style="font-size:9px;color:#94a3b8;font-weight:800;text-transform:uppercase;margin:0 0 2px">Total MET-minutes/week</p>'
+        + '<p style="font-size:22px;font-weight:800;color:#1e293b;margin:0">' + ipaqTotalMET.toFixed(0) + '</p>'
+        + '<p style="font-size:11px;color:#64748b;margin:4px 0 0">Metabolic Equivalent of Task</p>'
+        + '</div>'
+        + '<div style="flex:1;padding:10px 14px;border-radius:0.75rem;border:1px solid;background:' + clsColor + '15;border-color:' + clsColor + '30">'
+        + '<p style="font-size:9px;color:#94a3b8;font-weight:800;text-transform:uppercase;margin:0 0 2px">Activity Classification</p>'
+        + '<p style="font-size:22px;font-weight:800;color:' + clsColor + ';margin:0">' + clsLevel + '</p>'
+        + '<p style="font-size:11px;color:' + clsColor + ';margin:4px 0 0;opacity:0.7">' + clsText + '</p>'
+        + '</div></div></div></div>';
+    }
+
+    const notesSrc = (d.notes || "").trim();
+    const fmtNotes = notesSrc ? esc(notesSrc) : "";
+    const notesHtml = d.antispasticDrugs || d.otherDrugs || notesSrc ? '<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.3)">' +
+      (d.antispasticDrugs ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Antispastic Drugs / Antispastik İlaçlar:</strong><br>' + esc(d.antispasticDrugs) + '</p>' : "") +
+      (d.otherDrugs ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Other Medications / Diğer İlaçlar:</strong><br>' + esc(d.otherDrugs) + '</p>' : "") +
+      (fmtNotes ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Clinical Notes / Klinik Notlar:</strong><br><div style="margin-top:4px;white-space:pre-wrap">' + fmtNotes + '</div></p>' : "") +
+    '</div>' : "";
+
     const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>Clinical Report - ${esc(d.name || "Participant")}</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',system-ui,-apple-system,sans-serif; }
-  body { background:linear-gradient(135deg,#f0fdfa 0%,#e0f2fe 100%); color:#1e293b; padding:28px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body { background:#f5f0eb; color:#1e293b; padding:28px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body::before { content:""; position:fixed; inset:0; background:url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E"); pointer-events:none; z-index:9999; }
   .wrap { max-width:920px; margin:0 auto; }
   .header { backdrop-filter:blur(40px) saturate(180%); -webkit-backdrop-filter:blur(40px) saturate(180%); border:1px solid rgba(255,255,255,0.3); border-radius:1rem; box-shadow:0 25px 50px -8px rgba(0,0,0,0.10); padding:22px 30px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; }
   .header h1 { font-size:20px; color:#1e293b; font-weight:800; }
@@ -2572,12 +3747,17 @@ const ReportSection = ({ fd }) => {
   .velrow .velcard { flex:1; min-width:240px; margin-top:12px; background:rgba(255,255,255,0.4); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.3); border-radius:0.75rem; padding:14px; box-shadow:0 6px 20px -4px rgba(0,0,0,0.06); }
   .vellabel { font-size:12px; font-weight:800; color:#0d9488; margin-bottom:4px; }
 
+  .vel-chart-card { padding-bottom:16px; }
+  .vel-chart-wrap { border-radius:0.75rem; overflow:hidden; border:1px solid #e2e8f0; background:#f8fafc; padding:6px 6px 2px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .vel-chart-wrap svg { display:block; width:100%; height:auto; max-height:300px; }
+
   .singlecol .card { break-inside:avoid; page-break-inside:avoid; background:rgba(255,255,255,0.65); backdrop-filter:blur(40px) saturate(180%); -webkit-backdrop-filter:blur(40px) saturate(180%); border:1px solid rgba(255,255,255,0.3); border-radius:1rem; box-shadow:0 25px 50px -8px rgba(0,0,0,0.10); padding:18px 22px; margin-bottom:20px; }
   .pagebreak { break-before:page; page-break-before:always; }
 
   .interp { font-size:12px; line-height:1.8; color:#334155; }
   @media print {
-    body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; background:linear-gradient(135deg,#f0fdfa 0%,#e0f2fe 100%) !important; padding:16px; }
+    body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; background:#f5f0eb !important; padding:16px; }
+    body::before { background:url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E") !important; }
     .card, .header, .patient { box-shadow:0 10px 30px -6px rgba(0,0,0,0.08) !important; page-break-inside:avoid; break-inside:avoid; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
     tr { page-break-inside:avoid; break-inside:avoid; }
     .badge, thead th, .tblwrap { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -2593,51 +3773,33 @@ const ReportSection = ({ fd }) => {
     <div class="name">${esc(d.name || "\u2014")}</div>
     <div class="pid">${d.participantId ? "ID: " + esc(d.participantId) : ""}</div>
     <div class="demogrid">${demoItems}</div>
+    ${notesHtml}
   </div>
+  ${ipaqSection}
   <div class="tools">${toolSections}</div>
   ${videoSection}
   ${velSection}
   ${buildSummaryInterp()}
+  ${buildNarrativeSummary()}
 </div>
 <script>window.onload = () => { setTimeout(() => window.print(), 400); };</script>
 </body></html>`;
 
-    const win = window.open("", "_blank");
-    if (!win) { alert("Please allow pop-ups to export the report / Lütfen raporu dışa aktarmak için açılır pencerelere izin verin"); return; }
-    win.document.write(html);
-    win.document.close();
+    const blob = new Blob([html], { type: "text/html" });
+    const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile) {
+      downloadBlob(blob, `report_${d.participantId || d.name || "participant"}.html`);
+      alert("✓ Report downloaded — open the file and print to PDF");
+    } else {
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
     } catch (e) { alert("Report error: " + e.message); } };
 
   // ── PDF Export (jsPDF fallback) ──
   const exportPDF = () => {
     const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
-
-    // Helper: render velocity profile to a canvas data URL
-    const renderVelProfile = (profile, label) => {
-      if (!profile || !profile.t || profile.t.length < 2) return null;
-      const pts = profile.t.map((t, i) => ({ t, v: profile.v[i] }));
-      const w = 1800, h = 400, pad = 60;
-      const tMin = pts[0].t, tMax = pts[pts.length - 1].t;
-      const vMax = Math.max(...pts.map(p => p.v), 0.01);
-      const xp = (t) => pad + ((t - tMin) / (tMax - tMin || 1)) * (w - 2 * pad);
-      const yp = (v) => h - pad - (v / vMax) * (h - 2 * pad);
-      const path = smoothVelPath(pts, xp, yp);
-      const peak = pts.reduce((a, b) => a.v > b.v ? a : b);
-
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
-        <rect width="${w}" height="${h}" fill="#f8fafc"/>
-        <text x="${pad}" y="${pad - 10}" font-family="Helvetica,Arial,sans-serif" font-size="28" font-weight="bold" fill="#1e293b">${label}</text>
-        <line x1="${pad}" y1="${h - pad}" x2="${w - pad}" y2="${h - pad}" stroke="#e2e8f0" stroke-width="2"/>
-        <path d="${path}" fill="none" stroke="#0d9488" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="${xp(peak.t)}" cy="${yp(peak.v)}" r="8" fill="#0d9488" stroke="white" stroke-width="3"/>
-        <text x="${xp(peak.t)}" y="${yp(peak.v) - 20}" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="24" fill="#0f766e" font-weight="bold">${peak.v.toFixed(2)}</text>
-        <text x="${pad}" y="${h - pad + 40}" font-family="Helvetica,Arial,sans-serif" font-size="22" fill="#94a3b8">${tMin.toFixed(1)}s</text>
-        <text x="${w - pad}" y="${h - pad + 40}" text-anchor="end" font-family="Helvetica,Arial,sans-serif" font-size="22" fill="#94a3b8">${tMax.toFixed(1)}s</text>
-        <text x="${w/2}" y="${h - pad + 40}" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="22" fill="#94a3b8">Time (s)</text>
-        <text x="${pad - 40}" y="${h/2}" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="22" fill="#94a3b8" transform="rotate(-90,${pad - 40},${h/2})">Velocity (norm/s)</text>
-      </svg>`;
-      return "data:image/svg+xml;base64," + btoa(svg);
-    };
 
     // ── Design tokens (GlassCard style) ────────────────────────────
     const W = 210, M = 12, CW = W - 2 * M, R = 6, R2 = 4, R3 = 3;
@@ -2831,24 +3993,25 @@ const ReportSection = ({ fd }) => {
       y = (doc.lastAutoTable?.finalY || y) + 4;
     }
 
-    // ── Velocity profiles ─────────────────────────────────────────
+    // ── Velocity profiles (combined chart) ────────────────────────
     let kr2;
     try { kr2 = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {}; } catch { kr2 = {}; }
     const kinPhases = ["pre","post","baseline"].filter((p) => kr2[p]?.velocity_profile);
     if (kinPhases.length > 0) {
-      y = checkPage(y, 60);
-      rr(M, y, CW, 0.1, R, null, C.gray300); y += 1.5;
-      sectionBadge("Velocity Profiles", M + 4, y + 3, C.teal);
-      y += 8;
-      kinPhases.forEach((ph) => {
-        const lbl = { pre:"Pre", post:"Post", baseline:"Healthy side" }[ph];
-        const img = renderVelProfile(kr2[ph]?.velocity_profile, lbl);
-        if (img) {
-          y = checkPage(y, 54);
-          rr(M + 4, y, CW - 8, 44, R2, C.white, C.gray200);
-          try { doc.addImage(img, "SVG", M + 4, y, CW - 8, 44); y += 48; } catch {}
-        }
-      });
+      const combinedSvg = buildCombinedVelChart({
+        pre: kr2.pre?.velocity_profile,
+        post: kr2.post?.velocity_profile,
+        baseline: kr2.baseline?.velocity_profile,
+      }, true);
+      if (combinedSvg) {
+        const img = svgToDataUrl(combinedSvg);
+        y = checkPage(y, 78);
+        rr(M, y, CW, 0.1, R, null, C.gray300); y += 1.5;
+        sectionBadge("Combined Velocity Profile", M + 4, y + 3, C.teal);
+        y += 8;
+        rr(M + 4, y, CW - 8, 62, R2, C.gray50, C.gray200);
+        try { doc.addImage(img, "SVG", M + 6, y + 2, CW - 12, 58); y += 64; } catch {}
+      }
     }
 
     // ── Footer on each page ───────────────────────────────────────
@@ -2952,8 +4115,8 @@ const ReportSection = ({ fd }) => {
       XLSX.utils.book_append_sheet(
         wb,
         XLSX.utils.aoa_to_sheet([
-          ["Variable", "Unit", "Pre", "During", "Post", "Δ"],
-          ...kinRows.map((r) => [r.name || "", r.unit || "", r.pre || "", r.during || "", r.post || "", calcKinDelta(r.pre, r.post)]),
+          ["Variable", "Unit", "Pre", "Post", "Δ"],
+          ...kinRows.map((r) => [r.name || "", r.unit || "", r.pre || "", r.post || "", calcKinDelta(r.pre, r.post)]),
         ]),
         "Kinematics"
       );
@@ -2962,29 +4125,38 @@ const ReportSection = ({ fd }) => {
     XLSX.writeFile(wb, `research_data_${d.participantId || "participant"}_${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
-  // ── SPSS Export (all patients) ──
+  // ── SPSS Export (all patients, split by group + demo/assess/full) ──
   const exportSPSS = () => {
     const allPts = loadPatients();
-    if (allPts.length === 0) { return; }
+    if (allPts.length === 0) { showToast("No patients to export", "error"); return; }
 
-    const rows = [];
-    allPts.forEach((pt) => {
-      const built = buildSPSSData(pt);
-      if (built.length > 0) rows.push(built[0]);
-    });
-    if (rows.length === 0) { return; }
+    const masterRows = buildMasterDataset(allPts, WMFT_ITEMS, KGIA_MOVEMENTS, IPAQ_ACTS);
+    if (masterRows.length === 0) { showToast("No valid data rows", "error"); return; }
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const csvData = XLSX.utils.sheet_to_csv(ws);
-    const blob = new Blob(["\uFEFF" + csvData], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `spss_data_${allPts.length}patients_${new Date().toISOString().split("T")[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    let count = 0;
+    const toCsv = (name, rows) => {
+      const blob = new Blob(["\uFEFF" + XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(rows))], { type:"text/csv;charset=utf-8" });
+      setTimeout(() => downloadBlob(blob, name), count * 400);
+      count++;
+    };
+
+    toCsv("master_study_data.csv", masterRows);
+
+    const aomi = masterRows.filter((r) => r.Group === "1");
+    const ctrl = masterRows.filter((r) => r.Group === "2");
+    const demoKeys = ["ID","Group","Age","Sex","TimeSinceStroke","StrokeType","AffectedSide","MAS","MRC"];
+    const assessKeys = Object.keys(masterRows[0]).filter((k) => k !== "ID" && !demoKeys.includes(k));
+    const pick = (row, keys) => keys.reduce((o, k) => ({ ...o, [k]: row[k] }), {});
+
+    toCsv("aomi_full.csv", aomi.map((r) => pick(r, ["ID", ...demoKeys.slice(1), ...assessKeys])));
+    toCsv("control_full.csv", ctrl.map((r) => pick(r, ["ID", ...demoKeys.slice(1), ...assessKeys])));
+
+    setTimeout(() => downloadBlob(
+      new Blob(["\uFEFF" + generateStudySPSSSyntax("master_study_data.csv")], { type: "text/plain;charset=utf-8" }),
+      "neuro_study_analysis.sps"
+    ), count * 400);
+
+    showToast(`✓ Exported master CSV + group files + SPSS syntax`);
   };
 
   // ── JSON Export (all patients) ──
@@ -2993,55 +4165,15 @@ const ReportSection = ({ fd }) => {
     if (allPts.length === 0) { return; }
     const clean = allPts.map(({ _id, _savedAt, _hasPre, _hasPost, ...rest }) => rest);
     const blob = new Blob([JSON.stringify(clean, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `neuro_data_${allPts.length}patients_${new Date().toISOString().split("T")[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `neuro_data_${allPts.length}patients_${new Date().toISOString().split("T")[0]}.json`);
   };
 
-  // ── SPSS Syntax (.sps) export ──
+  // ── SPSS Syntax (.sps) export — full study analysis workflow ──
   const exportSPSSyntax = () => {
-    const vars = [
-      { n:"ID", l:"Study ID", m:"nominal", v:"" },
-      { n:"Group", l:"Group (1=AOMI, 2=Control)", m:"nominal", v:"1 'AOMI' 2 'Control'" },
-      { n:"Age", l:"Age (years)", m:"scale", v:"" },
-      { n:"Sex", l:"Sex (1=Male, 2=Female)", m:"nominal", v:"1 'Male' 2 'Female'" },
-      { n:"TimeSinceStroke", l:"Time since stroke (months)", m:"scale", v:"" },
-      { n:"StrokeType", l:"Stroke type (1=Ischemic, 2=Hemorrhagic)", m:"nominal", v:"1 'Ischemic' 2 'Hemorrhagic'" },
-      { n:"AffectedSide", l:"Affected side (1=Left, 2=Right)", m:"nominal", v:"1 'Left' 2 'Right'" },
-      { n:"MAS", l:"Modified Ashworth Scale", m:"ordinal", v:"0 'No increase' 1 'Slight catch' \"1+\" 'Catch+resistance' 2 'More marked' 3 'Considerable' 4 'Rigid'" },
-      { n:"MRC", l:"MRC Muscle Strength", m:"ordinal", v:"2 'Gravity eliminated' 3 'Against gravity' 4 'Some resistance' 5 'Normal'" },
-    ];
-    const kMap = { smoothness:"Smoothness Pause %", duration:"Movement Duration (s)", peakVel:"Peak Velocity (norm/s)", meanVel:"Mean Velocity (norm/s)", pathLen:"Path Length (norm)", latRange:"Lateral Range (norm)", trunkPalm:"Trunk/Palm Ratio", elbow:"Max Elbow Angle (deg)", shoulderDep:"Shoulder Depression (cm)", trunkLat:"Trunk Lateral (norm)", trunkVert:"Trunk Vertical (norm)" };
-    Object.entries(kMap).forEach(([k, lbl]) => { vars.push({ n:`${k}_Pre`, l:`${lbl} - Pre`, m:"scale", v:"" }); vars.push({ n:`${k}_Post`, l:`${lbl} - Post`, m:"scale", v:"" }); });
-    const clinVars = [
-      ["WMFT_Pre","WMFT-SF Total - Pre"],["WMFT_Post","WMFT-SF Total - Post"],
-      ["KVIQ_Vis_Pre","KVIQ Visual Total - Pre"],["KVIQ_Vis_Post","KVIQ Visual Total - Post"],
-      ["KVIQ_Kin_Pre","KVIQ Kinesthetic Total - Pre"],["KVIQ_Kin_Post","KVIQ Kinesthetic Total - Post"],
-    ];
-    ["Happy","Sad","Calm","Tense"].forEach((e) => { clinVars.push([`VAMS_${e}_Pre`,`VAMS ${e} - Pre`],[`VAMS_${e}_Post`,`VAMS ${e} - Post`]); });
-    clinVars.push(["IPAQ_Pre","IPAQ Total MET-min/week"]);
-    clinVars.push(["VAS_Pre","VAS Pain (avg) - Pre"],["VAS_Post","VAS Pain (avg) - Post"]);
-    clinVars.push(["MDRS_Post","Motor Difference Rating Scale - Post"]);
-    clinVars.forEach(([n, l]) => vars.push({ n, l, m:"scale", v:"" }));
-
-    let syn = "* SPSS Syntax - Auto-generated by NeuroLab Platform.\n* Variable Labels, Value Labels, and Measure Level.\n\n";
-    syn += "VARIABLE LABELS\n";
-    vars.forEach((v) => { syn += `  ${v.n} '${v.l}'.\n`; });
-    syn += "\nVALUE LABELS\n";
-    vars.filter((v) => v.v).forEach((v) => { syn += `  ${v.n} ${v.v}.\n`; });
-    syn += "\nVARIABLE LEVEL";
-    vars.forEach((v) => { syn += `\n  ${v.n} (${v.m.toUpperCase()})`; });
-    syn += ".\n\nEXECUTE.\n";
-
+    const syn = generateStudySPSSSyntax("master_study_data.csv");
     const blob = new Blob(["\uFEFF" + syn], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `neuro_variable_syntax.sps`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    downloadBlob(blob, "neuro_study_analysis.sps");
+    showToast("✓ SPSS syntax downloaded (neuro_study_analysis.sps)");
   };
 
   return (
@@ -3073,6 +4205,112 @@ const ReportSection = ({ fd }) => {
         </Glass>
       )}
 
+      {/* Clinical Notes */}
+      {(d.notes || d.antispasticDrugs || d.otherDrugs) && (
+        <Glass className="p-5 border-l-2 border-violet-400/40">
+          <div className="flex items-start gap-3 mb-4">
+            <FileText className="w-5 h-5 text-violet-300 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-extrabold text-white/90">Clinical Notes / Klinik Notlar</p>
+              <p className="text-xs font-light text-white/40 mt-0.5">Medical history, medications, and clinician observations</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {d.antispasticDrugs && (
+              <div className="glass-float bg-white/[0.09] border border-white/12 rounded-xl px-4 py-2.5">
+                <p className="text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-1">Antispastic Drugs / Antispastik İlaçlar</p>
+                <p className="text-sm text-white/80 font-medium">{d.antispasticDrugs}</p>
+              </div>
+            )}
+            {d.otherDrugs && (
+              <div className="glass-float bg-white/[0.09] border border-white/12 rounded-xl px-4 py-2.5">
+                <p className="text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-1">Other Medications / Diğer İlaçlar</p>
+                <p className="text-sm text-white/80 font-medium">{d.otherDrugs}</p>
+              </div>
+            )}
+            {d.notes && <div className="glass-float bg-white/[0.09] border border-white/12 rounded-xl px-4 py-2.5"><p className="text-sm text-white/80 font-medium whitespace-pre-wrap">{d.notes}</p></div>}
+          </div>
+        </Glass>
+      )}
+
+      {/* IPAQ Section */}
+      {(() => {
+        const ipaqData = fd.ipaq || {};
+        const hasIpaq = IPAQ_ACTS.some(a => ipaqData[a.id]?.gun || ipaqData[a.id]?.sure);
+        if (!hasIpaq) return null;
+        const totMin = (a) => ((parseFloat(ipaqData[a.id]?.sure) || 0) * (parseFloat(ipaqData[a.id]?.gun) || 0));
+        const totalMET = IPAQ_ACTS.reduce((s, a) => s + totMin(a) * a.met, 0);
+        return (
+          <Glass className="p-5 border-l-2 border-sky-400/40">
+            <div className="flex items-start gap-3 mb-4">
+              <Activity className="w-5 h-5 text-sky-300 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-extrabold text-white/90">International Physical Activity Questionnaire (IPAQ)</p>
+                <p className="text-xs font-light text-white/40 mt-0.5">Uluslararası Fiziksel Aktivite Anketi</p>
+              </div>
+            </div>
+            <div className="glass-float overflow-x-auto rounded-xl border border-white/[0.08]">
+              <table className="w-full text-sm min-w-[580px]">
+                <thead>
+                  <tr className="bg-white/[0.06] border-b border-white/[0.04]">
+                    <th className="text-left px-3 py-3 font-extrabold text-white/70 text-xs uppercase">Activity</th>
+                    <th className="text-center px-3 py-3 text-xs font-extrabold text-white/50 uppercase">Min/day</th>
+                    <th className="text-center px-3 py-3 text-xs font-extrabold text-white/50 uppercase">Days/wk</th>
+                    <th className="text-center px-3 py-3 text-xs font-extrabold text-white/50 uppercase">Total min/wk</th>
+                    <th className="text-center px-3 py-3 text-xs font-extrabold text-white/50 uppercase">MET</th>
+                    <th className="text-center px-3 py-3 text-xs font-extrabold text-white/50 uppercase">MET-min/wk</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {IPAQ_ACTS.filter(a => ipaqData[a.id]?.gun || ipaqData[a.id]?.sure).map((a, i) => {
+                    const t = totMin(a);
+                    return (
+                      <tr key={a.id} className={`border-b border-white/[0.06] hover:bg-white/[0.03] ${i % 2 === 0 ? "" : "bg-white/[0.02]"}`}>
+                        <td className="px-3 py-3 text-xs text-white/80">{a.en}</td>
+                        <td className="px-3 py-3 text-center text-xs text-white/70 font-bold">{ipaqData[a.id]?.sure || "0"}</td>
+                        <td className="px-3 py-3 text-center text-xs text-white/70 font-bold">{ipaqData[a.id]?.gun || "0"}</td>
+                        <td className="px-3 py-3 text-center text-xs text-white/70 font-bold">{t.toFixed(0)}</td>
+                        <td className="px-3 py-3 text-center text-xs text-white/70 font-bold">{a.met}</td>
+                        <td className="px-3 py-3 text-center text-xs text-emerald-300 font-extrabold">{(t * a.met).toFixed(0)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {(() => {
+              const highDays = parseFloat(ipaqData.high?.gun) || 0;
+              const medDays = parseFloat(ipaqData.medium?.gun) || 0;
+              const lightDays = parseFloat(ipaqData.light?.gun) || 0;
+              const med = totMin(IPAQ_ACTS.find(a=>a.id==="medium")) || 0;
+              const light = totMin(IPAQ_ACTS.find(a=>a.id==="light")) || 0;
+              let cls;
+              if (highDays >= 3 && totalMET >= 1500) cls = { level:"High", color:"emerald", text:"Vigorous activity ≥3 days & ≥1500 MET-min/week" };
+              else if ((medDays + lightDays) >= 7 && totalMET >= 3000) cls = { level:"High", color:"emerald", text:"Mixed activities 7 days & ≥3000 MET-min/week" };
+              else if (totalMET >= 600 || (medDays + lightDays >= 5 && (med + light) >= 150)) cls = { level:"Moderate", color:"amber", text:"≥600 MET-min/week or 5+ days moderate/walking" };
+              else cls = { level:"Low", color:"rose", text:"Not meeting moderate or high criteria" };
+              return (
+                <><div className="my-4 border-t border-white/[0.06]" />
+                <p className="text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-3">Physical Activity Level Interpretation</p>
+                <p className="text-xs text-white/50 mb-3">Based on IPAQ scoring guidelines</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="glass-float px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                    <p className="text-[10px] font-extrabold text-white/40 uppercase mb-1">Total MET-minutes/week</p>
+                    <p className="text-2xl font-extrabold text-white">{totalMET.toFixed(0)}</p>
+                    <p className="text-xs text-white/50 mt-1">Metabolic Equivalent of Task</p>
+                  </div>
+                  <div className={`px-4 py-3 rounded-xl border ${cls.color === "emerald" ? "bg-emerald-400/10 border-emerald-400/20" : cls.color === "amber" ? "bg-amber-400/10 border-amber-400/20" : "bg-rose-400/10 border-rose-400/20"}`}>
+                    <p className="text-[10px] font-extrabold text-white/40 uppercase mb-1">Activity Classification</p>
+                    <p className={`text-2xl font-extrabold ${cls.color === "emerald" ? "text-emerald-300" : cls.color === "amber" ? "text-amber-300" : "text-rose-300"}`}>{cls.level}</p>
+                    <p className={`text-xs mt-1 ${cls.color === "emerald" ? "text-emerald-300/70" : cls.color === "amber" ? "text-amber-300/70" : "text-rose-300/70"}`}>{cls.text}</p>
+                  </div>
+                </div></>
+              );
+            })()}
+          </Glass>
+        );
+      })()}
+
       {/* Clinical Summary Dashboard */}
       <Glass className="p-5">
         <div className="flex items-start gap-3 mb-5">
@@ -3083,7 +4321,7 @@ const ReportSection = ({ fd }) => {
           </div>
         </div>
 
-        {tools.map((tool) => {
+        {tools.filter(t => t !== "Kinematics").map((tool, idx) => {
           const toolRows = rows.filter((r) => r.tool === tool);
           const tc = toolColor[tool] || "text-white/60 bg-white/[0.05] border-white/[0.04]";
 
@@ -3093,7 +4331,7 @@ const ReportSection = ({ fd }) => {
                 {tool}
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
+              <div className="glass-float overflow-x-auto rounded-xl border border-white/[0.08]">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-white/[0.04] border-b border-white/[0.08]">
@@ -3105,47 +4343,48 @@ const ReportSection = ({ fd }) => {
                   </thead>
 
                   <tbody>
-                    {toolRows.map((row, i) => {
-                      const dVal = row.delta;
-                      const imp = row.improving;
-
+                    {tool === "Muscle Control" ? (() => {
+                      const preRow = toolRows.find(r => r.pre !== "—");
+                      const postRow = toolRows.find(r => r.post !== "—");
+                      const preVal = preRow ? preRow.pre : "—";
+                      const postVal = postRow ? postRow.post : "—";
+                      const delta = preVal !== "—" && postVal !== "—" ? (parseFloat(postVal) - parseFloat(preVal)).toFixed(2) : "—";
+                      const imp = preVal !== "—" && postVal !== "—" ? (parseFloat(postVal) > parseFloat(preVal) ? true : parseFloat(postVal) < parseFloat(preVal) ? false : null) : null;
                       return (
-                        <tr key={i} className={`border-b border-white/[0.05] hover:bg-white/[0.03] ${i % 2 === 0 ? "" : "bg-white/[0.02]"}`}>
-                          <td className="px-4 py-2.5 text-xs text-white/75 font-medium">{row.metric}</td>
-
-                          <td className="px-3 py-2.5 text-center">
-                            <span className="px-2.5 py-1 rounded-lg border bg-sky-500/10 border-sky-400/20 text-sky-200 text-xs font-bold">
-                              {row.pre}
-                            </span>
-                          </td>
-
-                          <td className="px-3 py-2.5 text-center">
-                            <span className="px-2.5 py-1 rounded-lg border bg-emerald-500/10 border-emerald-400/20 text-emerald-200 text-xs font-bold">
-                              {row.post}
-                            </span>
-                          </td>
-
-                          <td className="px-3 py-2.5 text-center">
-                            <span
-                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${
-                                dVal === "—"
-                                  ? "text-white/25 bg-white/[0.03] border-white/[0.06]"
-                                  : imp === true
-                                  ? "text-emerald-300 bg-emerald-500/15 border-emerald-400/25"
-                                  : imp === false
-                                  ? "text-rose-300 bg-rose-500/15 border-rose-400/25"
-                                  : "text-white/40 bg-white/[0.05] border-white/[0.08]"
-                              }`}
-                            >
-                              {dVal}
-                            </span>
-                          </td>
+                        <tr className="border-b border-white/[0.05] bg-white/[0.02]">
+                          <td className="px-4 py-2.5 text-xs text-white/75 font-medium">Felt Difference</td>
+                          <td className="px-3 py-2.5 text-center"><span className="px-2.5 py-1 rounded-lg border bg-sky-500/10 border-sky-400/20 text-sky-200 text-xs font-bold">{preVal}</span></td>
+                          <td className="px-3 py-2.5 text-center"><span className="px-2.5 py-1 rounded-lg border bg-emerald-500/10 border-emerald-400/20 text-emerald-200 text-xs font-bold">{postVal}</span></td>
+                          <td className="px-3 py-2.5 text-center"><span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${delta === "—" ? "text-white/25 bg-white/[0.03] border-white/[0.06]" : imp === true ? "text-emerald-300 bg-emerald-500/20 border-emerald-400/30" : imp === false ? "text-rose-300 bg-rose-500/20 border-rose-400/30" : "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>{delta}</span></td>
                         </tr>
                       );
-                    })}
+                    })() : (
+                      toolRows.map((row, i) => {
+                        const dVal = row.delta;
+                        const imp = row.improving;
+                        return (
+                          <tr key={i} className={`border-b border-white/[0.05] hover:bg-white/[0.03] ${i % 2 === 0 ? "" : "bg-white/[0.02]"}`}>
+                            <td className="px-4 py-2.5 text-xs text-white/75 font-medium">{row.metric}</td>
+                            <td className="px-3 py-2.5 text-center"><span className="px-2.5 py-1 rounded-lg border bg-sky-500/10 border-sky-400/20 text-sky-200 text-xs font-bold">{row.pre}</span></td>
+                            <td className="px-3 py-2.5 text-center"><span className="px-2.5 py-1 rounded-lg border bg-emerald-500/10 border-emerald-400/20 text-emerald-200 text-xs font-bold">{row.post}</span></td>
+                            <td className="px-3 py-2.5 text-center"><span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${dVal === "—" ? "text-white/25 bg-white/[0.03] border-white/[0.06]" : imp === true ? "text-emerald-300 bg-emerald-500/20 border-emerald-400/30" : imp === false ? "text-rose-300 bg-rose-500/20 border-rose-400/30" : "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>{dVal}</span></td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
+
+              {tool === "VAS" && fd.vas?.notes && (
+                <div className="mt-5 pt-4 border-t border-white/[0.08]">
+                  <p className="text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-3">Pain Characteristics</p>
+                  {(() => {
+                    const nm = { MED:"Medication", FATIGUE:"Fatigue", SESSION:"Session", PAIN:"Pain", NOTES:"Note" };
+                    return <div className="flex flex-wrap gap-1.5">{fd.vas.notes.split("\n").filter(Boolean).map((l, i) => { const e = l.indexOf("="); if (e > 0) return <span key={i} className="text-[10px] px-2 py-1 rounded-md bg-amber-400/10 border border-amber-400/15 text-amber-200 font-semibold">{(nm[l.slice(0,e)]||l.slice(0,e))+": "+l.slice(e+1)}</span>; return <span key={i} className="text-[10px] text-white/60 bg-white/[0.05] px-2 py-1 rounded-md">{l}</span>; })}</div>;
+                  })()}
+                </div>
+              )}
             </div>
           );
         })}
@@ -3170,14 +4409,13 @@ const ReportSection = ({ fd }) => {
           </div>
 
           {kinRows.length > 0 && (
-            <div className="overflow-x-auto rounded-xl border border-white/[0.08] mb-5">
+            <div className="glass-float overflow-x-auto rounded-xl border border-white/[0.08] mb-5">
               <table className="w-full text-sm min-w-[560px]">
                 <thead>
                   <tr className="bg-white/[0.04] border-b border-white/[0.08]">
                     <th className="text-left px-4 py-2.5 text-xs font-extrabold text-white/50 uppercase">Variable</th>
                     <th className="text-left px-3 py-2.5 text-xs font-extrabold text-white/50 uppercase">Unit</th>
                     <th className="text-center px-3 py-2.5 text-sky-300 uppercase">Pre</th>
-                    <th className="text-center px-3 py-2.5 text-violet-300 uppercase">During</th>
                     <th className="text-center px-3 py-2.5 text-emerald-300 uppercase">Post</th>
                     <th className="text-center px-3 py-2.5 text-amber-300 uppercase">Δ</th>
                   </tr>
@@ -3196,12 +4434,6 @@ const ReportSection = ({ fd }) => {
                       </td>
 
                       <td className="px-3 py-2.5 text-center">
-                        <span className="px-2.5 py-1 rounded-lg border bg-violet-500/10 border-violet-400/20 text-violet-200 text-xs font-bold">
-                          {r.during || "—"}
-                        </span>
-                      </td>
-
-                      <td className="px-3 py-2.5 text-center">
                         <span className="px-2.5 py-1 rounded-lg border bg-emerald-500/10 border-emerald-400/20 text-emerald-200 text-xs font-bold">
                           {r.post || "—"}
                         </span>
@@ -3210,11 +4442,15 @@ const ReportSection = ({ fd }) => {
                       <td className="px-3 py-2.5 text-center">
                         <span
                           className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${
-                            calcKinDelta(r.pre, r.post) === "—"
-                              ? "text-white/25 bg-white/[0.03] border-white/[0.06]"
-                              : calcKinDelta(r.pre, r.post).startsWith("+")
-                              ? "text-emerald-300 bg-emerald-500/15 border-emerald-400/25"
-                              : "text-rose-300 bg-rose-500/15 border-rose-400/25"
+                            (() => {
+                              const d = calcKinDelta(r.pre, r.post);
+                              if (d === "—") return "text-white/25 bg-white/[0.03] border-white/[0.06]";
+                              const dir = kinDirectionMap(r.name);
+                              const isImprovement = dir === "lower" ? d.startsWith("-") : d.startsWith("+");
+                              return isImprovement
+                                ? "text-emerald-300 bg-emerald-500/20 border-emerald-400/30"
+                                : "text-rose-300 bg-rose-500/20 border-rose-400/30";
+                            })()
                           }`}
                         >
                           {calcKinDelta(r.pre, r.post)}
@@ -3250,7 +4486,9 @@ const ReportSection = ({ fd }) => {
       {(() => {
         const videoKin = buildVideoKinRows();
         if (!videoKin) return null;
-        const phaseLabels = { pre: "Pre", during: "During", post: "Post", baseline: "Healthy side" };
+        const preIdx = videoKin.headers.indexOf("Pre");
+        const postIdx = videoKin.headers.indexOf("Post");
+        const healthyIdx = videoKin.headers.indexOf("Healthy side");
         return (
           <Glass className="p-5 border-l-2 border-blue-400/40">
             <div className="flex items-start gap-3 mb-5">
@@ -3260,8 +4498,8 @@ const ReportSection = ({ fd }) => {
                 <p className="text-xs font-light text-white/40 mt-0.5">Per-video kinematic metrics from pose estimation</p>
               </div>
             </div>
-            <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
-              <table className="w-full text-sm min-w-[560px]">
+            <div className="glass-float overflow-x-auto rounded-xl border border-white/[0.08]">
+              <table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-white/[0.04] border-b border-white/[0.08]">
                     <th className="text-left px-4 py-2.5 text-xs font-extrabold text-white/50 uppercase">Variable</th>
@@ -3271,22 +4509,59 @@ const ReportSection = ({ fd }) => {
                         {h}
                       </th>
                     ))}
+                    {preIdx >= 0 && postIdx >= 0 && <th className="text-center px-3 py-2.5 text-xs font-extrabold text-white/50 uppercase">Pre → Post</th>}
+                    {postIdx >= 0 && healthyIdx >= 0 && <th className="text-center px-3 py-2.5 text-xs font-extrabold text-white/50 uppercase">Post → Healthy</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {videoKin.body.map((row, i) => (
-                    <tr key={i} className={`border-b border-white/[0.05] hover:bg-white/[0.03] ${i % 2 === 0 ? "" : "bg-white/[0.02]"}`}>
-                      <td className="px-4 py-2.5 text-xs text-white/75 font-bold">{row[0]}</td>
-                      <td className="px-3 py-2.5 text-center text-xs text-white/40">{row[1]}</td>
-                      {row.slice(2).map((val, j) => (
-                        <td key={j} className="px-3 py-2.5 text-center">
-                          <span className="px-2.5 py-1 rounded-lg border bg-white/[0.06] border-white/[0.08] text-white/70 text-xs font-bold">
-                            {val}
+                  {videoKin.body.map((row, i) => {
+                    const dir = videoKin.varMeta?.[i]?.dir || kinDirectionMap(row[0]);
+                    let prePostHtml = null;
+                    let postHealthyHtml = null;
+                    if (preIdx >= 0 && postIdx >= 0) {
+                      const preVal = parseFloat(row[preIdx]);
+                      const postVal = parseFloat(row[postIdx]);
+                      if (!isNaN(preVal) && !isNaN(postVal)) {
+                        const badge = kinPrePostBadge(preVal, postVal, dir);
+                        prePostHtml = (
+                          <span className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold ${badge?.colorClass || "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>
+                            {badge?.text || "—"}
                           </span>
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
+                        );
+                      }
+                    }
+                    if (postIdx >= 0 && healthyIdx >= 0) {
+                      const postVal = parseFloat(row[postIdx]);
+                      const helVal = parseFloat(row[healthyIdx]);
+                      if (!isNaN(postVal) && !isNaN(helVal)) {
+                        const badge = kinPostHealthyBadge(postVal, helVal, dir);
+                        postHealthyHtml = (
+                          <span className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold ${badge?.colorClass || "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>
+                            {badge?.text || "—"}
+                          </span>
+                        );
+                      }
+                    }
+                    return (
+                      <tr key={i} className={`border-b border-white/[0.05] hover:bg-white/[0.03] ${i % 2 === 0 ? "" : "bg-white/[0.02]"}`}>
+                        <td className="px-4 py-2.5 text-xs text-white/75 font-bold">{row[0]}</td>
+                        <td className="px-3 py-2.5 text-center text-xs text-white/40">{row[1]}</td>
+                        {row.slice(2).map((val, j) => (
+                          <td key={j} className="px-3 py-2.5 text-center">
+                            <span className="px-2.5 py-1 rounded-lg border bg-white/[0.06] border-white/[0.08] text-white/70 text-xs font-bold">
+                              {val}
+                            </span>
+                          </td>
+                        ))}
+                        {preIdx >= 0 && postIdx >= 0 && (
+                          <td className="px-3 py-2.5 text-center">{prePostHtml || <span className="text-white/25 text-xs">—</span>}</td>
+                        )}
+                        {postIdx >= 0 && healthyIdx >= 0 && (
+                          <td className="px-3 py-2.5 text-center">{postHealthyHtml || <span className="text-white/25 text-xs">—</span>}</td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -3332,12 +4607,12 @@ const ReportSection = ({ fd }) => {
                 <Database className="w-5 h-5 text-violet-300" />
               </div>
               <div>
-                <p className="font-extrabold text-violet-200 text-sm">Export SPSS Ready</p>
-                <p className="text-[10px] text-violet-300/60">CSV + all patients</p>
+                <p className="font-extrabold text-violet-200 text-sm">Export SPSS CSVs</p>
+                <p className="text-[10px] text-violet-300/60">AOMI + Control · Demo / Assess / Full</p>
               </div>
             </div>
             <p className="text-xs text-white/45 leading-relaxed">
-              Flat CSV ready to import into SPSS. All patients combined with pre/post columns.
+              6 CSV files (AOMI & Control groups × demographics / assessments / full). Ready for SPSS.
             </p>
           </motion.button>
 
@@ -3508,129 +4783,254 @@ function _normalityCheck(arr) {
   return { normal, skew: skew.toFixed(3), kurt: kurt.toFixed(3) };
 }
 
+const CONSORT_LS_KEY = "neurolab_consort_v1";
+
 const AnalysisDashboard = () => {
+  const [tab, setTab] = useState("plan");
+  const [backendReport, setBackendReport] = useState(null);
+  const [runningBackend, setRunningBackend] = useState(false);
+  const [locfExport, setLocfExport] = useState(false);
+  const [consort, setConsort] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(CONSORT_LS_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  });
+
+  const saveConsort = (patch) => {
+    setConsort((prev) => {
+      const next = { ...prev, ...patch };
+      localStorage.setItem(CONSORT_LS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
   const pts = loadPatients();
   const n = pts.length;
   const aomi = pts.filter((p) => p.demographics?.group === "1");
   const ctrl = pts.filter((p) => p.demographics?.group === "2");
+  const rawRows = buildMasterDataset(pts, WMFT_ITEMS, KGIA_MOVEMENTS, IPAQ_ACTS, { locf: locfExport });
+  const rows = rawRows;
+  const outcomes = analyzeAllOutcomes(rows);
 
-  const kinVars = ["smoothness","duration","peakVel","meanVel","pathLen","latRange","trunkPalm","elbow","shoulderDep","trunkLat","trunkVert"];
-  const kinLabels = { smoothness:"Smoothness (%)", duration:"Duration (s)", peakVel:"Peak Vel (n/s)", meanVel:"Mean Vel (n/s)", pathLen:"Path Len (n)", latRange:"Lat Range (n)", trunkPalm:"Trunk/Palm", elbow:"Elbow (°)", shoulderDep:"Sh Depression (cm)", trunkLat:"Trunk Lat (n)", trunkVert:"Trunk Vert (n)" };
-  const kinMap = { smoothness:"smoothness_pause_pct", duration:"total_duration_s", peakVel:"total_peak_velocity", meanVel:"total_mean_velocity", pathLen:"total_path_length", latRange:"total_lat_range_norm", trunkPalm:"total_trunk_palm_ratio", elbow:"total_max_elbow_deg", shoulderDep:"total_depression_cm", trunkLat:"trunk_lat_norm", trunkVert:"trunk_vert_norm" };
+  const kinComplete = pts.filter((p) => getPatientKinPhase(p, "pre") && getPatientKinPhase(p, "post")).length;
+  const healthyComplete = pts.filter((p) => getPatientKinPhase(p, "baseline")).length;
+  const randomized = pts.filter((p) => p.demographics?.group === "1" || p.demographics?.group === "2").length;
 
-  const getVals = (group, tp, v) => {
-    const arr = [];
-    group.forEach((pt) => {
-      const k = pt.kinematics?.[`result_${tp}`] || {};
-      const val = parseFloat(k[kinMap[v]]);
-      if (!isNaN(val)) arr.push(val);
-    });
-    return arr;
+  const normalityForOutcome = (r) => {
+    if (!r?.pre || !r?.post) return null;
+    const vals = rows.flatMap((row) => [parseFloat(row[r.pre]), parseFloat(row[r.post])]).filter((v) => !isNaN(v));
+    return _normalityCheck(vals);
   };
-
-  const calcStats = (group, tp) => {
-    const stats = {};
-    kinVars.forEach((v) => {
-      const arr = getVals(group, tp, v);
-      if (arr.length < 2) { stats[v] = null; return; }
-      stats[v] = { mean: _mean(arr).toFixed(2), sd: _sd(arr).toFixed(2), n: arr.length };
-    });
-    return stats;
-  };
-
-  const preAomi = calcStats(aomi, "pre");
-  const preCtrl = calcStats(ctrl, "pre");
-  const postAomi = calcStats(aomi, "post");
-  const postCtrl = calcStats(ctrl, "post");
 
   const missingFields = [];
   pts.forEach((pt) => {
     const d = pt.demographics || {};
-    if (!d.participantId) missingFields.push({ id: d.participantId || "?", field: "Study ID" });
-    if (!d.group) missingFields.push({ id: d.participantId || "?", field: "Group" });
-    if (!d.age) missingFields.push({ id: d.participantId || "?", field: "Age" });
-    if (!d.sex) missingFields.push({ id: d.participantId || "?", field: "Sex" });
+    const id = d.participantId || "?";
+    if (!d.participantId) missingFields.push({ id, field: "Study ID" });
+    if (!d.group) missingFields.push({ id, field: "Group" });
+    if (!getPatientKinPhase(pt, "pre")) missingFields.push({ id, field: "Kinematics Pre" });
+    if (!getPatientKinPhase(pt, "post")) missingFields.push({ id, field: "Kinematics Post" });
   });
 
-  // ── Normality Check ──
-  const normalityResults = {};
-  kinVars.forEach((v) => {
-    ["pre","post"].forEach((tp) => {
-      ["aomi","ctrl"].forEach((g) => {
-        const group = g === "aomi" ? aomi : ctrl;
-        const key = `${v}_${tp}_${g}`;
-        const arr = getVals(group, tp, v);
-        normalityResults[key] = _normalityCheck(arr);
+  const downloadMasterCsv = () => {
+    if (!rows.length) { alert("No patient data to export"); return; }
+    const csv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(rows));
+    downloadBlob(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }), "master_study_data.csv");
+  };
+
+  const downloadSpssSyntax = () => {
+    downloadBlob(
+      new Blob(["\uFEFF" + generateStudySPSSSyntax("master_study_data.csv")], { type: "text/plain;charset=utf-8" }),
+      "neuro_study_analysis.sps"
+    );
+  };
+
+  const runBackendAnalysis = async () => {
+    if (!rows.length) return;
+    setRunningBackend(true);
+    try {
+      const res = await fetch(`${API_BASE}/study-analysis`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows }),
       });
-    });
-  });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setBackendReport(data);
+      setTab("results");
+    } catch (e) {
+      alert(`Backend analysis unavailable (${e.message}). Use preliminary table or run: python study_analysis.py master_study_data.csv`);
+    }
+    setRunningBackend(false);
+  };
 
-  // ── Preliminary Analysis ──
-  const prelimResults = {};
-  kinVars.forEach((v) => {
-    const aPre = getVals(aomi, "pre", v);
-    const aPost = getVals(aomi, "post", v);
-    const cPre = getVals(ctrl, "pre", v);
-    const cPost = getVals(ctrl, "post", v);
-    const deltaA = aPre.length === aPost.length && aPre.length > 0 ? aPre.map((x, i) => aPost[i] - x) : [];
-    const deltaC = cPre.length === cPost.length && cPre.length > 0 ? cPre.map((x, i) => cPost[i] - x) : [];
-
-    const withinA = (aPre.length > 1 && aPost.length > 1 && aPre.length === aPost.length) ? _ttestPaired(aPost, aPre) : null;
-    const withinC = (cPre.length > 1 && cPost.length > 1 && cPre.length === cPost.length) ? _ttestPaired(cPost, cPre) : null;
-    const between = (deltaA.length > 1 && deltaC.length > 1) ? _ttestWelch(deltaA, deltaC) : null;
-    const baseline = (aPre.length > 1 && cPre.length > 1) ? _ttestWelch(aPre, cPre) : null;
-
-    prelimResults[v] = { withinA, withinC, between, baseline, deltaA, deltaC };
-  });
+  const TabBtn = ({ id, label }) => (
+    <button
+      type="button"
+      onClick={() => setTab(id)}
+      className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all ${tab === id ? "bg-violet-500/30 border border-violet-400/40 text-violet-100" : "bg-white/[0.06] border border-white/10 text-white/50 hover:text-white/80"}`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div className="space-y-5">
-      <SH icon={BarChart3} en="Analysis Dashboard" tr="Analiz Paneli" badge="v6.4" />
+      <SH icon={BarChart3} en="Analysis Dashboard" tr="Analiz Paneli" badge="RCT v6" />
 
-      {/* Enrollment */}
+      <div className="flex flex-wrap gap-2">
+        <TabBtn id="plan" label="Analysis Plan" />
+        <TabBtn id="results" label="Results Preview" />
+        <TabBtn id="export" label="SPSS Export" />
+        <TabBtn id="thesis" label="Thesis Docs" />
+      </div>
+
+      {/* Enrollment — always visible */}
       <Glass className="p-5">
-        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Enrollment / Kayıt</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Enrollment / Kayıt (target n={STUDY_DESIGN.targetN})</p>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
-            { label: "Total / Toplam", val: n, color: "text-white" },
-            { label: "AOMI (n)", val: aomi.length, color: "text-teal-300" },
-            { label: "Control (n)", val: ctrl.length, color: "text-rose-300" },
-            { label: "Completion %", val: n > 0 ? Math.round((aomi.length + ctrl.length) / n * 100) : 0, color: "text-amber-300" },
+            { label: "Total", val: n, color: "text-white" },
+            { label: "AOMI", val: aomi.length, color: "text-teal-300" },
+            { label: "Control", val: ctrl.length, color: "text-rose-300" },
+            { label: "Kin complete", val: kinComplete, color: "text-sky-300" },
+            { label: "Ready for ANOVA", val: rows.length >= 8 && aomi.length >= 2 && ctrl.length >= 2 ? "✓" : "—", color: "text-amber-300" },
           ].map((item) => (
-            <div key={item.label} className="p-4 rounded-xl bg-white/[0.04] border border-white/[0.06] text-center">
-              <p className={`text-2xl font-black ${item.color}`}>{item.val}</p>
-              <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">{item.label}</p>
+            <div key={item.label} className="glass-float p-3 rounded-xl bg-white/[0.09] border border-white/12 text-center">
+              <p className={`text-xl font-black ${item.color}`}>{item.val}</p>
+              <p className="text-[9px] text-white/40 font-bold uppercase tracking-widest mt-1">{item.label}</p>
             </div>
           ))}
         </div>
       </Glass>
 
-      {/* Descriptive Stats */}
       <Glass className="p-5">
-        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Mean ± SD Per Group / Grup Başına Ort ± SS</p>
-        <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
+        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">CONSORT Flow (live + editable)</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          {[
+            { k: "screened", label: "Screened", val: consort.screened ?? "", auto: null },
+            { k: "excluded", label: "Excluded", val: consort.excluded ?? "", auto: null },
+            { k: "randomized", label: "Randomized", val: consort.randomized ?? randomized, auto: randomized },
+            { k: "analyzed", label: "Analyzed (ITT)", val: consort.analyzed ?? kinComplete, auto: kinComplete },
+          ].map(({ k, label, val, auto }) => (
+            <div key={k} className="glass-float p-3 rounded-xl bg-white/[0.06] border border-white/10">
+              <label className="text-[9px] text-white/40 font-bold uppercase tracking-widest">{label}</label>
+              <input
+                type="number"
+                min="0"
+                className="mt-1 w-full bg-transparent text-lg font-black text-white outline-none"
+                value={val}
+                placeholder={auto != null ? String(auto) : "—"}
+                onChange={(e) => saveConsort({ [k]: e.target.value === "" ? "" : parseInt(e.target.value, 10) })}
+              />
+              {auto != null && <p className="text-[9px] text-white/30 mt-1">Auto: {auto}</p>}
+            </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-white/35">Healthy baseline collected: {healthyComplete} · LOCF export: {locfExport ? "on" : "off"}</p>
+      </Glass>
+
+      {tab === "plan" && (
+        <>
+          <Glass className="p-5">
+            <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-3">Study Design</p>
+            <p className="text-sm text-white/70 leading-relaxed mb-4">{STUDY_DESIGN.design} · Primary: <strong className="text-violet-300">{STUDY_DESIGN.primaryOutcome}</strong> · α={STUDY_DESIGN.alpha}</p>
+            <div className="grid md:grid-cols-2 gap-4 text-xs">
+              <div>
+                <p className="font-bold text-teal-300 mb-2">Kinematic ({KINEMATIC_VARS.length} vars — manuscript tiers)</p>
+                <ul className="space-y-1 text-white/60">
+                  {KINEMATIC_VARS.map((k) => (
+                    <li key={k.key}>
+                      • {k.label} ({k.key}) — {k.tier}
+                      {k.dir === "lower" ? " ↓" : k.dir === "higher" ? " ↑" : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="font-bold text-amber-300 mb-2">Clinical & moderators</p>
+                <ul className="space-y-1 text-white/60">
+                  {CLINICAL_VARS.map((c) => (
+                    <li key={c.label}>• {c.label} ({c.tier})</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </Glass>
+
+          <Glass className="p-5">
+            <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">SPSS Workflow (12 steps)</p>
+            <div className="space-y-2">
+              {SPSS_WORKFLOW.map((s) => (
+                <div key={s.step} className="flex gap-3 text-xs border-b border-white/[0.06] pb-2">
+                  <span className="w-6 h-6 rounded-lg bg-violet-500/20 text-violet-300 font-black flex items-center justify-center flex-shrink-0">{s.step}</span>
+                  <div>
+                    <p className="font-bold text-white/80">{s.title}</p>
+                    <p className="text-white/45 font-mono text-[10px] mt-0.5">{s.spss}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-white/35 mt-4">Full document: STUDY_ANALYSIS_PLAN.md in NeuroLab folder</p>
+          </Glass>
+        </>
+      )}
+
+      {tab === "results" && (
+        <>
+          <Glass className="p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest">Preliminary 2×2 Analysis</p>
+                <p className="text-[10px] text-amber-400/80 font-bold mt-1">Δ between groups ≈ Group×Time interaction · Confirm in SPSS GLM</p>
+              </div>
+              <button type="button" onClick={runBackendAnalysis} disabled={runningBackend || rows.length < 4}
+                className="px-4 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-extrabold disabled:opacity-40">
+                {runningBackend ? "Running…" : "Run Python ANOVA (backend)"}
+              </button>
+            </div>
+
+            <div className="glass-float overflow-x-auto rounded-xl border border-white/[0.08]">
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-white/[0.04] border-b border-white/[0.08]">
-                <th className="text-left px-3 py-2 font-extrabold text-white/50 uppercase">Variable</th>
-                <th className="text-center px-3 py-2 font-extrabold text-sky-300 uppercase">AOMI Pre</th>
-                <th className="text-center px-3 py-2 font-extrabold text-emerald-300 uppercase">AOMI Post</th>
-                <th className="text-center px-3 py-2 font-extrabold text-rose-300 uppercase">Ctrl Pre</th>
-                <th className="text-center px-3 py-2 font-extrabold text-amber-300 uppercase">Ctrl Post</th>
+                    <th className="text-left px-3 py-2 font-extrabold text-white/50">Outcome</th>
+                    <th className="text-center px-2 py-2 text-emerald-200">Normal?</th>
+                    <th className="text-center px-2 py-2 text-sky-300">AOMI Pre</th>
+                    <th className="text-center px-2 py-2 text-emerald-300">AOMI Post</th>
+                    <th className="text-center px-2 py-2 text-rose-300">Ctrl Pre</th>
+                    <th className="text-center px-2 py-2 text-amber-300">Ctrl Post</th>
+                    <th className="text-center px-2 py-2 text-violet-300">AOMI Δ p</th>
+                    <th className="text-center px-2 py-2 text-violet-300">Ctrl Δ p</th>
+                    <th className="text-center px-2 py-2 font-extrabold text-white">Group Δ p</th>
+                    <th className="text-center px-2 py-2">d</th>
               </tr>
             </thead>
             <tbody>
-              {kinVars.map((v) => {
-                const aPre = preAomi[v], aPost = postAomi[v], cPre = preCtrl[v], cPost = postCtrl[v];
-                if (!aPre && !cPre) return null;
-                const fmt = (s) => s ? `${s.mean} ± ${s.sd}` : "—";
+                  {outcomes.map((r) => {
+                    const fmtM = (s) => s ? `${s.mean}±${s.sd}` : "—";
+                    const norm = normalityForOutcome(r);
                 return (
-                  <tr key={v} className="border-b border-white/[0.04]">
-                    <td className="px-3 py-2 text-white/70 font-medium">{kinLabels[v]}</td>
-                    <td className="px-3 py-2 text-center text-white/60">{fmt(aPre)}</td>
-                    <td className="px-3 py-2 text-center text-white/60">{fmt(aPost)}</td>
-                    <td className="px-3 py-2 text-center text-white/60">{fmt(cPre)}</td>
-                    <td className="px-3 py-2 text-center text-white/60">{fmt(cPost)}</td>
+                      <tr key={r.label} className={`border-b border-white/[0.04] ${r.isPrimary ? "bg-violet-500/10" : ""}`}>
+                        <td className="px-3 py-2 text-white/70 font-medium">
+                          {r.isPrimary ? "★ " : ""}{r.label}
+                          {r.pre?.includes("_Pre") && r.label && (
+                            <span className="block text-[9px] text-white/30 font-normal">{r.pre?.replace("_Pre", "")}</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-2 text-center text-[10px]">
+                          {norm ? (norm.normal ? <span className="text-emerald-400" title={`skew=${norm.skew} kurt=${norm.kurt}`}>✓</span> : <span className="text-amber-400" title={`skew=${norm.skew} kurt=${norm.kurt}`}>NP</span>) : "—"}
+                        </td>
+                        <td className="px-2 py-2 text-center text-white/55">{fmtM(r.aomiPre)}</td>
+                        <td className="px-2 py-2 text-center text-white/55">{fmtM(r.aomiPost)}</td>
+                        <td className="px-2 py-2 text-center text-white/55">{fmtM(r.ctrlPre)}</td>
+                        <td className="px-2 py-2 text-center text-white/55">{fmtM(r.ctrlPost)}</td>
+                        <td className="px-2 py-2 text-center">{fmtP(r.withinAomi?.p)}{sigStars(r.withinAomi?.p)}</td>
+                        <td className="px-2 py-2 text-center">{fmtP(r.withinCtrl?.p)}{sigStars(r.withinCtrl?.p)}</td>
+                        <td className="px-2 py-2 text-center font-bold text-white">{fmtP(r.betweenDelta?.p)}{sigStars(r.betweenDelta?.p)}</td>
+                        <td className="px-2 py-2 text-center text-white/50">{r.betweenDelta?.es != null ? Math.abs(r.betweenDelta.es).toFixed(2) : "—"}</td>
                   </tr>
                 );
               })}
@@ -3639,35 +5039,29 @@ const AnalysisDashboard = () => {
         </div>
       </Glass>
 
-      {/* Normality Check */}
-      {aomi.length >= 2 && ctrl.length >= 2 && (
+          {backendReport?.outcomes && (
+            <>
         <Glass className="p-5">
-          <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Normality Check (Skewness/Kurtosis) / Normallik Kontrolü</p>
-          <p className="text-[10px] text-white/30 mb-3">🟢 Normal (|skew|&lt;2 & |kurtosis|&lt;7) → Parametric · 🔴 Non-normal → Non-parametric</p>
-          <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
+              <p className="text-xs font-extrabold text-emerald-300 uppercase tracking-widest mb-4">Backend Mixed ANOVA (Group × Time)</p>
+              <div className="overflow-x-auto rounded-xl border border-emerald-500/20">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-white/[0.04] border-b border-white/[0.08]">
-                  <th className="text-left px-3 py-2 font-extrabold text-white/50 uppercase">Variable</th>
-                  <th className="text-center px-3 py-2 font-extrabold text-white/40 uppercase">AOMI Pre</th>
-                  <th className="text-center px-3 py-2 font-extrabold text-white/40 uppercase">AOMI Post</th>
-                  <th className="text-center px-3 py-2 font-extrabold text-white/40 uppercase">Ctrl Pre</th>
-                  <th className="text-center px-3 py-2 font-extrabold text-white/40 uppercase">Ctrl Post</th>
+                    <tr className="bg-emerald-500/10">
+                      <th className="text-left px-3 py-2 text-emerald-200">Outcome</th>
+                      <th className="text-center px-3 py-2">F (interaction)</th>
+                      <th className="text-center px-3 py-2">p</th>
+                      <th className="text-center px-3 py-2">ηp²</th>
                 </tr>
               </thead>
               <tbody>
-                {kinVars.map((v) => {
-                  const c = (g, tp) => normalityResults[`${v}_${tp}_${g}`];
-                  const aPre = c("aomi","pre"), aPost = c("aomi","post"), cPre = c("ctrl","pre"), cPost = c("ctrl","post");
-                  if (!aPre && !cPre) return null;
-                  const fmt = (r) => r ? (r.normal ? "🟢" : "🔴") : "—";
+                    {backendReport.outcomes.map((o) => {
+                      const ix = o.mixed_anova?.interaction;
                   return (
-                    <tr key={v} className="border-b border-white/[0.04]">
-                      <td className="px-3 py-2 text-white/70 font-medium">{kinLabels[v]}</td>
-                      <td className="px-3 py-2 text-center text-white/60">{fmt(aPre)}</td>
-                      <td className="px-3 py-2 text-center text-white/60">{fmt(aPost)}</td>
-                      <td className="px-3 py-2 text-center text-white/60">{fmt(cPre)}</td>
-                      <td className="px-3 py-2 text-center text-white/60">{fmt(cPost)}</td>
+                        <tr key={o.base} className="border-b border-white/[0.04]">
+                          <td className="px-3 py-2 text-white/70">{o.label}</td>
+                          <td className="px-3 py-2 text-center text-white/60">{ix ? ix.F.toFixed(3) : "—"}</td>
+                          <td className="px-3 py-2 text-center font-bold">{ix ? fmtP(ix.p) : "—"}</td>
+                          <td className="px-3 py-2 text-center text-white/50">{ix ? ix.eta_p2 : "—"}</td>
                     </tr>
                   );
                 })}
@@ -3675,93 +5069,107 @@ const AnalysisDashboard = () => {
             </table>
           </div>
         </Glass>
+          {backendReport?.holm_secondary_kinematic && (
+        <Glass className="p-5">
+              <p className="text-xs font-extrabold text-amber-300 uppercase tracking-widest mb-4">Holm–Bonferroni (secondary kinematic, k=8)</p>
+              <div className="overflow-x-auto rounded-xl border border-amber-500/20">
+            <table className="w-full text-xs">
+              <thead>
+                    <tr className="bg-amber-500/10">
+                      <th className="text-left px-3 py-2 text-amber-200">Variable</th>
+                      <th className="text-center px-3 py-2">p (interaction)</th>
+                      <th className="text-center px-3 py-2">Holm α</th>
+                      <th className="text-center px-3 py-2">Sig?</th>
+                </tr>
+              </thead>
+              <tbody>
+                    {backendReport.holm_secondary_kinematic.map((h) => (
+                      <tr key={h.name} className="border-b border-white/[0.04]">
+                        <td className="px-3 py-2 text-white/70">{h.name}</td>
+                        <td className="px-3 py-2 text-center">{fmtP(h.p)}</td>
+                        <td className="px-3 py-2 text-center text-white/50">{h.holm_alpha}</td>
+                        <td className="px-3 py-2 text-center font-bold">{h.significant ? "✓" : "—"}</td>
+                    </tr>
+                    ))}
+              </tbody>
+            </table>
+          </div>
+        </Glass>
+          )}
+            </>
+          )}
+        </>
       )}
 
-      {/* Preliminary Analysis */}
-      {aomi.length >= 2 && ctrl.length >= 2 && (
+      {tab === "thesis" && (
+        <>
         <Glass className="p-5">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="flex-1">
-              <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest">Preliminary Analysis / Ön Analiz</p>
-              <p className="text-[10px] text-amber-400/80 font-bold mt-1">⚠ PRELIMINARY — Not for publication · Use SPSS for final analysis</p>
+            <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Thesis Documents</p>
+            <p className="text-sm text-white/60 mb-4">Literature review (condensed Introduction) and CONSORT + SAP for committee review.</p>
+            <div className="flex flex-wrap gap-3">
+              <button type="button" onClick={() => downloadBlob(new Blob(["\uFEFF" + generateLiteratureReviewMarkdown()], { type: "text/markdown;charset=utf-8" }), "THESIS_LITERATURE_REVIEW.md")} className="px-5 py-2.5 rounded-xl bg-teal-500/20 border border-teal-400/30 text-teal-200 text-xs font-extrabold">
+                ⬇ Literature Review
+              </button>
+              <button type="button" onClick={() => downloadBlob(new Blob(["\uFEFF" + generateConsortSapMarkdown()], { type: "text/markdown;charset=utf-8" }), "THESIS_CONSORT_SAP.md")} className="px-5 py-2.5 rounded-xl bg-violet-500/20 border border-violet-400/30 text-violet-200 text-xs font-extrabold">
+                ⬇ CONSORT + SAP
+              </button>
+          </div>
+        </Glass>
+
+          <Glass className="p-5">
+            <p className="text-xs font-extrabold text-rose-300 uppercase tracking-widest mb-4">Program Roadmap (what NeuroLab still needs)</p>
+            <div className="space-y-2">
+              {PROGRAM_GAPS.map((g) => (
+                <div key={g.item} className="flex gap-3 text-xs border-b border-white/[0.06] pb-2">
+                  <span className={`shrink-0 px-2 py-0.5 rounded-md font-bold uppercase text-[9px] ${g.priority === "high" ? "bg-rose-500/20 text-rose-300" : g.priority === "medium" ? "bg-amber-500/20 text-amber-300" : "bg-white/10 text-white/40"}`}>{g.priority}</span>
+                  <div>
+                    <p className="font-bold text-white/80">{g.item}</p>
+                    <p className="text-white/45 mt-0.5">{g.detail}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          </Glass>
+        </>
+      )}
 
-          <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-white/[0.04] border-b border-white/[0.08]">
-                  <th className="text-left px-3 py-2 font-extrabold text-white/50 uppercase">Variable</th>
-                  <th className="text-center px-3 py-2 font-extrabold text-sky-300 uppercase">Baseline p</th>
-                  <th className="text-center px-3 py-2 font-extrabold text-teal-300 uppercase">AOMI Δ p</th>
-                  <th className="text-center px-3 py-2 font-extrabold text-rose-300 uppercase">Ctrl Δ p</th>
-                  <th className="text-center px-3 py-2 font-extrabold text-amber-300 uppercase">Between Δ p</th>
-                  <th className="text-center px-3 py-2 font-extrabold text-violet-300 uppercase">Cohen's d</th>
-                </tr>
-              </thead>
-              <tbody>
-                {kinVars.map((v) => {
-                  const r = prelimResults[v];
-                  if (!r) return null;
-                  const fmtP = (x) => x ? (x.p < 0.001 ? "&lt;0.001" : x.p.toFixed(3)) : "—";
-                  const fmtD = (x) => x ? (x.d ? Math.abs(x.d).toFixed(2) : (x.dz ? Math.abs(x.dz).toFixed(2) : "—")) : "—";
-                  return (
-                    <tr key={v} className="border-b border-white/[0.04]">
-                      <td className="px-3 py-2 text-white/70 font-medium">{kinLabels[v]}</td>
-                      <td className="px-3 py-2 text-center text-white/60">{fmtP(r.baseline)}</td>
-                      <td className="px-3 py-2 text-center text-white/60">{fmtP(r.withinA)}</td>
-                      <td className="px-3 py-2 text-center text-white/60">{fmtP(r.withinC)}</td>
-                      <td className="px-3 py-2 text-center text-white/60">{fmtP(r.between)}</td>
-                      <td className="px-3 py-2 text-center text-white/60">{fmtD(r.between)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      {tab === "export" && (
+      <Glass className="p-5">
+          <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Post-Study Export Package</p>
+          <p className="text-sm text-white/60 mb-4">After data collection: export master CSV → open in SPSS → run syntax → copy GLM tables to manuscript.</p>
+          <label className="flex items-center gap-2 text-xs text-white/60 mb-4 cursor-pointer">
+            <input type="checkbox" checked={locfExport} onChange={(e) => setLocfExport(e.target.checked)} className="rounded" />
+            Apply LOCF imputation (missing Post ← Pre) for ITT export
+          </label>
+        <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={downloadMasterCsv} className="px-5 py-2.5 rounded-xl bg-violet-500/20 border border-violet-400/30 text-violet-200 text-xs font-extrabold hover:bg-violet-500/30">
+              ⬇ master_study_data.csv
+            </button>
+            <button type="button" onClick={downloadSpssSyntax} className="px-5 py-2.5 rounded-xl bg-sky-500/20 border border-sky-400/30 text-sky-200 text-xs font-extrabold hover:bg-sky-500/30">
+              ⬇ neuro_study_analysis.sps
+            </button>
+            <button type="button" onClick={() => {
+            const allPts = loadPatients();
+              downloadBlob(new Blob([JSON.stringify(allPts, null, 2)], { type: "application/json" }), `neuro_backup_${allPts.length}pts.json`);
+            }} className="px-5 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-extrabold">
+              ⬇ JSON backup
+            </button>
           </div>
+          <p className="text-[10px] text-white/35 mt-4 font-mono">CLI: python backend/study_analysis.py master_study_data.csv --out study_results.txt</p>
         </Glass>
       )}
 
-      {/* Missing Data */}
       {missingFields.length > 0 && (
         <Glass className="p-5">
-          <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Missing Data / Eksik Veri</p>
-          <div className="overflow-x-auto rounded-xl border border-rose-500/20">
-            <table className="w-full text-xs">
-              <thead><tr className="bg-rose-500/10 border-b border-rose-500/20"><th className="text-left px-3 py-2 font-extrabold text-rose-300 uppercase">Patient ID</th><th className="text-left px-3 py-2 font-extrabold text-rose-300 uppercase">Missing Field</th></tr></thead>
-              <tbody>{missingFields.map((m, i) => <tr key={i} className="border-b border-rose-500/10"><td className="px-3 py-2 text-white/60">{m.id}</td><td className="px-3 py-2 text-rose-200/80">{m.field}</td></tr>)}</tbody>
-            </table>
-          </div>
-        </Glass>
-      )}
-
-      {/* Export buttons */}
-      <Glass className="p-5">
-        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Exports / Dışa Aktarma</p>
-        <div className="flex flex-wrap gap-3">
-          <button onClick={() => {
-            const allPts = loadPatients();
-            if (!allPts.length) return;
-            const rows = [];
-            allPts.forEach((pt) => { const r = buildSPSSData(pt); if (r.length) rows.push(r[0]); });
-            if (!rows.length) return;
-            const ws = XLSX.utils.json_to_sheet(rows);
-            const csv = XLSX.utils.sheet_to_csv(ws);
-            const blob = new Blob(["\uFEFF" + csv], { type:"text/csv;charset=utf-8" });
-            const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `spss_${allPts.length}pts.csv`;
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-          }} className="px-5 py-2.5 rounded-xl bg-violet-500/20 border border-violet-400/30 text-violet-200 text-xs font-extrabold hover:bg-violet-500/30 transition-all">⬇ SPSS CSV</button>
-
-          <button onClick={() => {
-            const allPts = loadPatients();
-            if (!allPts.length) return;
-            const clean = allPts.map(({ _id, _savedAt, _hasPre, _hasPost, ...r }) => r);
-            const blob = new Blob([JSON.stringify(clean, null, 2)], { type:"application/json" });
-            const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `neuro_${allPts.length}pts.json`;
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-          }} className="px-5 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-extrabold hover:bg-emerald-500/30 transition-all">⬇ JSON</button>
+          <p className="text-xs font-extrabold text-rose-300 uppercase tracking-widest mb-3">Missing Data ({missingFields.length})</p>
+          <div className="max-h-40 overflow-y-auto text-xs text-white/50 space-y-1">
+            {missingFields.slice(0, 20).map((m, i) => (
+              <p key={i}>{m.id}: {m.field}</p>
+            ))}
+            {missingFields.length > 20 && <p>…and {missingFields.length - 20} more</p>}
         </div>
       </Glass>
+      )}
     </div>
   );
 };
@@ -3772,10 +5180,55 @@ const getTodayDate = () => new Date().toISOString().split("T")[0];
 
 export default function App() {
   const [active, setActive] = useState("demographics");
-  const [sidebar, setSidebar] = useState(true);
+  const [sidebar, setSidebar] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true
+  );
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true
+  );
+  const [sidebarPush, setSidebarPush] = useState(() => sidebarPushWidth());
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
   const [bgUrl, setBgUrl] = useState(BG);
   const bgRef = useRef(null);
+  const importRef = useRef(null);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const syncLayout = () => {
+      setIsDesktop(mq.matches);
+      setSidebarPush(sidebarPushWidth());
+    };
+    syncLayout();
+    mq.addEventListener("change", syncLayout);
+    window.addEventListener("resize", syncLayout);
+    return () => {
+      mq.removeEventListener("change", syncLayout);
+      window.removeEventListener("resize", syncLayout);
+    };
+  }, []);
+
+  useEffect(() => {
+    const KEY = "nl_app_v";
+    try {
+      const prev = localStorage.getItem(KEY);
+      if (prev && prev !== APP_VERSION) {
+        localStorage.setItem(KEY, APP_VERSION);
+        const url = new URL(window.location.href);
+        if (url.searchParams.get("_v") !== APP_VERSION) {
+          url.searchParams.set("_v", APP_VERSION);
+          window.location.replace(url.toString());
+          return;
+        }
+      }
+      localStorage.setItem(KEY, APP_VERSION);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetch("/bg.b64.txt")
+      .then((r) => (r.ok ? r.text() : Promise.reject()))
+      .then((b64) => setBgUrl(`data:image/jpeg;base64,${b64.trim()}`))
+      .catch(() => {});
+  }, []);
 
   const [fd, setFd] = useState(() => {
     try {
@@ -3783,7 +5236,7 @@ export default function App() {
       if (saved && typeof saved === "object") return saved;
     } catch {}
     return {
-      demographics: { participantId: String(getNextStudyId()) },
+      demographics: { participantId: String(nextStudyId()) },
       ipaq: {},
       vas: {},
       vams: {},
@@ -3798,6 +5251,20 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(FD_LS_KEY, JSON.stringify(fd));
   }, [fd]);
+
+  // Sync patients from server on startup (cross-device)
+  useEffect(() => {
+    syncPatientsWithServer({ silent: true }).then(({ ok, patients: merged }) => {
+      if (!ok) return;
+          const curId = fd._loadedId || fd.demographics?.participantId;
+          if (curId) {
+            const cur = merged.find((p) => (p._id || p.demographics?.participantId) === curId);
+            if (cur?.kinematics?.analysisResults) {
+              localStorage.setItem(KIN_LS_KEY, JSON.stringify(cur.kinematics.analysisResults));
+            }
+          }
+    });
+  }, []);
 
   const upd = useCallback((sec, d) => setFd((p) => ({ ...p, [sec]: d })), []);
 
@@ -3824,9 +5291,12 @@ export default function App() {
       );
     }
 
+    let kinResults;
+    try { kinResults = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {}; } catch { kinResults = {}; }
     if (existingIdx >= 0) {
       const existing = patients[existingIdx];
-      const { _loadedId, ...cleanFd } = fd;
+      const fdWithKin = { ...fd, kinematics: { ...fd.kinematics, analysisResults: kinResults } };
+      const { _loadedId, ...cleanFd } = fdWithKin;
       patients[existingIdx] = {
         ...existing,
         ...cleanFd,
@@ -3835,9 +5305,14 @@ export default function App() {
         _hasPost: existing._hasPost || hasPost,
       };
       savePatients(patients);
-      showToast(`✓ Session updated for ${d.name || d.participantId || "patient"}`);
+      window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: patients.length } }));
+      showToast("✓ Session updated");
+      syncPatientsWithServer({ silent: true }).then(({ ok }) => {
+        if (!ok) showToast("Saved locally — server sync pending. Tap Sync in Database.", "error");
+      });
     } else {
-      const { _loadedId, ...cleanFd } = fd;
+      const fdWithKin = { ...fd, kinematics: { ...fd.kinematics, analysisResults: kinResults } };
+      const { _loadedId, ...cleanFd } = fdWithKin;
       patients.push({
         _id: `pt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         _savedAt: new Date().toISOString(),
@@ -3846,23 +5321,160 @@ export default function App() {
         ...cleanFd,
       });
       savePatients(patients);
-      incrementStudyId();
+      window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: patients.length } }));
+      showToast("✓ New patient saved");
+      syncPatientsWithServer({ silent: true }).then(({ ok }) => {
+        if (!ok) showToast("Saved locally — server sync pending. Tap Sync in Database.", "error");
+      });
       setFd((p) => ({
         ...p,
-        demographics: { ...p.demographics, participantId: String(getNextStudyId()) },
+        demographics: { ...p.demographics, participantId: String(nextStudyId()) },
       }));
-      showToast("✓ New patient record saved");
     }
   }, [fd, showToast]);
+
+  const newSession = useCallback(() => {
+    localStorage.setItem("neuro_last_session_backup", JSON.stringify(fd));
+    localStorage.removeItem(KIN_LS_KEY);
+    setFd({
+      demographics: { participantId: String(nextStudyId()) },
+      ipaq: {},
+      vas: {},
+      vams: {},
+      motorchange: {},
+      kgia: {},
+      wmft: {},
+      kinematics: {},
+    });
+    setActive("demographics");
+    if (!isDesktop) setSidebar(false);
+    showToast("✓ New session started / Yeni seans başlatıldı");
+  }, [fd, showToast, isDesktop]);
 
   const handleLoadSession = useCallback((record) => {
     const { _id, _savedAt, _hasPre, _hasPost, ...sessionData } = record;
     setFd((prev) => ({ ...prev, ...sessionData, _loadedId: _id }));
+    if (sessionData.kinematics?.analysisResults) {
+      localStorage.setItem(KIN_LS_KEY, JSON.stringify(sessionData.kinematics.analysisResults));
+    }
     setActive("demographics");
     showToast(`✓ Loaded: ${record.demographics?.name || record.demographics?.participantId || "patient"}`);
   }, [showToast]);
 
+  const handleImportFile = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const normalized = await importPatientFile(file);
+      const record = buildImportRecord(normalized);
+      const patients = loadPatients();
+      const pid = record.demographics?.participantId;
+      const idx = pid
+        ? patients.findIndex((p) => p.demographics?.participantId === pid)
+        : -1;
+      if (idx >= 0) {
+        patients[idx] = { ...patients[idx], ...record, _id: patients[idx]._id };
+        record._id = patients[idx]._id;
+      } else {
+        patients.push(record);
+      }
+      savePatients(patients);
+      window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: patients.length } }));
+      handleLoadSession(record);
+      syncPatientsWithServer({ silent: true });
+    } catch (err) {
+      showToast(`Import failed: ${err?.message || "Unknown error"}`, "error");
+    }
+  }, [handleLoadSession, showToast]);
+
   const nav = NAV_ITEMS.find((n) => n.id === active);
+
+  const topBar = (
+    <div className={`app-topbar-glass glass-float flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl ${GLASS_CLS}`} style={{ boxShadow: FLOAT_M }}>
+      <motion.button
+        whileTap={{ scale: 0.9 }}
+        onClick={() => setSidebar((p) => !p)}
+        className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0"
+        style={GLASS_FIELD}
+        aria-label={sidebar ? "Close menu" : "Open menu"}
+      >
+        {sidebar ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+      </motion.button>
+
+      {(!sidebar || isDesktop) && nav && (() => {
+        const Icon = nav.icon;
+        return (
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <Icon className="w-4 h-4 text-white/60 flex-shrink-0" />
+            <span className="text-sm font-extrabold text-white truncate">{nav.en}</span>
+            <span className="text-xs font-light text-white/30 hidden md:inline truncate">/{nav.tr}</span>
+          </div>
+        );
+      })()}
+
+      {sidebar && !isDesktop && (
+        <span className="flex-1 text-sm font-extrabold text-white/70 truncate">Navigation</span>
+      )}
+
+      <div className={`ml-auto flex items-center gap-2 flex-shrink-0 ${sidebar && !isDesktop ? "hidden" : ""}`}>
+        <span className="text-xs font-light text-white/30 hidden lg:block whitespace-nowrap">
+          {new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" })}
+        </span>
+
+        <input
+          ref={importRef}
+          type="file"
+          accept=".json,.pdf,application/json,application/pdf"
+          className="hidden"
+          onChange={handleImportFile}
+        />
+
+        <input
+          ref={bgRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) setBgUrl(URL.createObjectURL(f));
+          }}
+        />
+
+        <motion.button
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          onClick={() => importRef.current?.click()}
+          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-emerald-300 transition-all flex-shrink-0"
+          style={GLASS_FIELD}
+          title="Import patient (JSON or Clinical Report PDF)"
+          aria-label="Import patient file"
+        >
+          <FileUp className="w-4 h-4" />
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          onClick={() => bgRef.current?.click()}
+          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
+          style={GLASS_FIELD}
+        >
+          <ImageIcon className="w-4 h-4" />
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          onClick={() => { setActive("database"); if (!isDesktop) setSidebar(false); }}
+          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
+          style={GLASS_FIELD}
+        >
+          <Database className="w-4 h-4" />
+        </motion.button>
+      </div>
+    </div>
+  );
 
   const sections = {
     demographics: <DemoSection data={fd.demographics} onChange={(d) => upd("demographics", d)} onBulkUpdate={(sec, d) => upd(sec, d)} />,
@@ -3876,76 +5488,67 @@ export default function App() {
     kinematics: (
       <KinSection
         data={fd.kinematics}
+        sessionKey={fd._loadedId || fd.demographics?.participantId}
         demographics={fd.demographics}
         onChange={(d) => upd("kinematics", d)}
         showToast={showToast}
       />
     ),
-    database: <DatabaseSection onLoadSession={handleLoadSession} showToast={showToast} />,
-    report: <ReportSection fd={fd} />,
+    database: <DatabaseSection fd={fd} setFd={setFd} onLoadSession={handleLoadSession} showToast={showToast} isActive={active === "database"} />,
+    report: <ReportSection fd={fd} onChange={(d) => upd("demographics", d)} showToast={showToast} />,
     analysis: <AnalysisDashboard />,
   };
 
   return (
-    <div className="min-h-screen flex relative" style={{ fontFamily: "'Inter',system-ui,sans-serif" }}>
-      {/* Background */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
+    <div className="min-h-screen flex relative overflow-x-hidden" style={{ fontFamily: "'Inter',system-ui,sans-serif" }}>
+      <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
         <div
           className="absolute inset-0"
           style={{
             backgroundImage: `url('${bgUrl}')`,
             backgroundSize: "cover",
-            backgroundPosition: "center",
-            filter: "blur(16px) brightness(0.38) saturate(0.65)",
-            transform: "scale(1.08)",
+            backgroundPosition: "center center",
+            backgroundRepeat: "no-repeat",
+            filter: BG_FILTER,
+            transform: BG_SCALE,
           }}
         />
-        <div className="absolute inset-0" style={{ background: "rgba(4,6,18,0.60)" }} />
+        <div className="absolute inset-0" style={{ background: BG_OVERLAY }} />
       </div>
 
-      {/* Sidebar backdrop (mobile only) */}
-      {sidebar && (
+      {!isDesktop && sidebar && (
         <div
-          className="fixed inset-0 z-20 sm:hidden bg-black/60"
+          className="fixed inset-0 z-20 bg-black/60"
           onClick={() => setSidebar(false)}
+          aria-hidden="true"
         />
       )}
-      <AnimatePresence>
-        {sidebar && (
+
           <motion.aside
-            key="sb"
-            initial={{ x: -280 }}
-            animate={{ x: 0 }}
-            exit={{ x: -280 }}
-            transition={{ type: "spring", stiffness: 320, damping: 32 }}
-            className="fixed left-0 top-0 h-full z-30 w-72 max-w-[85vw] sm:w-[255px] flex flex-col p-3 sm:p-3 p-2"
-          >
-            <div             className="flex-1 flex flex-col rounded-2xl overflow-hidden bg-[#181818]/90 backdrop-blur-xl border border-white/[0.06] shadow-xl">
-              {/* Logo */}
-              <div className="p-5 border-b border-white/[0.08] flex items-start gap-3">
-                <div className="flex-1 min-w-0">
+        initial={false}
+        animate={{ x: sidebar ? 0 : (isDesktop ? SIDEBAR_X_HIDDEN : "-100%") }}
+        transition={SIDEBAR_SPRING}
+        className={`fixed left-0 top-0 h-full z-30 flex flex-col px-3 pb-3 ${isDesktop ? "" : "w-full"}`}
+        style={isDesktop ? { width: sidebarPush, paddingTop: SAFE_TOP } : { width: "100%", paddingTop: SAFE_TOP }}
+      >
+            <div className={`sidebar-shell flex-1 flex flex-col min-h-0 rounded-2xl overflow-hidden ${SIDEBAR_CLS}`} style={{ boxShadow: FLOAT_M }}>
+              <div className="p-5 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/[0.08] flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={GLASS_FIELD}>
                       <Stethoscope className="w-5 h-5 text-white/80" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-extrabold text-white truncate">Stroke Rehab Platform</p>
-                      <p className="text-xs font-thin text-white/35">v6.4 — Full Suite + SPSS</p>
+                    <p className="text-[10px] text-white/30 font-light">{APP_VERSION}</p>
                     </div>
-                    <button onClick={() => setSidebar(false)} className="sm:hidden w-8 h-8 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-white/60 hover:text-white flex-shrink-0">
-                      <X className="w-4 h-4" />
-                    </button>
                   </div>
-
-                <div className="mt-3 flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-white/[0.06] border border-white/[0.08]">
+                <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl" style={GLASS_FIELD}>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
                   <span className="text-xs font-light text-white/50 truncate">Pre / Post Longitudinal</span>
-                </div>
               </div>
             </div>
 
-              {/* Navigation */}
-              <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+              <nav className="flex-1 min-h-0 p-3 space-y-0.5 overflow-y-auto">
                 {NAV_ITEMS.map((item) => {
                   const on = active === item.id;
                   const Icon = item.icon;
@@ -3954,30 +5557,23 @@ export default function App() {
                     <motion.button
                       key={item.id}
                       whileTap={{ scale: 0.97 }}
-                      onClick={() => { setActive(item.id); if (window.innerWidth < 768) setSidebar(false); }}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all relative group ${
-                        on ? "bg-white/[0.07] border border-white/[0.06]" : "hover:bg-white/[0.04] border border-transparent"
+                      onClick={() => { setActive(item.id); if (!isDesktop) setSidebar(false); }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors duration-200 relative group ${
+                        on ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
                       }`}
+                      style={on ? { backgroundColor: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.06)", boxShadow: "none" } : { border: "1px solid transparent" }}
                     >
-                      {on && (
-                        <motion.div
-                          layoutId="np"
-                          className="absolute inset-0 rounded-xl bg-white/[0.07]"
-                          transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                        />
-                      )}
-
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 relative z-10 transition-all ${
-                        on ? "bg-white/10 border border-white/10" : "bg-white/[0.04] border border-white/[0.04] group-hover:bg-white/[0.07]"
-                      }`}>
+                        on ? "bg-white/10" : "bg-white/[0.04] group-hover:bg-white/[0.07]"
+                      }`} style={GLASS_FIELD}>
                         <Icon className={`w-4 h-4 ${on ? "text-white" : "text-white/45 group-hover:text-white/70"}`} />
                       </div>
 
                       <div className="flex-1 min-w-0 relative z-10">
-                        <p className={`text-sm font-extrabold truncate ${on ? "text-white" : "text-white/60 group-hover:text-white/85"}`}>
+                        <p className={`text-sm font-extrabold leading-snug sm:truncate ${on ? "text-white" : "text-white/60 group-hover:text-white/85"}`}>
                           {item.en}
                         </p>
-                        <p className={`text-[10px] font-light truncate ${on ? "text-white/40" : "text-white/20"}`}>
+                        <p className={`text-[10px] font-light leading-snug sm:truncate ${on ? "text-white/40" : "text-white/20"}`}>
                           {item.tr}
                         </p>
                       </div>
@@ -3988,11 +5584,19 @@ export default function App() {
                 })}
               </nav>
 
-              {/* Save Button */}
-              <div className="p-3 border-t border-white/[0.08]">
+              <div className="p-3 flex-shrink-0 space-y-2" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
                 <motion.button
                   whileTap={{ scale: 0.96 }}
-                  onClick={() => { saveSession(); if (window.innerWidth < 768) setSidebar(false); }}
+                  onClick={() => { newSession(); }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-violet-500/15 border border-violet-400/25 text-violet-200 hover:bg-violet-500/25 hover:border-violet-400/40 transition-all"
+                >
+                  <PlusCircle className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-sm font-bold">New Session</span>
+                  <RotateCcw className="w-3.5 h-3.5 ml-auto opacity-60 flex-shrink-0" />
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => { saveSession(); if (!isDesktop) setSidebar(false); }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-200 hover:bg-emerald-500/25 hover:border-emerald-400/40 transition-all"
                 >
                   <Save className="w-4 h-4 flex-shrink-0" />
@@ -4002,75 +5606,22 @@ export default function App() {
               </div>
             </div>
           </motion.aside>
-        )}
-      </AnimatePresence>
 
-      {/* Main Content */}
-      <main className="flex-1 relative z-10 transition-all duration-500" style={{ marginLeft: sidebar ? "255px" : "0" }}>
-        {/* Top Bar */}
-        <div className="sticky top-0 z-20 px-4 pt-4 pb-0">
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] backdrop-blur-2xl border border-white/[0.04] shadow-xl">
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setSidebar((p) => !p)}
-              className="w-8 h-8 rounded-lg bg-white/[0.08] border border-white/[0.06] flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0"
-            >
-              {sidebar ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-            </motion.button>
-
-            {nav && (() => {
-              const Icon = nav.icon;
-              return (
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <Icon className="w-4 h-4 text-white/60" />
-                  <span className="text-sm font-extrabold text-white truncate">{nav.en}</span>
-                  <span className="text-xs font-light text-white/30 hidden md:inline truncate">/{nav.tr}</span>
+      <main
+        className="flex-1 relative z-10 transition-[margin] duration-300"
+        style={{ marginLeft: isDesktop && sidebar ? sidebarPush : 0 }}
+      >
+          <div className="sticky top-0 z-[60] px-3 sm:px-4 pb-0" style={{ paddingTop: SAFE_TOP }}>
+            {topBar}
                 </div>
-              );
-            })()}
-
-            <div className="ml-auto flex items-center gap-2 flex-shrink-0">
-              <span className="text-xs font-light text-white/30 hidden lg:block whitespace-nowrap">
-                {new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" })}
-              </span>
-
-              <input
-                ref={bgRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) setBgUrl(URL.createObjectURL(f));
-                }}
-              />
-
-              <motion.button
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.92 }}
-                onClick={() => bgRef.current?.click()}
-                className="w-8 h-8 rounded-lg bg-white/[0.08] border border-white/[0.06] flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
-              >
-                <ImageIcon className="w-4 h-4" />
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.92 }}
-                onClick={() => setActive("database")}
-                className="w-8 h-8 rounded-lg bg-white/[0.08] border border-white/[0.06] flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
-              >
-                <Database className="w-4 h-4" />
-              </motion.button>
-            </div>
-          </div>
-        </div>
-
-        {/* Sections */}
-        <div className="px-4 py-6 max-w-5xl mx-auto">
-          <AnimatePresence mode="wait">
+        <div className="app-main-inner px-3 sm:px-4 py-4 sm:py-6 max-w-5xl w-full mx-auto">
+          <div className="content-shell rounded-2xl">
+            <div className="content-shell-inner p-4 sm:p-6">
+              <div className="section-transition-host min-h-[420px]">
+                <AnimatePresence mode="sync" initial={false}>
             <motion.div
               key={active}
+                    className="section-pane w-full"
               initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
@@ -4080,13 +5631,7 @@ export default function App() {
             </motion.div>
           </AnimatePresence>
         </div>
-
-        {/* Footer */}
-        <div className="px-4 pb-6">
-          <div className="px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.07] text-center">
-            <p className="text-xs font-light text-white/20">
-              Stroke Rehabilitation Research Platform v6.4 · LocalStorage Patient DB · PDF & Excel & SPSS Export · Touch-Optimised Sliders · Kinematics AI Lab
-            </p>
+            </div>
           </div>
         </div>
       </main>
@@ -4094,6 +5639,54 @@ export default function App() {
       {/* Global Styles */}
       <style>{`
         * { box-sizing: border-box; }
+        h1, h2, h3, p, span, label, button {
+          text-shadow: 0 1px 3px rgba(0,0,0,0.25);
+        }
+
+        /* Design tokens — glass 8% white / border 12% / inputs 9% */
+        [class*="border-white"] {
+          border-color: rgba(255,255,255,0.12) !important;
+        }
+        .border-b[class*="border-white"],
+        .border-t[class*="border-white"] {
+          border-color: rgba(255,255,255,0.08) !important;
+          box-shadow: none !important;
+        }
+
+        .sidebar-shell,
+        .glass-float {
+          border-color: rgba(255,255,255,0.12) !important;
+        }
+
+        .content-shell {
+          border-color: rgba(255,255,255,0.11) !important;
+        }
+
+        .glass-float {
+          box-shadow: none !important;
+        }
+
+        /* Inputs — bg 9%, border 12% */
+        .glass-field,
+        input, select, textarea {
+          background-color: rgba(255,255,255,0.09) !important;
+          border-color: rgba(255,255,255,0.12) !important;
+          box-shadow: none !important;
+        }
+        .glass-float input,
+        .glass-float select,
+        .glass-float textarea,
+        .glass-float .glass-field {
+          box-shadow: none !important;
+        }
+        .glass-float .glass-float {
+          box-shadow: none !important;
+        }
+
+        .shadow-lg, .shadow-xl, .shadow-2xl {
+          box-shadow: 0 16px 40px -22px rgba(0,0,0,0.07) !important;
+        }
+
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 99px; }
@@ -4118,8 +5711,9 @@ export default function App() {
         input, select { min-height: 44px !important; }
         button { min-height: 44px !important; }
         @media (max-width: 768px) {
-          main { margin-left: 0 !important; }
           input, select, textarea { font-size: 16px !important; }
+          .app-main-inner { padding-left: 12px !important; padding-right: 12px !important; }
+          .content-shell-inner { padding: 14px !important; }
           .px-4 { padding-left: 12px !important; padding-right: 12px !important; }
           .p-5 { padding: 14px !important; }
           table { font-size: 11px !important; }

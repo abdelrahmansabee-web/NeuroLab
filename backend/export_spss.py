@@ -28,52 +28,43 @@ from kinematics_analyzer import analyze_reach_and_wipe
 # ─── All variables to extract ──────────────────────────────
 
 GLOBAL_VARS = [
-    "total_duration_s", "total_peak_velocity", "total_mean_velocity",
-    "total_path_length", "total_lat_range_norm", "total_trunk_palm_ratio",
-    "total_max_elbow_deg", "smoothness_pause_pct",
-    "trunk_lat_norm", "trunk_vert_norm", "trunk_rot_norm",
-    "arm_length_norm", "shoulder_width_norm", "baseline_elbow_deg",
-    "phases_detected", "side_analyzed", "active_hand_path", "inactive_hand_path",
-    "rest_velocity", "idle_threshold",
-    "shoulder_width_cm", "arm_length_cm", "total_path_length_cm",
-    "total_lat_range_cm", "trunk_lat_cm", "trunk_vert_cm", "trunk_rot_cm",
+    "sparc",
+    "trunk_ratio",
+    "shoulder_vert_norm",
+    "elbow_angle_mean",
+    "elbow_angle_min",
+    "elbow_angle_max",
+    "movement_time_sec",
+    "peak_velocity_px_s",
+    "peak_velocity_m_s",
+    "time_to_peak_velocity_sec",
+    "relative_time_to_peak_pct",
+    "shoulder_width_px",
+    "shoulder_width_cm",
+    "metric_scale_m",
+    "shoulder_elevation_cm",
+    "side_analyzed",
+    "fs_hz",
+    "active_onset_s",
+    "active_offset_s",
+    "trunk_displacement_px",
+    "palm_displacement_px",
 ]
 
-PHASE_NAMES = ["forward", "wipe_right", "wipe_left", "return"]
-PHASE_VARS = [
-    "duration_s", "peak_velocity", "mean_velocity",
-    "distance_norm", "lateral_range_norm", "forward_range_norm",
-    "pause_pct", "path_ratio", "trunk_palm_ratio", "max_elbow_deg",
-    "present",
-]
 
-
-def analyze_file(filepath, affected_side="right"):
+def analyze_file(filepath, affected_side="right", metric_scale=0.0):
     """Run analysis and extract all metrics into a flat dict."""
-    result = analyze_reach_and_wipe(filepath, affected_side=affected_side)
+    result = analyze_reach_and_wipe(filepath, affected_side=affected_side, metric_scale=metric_scale)
     if "error" in result:
         raise ValueError(f"Analysis error: {result['error']}")
     return result
 
 
 def flatten_result(result, phase_prefix):
-    """
-    Flatten the nested result into a dict keyed by {prefix}_{varname}.
-    """
     row = {}
     for v in GLOBAL_VARS:
         val = result.get(v)
         row[f"{phase_prefix}_{v}"] = val if val is not None else ""
-
-    for pn in PHASE_NAMES:
-        phase = result.get("phases", {}).get(pn, {})
-        for v in PHASE_VARS:
-            val = phase.get(v)
-            # present is stored as bool
-            if v == "present":
-                row[f"{phase_prefix}_{pn}_{v}"] = 1 if val else 0
-            else:
-                row[f"{phase_prefix}_{pn}_{v}"] = val if val is not None else ""
     return row
 
 
@@ -139,6 +130,7 @@ def main():
     parser.add_argument("--patients", type=str, help="Patient mapping CSV file")
     parser.add_argument("--out", type=str, default="spss_kinematics.csv", help="Output CSV path")
     parser.add_argument("--side", type=str, default="right", help="Affected side (right/left/auto)")
+    parser.add_argument("--metric-scale", type=float, default=0.0, help="Shoulder width in meters (0=normalized only)")
 
     args = parser.parse_args()
 
@@ -180,7 +172,7 @@ def main():
 
             print(f"  Analyzing {pid} / {tp} ... ", end="", flush=True)
             try:
-                result = analyze_file(fpath, affected_side=args.side)
+                result = analyze_file(fpath, affected_side=args.side, metric_scale=args.metric_scale)
                 flat = flatten_result(result, tp)
                 patient_row.update(flat)
                 # Store filename for reference

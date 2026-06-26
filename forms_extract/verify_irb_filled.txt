@@ -1,0 +1,122 @@
+	                                                                                                                                              Tarih:15/06/2026
+İNSAN ARASTIRMALARI ETİK KURULU BASVURU FORMU
+PROJENİN ADI:
+Immediate Effects of a Single Session of PETTLEP-Based Action Observation and Motor Imagery (AOMI) on Upper Limb Kinematics in Stroke Survivors: A Randomized Controlled Trial 
+BAŞVURU BİLGİLERİ
+Başvurunun Şekli
+ İlk Başvuru  
+ Düzeltme
+ Onaylanmış Projenin Devamı
+ Onaylanan Projede Değişiklik Bildirimi
+ Bu araştırmanın sonuçları bilimsel bir dergide yayınlanacaktır.
+Araştırmanın Niteliği
+ Öğretim Üyesi Araştırması
+ Yüksek Lisans   Doktora Tez Çalışması
+ Bu Araştırmanın Sonuçları Bilimsel Bir Dergide Yayınlanacaktır
+ Diğer (Lütfen açıklayınız)
+PROJE DANIŞMANI ÖĞRETİM ÜYESİ
+Unvanı,/Adı Soyadı
+Kurum / Fakülte / Bölüm / Uzmanlık Alanı
+Cep Telefonu ve E-posta
+İmza
+Dr. Öğr. Üyesi Begüm Kara Kaya
+Biruni Üniversitesi, Fizyoterapi ve Rehabilitasyon Anabilim Dalı
+[CEP TELEFONU — doldurunuz] / begum.kara@biruni.edu.tr
+SORUMLU ARAŞTIRMACI
+Unvanı,/Adı Soyadı
+Kurum / Fakülte / Bölüm / Uzmanlık Alanı
+Cep Telefonu ve E-posta
+İmza
+Yüksek Lisans Öğrencisi / Fizyoterapist
+Abdelrahman Walid Hamza Mohamed Elsayed Sabee
+İstinye Üniversitesi, Lisansüstü Eğitim Enstitüsü, Fizyoterapi ve Rehabilitasyon Anabilim Dalı
+[CEP TELEFONU — doldurunuz] / abdelrahman.sabee@stu.istinye.edu.tr
+YARDIMCI ARAŞTIRMACILAR
+Unvanı,/Adı Soyadı
+Kurum / Fakülte / Bölüm / Uzmanlık Alanı
+Cep Telefonu ve E-posta
+İmza
+Doç. Dr. Çiğdem Çınar
+Biruni Üniversitesi Hastanesi, Fiziksel Tıp ve Rehabilitasyon Anabilim Dalı
+0507 783464 / ccinar@biruni.edu.tr
+(Sayısına göre satır ekleyiniz)
+ARAŞTIRMANIN GEREKÇESİ, AMACI VE KAYNAKLARI
+Stroke sonrası üst ekstremite motor bozukluğu yetişkinlerde önemli bir fonksiyonel kısıtlılık nedenidir. Hareket pürüzsüzlüğündeki bozulma (duraklama yüzdesi), gövde kompensasyonu ve omuz yükselmesi, merkezi motor planlama ve yürütme bozukluklarını yansıtır. PETTLEP çerçevesinde yapılandırılmış Eylem Gözlemi ve Motor İmgeleme (AOMI), fiziksel efor gerektirmeden motor yolları hedefleyebilir; ancak tek seanslı AOMI'nin anlık kinematik etkileri objektif markerless analizle yeterince araştırılmamıştır.
+Bu randomize kontrollü çalışma, inme sonrası bireylerde tek seans PETTLEP temelli AOMI'nin hareket pürüzsüzlüğü (smoothness_pause_pct; birincil sonuç), toplam hareket süresi, gövde-kompanzasyon oranı, omuz dikey yer değiştirmesi, tepe el hızı ve üst ekstremite fonksiyonu (WMFT-4) üzerindeki anlık etkilerini, zaman eşleştirilmiş bilişsel ve somatik kontrol koşulu ile karşılaştırmayı amaçlamaktadır.
+Literatür: Guerra et al. (2017); Kim & Lee (2022); Holmes & Collins (2001); Schwarz et al. (2022); Lakshminarayanan et al. (2023); Uğur et al. (2021) KVIQ-10; MediaPipe markerless kinematik analiz.
+REVİZYON (onaylanmış protokolde değişiklik): Çalışma çok merkezli hale getirilmiş; Biruni Üniversitesi Hastanesi ikinci veri toplama merkezi olarak eklenmiş ve Doç. Dr. Çiğdem Çınar yardımcı araştırmacı olarak ekibe dahil edilmiştir.
+  (Ayrıntılı olarak yazılmalıdır.)
+Çalışma ile ilgili gördüğünüz literatür başlıkları yazılmalıdır.               
+GÖNÜLLÜLERİN NİTELİĞİ 
+Çalışmaya Alınacak Minimum Gönüllü Sayısı
+Gönüllü Sayısı
+Yaş Aralığı
+Etik Kurul Onayı Sonrası
+Sağlıklı
+12 ay (Şubat 2026 – Şubat 2027)
+Hasta (İnme / Stroke)
+28
+40–80
+Çocuk 
+Toplam
+28
+ARAŞTIRMANIN YAPILACAĞI YER
+Kurum/Kuruluş Adı ve Adresi:
+1) İstinye Üniversitesi Liv Bahçeşehir Hastanesi, Nörorehabilitasyon Kliniği, İstanbul
+2) Biruni Üniversitesi Hastanesi, Fiziksel Tıp ve Rehabilitasyon Polikliniği, İstanbul (çok merkezli veri toplama merkezi — revizyon kapsamında eklenmiştir)
+(Varsa birden fazla belirtiniz):
+ Hastane (İzin Yazısı Alınmalıdır)		Saha 
+   Poliklinik (İzin Yazısı Alınmalıdır)		Diğer (lütfen belirtiniz)
+ Sağlık Ocağı (İzin Yazısı Alınmalıdır)
+VERİ TOPLAMA YÖNTEMİ 
+Anket*
+Ölçek*
+Test
+Mülakat
+Gözlem
+Bilgisayar ortamında uygulamak**
+Görüntü kaydı
+Ses kaydı
+Diğer (Lütfen belirtiniz)
+*Uygulanacak anket ve ölçekler anonim midir? Anonim değil ise izin belgesi eklenmelidir
+Anket Soruları tarafınızca hazırlandıysa ‘veri toplama aidiyet dilekçesi’ doldurulup dosyaya eklenmelidir. 
+**Online veri toplama form örneği dosyaya eklenmelidir.
+ARAŞTIRMAYA DAHİL EDİLME, HARİÇ TUTULMA VE ARAŞTIRMADAN ÇIKARILMA KRİTERLERİ 
+Araştırmaya Dahil Olma Kriterleri:
+• 40–80 yaş arası kadın/erkek yetişkinler
+• Tek taraflı iskemik veya hemorajik inme tanısı
+• Etkilenen üst ekstremitede artık gönüllü hareket bulunması
+• Hafif-orta spastisite (Modified Ashworth Skalası ≤ 2)
+• Basit talimatları anlayabilme (MMSE ≥ 21)
+• Tıbbi olarak stabil olma
+• En az 30 dk desteksiz oturabilme ve kısa bilişsel-motor egzersizleri yapabilme
+Araştırmaya Hariç Olma Kriterleri:
+• İnme dışı santral sinir sistemi hastalıkları (Parkinson, MS, TBI vb.)
+• Üst ekstremite hareketini kısıtlayan ortopedik/muskuloskeletal durumlar (sabit kontraktür, ciddi eklem deformitesi vb.)
+• Görevi veya motor imgelemeyi engelleyen ciddi duyu kaybı, görsel ihmal veya dikkatsizlik
+• Kontrolsüz nöbet, ciddi kardiyovasküler instabilite veya imgelemeye kontrendikasyon
+• Araştırma protokolüne uyum sağlayamama veya gönüllü geri çekilme
+UYGULANACAK YAKLAŞIM VE İSTATİSTİKSEL YÖNTEM
+Tasarım: Tek kör, ön test–son test, prospektif paralel grup randomize kontrollü çalışma (RCT); çok merkezli (İstinye Üniversitesi Liv Bahçeşehir Hastanesi Nörorehabilitasyon Kliniği + Biruni Üniversitesi Hastanesi FTR Polikliniği).
+Örneklem: n=28 (grup başına 14); G*Power ile planlanmış; permütasyon blok randomizasyon (1:1); cinsiyet ve MAS (0–1+ / 2) stratifikasyonu; körleme: katılımcılar kör olamaz, kinematik çıkarımı otomatik/kör.
+Görev: Reach & Wipe (havlu ile masada ulaşma-silme); pre/post üç deneme, ortalama analiz.
+PETTLEP çerçevesi (Holmes & Collins, 2001):
+P: Gerçek oturma düzeni, normal kıyafet, gerçek havlu. E: Değerlendirme ile aynı oda/masa düzeni. T: Reach & Wipe, günlük yaşama uygun. T: Gerçek zamanlı imgeleme (kritik); 3 sn ulaş / 3 sn silme / 3 sn dönüş sayımı. L: Bloklar arası düzeltici rehberlik. E: Rahatlık, güven, doğal kas hissi. P: Watch’ta dış (3. kişi), Imagine’da iç (1. kişi) perspektif.
+Deneysel müdahale (PETTLEP-AOMI; toplam ~17 dk; müdahale sırasında fiziksel uygulama YOK):
+• 2 dk kalibrasyon (notice–name–transfer; etkilenmemiş uzuv).
+• 5 blok × 3 dk: Watch 45 sn (ayna videolu eylem gözlemi) + Imagine 75 sn (gerçek zamanlı kinestetik MI, kulaklık script) + Rest 60 sn.
+• Fiziksel Reach & Wipe yalnızca pre/post değerlendirmede.
+Kontrol: ~17 dk eşleştirilmiş; 2 dk giriş gevşemesi + 5 blok × 3 dk Beden Taraması / Mekânsal Navigasyon (alternatif).
+Ölçümler: MediaPipe + ZoeDepth (NeuroLab); birincil sonuç smoothness_pause_pct; ikincil kinematikler (total_duration_s, total_trunk_palm_ratio, shoulder_vert_norm, total_peak_velocity); WMFT-4, KVIQ-10, VAMS-4, IPAQ, MDRS, VAS.
+İstatistik: 2 (Grup) × 2 (Zaman) karma ANOVA; ITT; LOCF; Holm–Bonferroni (ikincil kinematik ailesi).
+Araştırmanın tasarımı, örnekleme yöntemi ve kullanılacak istatistiksel analiz yöntemleri açıkça belirtilmelidir.
+ DESTEK VE BÜTÇE BİLGİSİ
+Bu araştırma herhangi bir kurum veya kuruluş (TÜBİTAK, BAP vb.) tarafından destekleniyor mu? Bütçe miktarı ve kaynağı belirtilmelidir.
+Evet
+Kurum veya kuruluş bilgisi eklenmelidir.
+Hayır
+*** Bu formda yer alan araştırma projesine ait veri toplama yöntemi ve çalışma dizaynına sadık kalınacağını, bilgilerin doğruluğunu, başka amaçla kullanılmayacağını taahhüt ederim.
+Sorumlu Araştırmacı   					
+El yazısıyla adı soyadı: 					
+Tarih (gün/ay/yıl olarak): …/…/….                              	
+İmza:							

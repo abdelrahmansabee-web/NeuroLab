@@ -1,0 +1,120 @@
+	                                                                                                                                              Tarih:15/06/2026
+
+İNSAN ARASTIRMALARI ETİK KURULU BASVURU FORMU
+
+PROJENİN ADI:
+Immediate Effects of a Single Session of PETTLEP-Based Action Observation and Motor Imagery (AOMI) on Upper Limb Kinematics in Stroke Survivors: A Randomized Controlled Trial 
+
+
+BAŞVURU BİLGİLERİ
+Başvurunun Şekli
+ İlk Başvuru  
+ Düzeltme
+ Onaylanmış Projenin Devamı
+ Onaylanan Projede Değişiklik Bildirimi
+ Bu araştırmanın sonuçları bilimsel bir dergide yayınlanacaktır.
+
+Araştırmanın Niteliği
+ Öğretim Üyesi Araştırması
+ Yüksek Lisans   Doktora Tez Çalışması
+ Bu Araştırmanın Sonuçları Bilimsel Bir Dergide Yayınlanacaktır
+ Diğer (Lütfen açıklayınız)
+
+PROJE DANIŞMANI ÖĞRETİM ÜYESİ
+Unvanı,/Adı Soyadı
+Kurum / Fakülte / Bölüm / Uzmanlık Alanı
+Cep Telefonu ve E-posta
+İmza
+
+Dr. Öğr. Üyesi Begüm Kara Kaya
+Biruni Üniversitesi, Fizyoterapi ve Rehabilitasyon Anabilim Dalı
+[CEP TELEFONU — doldurunuz] / begum.kara@biruni.edu.tr
+
+
+
+SORUMLU ARAŞTIRMACI
+Unvanı,/Adı Soyadı
+Kurum / Fakülte / Bölüm / Uzmanlık Alanı
+Cep Telefonu ve E-posta
+İmza
+
+Yüksek Lisans Öğrencisi / Fizyoterapist
+Abdelrahman Walid Hamza Mohamed Elsayed Sabee
+İstinye Üniversitesi, Lisansüstü Eğitim Enstitüsü, Fizyoterapi ve Rehabilitasyon Anabilim Dalı
+[CEP TELEFONU — doldurunuz] / abdelrahman.sabee@stu.istinye.edu.tr
+
+
+
+YARDIMCI ARAŞTIRMACILAR
+Unvanı,/Adı Soyadı
+Kurum / Fakülte / Bölüm / Uzmanlık Alanı
+Cep Telefonu ve E-posta
+İmza
+
+Doç. Dr. Çiğdem Çınar
+Biruni Üniversitesi Hastanesi, Fiziksel Tıp ve Rehabilitasyon Anabilim Dalı
+0507 783464 / ccinar@biruni.edu.tr
+
+
+(Sayısına göre satır ekleyiniz)
+
+
+ARAŞTIRMANIN GEREKÇESİ, AMACI VE KAYNAKLARI
+Stroke sonrası üst ekstremite motor bozukluğu yetişkinlerde önemli bir fonksiyonel kısıtlılık nedenidir. Hareket pürüzsüzlüğündeki bozulma (duraklama yüzdesi), gövde kompensasyonu ve omuz yükselmesi, merkezi motor planlama ve yürütme bozukluklarını yansıtır. PETTLEP çerçevesinde yapılandırılmış Eylem Gözlemi ve Motor İmgeleme (AOMI), fiziksel efor gerektirmeden motor yolları hedefleyebilir; ancak tek seanslı AOMI'nin anlık kinematik etkileri objektif markerless analizle yeterince araştırılmamıştır.
+
+Bu randomize kontrollü çalışma, inme sonrası bireylerde tek seans PETTLEP temelli AOMI'nin hareket pürüzsüzlüğü (smoothness_pause_pct; birincil sonuç), toplam hareket süresi, gövde-kompanzasyon oranı, omuz dikey yer değiştirmesi, tepe el hızı ve üst ekstremite fonksiyonu (WMFT-4) üzerindeki anlık etkilerini, zaman eşleştirilmiş bilişsel ve somatik kontrol koşulu ile karşılaştırmayı amaçlamaktadır.
+
+Literatür: Guerra et al. (2017); Kim & Lee (2022); Holmes & Collins (2001); Schwarz et al. (2022); Lakshminarayanan et al. (2023); Uğur et al. (2021) KVIQ-10; MediaPipe markerless kinematik analiz.
+
+REVİZYON (onaylanmış protokolde değişiklik): Çalışma çok merkezli hale getirilmiş; Biruni Üniversitesi Hastanesi ikinci veri toplama merkezi olarak eklenmiş ve Doç. Dr. Çiğdem Çınar yardımcı araştırmacı olarak ekibe dahil edilmiştir.
+  (Ayrıntılı olarak yazılmalıdır.)
+Çalışma ile ilgili gördüğünüz literatür başlıkları yazılmalıdır.               
+
+
+GÖNÜLLÜLERİN NİTELİĞİ 
+
+Çalışmaya Alınacak Minimum Gönüllü Sayısı
+Gönüllü Sayısı
+Yaş Aralığı
+Etik Kurul Onayı Sonrası
+
+Sağlıklı
+
+
+12 ay (Subat 2026 - Subat 2027)
+
+Hasta (Inme / Stroke)
+
+28
+40-80
+
+
+Çocuk 
+
+
+
+
+Toplam
+28
+
+
+
+
+
+
+
+	
+ARAŞTIRMANIN YAPILACAĞI YER
+Kurum/Kuruluş Adı ve Adresi:
+1) İstinye Üniversitesi Liv Bahçeşehir Hastanesi, Nörorehabilitasyon Kliniği, İstanbul
+2) Biruni Üniversitesi Hastanesi, Fiziksel Tıp ve Rehabilitasyon Polikliniği, İstanbul (çok merkezli veri toplama merkezi — revizyon kapsamında eklenmiştir)
+
+(Varsa birden fazla belirtiniz):
+
+ Hastane (İzin Yazısı Alınmalıdır)		Saha 
+   Poliklinik (İzin Yazısı Alınmalıdır)		Diğer (lütfen belirtiniz)
+ Sağlık Ocağı (İzin Yazısı Alınmalıdır)
+
+
+VERİ TOPLAMA YÖNTEMİ 
+

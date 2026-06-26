@@ -73,7 +73,7 @@ def extract_pose_from_video(video_path, output_dir, base_name, model_dir):
             return {"success": False, "error": f"Model not found at {src}"}
         with open(str(src), 'rb') as f:
             model_buffer = f.read()
-        base_options = mp.tasks.BaseOptions(model_asset_buffer=model_buffer)
+        base_options = mp.tasks.BaseOptions(model_asset_buffer=model_buffer, delegate=mp.tasks.BaseOptions.Delegate.CPU)
 
         csv_path = output_dir / f"{base_name}.csv"
         trc_path = output_dir / f"{base_name}.trc"
@@ -96,23 +96,29 @@ def extract_pose_from_video(video_path, output_dir, base_name, model_dir):
 
             fps = cap.get(cv2.CAP_PROP_FPS) or 30
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
             landmarks_all = []
             frames_detected = 0
             prev_smooth = None
+            width = height = 0
+            out_2d = None
 
             print(f"Detecting landmarks in {total_frames} frames...")
-
-            out_2d = cv2.VideoWriter(str(video_2d_path), fourcc, fps, (width, height))
 
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
                     break
+
+                h, w = frame.shape[:2]
+                if w > h:
+                    frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+                    h, w = w, h
+                if out_2d is None:
+                    width, height = w, h
+                    out_2d = cv2.VideoWriter(str(video_2d_path), fourcc, fps, (w, h))
 
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
@@ -149,7 +155,8 @@ def extract_pose_from_video(video_path, output_dir, base_name, model_dir):
                 out_2d.write(frame)
 
             cap.release()
-            out_2d.release()
+            if out_2d is not None:
+                out_2d.release()
 
             print(f"Detected pose in {frames_detected}/{total_frames} frames")
 
@@ -168,11 +175,13 @@ def extract_pose_from_video(video_path, output_dir, base_name, model_dir):
                     t = idx / fps
                     writer.writerow([idx + 1, round(t, 5)] + [round(v, 6) if not np.isnan(v) else "" for v in row])
 
+            num_frames = len(landmarks_all)
             with open(trc_path, "w") as f:
                 f.write("PathFileType\t4\t(X/Y/Z)\t" + trc_path.name + "\n")
-                f.write("DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\n")
-                f.write(f"{fps}\t{fps}\t{len(landmarks_all)}\t33\tm\n")
-                f.write("Frame#\tTime\t" + "\t".join([f"{LANDMARK_NAMES[i]}\t{LANDMARK_NAMES[i]}\t{LANDMARK_NAMES[i]}" for i in range(33)]) + "\n")
+                f.write("DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\tOrigDataRate\tOrigDataStartFrame\tOrigNumFrames\n")
+                f.write(f"{fps}\t{fps}\t{num_frames}\t33\tm\t{fps}\t1\t{num_frames}\n")
+                f.write("Frame#\tTime\t" + "\t".join([f"{LANDMARK_NAMES[i]}" for i in range(33)]) + "\n")
+                f.write("\t\t" + "\t".join([f"X{i+1}\tY{i+1}\tZ{i+1}" for i in range(33)]) + "\n")
                 for i, row in enumerate(landmarks_all):
                     t = i / fps
                     line = f"{i+1}\t{t:.5f}\t"
