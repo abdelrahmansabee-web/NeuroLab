@@ -2103,14 +2103,20 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   useEffect(() => {
     if (!data || Object.keys(kinematicsResults).length > 0) return;
     const kinMap = {
-      sparc: "sparc",
+      nvp: "nvp",
+      straightness: "straightness",
+      pauseTimeSec: "pause_time_sec",
+      numberOfStops: "number_of_stops",
       trunkRatio: "trunk_ratio",
       shoulderVertNorm: "shoulder_vert_norm",
-      handDisplacementNorm: "hand_displacement_norm",
+      elbowAngleMeanDeg: "elbow_angle_mean_deg",
       movementTimeSec: "movement_time_sec",
       peakVelocityPxS: "peak_velocity_px_s",
-    peakVelocityCmS: "peak_velocity_cm_s",
+      peakVelocityCmS: "peak_velocity_cm_s",
       duration: "movement_time_sec",
+      // Legacy keys kept for backward compatibility
+      sparc: "sparc",
+      handDisplacementNorm: "hand_displacement_norm",
     };
     const converted = {};
     const phaseMap = { pre: "pre", post: "post", healthy: "baseline" };
@@ -2229,7 +2235,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       if (!isCsv) {
         fd.append("arm_type", "paretic");
         fd.append("trial_count", "1");
-        fd.append("best_trial_metric", "sparc");
+        fd.append("best_trial_metric", "nvp");
       }
 
       const endpoint = isCsv ? "/analyze-csv" : "/analyze";
@@ -2356,28 +2362,38 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     const val = getMetricValue(phase, key);
     if (val === "—" || typeof val === "string") return val;
     if (typeof val !== "number") return val;
-    if (key === "sparc") return val.toFixed(3);
+    if (key === "nvp") return val.toFixed(0);
+    if (key === "straightness") return val.toFixed(3);
+    if (key === "pause_time_sec") return val.toFixed(2);
+    if (key === "number_of_stops") return val.toFixed(0);
     if (key === "trunk_ratio") return (val * 100).toFixed(1);
     if (key === "shoulder_vert_norm") return (val * 100).toFixed(1);
-    if (key === "hand_displacement_norm") return `${val.toFixed(1)} cm`;
+    if (key === "elbow_angle_mean_deg") return val.toFixed(1);
     if (key === "movement_time_sec") return val.toFixed(2);
     if (key === "peak_velocity_px_s") return val.toFixed(1);
     if (key === "peak_velocity_cm_s") return `${val.toFixed(1)} cm/s`;
+    if (key === "sparc") return val.toFixed(3);
+    if (key === "hand_displacement_norm") return `${val.toFixed(1)} cm`;
     if (key.includes("ratio") || key.includes("trunk") || key.includes("_sw") || key.includes("path_eff")) return val.toFixed(3);
     return val.toFixed(2);
   };
 
   const KIN_TIPS = {
-    sparc: "SPARC — less negative (closer to 0) = smoother movement. Pose trajectories upsampled to 60 Hz before FFT (Balasubramanian 2012/2015).",
-    trunk_ratio: "Trunk displacement / palm displacement. Lower = less compensation.",
-    shoulder_vert_norm: "Shoulder elevation (method adapts to camera: frontal=rest-to-peak, side=range norm).",
-    hand_displacement_norm: "Peak hand reach relative to trunk (anti-compensation), calibrated to 60 cm table width (cm). Trunk compensation tracked via trunk_ratio.",
+    nvp: "Number of velocity peaks — fewer = smoother, more ballistic movement.",
+    straightness: "Path straightness = straight-line displacement / actual path length. Higher = straighter reach.",
+    pause_time_sec: "Total time the hand is paused (speed below 5% of peak) during the reach.",
+    number_of_stops: "Number of distinct pauses during the reach.",
+    trunk_ratio: "Trunk displacement / palm displacement. Lower = less trunk compensation.",
+    shoulder_vert_norm: "Shoulder elevation normalized to shoulder width. Lower = less compensatory elevation.",
+    elbow_angle_mean_deg: "Mean elbow flexion angle during the movement window.",
     movement_time_sec: "Active movement duration (onset to offset).",
     peak_velocity_px_s: "Peak tangential hand velocity during reach (px/s).",
     peak_velocity_cm_s: "Peak tangential hand velocity during reach (cm/s).",
+    sparc: "SPARC — less negative (closer to 0) = smoother movement. Kept for backward compatibility.",
+    hand_displacement_norm: "Peak hand reach relative to trunk (legacy).",
   };
 
-  const CARD_PREVIEW_KEYS = ["sparc", "trunk_ratio", "shoulder_vert_norm", "peak_velocity_px_s"];
+  const CARD_PREVIEW_KEYS = ["nvp", "straightness", "pause_time_sec", "number_of_stops"];
 
   const variables = orderedKinematicVars().map((v) => ({
     group: v.tier === "primary" ? "Primary" : v.tier === "secondary" ? "Secondary" : "Exploratory",
@@ -2390,9 +2406,9 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
 
   const activeResultPhases = phases.filter((ph) => kinematicsResults[ph.k]);
   const kinViewWarning = (() => {
-    const lowSparc = activeResultPhases.filter((ph) => kinematicsResults[ph.k]?.sparc_comparable === false);
-    if (lowSparc.length) {
-      return `Reach amplitude low in ${lowSparc.map((ph) => ph.label).join(", ")} — SPARC may be less reliable`;
+    const lowAmp = activeResultPhases.filter((ph) => kinematicsResults[ph.k]?.sparc_comparable === false);
+    if (lowAmp.length) {
+      return `Reach amplitude low in ${lowAmp.map((ph) => ph.label).join(", ")} — kinematic smoothness metrics may be less reliable`;
     }
     return null;
   })();

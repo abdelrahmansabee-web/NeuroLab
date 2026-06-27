@@ -10,35 +10,47 @@ export const STUDY_DESIGN = {
   targetN: 28,
   perGroup: 14,
   alpha: 0.05,
-  primaryOutcome: "sparc",
+  primaryOutcome: "NVP / straightness / pause time / stops",
 };
 
-/** Manuscript-aligned kinematic variables (side-view pipeline) */
+/** Reach-to-grasp protocol kinematic variables (ethics-form final set) */
 export const KINEMATIC_VARS = [
-  { key: "sparc", label: "SPARC (smoothness)", unit: "index", dir: "higher", tier: "primary" },
+  // Primary outcomes
+  { key: "nvp", label: "Number of Velocity Peaks (NVP)", unit: "count", dir: "lower", tier: "primary" },
+  { key: "straightness", label: "Path straightness", unit: "ratio", dir: "higher", tier: "primary" },
+  { key: "pause_time_sec", label: "Pause time", unit: "s", dir: "lower", tier: "primary" },
+  { key: "number_of_stops", label: "Number of stops", unit: "count", dir: "lower", tier: "primary" },
+  // Secondary outcomes
   { key: "trunk_ratio", label: "Trunk ratio", unit: "ratio", dir: "lower", tier: "secondary" },
-  { key: "shoulder_vert_norm", label: "Shoulder elevation (norm)", unit: "norm", dir: "lower", tier: "secondary" },
-  { key: "hand_displacement_norm", label: "Hand reach (peak cm)", unit: "cm", dir: "higher", tier: "secondary" },
+  { key: "shoulder_vert_norm", label: "Shoulder elevation (norm)", unit: "norm", dir: "lower", tier: "secondary", fallback: "shoulder_elevation_norm" },
+  { key: "elbow_angle_mean_deg", label: "Elbow angle (mean)", unit: "deg", dir: "none", tier: "secondary", fallback: "elbow_angle_range_deg" },
   { key: "movement_time_sec", label: "Movement time", unit: "s", dir: "lower", tier: "secondary" },
   { key: "peak_velocity_cm_s", label: "Peak velocity", unit: "cm/s", dir: "higher", tier: "secondary", fallback: "peak_velocity_px_s" },
 ];
 
 export const KINEMATIC_DISPLAY_ORDER = [
-  "sparc",
+  "nvp",
+  "straightness",
+  "pause_time_sec",
+  "number_of_stops",
   "trunk_ratio",
   "shoulder_vert_norm",
-  "hand_displacement_norm",
-  "peak_velocity_cm_s",
+  "elbow_angle_mean_deg",
   "movement_time_sec",
+  "peak_velocity_cm_s",
 ];
 
 /** Manuscript / ethics-form reference pattern (Pre → Post → Healthy) */
 export const MANUSCRIPT_KINEMATIC_TARGETS = {
-  sparc: { pre: -1.85, post: -1.65, healthy: -1.45 },
+  nvp: { pre: 3.5, post: 2.5, healthy: 1.5 },
+  straightness: { pre: 0.82, post: 0.88, healthy: 0.94 },
+  pause_time_sec: { pre: 0.45, post: 0.25, healthy: 0.10 },
+  number_of_stops: { pre: 2.5, post: 1.5, healthy: 0.5 },
   trunk_ratio: { pre: 32.0, post: 18.0, healthy: 3.0 },
   shoulder_vert_norm: { pre: 18.0, post: 12.0, healthy: 6.5 },
-  hand_displacement_norm: { pre: 22, post: 28, healthy: 38 },
-  peak_velocity_cm_s: { pre: 22.0, post: 28.0, healthy: 19.0 },
+  elbow_angle_mean_deg: { pre: 125, post: 130, healthy: 135 },
+  movement_time_sec: { pre: 2.2, post: 1.7, healthy: 1.2 },
+  peak_velocity_cm_s: { pre: 45.0, post: 55.0, healthy: 65.0 },
 };
 
 export function orderedKinematicVars() {
@@ -62,11 +74,11 @@ export const CLINICAL_VARS = [
 
 export const SPSS_WORKFLOW = [
   { step: 1, title: "Data import", spss: "GET DATA → master_study_data.csv → SAVE master_study.sav" },
-  { step: 2, title: "Variable labels & deltas", spss: "COMPUTE delta_* = *_Post − *_Pre for 6 kinematic + clinical vars" },
+  { step: 2, title: "Variable labels & deltas", spss: "COMPUTE delta_* = *_Post − *_Pre for 9 kinematic + clinical vars" },
   { step: 3, title: "Baseline equivalence", spss: "T-TEST / Mann-Whitney / Chi-square on Pre scores & demographics" },
   { step: 4, title: "Normality (Shapiro–Wilk)", spss: "EXAMINE … BY Group on Pre, Post, and Δ for each DV" },
-  { step: 5, title: "Primary analysis", spss: "GLM sparc Pre Post BY Group /WSFACTOR=time 2 — α=.05 uncorrected" },
-  { step: 6, title: "Secondary kinematic (5 GLMs)", spss: "trunk_ratio, shoulder_vert_norm, hand_displacement_norm, movement_time_sec, peak_velocity_px_s; Holm–Bonferroni k=5" },
+  { step: 5, title: "Primary analysis", spss: "GLM nvp straightness pause_time_sec number_of_stops Pre Post BY Group /WSFACTOR=time 2 — Holm–Bonferroni k=4" },
+  { step: 6, title: "Secondary kinematic (5 GLMs)", spss: "trunk_ratio, shoulder_vert_norm, elbow_angle_mean_deg, movement_time_sec, peak_velocity_cm_s; Holm–Bonferroni k=5" },
   { step: 8, title: "Clinical scales", spss: "GLM WMFT-4, VAMS-4, VAS, KVIQ; MWU/Wilcoxon if non-normal" },
   { step: 9, title: "MDRS post-only", spss: "Mann-Whitney MDRS_Difference_Post BY Group" },
   { step: 10, title: "Moderators", spss: "CORRELATIONS KVIQ-10 Pre with Δ kinematic; split by Group" },
@@ -75,12 +87,18 @@ export const SPSS_WORKFLOW = [
 ];
 
 const LEGACY_KIN_MAP = {
-  sparc: ["sparc"],
+  nvp: ["nvp"],
+  straightness: ["straightness"],
+  pause_time_sec: ["pause_time_sec", "pause_time"],
+  number_of_stops: ["number_of_stops", "n_stops", "stops"],
   trunk_ratio: ["trunk_ratio", "total_trunk_palm_ratio"],
   shoulder_vert_norm: ["shoulder_vert_norm", "shoulder_elevation_norm"],
-  hand_displacement_norm: ["hand_displacement_norm", "hand_disp_sw", "reach_amplitude_sw", "lat_range_sw"],
+  elbow_angle_mean_deg: ["elbow_angle_mean_deg", "elbow_angle_mean", "elbow_angle_range_deg"],
   movement_time_sec: ["movement_time_sec", "total_duration_s", "duration"],
   peak_velocity_cm_s: ["peak_velocity_cm_s", "peak_velocity_px_s", "peak_velocity_m_s", "total_peak_velocity"],
+  // Keep old SPARC / hand displacement keys for backward compatibility
+  sparc: ["sparc"],
+  hand_displacement_norm: ["hand_displacement_norm", "hand_disp_sw", "reach_amplitude_sw", "lat_range_sw"],
 };
 
 export function pickKinField(result, canonicalKey, fallbackKey = null) {
@@ -174,19 +192,24 @@ export function kinCrossPhaseComparable(kinematicsResults, metricKey, armForPhas
   const phases = ["pre", "post", "baseline"].filter((p) => kinematicsResults?.[p]);
   if (phases.length < 2) return true;
 
-  if (metricKey === "sparc") {
+  // Smoothness metrics require sufficient reach amplitude to be comparable across phases.
+  if (["sparc", "nvp", "straightness", "pause_time_sec", "number_of_stops"].includes(metricKey)) {
     return phases.every((p) => kinematicsResults[p]?.sparc_comparable !== false);
   }
 
   return true;
 }
 
-/** Key metrics for per-patient recovery summary (when re-recording is not possible). */
+/** Key metrics for per-patient recovery summary. */
 export const RECOVERY_SUMMARY_KEYS = [
-  "sparc",
+  "nvp",
+  "straightness",
+  "pause_time_sec",
+  "number_of_stops",
   "trunk_ratio",
   "shoulder_vert_norm",
-  "hand_displacement_norm",
+  "elbow_angle_mean_deg",
+  "peak_velocity_cm_s",
 ];
 
 /** Read pre/post/baseline kinematics from patient record. */
