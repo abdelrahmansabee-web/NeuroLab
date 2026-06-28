@@ -250,6 +250,18 @@ export async function importPatientFile(file) {
     return parsePatientJson(await file.text());
   }
   if (name.endsWith(".pdf")) {
+    // Prefer server-side parsing (more robust than browser pdfjs).
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/parse-pdf", { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.success && data.patient) {
+        return normalizeImportedPatient(data.patient);
+      }
+    } catch (err) {
+      console.warn("Server-side PDF parse failed, falling back to browser:", err);
+    }
     const text = await extractPdfText(file);
     return parseClinicalReportPdf(text);
   }
