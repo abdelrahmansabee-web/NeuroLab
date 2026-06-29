@@ -6,7 +6,6 @@ colorTo: green
 sdk: static
 sdk_version: "1.0"
 app_file: frontend/dist/index.html
-app_build_command: cd frontend && npm install && npm run build
 pinned: false
 ---
 
@@ -44,7 +43,7 @@ kinematics-lab/
 │   │   │   └── DemoModeIndicator.tsx
 │   │   └── services/
 │   │       └── api.ts         # Backend communication + mock data
-│   └── ...config files
+│   └── dist/                  # Pre-built static files for Hugging Face Spaces
 │
 └── README.md
 ```
