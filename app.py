@@ -3,6 +3,7 @@ from fastapi import FastAPI, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
+import uvicorn
 
 app = FastAPI()
 
@@ -35,7 +36,6 @@ async def catch_all(path: str):
 async def health_check():
     return {"status": "ok"}
 
-# NOTE: Full backend endpoints are in backend/main.py
-# This minimal app.py is only to satisfy Hugging Face Spaces with Gradio SDK
-# while serving the React frontend. For full processing, backend/main.py should
-# be used in a separate deployment or the endpoints should be merged here.
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 7860))
+    uvicorn.run(app, host="0.0.0.0", port=port)
