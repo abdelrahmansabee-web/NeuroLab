@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+.git/
+uploads/
+outputs/
+results/
+sessions/
+data/
+*.log
+.env
