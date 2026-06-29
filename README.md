@@ -3,9 +3,9 @@ title: KinematicsAI Lab v7.0
 emoji: 🧠
 colorFrom: blue
 colorTo: green
-sdk: static
-sdk_version: "1.0"
-app_file: index.html
+sdk: gradio
+sdk_version: "5.0"
+app_file: app.py
 pinned: false
 ---
 
