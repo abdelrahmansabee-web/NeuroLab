@@ -1,3 +1,13 @@
+---
+title: KinematicsAI Lab v7.0
+emoji: 🧠
+colorFrom: blue
+colorTo: green
+sdk: static
+sdk_version: "1.0"
+pinned: false
+---
+
 # KinematicsAI Lab v7.0
 ## Stroke Rehabilitation Kinematic Analysis System
 
@@ -95,7 +105,7 @@ If the backend is not running, the frontend automatically switches to **Demo Mod
 |---|---|---|
 | `file` | UploadFile | Video file (.mp4, .mov, .avi) |
 | `side` | Query string | Affected side: `R` or `L` |
-| `phase` | Query string | Treatment phase: `pre`, `during`, `post` |
+| `phase` | Query string | Treatment phase: `pre`, `post` |
 
 **Response:**
 ```json
