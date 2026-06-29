@@ -5,7 +5,7 @@ colorFrom: blue
 colorTo: green
 sdk: static
 sdk_version: "1.0"
-app_file: frontend/dist/index.html
+app_file: index.html
 pinned: false
 ---
 
