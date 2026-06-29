@@ -9,13 +9,8 @@ with open("index.html", "r", encoding="utf-8") as f:
 html_content = html_content.replace('href="/assets/', 'href="./assets/')
 html_content = html_content.replace('src="/assets/', 'src="./assets/')
 
-demo = gr.Interface(
-    fn=None,
-    inputs=None,
-    outputs=gr.HTML(html_content),
-    title="KinematicsAI Lab v7.0",
-    description="Stroke Rehabilitation Kinematic Analysis System"
-)
+with gr.Blocks(title="KinematicsAI Lab v7.0") as demo:
+    gr.HTML(html_content)
 
 if __name__ == "__main__":
     demo.launch()
