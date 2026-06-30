@@ -676,7 +676,7 @@ def _draw_mediapipe_skeleton(
     frame_h: int,
     active_side: str = "right",
 ) -> None:
-    """Draw a clean, accurate skeleton overlay with very light smoothing to remove jitter."""
+    """Draw a clean, accurate skeleton overlay with temporal smoothing to remove jitter."""
 
     if row_idx >= len(raw_df):
         return
@@ -703,12 +703,15 @@ def _draw_mediapipe_skeleton(
                 x = raw_df[xs].astype(float).values * frame_w
                 y = raw_df[ys].astype(float).values * frame_h
                 try:
+                    from scipy.ndimage import median_filter
+                    x_m = median_filter(np.nan_to_num(x, nan=np.nanmedian(x)), size=3)
+                    y_m = median_filter(np.nan_to_num(y, nan=np.nanmedian(y)), size=3)
                     from motion_invariants import smooth_series
-                    x_s = smooth_series(x, fs, window_s=0.25)
-                    y_s = smooth_series(y, fs, window_s=0.25)
+                    x_s = smooth_series(x_m, fs, window_s=0.40)
+                    y_s = smooth_series(y_m, fs, window_s=0.40)
                 except Exception:
-                    x_s = _smooth_positions(np.column_stack([x, y]), window=9)[:, 0]
-                    y_s = _smooth_positions(np.column_stack([x, y]), window=9)[:, 1]
+                    xy_s = _smooth_positions(np.column_stack([x, y]), window=15)
+                    x_s, y_s = xy_s[:, 0], xy_s[:, 1]
                 smooth[n] = np.column_stack([x_s, y_s])
         smooth_cache = {"key": cache_key, "smooth": smooth}
         _draw_mediapipe_skeleton._smooth_cache = smooth_cache
@@ -759,21 +762,21 @@ def _draw_mediapipe_skeleton(
     ) -> None:
         if a is None or b is None:
             return
-        w = max(3, int(width))
-        # Outer dark halo for contrast on light backgrounds
-        cv2.line(canvas, a, b, (10, 10, 10), w + _s(8), cv2.LINE_AA)
+        w = max(2, int(width))
+        # Subtle dark halo for contrast; keep thin so skeleton matches body size
+        cv2.line(canvas, a, b, (10, 10, 10), w + _s(3), cv2.LINE_AA)
         if glow:
-            cv2.line(canvas, a, b, glow, w + _s(10), cv2.LINE_AA)
-        cv2.line(canvas, a, b, (20, 20, 20), w + _s(4), cv2.LINE_AA)
+            cv2.line(canvas, a, b, glow, w + _s(4), cv2.LINE_AA)
+        cv2.line(canvas, a, b, (20, 20, 20), w + _s(1), cv2.LINE_AA)
         if outline:
-            cv2.line(canvas, a, b, outline, w + _s(2), cv2.LINE_AA)
+            cv2.line(canvas, a, b, outline, w + _s(1), cv2.LINE_AA)
         cv2.line(canvas, a, b, color, w, cv2.LINE_AA)
-        r = w // 2
+        r = max(2, w // 2)
         cv2.circle(canvas, a, r, color, -1, cv2.LINE_AA)
         cv2.circle(canvas, b, r, color, -1, cv2.LINE_AA)
-        if w >= _s(5):
+        if w >= _s(4):
             hl = tuple(min(255, int(c * 1.15 + 30)) for c in color)
-            cv2.line(canvas, a, b, hl, max(1, w // 3), cv2.LINE_AA)
+            cv2.line(canvas, a, b, hl, max(1, w // 4), cv2.LINE_AA)
 
     def _joint_cv(
         pt: Optional[Tuple[int, int]],
@@ -783,9 +786,9 @@ def _draw_mediapipe_skeleton(
     ) -> None:
         if pt is None:
             return
-        r = max(3, int(radius))
-        cv2.circle(canvas, pt, r + _s(4), (10, 10, 10), -1, cv2.LINE_AA)
-        cv2.circle(canvas, pt, r + _s(2), (20, 20, 20), -1, cv2.LINE_AA)
+        r = max(2, int(radius))
+        cv2.circle(canvas, pt, r + _s(2), (10, 10, 10), -1, cv2.LINE_AA)
+        cv2.circle(canvas, pt, r + _s(1), (20, 20, 20), -1, cv2.LINE_AA)
         if outline:
             cv2.circle(canvas, pt, r + _s(1), outline, -1, cv2.LINE_AA)
         cv2.circle(canvas, pt, r, color, -1, cv2.LINE_AA)
@@ -798,39 +801,39 @@ def _draw_mediapipe_skeleton(
         (ls, rs), (lh, rh), (ls, lh), (rs, rh)
     ]
     for a, b in torso_pairs:
-        _bone_cv(a, b, max(_s(2), int(shoulder_width / 28)), inactive_bone)
+        _bone_cv(a, b, max(_s(1), int(shoulder_width / 36)), inactive_bone)
 
     # Head
     if nose is not None and ls and rs:
         neck = (int((ls[0] + rs[0]) / 2), int((ls[1] + rs[1]) / 2))
-        _bone_cv(neck, nose, max(_s(2), int(shoulder_width / 32)), inactive_bone)
-        _joint_cv(nose, max(_s(2), int(shoulder_width / 22)), inactive_joint)
+        _bone_cv(neck, nose, max(_s(1), int(shoulder_width / 40)), inactive_bone)
+        _joint_cv(nose, max(_s(2), int(shoulder_width / 28)), inactive_joint)
 
     # Subtle clavicles
     if ls and rs:
-        _bone_cv(ls, rs, max(_s(2), int(shoulder_width / 30)), inactive_bone)
+        _bone_cv(ls, rs, max(_s(1), int(shoulder_width / 38)), inactive_bone)
 
     # Subtle joints for whole body
     for pt in [ls, rs, le, re, lw, rw, lh, rh]:
         if pt is not None:
-            _joint_cv(pt, max(_s(2), int(shoulder_width / 24)), inactive_joint)
+            _joint_cv(pt, max(_s(2), int(shoulder_width / 32)), inactive_joint)
 
-    # Active arm (prominent) --------------------------------------------------
+    # Active arm (prominent but not oversized) --------------------------------------------------
     if right_active and rs and re:
-        _bone_cv(rs, re, max(_s(7), int(shoulder_width / 18)), active_bone, outline=active_outline, glow=glow_color)
-        _joint_cv(rs, max(_s(5), int(shoulder_width / 24)), active_joint, outline=active_outline)
-        _joint_cv(re, max(_s(5), int(shoulder_width / 24)), active_joint, outline=active_outline)
+        _bone_cv(rs, re, max(_s(5), int(shoulder_width / 24)), active_bone, outline=active_outline, glow=glow_color)
+        _joint_cv(rs, max(_s(4), int(shoulder_width / 30)), active_joint, outline=active_outline)
+        _joint_cv(re, max(_s(4), int(shoulder_width / 30)), active_joint, outline=active_outline)
         if rw:
-            _bone_cv(re, rw, max(_s(6), int(shoulder_width / 22)), active_bone, outline=active_outline, glow=glow_color)
-            _joint_cv(rw, max(_s(4), int(shoulder_width / 32)), active_joint, outline=active_outline)
+            _bone_cv(re, rw, max(_s(4), int(shoulder_width / 26)), active_bone, outline=active_outline, glow=glow_color)
+            _joint_cv(rw, max(_s(3), int(shoulder_width / 36)), active_joint, outline=active_outline)
 
     if left_active and ls and le:
-        _bone_cv(ls, le, max(_s(7), int(shoulder_width / 18)), active_bone, outline=active_outline, glow=glow_color)
-        _joint_cv(ls, max(_s(5), int(shoulder_width / 24)), active_joint, outline=active_outline)
-        _joint_cv(le, max(_s(5), int(shoulder_width / 24)), active_joint, outline=active_outline)
+        _bone_cv(ls, le, max(_s(5), int(shoulder_width / 24)), active_bone, outline=active_outline, glow=glow_color)
+        _joint_cv(ls, max(_s(4), int(shoulder_width / 30)), active_joint, outline=active_outline)
+        _joint_cv(le, max(_s(4), int(shoulder_width / 30)), active_joint, outline=active_outline)
         if lw:
-            _bone_cv(le, lw, max(_s(6), int(shoulder_width / 22)), active_bone, outline=active_outline, glow=glow_color)
-            _joint_cv(lw, max(_s(4), int(shoulder_width / 32)), active_joint, outline=active_outline)
+            _bone_cv(le, lw, max(_s(4), int(shoulder_width / 26)), active_bone, outline=active_outline, glow=glow_color)
+            _joint_cv(lw, max(_s(3), int(shoulder_width / 36)), active_joint, outline=active_outline)
 
 
 def _draw_3d_skeleton(
@@ -1208,8 +1211,14 @@ def _draw_panel_pil(
     row_idx = min(frame_i, len(df) - 1)
     cur_speed = speed[row_idx] if row_idx < len(speed) else 0.0
     cur_straightness = straightness[row_idx] if row_idx < len(straightness) else float("nan")
-    nvp_so_far = int(np.sum(find_peaks(speed[: row_idx + 1], prominence=np.nanstd(speed) * 0.5)[0])) if row_idx > 0 else 0
+
+    # Compute NVP exactly the same way as stroke_kinematic_pipeline.calculate_nvp()
+    # (prominence = 0.30 * std) so the animated counter matches the table value.
+    speed_std = float(np.nanstd(speed)) if len(speed) else 0.0
     speed_peak = float(np.nanmax(speed)) if len(speed) else 0.0
+    nvp_prominence = speed_std * 0.30 if speed_std > 0 else speed_peak * 0.05
+    nvp_peak_indices = find_peaks(speed, prominence=nvp_prominence)[0]
+    nvp_so_far = int(np.sum(nvp_peak_indices <= row_idx)) if row_idx > 0 else 0
     speed_threshold = 0.05 * speed_peak if speed_peak > 0 else 1.0
     is_pause = cur_speed < speed_threshold
 
@@ -1515,18 +1524,19 @@ def _compute_speed(df: pd.DataFrame) -> np.ndarray:
 def _compute_nvp_and_stops(
     speed: np.ndarray,
     time: np.ndarray,
-    prominence_frac: float = 0.5,
+    prominence_frac: float = 0.30,
     min_pause_s: float = 0.1,
 ) -> Tuple[int, float, int]:
     """
     Number of velocity peaks, total pause time, and number of stops.
-    Matches the exploratory movement-control metrics used in the thesis scripts.
+    Matches stroke_kinematic_pipeline.calculate_nvp() (prominence = 0.30 * std).
     """
     if len(speed) == 0:
         return 0, 0.0, 0
-    std = float(np.nanstd(speed)) if np.nanstd(speed) > 0 else 1.0
+    std = float(np.nanstd(speed)) if np.nanstd(speed) > 0 else 0.0
     peak = float(np.nanmax(speed)) if np.nanmax(speed) > 0 else 1.0
-    peaks, _ = find_peaks(speed, prominence=std * prominence_frac, distance=max(1, int(0.15 * len(time) / (time[-1] - time[0]) if len(time) > 1 else 30)))
+    prominence = std * prominence_frac if std > 0 else peak * 0.05
+    peaks, _ = find_peaks(speed, prominence=prominence)
     threshold = 0.05 * peak
     paused = speed < threshold
 
