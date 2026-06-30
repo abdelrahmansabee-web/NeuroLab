@@ -1685,34 +1685,8 @@ def render_unified_validation_video(
     else:
         orig_w, orig_h = native_w, native_h
 
-    # 4K output scaling: make the video's short edge 2160 px and its long
-    # edge up to 3840 px, then scale the metrics panel proportionally.
-    TARGET_4K_SHORT = 2160
-    TARGET_4K_LONG = 3840
-    use_4k = str(resolution).lower() in ("4k", "uhd", "2160", "3840")
-    use_480p = str(resolution).lower() in ("480p", "480", "sd")
+    # Use native resolution but skip costly interpolation
     scale = 1.0
-    if use_4k:
-        try:
-            if orig_h >= orig_w:
-                target_h = TARGET_4K_LONG
-            else:
-                target_h = TARGET_4K_SHORT
-            scale = target_h / orig_h
-            test_w = int(orig_w * scale) + int(420 * scale)
-            test_h = target_h
-            # Probe allocation; if it fails we fall back to native resolution.
-            _ = np.zeros((test_h, test_w, 3), dtype=np.uint8)
-            del _
-        except (MemoryError, Exception):
-            print("4K canvas allocation failed; falling back to native resolution")
-            scale = 1.0
-    elif use_480p:
-        target_h = 480
-        scale = target_h / orig_h
-        if scale > 1.0:
-            scale = 1.0
-
     orig_w = int(orig_w * scale)
     orig_h = int(orig_h * scale) if scale != 1.0 else orig_h
     panel_width = int(panel_width * scale)
@@ -1846,7 +1820,10 @@ def render_unified_validation_video(
             frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
         # Upscale to 4K rendering resolution
-        frame = cv2.resize(frame, (orig_w, orig_h), interpolation=cv2.INTER_LANCZOS4)
+        if scale != 1.0:
+            frame = cv2.resize(frame, (orig_w, orig_h), interpolation=cv2.INTER_LANCZOS4)
+        else:
+            frame = cv2.resize(frame, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
 
         # Map video frame to dataframe row
         row_idx = min(frame_i, n_rows - 1)
