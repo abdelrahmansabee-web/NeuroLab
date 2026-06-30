@@ -504,6 +504,26 @@ async def analyze_video(
         # — 7. Clinical plausibility checks —
         plausibility = _check_clinical_plausibility(analysis, phase, resolved_arm)
 
+        # — 8. Generate unified validation video immediately (so it appears instantly) —
+        unified_validation_video = None
+        try:
+            out_name = f"{base_name}_unified_validation.mp4"
+            out_path = OUTPUT_DIR / out_name
+            render_unified_validation_video(
+                video_path=str(video_path),
+                output_path=str(out_path),
+                analysis=analysis,
+                landmarks_csv=str(analysis_csv_path),
+                force_rotation="auto",
+                resolution="native",
+                panel_width=640,
+            )
+            if out_path.exists() and out_path.stat().st_size > 1000:
+                unified_validation_video = out_name
+                print(f"Unified validation video generated: {out_name}")
+        except Exception as e:
+            print(f"Unified validation video generation failed: {e}")
+
         response = {
             "success": True,
             "phase": phase,
@@ -515,6 +535,7 @@ async def analyze_video(
             "trc_filename": None,
             "mot_filename": mot_filename,
             "validation_video": validation_video,
+            "unified_validation_video": unified_validation_video,
             "quality_report": quality_report,
             "legacy_format": legacy,
             "intermediate_files": {
