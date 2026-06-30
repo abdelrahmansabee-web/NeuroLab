@@ -515,8 +515,8 @@ async def analyze_video(
                 analysis=analysis,
                 landmarks_csv=str(analysis_csv_path),
                 force_rotation="auto",
-                resolution="native",
-                panel_width=640,
+                resolution="480p",
+                panel_width=320,
             )
             if out_path.exists() and out_path.stat().st_size > 1000:
                 unified_validation_video = out_name

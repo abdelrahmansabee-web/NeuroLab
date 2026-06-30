@@ -1690,6 +1690,7 @@ def render_unified_validation_video(
     TARGET_4K_SHORT = 2160
     TARGET_4K_LONG = 3840
     use_4k = str(resolution).lower() in ("4k", "uhd", "2160", "3840")
+    use_480p = str(resolution).lower() in ("480p", "480", "sd")
     scale = 1.0
     if use_4k:
         try:
@@ -1705,6 +1706,11 @@ def render_unified_validation_video(
             del _
         except (MemoryError, Exception):
             print("4K canvas allocation failed; falling back to native resolution")
+            scale = 1.0
+    elif use_480p:
+        target_h = 480
+        scale = target_h / orig_h
+        if scale > 1.0:
             scale = 1.0
 
     orig_w = int(orig_w * scale)
