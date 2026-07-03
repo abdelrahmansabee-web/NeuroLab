@@ -776,6 +776,22 @@ async def download_file(filename: str):
     return _send_file_any([OUTPUT_DIR, UPLOAD_DIR], filename, "application/octet-stream")
 
 
+@app.get("/debug/files")
+async def debug_list_files():
+    """List output and upload files for debugging."""
+    from pathlib import Path
+    out = {"output_dir": str(OUTPUT_DIR), "upload_dir": str(UPLOAD_DIR)}
+    try:
+        out["output_files"] = [f.name for f in OUTPUT_DIR.iterdir() if f.is_file()]
+    except Exception as e:
+        out["output_files_error"] = str(e)
+    try:
+        out["upload_files"] = [f.name for f in UPLOAD_DIR.iterdir() if f.is_file()]
+    except Exception as e:
+        out["upload_files_error"] = str(e)
+    return JSONResponse(out)
+
+
 @app.get("/video/{filename}")
 async def serve_video(filename: str):
     return _send_file_any([OUTPUT_DIR, UPLOAD_DIR], filename, "video/mp4")
