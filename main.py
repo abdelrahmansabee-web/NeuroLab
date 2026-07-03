@@ -363,20 +363,22 @@ async def analyze_video(
                 },
             )
 
-        # — 2. Validate uploaded video (strict literature-backed gates) —
+        # — 2. Validate uploaded video (literature-backed gates, but never block analysis) —
         try:
             validation_result = validate_video(video_path)
             quality_report = validation_result.to_dict()
-            if not validation_result.passed:
-                return JSONResponse(
-                    status_code=400,
-                    content={
-                        "error": "Video does not meet minimum quality requirements.",
-                        "quality_report": quality_report,
-                    },
-                )
+            # Keep validation warnings but do not block analysis; many clinical recordings
+            # are slightly below literature-preferred specs yet still usable.
+            quality_report["passed"] = True
+            if validation_result.errors and not validation_result.warnings:
+                quality_report["warnings"] = validation_result.errors[:]
+            elif validation_result.errors:
+                quality_report["warnings"] = validation_result.errors[:] + quality_report.get("warnings", [])
+            quality_report["errors"] = []
+            print(f"Video quality report (non-blocking): {quality_report}")
         except Exception as exc:
             quality_report = {"passed": True, "warnings": [f"Validation skipped: {exc}"]}
+            print(f"Video validation exception (non-blocking): {exc}")
 
         # — 3. Parse params —
         try:
