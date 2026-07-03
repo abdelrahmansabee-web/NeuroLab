@@ -760,7 +760,14 @@ def _send_file_any(folders: List[Path], filename: str, media_type: str):
     for folder in folders:
         fp = folder / filename
         if fp.exists():
-            return FileResponse(path=str(fp), filename=filename, media_type=media_type)
+            # For downloads, set Content-Disposition so browser saves the file.
+            headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+            return FileResponse(
+                path=str(fp),
+                filename=filename,
+                media_type=media_type,
+                headers=headers,
+            )
     raise HTTPException(status_code=404, detail=f"File not found: {filename}")
 
 
