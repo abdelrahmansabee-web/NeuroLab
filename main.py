@@ -919,19 +919,6 @@ async def health():
     return {"status": "ok", "version": DEPLOY_VERSION}
 
 
-@app.get("/debug/commit")
-async def debug_commit():
-    import hashlib, subprocess
-    from pathlib import Path
-    pipeline = Path(__file__).with_name("stroke_kinematic_pipeline.py")
-    h = hashlib.sha256(pipeline.read_bytes()).hexdigest()[:16] if pipeline.exists() else None
-    try:
-        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=Path(__file__).parent, text=True).strip()
-    except Exception:
-        commit = None
-    return {"commit": commit, "pipeline_sha256_prefix": h, "version": DEPLOY_VERSION}
-
-
 # Serve root-level static files from the frontend build directory
 # (pdf.worker.min.js, manifest.json, favicon.ico, logos, bg.jpg, etc.)
 # IMPORTANT: keep this catch-all route LAST so it does not shadow API endpoints.
