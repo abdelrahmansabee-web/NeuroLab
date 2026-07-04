@@ -221,16 +221,6 @@ async def serve_static(rest_of_path: str):
     raise HTTPException(status_code=404)
 
 
-# Serve root-level static files from the frontend build directory
-# (pdf.worker.min.js, manifest.json, favicon.ico, logos, bg.jpg, etc.)
-@app.get("/{file_name}")
-async def serve_build_root(file_name: str):
-    if file_name in ("index.html",):
-        raise HTTPException(status_code=404)
-    file_path = FRONTEND_BUILD / file_name
-    if file_path.exists() and file_path.is_file():
-        return FileResponse(file_path)
-    raise HTTPException(status_code=404)
 
 
 @app.get("/api/patients")
@@ -935,10 +925,6 @@ async def health():
 @app.get("/{file_name}")
 async def serve_build_root(file_name: str):
     if file_name in ("index.html",):
-        raise HTTPException(status_code=404)
-    file_path = FRONTEND_BUILD / file_name
-    if file_path.exists() and file_path.is_file():
-        return FileResponse(file_path)
     raise HTTPException(status_code=404)
 
 
@@ -946,3 +932,9 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=7860)
+
+    file_path = FRONTEND_BUILD / file_name
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(file_path)
+    raise HTTPException(status_code=404)
+
