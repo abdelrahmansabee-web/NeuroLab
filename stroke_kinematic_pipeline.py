@@ -2339,11 +2339,14 @@ def analyze_stroke_kinematic_csv(
         from table_calibrator import find_video_for_csv
 
         df = pd.read_csv(csv_path)
+        native_df = df.copy()
         df, native_fs, analysis_fs, upsampled = prepare_trial_timeseries(df)
         role = trial_role or infer_trial_role(csv_path, affected_side=affected_side)
         if not video_path:
             vid = find_video_for_csv(csv_path, None)
             video_path = str(vid) if vid else None
+        # Pass the native dataframe so analyze_trial can upsample consistently.
+        # (Passing the already-upsampled df with native_fs < 55 causes double upsampling.)
         raw = analyze_trial(
             csv_path,
             fs=analysis_fs,
@@ -2352,7 +2355,7 @@ def analyze_stroke_kinematic_csv(
             affected_side=affected_side,
             frame_width=frame_width,
             frame_height=frame_height,
-            trial_df=df,
+            trial_df=native_df,
             native_fs=native_fs,
             upsampled=upsampled,
             task_mode=task_mode,
@@ -2382,6 +2385,52 @@ def analyze_stroke_kinematic_csv(
         except KeyError:
             sw_px = None
 
+    if "palm_x" in native_df.columns:
+        px_native = native_df["palm_x"].astype(float).values
+        py_native = native_df["palm_y"].astype(float).values
+    else:
+        lm, _, _ = _landmarks_from_mediapipe_csv(
+            native_df, affected_side=affected_side, frame_width=frame_width, frame_height=frame_height
+        )
+        px_native, py_native = lm["palm_x"], lm["palm_y"]
+
+    n_native = len(px_native)
+    spd_native = np.sqrt(np.gradient(px_native) ** 2 + np.gradient(py_native) ** 2) * native_fs
+
+    start_i = int(raw.get("movement_onset_frame") or 0)
+    end_i = int(raw.get("movement_offset_frame") or (n_native - 1))
+
+    # The raw window indices are on the analysis (upsampled) timeline, but the
+    # exported dataframe and validation video use native video frames. Map them
+    # back so the onset/offset point to the same moment in the original video.
+    if upsampled and native_fs and fs_hz and abs(fs_hz - native_fs) > 1e-6:
+        start_i, end_i = _map_frames_to_native_fs(start_i, end_i, fs_hz, native_fs, n_native)
+
+    start_i = max(0, min(start_i, n_native - 1))
+    end_i = max(start_i, min(end_i, n_native - 1))
+    if end_i <= start_i:
+        mask = spd_native > velocity_threshold_px_s
+        start_i = int(np.where(mask)[0][0]) if np.any(mask) else 0
+        end_i = int(np.where(mask)[0][-1]) if np.any(mask) else n_native - 1
+    start_i = max(0, min(start_i, n_native - 1))
+    end_i = max(start_i, min(end_i, n_native - 1))
+
+    # Map other exported frame windows back to native indices for consistency.
+    def _map_frame_key(key: str) -> Optional[int]:
+        v = raw.get(key)
+        if v is None:
+            return None
+        try:
+            v = int(v)
+        except Exception:
+            return None
+        if upsampled and native_fs and fs_hz and abs(fs_hz - native_fs) > 1e-6:
+            _, v = _map_frames_to_native_fs(v, v, fs_hz, native_fs, n_native)
+        return max(0, min(v, n_native - 1))
+
+    sparc_onset_native = _map_frame_key("sparc_window_onset_frame")
+    sparc_offset_native = _map_frame_key("sparc_window_offset_frame")
+
     if "palm_x" in df.columns:
         px = df["palm_x"].astype(float).values
         py = df["palm_y"].astype(float).values
@@ -2392,17 +2441,6 @@ def analyze_stroke_kinematic_csv(
         px, py = lm["palm_x"], lm["palm_y"]
 
     spd = np.sqrt(np.gradient(px) ** 2 + np.gradient(py) ** 2) * fs_hz
-    start_i = int(raw.get("movement_onset_frame") or 0)
-    end_i = int(raw.get("movement_offset_frame") or (len(px) - 1))
-    n_px = len(px)
-    start_i = max(0, min(start_i, n_px - 1))
-    end_i = max(start_i, min(end_i, n_px - 1))
-    if end_i <= start_i:
-        mask = spd > velocity_threshold_px_s
-        start_i = int(np.where(mask)[0][0]) if np.any(mask) else 0
-        end_i = int(np.where(mask)[0][-1]) if np.any(mask) else n_px - 1
-    start_i = max(0, min(start_i, n_px - 1))
-    end_i = max(start_i, min(end_i, n_px - 1))
 
     result = {
         # --- reach-to-grasp primary outcomes ---
@@ -2456,14 +2494,14 @@ def analyze_stroke_kinematic_csv(
         "velocity_threshold_px_s": velocity_threshold_px_s,
         "movement_onset_frame": start_i,
         "movement_offset_frame": end_i,
-        "active_onset_s": round(start_i / fs_hz, 3),
-        "active_offset_s": round(end_i / fs_hz, 3),
+        "active_onset_s": round(start_i / native_fs, 3) if native_fs else round(start_i / fs_hz, 3),
+        "active_offset_s": round(end_i / native_fs, 3) if native_fs else round(end_i / fs_hz, 3),
         "sparc_interpretation": raw.get("sparc_interpretation"),
         "sparc_active_frames": raw.get("sparc_active_frames"),
         "sparc_comparable": raw.get("sparc_comparable"),
         "sparc_method": raw.get("sparc_method"),
-        "sparc_window_onset_frame": raw.get("sparc_window_onset_frame"),
-        "sparc_window_offset_frame": raw.get("sparc_window_offset_frame"),
+        "sparc_window_onset_frame": sparc_onset_native,
+        "sparc_window_offset_frame": sparc_offset_native,
         "sparc_matched": _r(raw.get("sparc_matched"), 4),
         "sparc_matched_interpretation": raw.get("sparc_matched_interpretation"),
         "sparc_matched_amplitude_sw": _r(raw.get("sparc_matched_amplitude_sw"), 3),
