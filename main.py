@@ -773,12 +773,41 @@ def _send_file_any(folders: List[Path], filename: str, media_type: str):
 
 @app.get("/download/{filename}")
 async def download_file(filename: str):
-    return _send_file_any([OUTPUT_DIR, UPLOAD_DIR], filename, "application/octet-stream")
+    """Return file as a downloadable attachment.
+
+    Wraps FileResponse so the browser/PWA treats the response as a download
+    rather than an inline resource.
+    """
+    for folder in [OUTPUT_DIR, UPLOAD_DIR]:
+        fp = folder / filename
+        if fp.exists():
+            return FileResponse(
+                path=str(fp),
+                filename=filename,
+                media_type="application/octet-stream",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Content-Type": "application/octet-stream",
+                },
+            )
+    raise HTTPException(status_code=404, detail=f"File not found: {filename}")
 
 
 @app.get("/video/{filename}")
 async def serve_video(filename: str):
-    return _send_file_any([OUTPUT_DIR, UPLOAD_DIR], filename, "video/mp4")
+    """Return video for inline playback."""
+    for folder in [OUTPUT_DIR, UPLOAD_DIR]:
+        fp = folder / filename
+        if fp.exists():
+            return FileResponse(
+                path=str(fp),
+                filename=filename,
+                media_type="video/mp4",
+                headers={
+                    "Accept-Ranges": "bytes",
+                },
+            )
+    raise HTTPException(status_code=404, detail=f"File not found: {filename}")
 
 
 @app.get("/csv/{filename}")
