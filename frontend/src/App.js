@@ -2073,6 +2073,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   const [kinResultsTab, setKinResultsTab] = useState("compare");
   const [mediaPreview, setMediaPreview] = useState(null);
   const [analysisStatus, setAnalysisStatus] = useState({});
+  const [showResultsTable, setShowResultsTable] = useState(true);
 
   const abortRef = useRef({});
 
@@ -2264,6 +2265,9 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
         [statusKey(phase)]: "completed",
       });
       showToast(`✓ Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials → mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
+      // Auto-generate unified validation video after analysis and hide results until it finishes
+      setShowResultsTable(false);
+      setTimeout(() => generateUnifiedValidation(phase), 300);
     } catch (err) {
       if (err.name === "AbortError") {
         showToast(`✕ Analysis cancelled for ${phase}`, "info");
@@ -2297,10 +2301,41 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
 
     const url = `${API_BASE}/download/${encodeURIComponent(filename)}`;
 
+    if (type === "unified-download") {
+      try {
+        const res = await fetch(url);
+        if (res.status === 404) {
+          showToast("Validation video expired on server — please re-analyze the video", "error");
+          return;
+        }
+        if (!res.ok) throw new Error(`Download failed (${res.status})`);
+        const blob = await res.blob();
+        // On iOS/PWA, prefer opening the video in a new tab so the user can
+        // long-press to save; blob downloads are often blocked in web clips.
+        if (isIOSDevice() || isStandalonePWA()) {
+          const objectUrl = URL.createObjectURL(blob);
+          const newTab = window.open(objectUrl, "_blank");
+          if (!newTab) {
+            // fallback if popup blocked
+            downloadBlob(blob, filename);
+          }
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+          showToast("Video opened — long-press to save", "success");
+        } else {
+          downloadBlob(blob, filename);
+          showToast("Validation video downloaded", "success");
+        }
+      } catch (err) {
+        console.error("Download error:", err);
+        showToast("Failed to download validation video", "error");
+      }
+      return;
+    }
+
     // Play video inside app — iOS PWA has no back button if we navigate away
     if (type === "video" || type === "unified") {
       const title = type === "unified" ? "Unified Validation Video" : "Skeleton Video";
-      setMediaPreview({ url, title: `${phases.find((p) => p.k === phase)?.l || phase} — ${title}` });
+      setMediaPreview({ url: `${API_BASE}/video/${encodeURIComponent(filename)}`, title: `${phases.find((p) => p.k === phase)?.l || phase} — ${title}` });
       return;
     }
 
@@ -2333,6 +2368,8 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
         [phase]: { ...prev[phase], unified_validation_video: data.unified_validation_video },
       }));
       showToast("Unified validation video ready", "success");
+      // Hide results table until validation video finishes
+      setShowResultsTable(false);
     } catch (err) {
       console.error(err);
       showToast(err.message || "Failed to generate unified validation video", "error");
@@ -2447,8 +2484,8 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     c === "emerald" ? "text-emerald-300" : "text-amber-300";
 
   const kinDirArrow = (dir) => {
-    if (dir === "higher") return { sym: "↑", tip: "↑ زيادة = تحسّن" };
-    if (dir === "lower") return { sym: "↓", tip: "↓ نقص = تحسّن" };
+    if (dir === "higher") return { sym: "↑", tip: "↑ higher = improvement" };
+    if (dir === "lower") return { sym: "↓", tip: "↓ lower = improvement" };
     return null;
   };
 
@@ -2608,9 +2645,6 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                         <GBtn variant="default" onClick={() => downloadFile(ph.k, "mot")} className="!py-1.5 !px-2 min-w-[2.25rem] shrink-0" title="OpenSim MOT (IK)">
                         <Activity className="w-3.5 h-3.5" />
                       </GBtn>
-                        <GBtn variant="default" onClick={() => downloadFile(ph.k, "video")} disabled={!kinematicsResults[ph.k]?.validation_video} className="!py-1.5 !px-2 min-w-[2.25rem] shrink-0" title={kinematicsResults[ph.k]?.validation_video ? "2D Skeleton Video" : "Re-analyze video to generate skeleton overlay"}>
-                          <span className="text-[10px] font-bold leading-none">2D</span>
-                      </GBtn>
                         <GBtn variant="default" onClick={() => kinematicsResults[ph.k]?.unified_validation_video ? downloadFile(ph.k, "unified") : generateUnifiedValidation(ph.k)} disabled={analysisStatus[ph.k] === "generating_unified"} className="!py-1.5 !px-2 min-w-[2.25rem] shrink-0" title={kinematicsResults[ph.k]?.unified_validation_video ? "Unified Validation Video" : "Generate Unified Validation Video"}>
                           {analysisStatus[ph.k] === "generating_unified" ? (
                             <span className="text-[10px] font-bold leading-none">…</span>
@@ -2683,6 +2717,59 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       </Glass>
 
       {Object.keys(kinematicsResults).length > 0 && (
+        <Glass className="p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <p className="text-sm font-extrabold text-white/80">Validation Video / Doğrulama Videosu</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {phases.filter((ph) => kinematicsResults[ph.k]?.unified_validation_video).map((ph) => (
+              <div key={ph.k} className={`rounded-xl border p-3 ${phaseValueCls(ph.c)}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>{ph.l} — Unified Validation</p>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => downloadFile(ph.k, "unified-download")}
+                      className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
+                      title="Download video"
+                    >
+                      ↓ Download
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadFile(ph.k, "unified")}
+                      className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
+                      title="Expand video"
+                    >
+                      ▣ Expand
+                    </button>
+                  </div>
+                </div>
+                <video
+                  src={`${API_BASE}/video/${encodeURIComponent(kinematicsResults[ph.k].unified_validation_video)}`}
+                  controls
+                  playsInline
+                  muted
+                  className="w-full rounded-lg bg-black"
+                  onError={() => showToast(`${ph.l} validation video expired — please re-analyze`, "error")}
+                  onEnded={() => setShowResultsTable(true)}
+                />
+              </div>
+            ))}
+            {phases.filter((ph) => kinematicsResults[ph.k] && !kinematicsResults[ph.k]?.unified_validation_video).map((ph) => (
+              <div key={ph.k} className={`rounded-xl border p-3 ${phaseValueCls(ph.c)}`}>
+                <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)} mb-2`}>{ph.l} — Unified Validation</p>
+                <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3">
+                  <p className="text-[11px] text-white/50 mb-2">Generating unified validation video…</p>
+                  <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Glass>
+      )}
+
+      {Object.keys(kinematicsResults).length > 0 && showResultsTable && (
         <Glass className="p-4 sm:p-5">
           {hasKinTriple && recoverySummaryRows.length > 0 && (
             <div className="mb-5 rounded-xl border border-cyan-400/20 bg-cyan-500/5 p-4">
@@ -2969,7 +3056,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                 className="w-full max-h-full rounded-xl bg-black"
                 style={{ maxHeight: "calc(100dvh - 5rem)" }}
                 onError={() => {
-                  showToast("Could not load validation video — try re-analyzing the video", "error");
+                  showToast("Validation video expired on server — please re-analyze", "error");
                   setMediaPreview(null);
                 }}
               />
