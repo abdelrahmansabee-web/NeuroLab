@@ -2403,7 +2403,8 @@ def analyze_stroke_kinematic_csv(
     # The raw window indices are on the analysis (upsampled) timeline, but the
     # exported dataframe and validation video use native video frames. Map them
     # back so the onset/offset point to the same moment in the original video.
-    if upsampled and native_fs and fs_hz and abs(fs_hz - native_fs) > 1e-6:
+    did_upsample = upsampled or bool(raw.get("upsampled_to_60hz"))
+    if did_upsample and native_fs and fs_hz and abs(fs_hz - native_fs) > 1e-6:
         start_i, end_i = _map_frames_to_native_fs(start_i, end_i, fs_hz, native_fs, n_native)
 
     start_i = max(0, min(start_i, n_native - 1))
@@ -2424,7 +2425,7 @@ def analyze_stroke_kinematic_csv(
             v = int(v)
         except Exception:
             return None
-        if upsampled and native_fs and fs_hz and abs(fs_hz - native_fs) > 1e-6:
+        if did_upsample and native_fs and fs_hz and abs(fs_hz - native_fs) > 1e-6:
             _, v = _map_frames_to_native_fs(v, v, fs_hz, native_fs, n_native)
         return max(0, min(v, n_native - 1))
 
