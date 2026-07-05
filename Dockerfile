@@ -3,8 +3,6 @@ FROM python:3.11.9-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev \
     libgomp1 wget curl gnupg \
-    libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
-    libosmesa6-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -u 1000 user
