@@ -10,13 +10,15 @@ import subprocess
 import sys
 import traceback
 import concurrent.futures
+import uuid
+import asyncio
+from typing import Optional, Any, List, Dict
 
 import cv2
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Any, List
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -76,6 +78,34 @@ POSE_MODEL_FILE = MODEL_DIR / "pose_landmarker_heavy.task"
 
 for d in [UPLOAD_DIR, OUTPUT_DIR, MODEL_DIR, DATA_DIR]:
     d.mkdir(parents=True, exist_ok=True)
+
+# In-memory job progress store (small, transient; HF Spaces is single-instance).
+job_progress: Dict[str, Dict[str, Any]] = {}
+
+
+def _set_job_progress(job_id: str, pct: float, step: str, done: bool = False, error: Optional[str] = None, result: Optional[Dict[str, Any]] = None):
+    job_progress[job_id] = {
+        "pct": min(100.0, max(0.0, round(float(pct), 1))),
+        "step": step,
+        "done": done,
+        "error": error,
+        "result": result,
+        "updated_at": datetime.now().isoformat(),
+    }
+
+
+def _cleanup_old_jobs(max_age_minutes: int = 30):
+    now = datetime.now()
+    cutoff_keys = []
+    for job_id, info in list(job_progress.items()):
+        try:
+            updated = datetime.fromisoformat(info.get("updated_at", "2000-01-01T00:00:00"))
+            if (now - updated).total_seconds() > max_age_minutes * 60:
+                cutoff_keys.append(job_id)
+        except Exception:
+            cutoff_keys.append(job_id)
+    for k in cutoff_keys:
+        job_progress.pop(k, None)
 
 
 def ensure_pose_model() -> bool:
@@ -302,8 +332,245 @@ def _auto_rotate_video_with_ffmpeg(video_path: Path) -> Optional[Path]:
     return rotated_path
 
 
+def _run_analysis_job(
+    job_id: str,
+    video_path: Path,
+    phase: str,
+    resolved_arm: str,
+    quality_report: Dict[str, Any],
+    cutoff: float,
+    order: int,
+    legacy: bool,
+    save_intermediate: bool,
+    metric_scale: float,
+):
+    """Run the full analysis pipeline and update job_progress."""
+    base_name = f"{phase}_{video_path.stem}"
+    csv_path = OUTPUT_DIR / f"{base_name}.csv"
+    try:
+        _set_job_progress(job_id, 5, "Saving uploaded video...")
+
+        _set_job_progress(job_id, 12, "Extracting pose landmarks...")
+        intermediate_dir = str(OUTPUT_DIR / f"{base_name}_intermediates")
+        ensure_pose_model()
+        from mediapipe_csv_extractor import extract_from_video
+        from stroke_kinematic_pipeline import resolve_analysis_arm
+
+        report = extract_from_video(
+            video_path=str(video_path),
+            output_csv=str(csv_path),
+            model_path=str(POSE_MODEL_FILE),
+            affected_side=resolved_arm,
+            camera_view="auto",
+            use_clahe=not legacy,
+            max_interpolate_gap=8,
+            butterworth_cutoff_hz=cutoff,
+            butterworth_order=order,
+            save_raw_pose=True,
+            show_progress=True,
+            legacy_format=legacy,
+            save_intermediate_frames=save_intermediate,
+            intermediate_dir=intermediate_dir,
+            save_resampled=save_intermediate,
+        )
+        frames_detected = int(report.get("frames", 0))
+        fps = float(report.get("fps", 30.0))
+        analysis_csv_path = csv_path
+        raw_pose_csv = report.get("raw_pose_csv")
+        if raw_pose_csv:
+            raw_pose_p = Path(raw_pose_csv)
+            if raw_pose_p.exists():
+                analysis_csv_path = raw_pose_p
+
+        _set_job_progress(job_id, 55, "Computing kinematics...")
+        analysis = analyze_reach_and_wipe(
+            file_path=str(analysis_csv_path),
+            cutoff_frequency=cutoff,
+            filter_order=order,
+            affected_side=resolved_arm,
+            metric_scale=metric_scale,
+            phase_name=phase.upper(),
+            camera_view="auto",
+            video_path=str(video_path),
+        )
+        if isinstance(analysis, dict) and analysis.get("error"):
+            _set_job_progress(job_id, 0, "Analysis failed", done=True, error=analysis["error"])
+            return
+
+        _set_job_progress(job_id, 80, "Rendering validation video...")
+        unified_validation_video = None
+        unified_validation_video_b64 = None
+        validation_summary = None
+        try:
+            out_name = f"{base_name}_unified_validation.mp4"
+            out_path = OUTPUT_DIR / out_name
+            uv_result = render_unified_validation_video(
+                video_path=str(video_path),
+                output_path=str(out_path),
+                analysis=analysis,
+                landmarks_csv=str(analysis_csv_path),
+                force_rotation="auto",
+                resolution="native",
+                panel_width=480,
+            )
+            uv_path = uv_result.get("path") if isinstance(uv_result, dict) else str(uv_result)
+            if uv_path and Path(uv_path).exists() and Path(uv_path).stat().st_size > 1000:
+                unified_validation_video = out_name
+                try:
+                    unified_validation_video_b64 = base64.b64encode(Path(uv_path).read_bytes()).decode("utf-8")
+                except Exception as e64:
+                    print(f"Failed to embed validation video: {e64}")
+                validation_summary = uv_result.get("summary") if isinstance(uv_result, dict) else None
+        except Exception as e:
+            print(f"Unified validation video generation failed: {e}")
+
+        _set_job_progress(job_id, 95, "Finalizing results...")
+        response = {
+            "success": True,
+            "phase": phase,
+            "frames_detected": frames_detected,
+            "total_frames": frames_detected,
+            "fps": round(fps, 2),
+            "csv_filename": Path(analysis_csv_path).name,
+            "video_filename": video_path.name,
+            "trc_filename": None,
+            "mot_filename": None,
+            "validation_video": report.get("validation_video"),
+            "unified_validation_video": unified_validation_video,
+            "unified_validation_video_b64": unified_validation_video_b64,
+            "validation_summary": validation_summary,
+            "quality_report": quality_report,
+            "legacy_format": legacy,
+            "intermediate_files": {
+                "raw_pose_csv": report.get("raw_pose_csv"),
+                "filtered_landmarks_csv": report.get("filtered_landmarks_csv"),
+                "resampled_landmarks_csv": report.get("resampled_landmarks_csv"),
+                "intermediate_dir": report.get("intermediate_dir"),
+                "quality_json": report.get("quality_json"),
+            },
+            **analysis,
+        }
+        _set_job_progress(job_id, 100, "Done", done=True, result=response)
+    except Exception as exc:
+        traceback.print_exc()
+        _set_job_progress(job_id, 0, "Error", done=True, error=str(exc))
+
+
 @app.post("/analyze")
 async def analyze_video(
+    background_tasks: BackgroundTasks,
+    video: UploadFile = File(...),
+    phase: str = Form("pre"),
+    arm_type: str = Form("paretic"),
+    affected_side: str = Form("auto"),
+    stroke_side: str = Form("auto"),
+    trial_count: str = Form("1"),
+    best_trial_metric: str = Form("sparc"),
+    patient_height_cm: str = Form("auto"),
+    shoulder_width_cm: str = Form("auto"),
+    cutoff_frequency: str = Form("4.0"),
+    filter_order: str = Form("4"),
+    legacy_format: str = Form("false"),
+    save_intermediates: str = Form("true"),
+):
+    _cleanup_old_jobs()
+    job_id = str(uuid.uuid4())
+    _set_job_progress(job_id, 0, "Starting...")
+
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_name = video.filename.replace(" ", "_")
+        base_name = f"{phase}_{timestamp}_{Path(safe_name).stem}"
+        video_path = UPLOAD_DIR / f"{base_name}{Path(safe_name).suffix}"
+
+        with video_path.open("wb") as f:
+            shutil.copyfileobj(video.file, f)
+
+        try:
+            rotated_path = _auto_rotate_video_with_ffmpeg(video_path)
+            if rotated_path and rotated_path.exists():
+                video_path = rotated_path
+        except Exception as exc:
+            print(f"Video auto-rotation skipped: {exc}")
+
+        resolved_arm = resolve_analysis_arm(phase, stroke_side, affected_side)
+        if resolved_arm == "auto":
+            _set_job_progress(job_id, 0, "Error", done=True, error="Set Affected Side (Left/Right) in patient demographics.")
+            return JSONResponse(status_code=400, content={"error": "Set Affected Side (Left/Right) in patient demographics — required for correct arm (pre/post = paretic, healthy = contralateral)."})
+
+        try:
+            validation_result = validate_video(video_path)
+            quality_report = validation_result.to_dict()
+            quality_report["passed"] = True
+            if validation_result.errors and not validation_result.warnings:
+                quality_report["warnings"] = validation_result.errors[:]
+            elif validation_result.errors:
+                quality_report["warnings"] = validation_result.errors[:] + quality_report.get("warnings", [])
+            quality_report["errors"] = []
+        except Exception as exc:
+            quality_report = {"passed": True, "warnings": [f"Validation skipped: {exc}"]}
+
+        try:
+            cutoff = float(cutoff_frequency)
+        except Exception:
+            cutoff = 4.0
+        try:
+            order = int(filter_order)
+        except Exception:
+            order = 4
+        legacy = (legacy_format or "true").lower() in ("true", "1", "yes", "on")
+        save_intermediate = (save_intermediates or "true").lower() in ("true", "1", "yes", "on")
+
+        metric_scale = 0.0
+        if shoulder_width_cm and shoulder_width_cm != "auto":
+            metric_scale = float(shoulder_width_cm) / 100.0
+        elif patient_height_cm and patient_height_cm != "auto":
+            metric_scale = float(patient_height_cm) * 0.255 / 100.0
+        else:
+            try:
+                from depth_estimator import estimate_shoulder_width_m
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    fut = pool.submit(estimate_shoulder_width_m, str(video_path))
+                    metric_scale = fut.result(timeout=30)
+            except Exception:
+                metric_scale = 0.0
+
+        _set_job_progress(job_id, 2, "Queued for analysis...")
+        background_tasks.add_task(_run_analysis_job, job_id, video_path, phase, resolved_arm, quality_report, cutoff, order, legacy, save_intermediate, metric_scale)
+
+        return {"job_id": job_id, "status": "started"}
+    except Exception as exc:
+        _set_job_progress(job_id, 0, "Error", done=True, error=str(exc))
+        return JSONResponse(status_code=500, content={"error": f"Server error: {str(exc)}"})
+
+
+@app.get("/analyze-progress/{job_id}")
+async def analyze_progress(job_id: str):
+    info = job_progress.get(job_id, {"pct": 0, "step": "Waiting...", "done": False})
+    return {
+        "job_id": job_id,
+        "pct": info.get("pct", 0),
+        "step": info.get("step", ""),
+        "done": info.get("done", False),
+        "error": info.get("error"),
+    }
+
+
+@app.post("/analyze-result/{job_id}")
+async def analyze_result(job_id: str):
+    info = job_progress.get(job_id)
+    if not info:
+        return JSONResponse(status_code=404, content={"error": "Job not found"})
+    if info.get("error"):
+        return JSONResponse(status_code=400, content={"error": info["error"]})
+    if not info.get("done"):
+        return {"done": False, "pct": info.get("pct", 0), "step": info.get("step", "")}
+    return info.get("result", {"done": True})
+
+
+# Legacy synchronous analyze endpoint kept for backward compatibility.
+@app.post("/analyze-sync")
+async def analyze_video_sync(
     video: UploadFile = File(...),
     phase: str = Form("pre"),
     arm_type: str = Form("paretic"),
