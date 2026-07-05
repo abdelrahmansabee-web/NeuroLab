@@ -470,18 +470,6 @@ async def analyze_video(
         if validation_video and not (OUTPUT_DIR / validation_video).exists():
             validation_video = None
 
-        # Embed the unified validation video as a base64 data URL so the frontend
-        # can play it immediately without a second HTTP request. This avoids 404s
-        # caused by ephemeral HF Space storage and proxy issues with HEAD/range.
-        unified_validation_video_b64 = None
-        if unified_validation_video and (OUTPUT_DIR / unified_validation_video).exists():
-            try:
-                unified_validation_video_b64 = base64.b64encode(
-                    (OUTPUT_DIR / unified_validation_video).read_bytes()
-                ).decode("utf-8")
-            except Exception as e:
-                print(f"Failed to embed validation video: {e}")
-
         mot_filename = None
         try:
             print(" Running OpenSim IK skipped (pipeline disabled)...")
