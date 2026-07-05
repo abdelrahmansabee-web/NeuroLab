@@ -844,13 +844,7 @@ def _draw_3d_skeleton(
     frame_h: int,
     active_side: str = "right",
 ) -> None:
-    """Render a true 3-D articulated skeleton overlay using pyrender (optional)."""
-    try:
-        from skeleton_3d_renderer import Skeleton3DRenderer
-    except Exception as exc:
-        # pyrender/trimesh not installed on lightweight deploys; fall back to 2-D.
-        _draw_mediapipe_skeleton(canvas, raw_df, row_idx, frame_w, frame_h, active_side)
-        return
+    """Render a true 3-D articulated skeleton overlay using pyrender."""
     if row_idx >= len(raw_df):
         return
     row = raw_df.iloc[row_idx]
