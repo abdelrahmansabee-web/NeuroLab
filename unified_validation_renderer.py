@@ -1507,8 +1507,42 @@ def _compute_straightness_series(palm_x: np.ndarray, palm_y: np.ndarray) -> np.n
     return np.clip(out, 0.0, 1.0)
 
 
+def _extract_profile_arrays(
+    analysis: Dict[str, Any]
+) -> Dict[str, Optional[np.ndarray]]:
+    """Return the exact palm speed / straightness / elbow-angle arrays used by the analysis."""
+    out: Dict[str, Optional[np.ndarray]] = {
+        "palm_speed_profile": None,
+        "straightness_series": None,
+        "elbow_angle_series": None,
+        "time": None,
+        "fs_hz": None,
+    }
+    vp = analysis.get("velocity_profile")
+    if isinstance(vp, dict):
+        for k in ("speed", "palm_speed", "palm_speed_profile"):
+            if k in vp:
+                try:
+                    arr = np.asarray(vp[k], dtype=float)
+                    if arr.size:
+                        out["palm_speed_profile"] = arr
+                        break
+                except Exception:
+                    pass
+        if "time" in vp:
+            try:
+                out["time"] = np.asarray(vp["time"], dtype=float)
+            except Exception:
+                pass
+        if out["time"] is None and out["palm_speed_profile"] is not None:
+            out["time"] = np.arange(len(out["palm_speed_profile"])) / 60.0
+    if out["fs_hz"] is None:
+        out["fs_hz"] = float(analysis.get("analysis_fs_hz") or analysis.get("fs_hz") or 60.0)
+    return out
+
+
 def _compute_speed(df: pd.DataFrame) -> np.ndarray:
-    """Tangential palm speed in px/s (same as pipeline)."""
+    """Tangential palm speed in px/s (fallback if no velocity_profile provided)."""
     if "palm_x" not in df.columns or "palm_y" not in df.columns:
         return np.zeros(len(df))
     px = df["palm_x"].astype(float).values
@@ -1711,23 +1745,51 @@ def render_unified_validation_video(
     print(f"UV renderer: native={native_w}x{native_h}, rotation={rotation}, "
           f"scale={scale:.3f}, output={orig_w + panel_width}x{orig_h}")
 
-    speed = _compute_speed(df)
-    time = df["time"].astype(float).values if "time" in df.columns else np.arange(len(df)) / 30.0
-    fps = float(analysis.get("fs_hz", video_fps))
+    profile = _extract_profile_arrays(analysis)
+    profile_speed = profile["palm_speed_profile"]
+    profile_time = profile["time"]
+    profile_fs = profile["fs_hz"] or float(analysis.get("analysis_fs_hz") or analysis.get("fs_hz") or video_fps or 30.0)
+
+    # Speed: prefer the exact analysis profile; otherwise derive from landmarks.
+    speed = profile_speed if profile_speed is not None else _compute_speed(df)
+    time = profile_time if profile_time is not None else (
+        df["time"].astype(float).values if "time" in df.columns else np.arange(len(df)) / 30.0
+    )
+    fps = float(analysis.get("analysis_fs_hz", analysis.get("fs_hz", video_fps)))
     if fps <= 0:
-        fps = 1.0 / np.median(np.diff(time)) if len(time) > 1 else 30.0
+        fps = profile_fs if profile_fs > 0 else (1.0 / np.median(np.diff(time)) if len(time) > 1 else 30.0)
 
     nvp, pause_time, n_stops = _compute_nvp_and_stops(speed, time)
     elbow_angle = _compute_elbow_angle(df)
 
+    # Map current video frame to the analysis-profile index (same time base).
+    def _profile_idx_for_frame(frame_i: int) -> int:
+        if profile_speed is None or profile_time is None or len(profile_time) == 0:
+            return min(frame_i, len(speed) - 1)
+        t = frame_i / max(video_fps, 1e-6)
+        idx = int(np.argmin(np.abs(profile_time - t)))
+        return max(0, min(idx, len(profile_speed) - 1))
+
+    # Override start/end indices with the exact window used by the analysis.
+    if isinstance(analysis.get("velocity_profile"), dict):
+        vp_meta = analysis["velocity_profile"]
+        if vp_meta.get("onset_frame") is not None and vp_meta.get("offset_frame") is not None:
+            try:
+                start_idx = int(vp_meta["onset_frame"])
+                end_idx = int(vp_meta["offset_frame"])
+            except Exception:
+                pass
+
     # Summary values from analysis dict (these are the numbers shown in the table)
+    shoulder_elev_norm = _safe_float(analysis.get("shoulder_elevation_norm"))
     summary = {
         "nvp": _safe_float(analysis.get("nvp")),
         "straightness": _safe_float(analysis.get("straightness")),
         "pause_time_sec": _safe_float(analysis.get("pause_time_sec")),
         "number_of_stops": _safe_float(analysis.get("number_of_stops")),
         "trunk_ratio": _safe_float(analysis.get("trunk_ratio")),
-        "shoulder_elevation_norm": _safe_float(analysis.get("shoulder_elevation_norm")),
+        "shoulder_elevation_norm": shoulder_elev_norm,
+        "shoulder_vert_norm": shoulder_elev_norm,
         "elbow_angle_mean_deg": _safe_float(analysis.get("elbow_angle_mean_deg")),
         "elbow_angle_range_deg": _safe_float(analysis.get("elbow_angle_range_deg")),
         "movement_time_sec": _safe_float(analysis.get("movement_time_sec")),
@@ -1931,7 +1993,7 @@ def render_unified_validation_video(
     if not h264_ok:
         print("WARNING: validation video was saved in OpenCV mp4v format and may not play in browsers.")
 
-    return str(output_path)
+    return {"path": str(output_path), "summary": summary}
 
 
 if __name__ == "__main__":
@@ -1947,4 +2009,4 @@ if __name__ == "__main__":
         analysis_data = json.load(f)
     landmarks = sys.argv[4] if len(sys.argv) > 4 else None
     out = render_unified_validation_video(sys.argv[1], sys.argv[3], analysis_data, landmarks)
-    print(f"Saved: {out}")
+    print(f"Saved: {out.get('path') if isinstance(out, dict) else out}")

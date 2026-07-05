@@ -32,7 +32,7 @@ from mediapipe_csv_extractor import extract_from_video  # noqa: E402
 from stroke_kinematic_pipeline import resolve_analysis_arm  # noqa: E402
 from video_quality_validator import validate_video, VideoValidationResult  # noqa: E402
 
-DEPLOY_VERSION = "25.3"
+DEPLOY_VERSION = "25.4"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -500,10 +500,11 @@ async def analyze_video(
         # — 8. Generate unified validation video immediately (so it appears instantly) —
         unified_validation_video = None
         unified_validation_video_b64 = None
+        validation_summary = None
         try:
             out_name = f"{base_name}_unified_validation.mp4"
             out_path = OUTPUT_DIR / out_name
-            render_unified_validation_video(
+            uv_result = render_unified_validation_video(
                 video_path=str(video_path),
                 output_path=str(out_path),
                 analysis=analysis,
@@ -512,12 +513,14 @@ async def analyze_video(
                 resolution="native",
                 panel_width=480,
             )
-            if out_path.exists() and out_path.stat().st_size > 1000:
+            uv_path = uv_result.get("path") if isinstance(uv_result, dict) else str(uv_result)
+            if uv_path and Path(uv_path).exists() and Path(uv_path).stat().st_size > 1000:
                 unified_validation_video = out_name
                 try:
-                    unified_validation_video_b64 = base64.b64encode(out_path.read_bytes()).decode("utf-8")
+                    unified_validation_video_b64 = base64.b64encode(Path(uv_path).read_bytes()).decode("utf-8")
                 except Exception as e64:
                     print(f"Failed to embed validation video: {e64}")
+                validation_summary = uv_result.get("summary") if isinstance(uv_result, dict) else None
                 print(f"Unified validation video generated: {out_name}")
         except Exception as e:
             print(f"Unified validation video generation failed: {e}")
@@ -535,6 +538,7 @@ async def analyze_video(
             "validation_video": validation_video,
             "unified_validation_video": unified_validation_video,
             "unified_validation_video_b64": unified_validation_video_b64,
+            "validation_summary": validation_summary,
             "quality_report": quality_report,
             "legacy_format": legacy,
             "intermediate_files": {
@@ -724,7 +728,7 @@ async def unified_validation(
         out_name = f"{csv_path.stem}_unified_validation.mp4"
         out_path = OUTPUT_DIR / out_name
 
-        render_unified_validation_video(
+        uv_result = render_unified_validation_video(
             video_path=str(video_path),
             output_path=str(out_path),
             analysis=analysis,
@@ -733,11 +737,13 @@ async def unified_validation(
             resolution="native",
             panel_width=640,
         )
+        validation_summary = uv_result.get("summary") if isinstance(uv_result, dict) else None
 
         return {
             "success": True,
             "unified_validation_video": out_name,
             "download_url": f"/download/{out_name}",
+            "validation_summary": validation_summary,
         }
     except Exception as e:
         traceback.print_exc()

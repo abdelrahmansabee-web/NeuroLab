@@ -1864,6 +1864,19 @@ def analyze_trial(
     py_s = smooth_series(np.asarray(palm_y, dtype=float), fs, window_s=0.12)
     palm_speed_profile = np.sqrt(np.gradient(px_s) ** 2 + np.gradient(py_s) ** 2) * fs
 
+    # Store the exact profile used to derive the table numbers, with native-frame
+    # time so the renderer can sample it without recomputing speed differently.
+    if fs > 0:
+        results["velocity_profile"] = {
+            "time": (np.arange(len(palm_speed_profile)) / fs).tolist(),
+            "speed": palm_speed_profile.tolist(),
+            "fs_hz": fs,
+            "onset_frame": int(mt_start),
+            "offset_frame": int(mt_end),
+        }
+    else:
+        results["velocity_profile"] = None
+
     results["movement_time_sec"] = calculate_movement_time(
         palm_x, palm_y, fs=fs, velocity_threshold=velocity_threshold,
         shoulder_width=sw, start_idx=mt_start, end_idx=mt_end,
@@ -2468,17 +2481,18 @@ def analyze_stroke_kinematic_csv(
         "shoulder_elevation_abs_px": _r(raw.get("shoulder_elevation_abs_px"), 2),
         "shoulder_width_px": round(sw_px, 2) if sw_px else None,
         "sparc": _r(raw.get("sparc"), 4),
-        # --- physical-unit values (prefer metric_scale when provided) ---
-        "hand_displacement_cm": None,
-        "hand_displacement_norm": None,
-        "hand_displacement_table_frac": None,
-        "shoulder_elevation_cm": None,
-        "cm_per_px": _r(raw.get("cm_per_px"), 5),
-        "table_scale_method": raw.get("table_scale_method"),
-        "table_width_cm": raw.get("table_width_cm"),
-        "table_width_px": _r(raw.get("table_width_px"), 1),
-        # --- metadata ---
-        "_code_version": "stroke-kinematic-v24-reach2grasp",
+    # --- physical-unit values (prefer metric_scale when provided) ---
+    "hand_displacement_cm": None,
+    "hand_displacement_norm": None,
+    "hand_displacement_table_frac": None,
+    "shoulder_elevation_cm": None,
+    "cm_per_px": _r(raw.get("cm_per_px"), 5),
+    "table_scale_method": raw.get("table_scale_method"),
+    "table_width_cm": raw.get("table_width_cm"),
+    "table_width_px": _r(raw.get("table_width_px"), 1),
+    "velocity_profile": raw.get("velocity_profile"),
+    # --- metadata ---
+    "_code_version": "stroke-kinematic-v24-reach2grasp",
         "task_mode": raw.get("task_mode", task_mode),
         "name": name or Path(csv_path).stem,
         "side_analyzed": raw.get("side_analyzed"),
