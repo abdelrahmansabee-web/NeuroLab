@@ -511,6 +511,7 @@ async def analyze_video(
 
         # — 8. Generate unified validation video immediately (so it appears instantly) —
         unified_validation_video = None
+        unified_validation_video_b64 = None
         try:
             out_name = f"{base_name}_unified_validation.mp4"
             out_path = OUTPUT_DIR / out_name
@@ -525,6 +526,10 @@ async def analyze_video(
             )
             if out_path.exists() and out_path.stat().st_size > 1000:
                 unified_validation_video = out_name
+                try:
+                    unified_validation_video_b64 = base64.b64encode(out_path.read_bytes()).decode("utf-8")
+                except Exception as e64:
+                    print(f"Failed to embed validation video: {e64}")
                 print(f"Unified validation video generated: {out_name}")
         except Exception as e:
             print(f"Unified validation video generation failed: {e}")
