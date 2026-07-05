@@ -458,119 +458,6 @@ def _run_analysis_job(
 
 @app.post("/analyze")
 async def analyze_video(
-    background_tasks: BackgroundTasks,
-    video: UploadFile = File(...),
-    phase: str = Form("pre"),
-    arm_type: str = Form("paretic"),
-    affected_side: str = Form("auto"),
-    stroke_side: str = Form("auto"),
-    trial_count: str = Form("1"),
-    best_trial_metric: str = Form("sparc"),
-    patient_height_cm: str = Form("auto"),
-    shoulder_width_cm: str = Form("auto"),
-    cutoff_frequency: str = Form("4.0"),
-    filter_order: str = Form("4"),
-    legacy_format: str = Form("false"),
-    save_intermediates: str = Form("true"),
-):
-    _cleanup_old_jobs()
-    job_id = str(uuid.uuid4())
-    _set_job_progress(job_id, 0, "Starting...")
-
-    try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_name = video.filename.replace(" ", "_")
-        base_name = f"{phase}_{timestamp}_{Path(safe_name).stem}"
-        video_path = UPLOAD_DIR / f"{base_name}{Path(safe_name).suffix}"
-
-        with video_path.open("wb") as f:
-            shutil.copyfileobj(video.file, f)
-
-        try:
-            rotated_path = _auto_rotate_video_with_ffmpeg(video_path)
-            if rotated_path and rotated_path.exists():
-                video_path = rotated_path
-        except Exception as exc:
-            print(f"Video auto-rotation skipped: {exc}")
-
-        resolved_arm = resolve_analysis_arm(phase, stroke_side, affected_side)
-        if resolved_arm == "auto":
-            _set_job_progress(job_id, 0, "Error", done=True, error="Set Affected Side (Left/Right) in patient demographics.")
-            return JSONResponse(status_code=400, content={"error": "Set Affected Side (Left/Right) in patient demographics — required for correct arm (pre/post = paretic, healthy = contralateral)."})
-
-        try:
-            validation_result = validate_video(video_path)
-            quality_report = validation_result.to_dict()
-            quality_report["passed"] = True
-            if validation_result.errors and not validation_result.warnings:
-                quality_report["warnings"] = validation_result.errors[:]
-            elif validation_result.errors:
-                quality_report["warnings"] = validation_result.errors[:] + quality_report.get("warnings", [])
-            quality_report["errors"] = []
-        except Exception as exc:
-            quality_report = {"passed": True, "warnings": [f"Validation skipped: {exc}"]}
-
-        try:
-            cutoff = float(cutoff_frequency)
-        except Exception:
-            cutoff = 4.0
-        try:
-            order = int(filter_order)
-        except Exception:
-            order = 4
-        legacy = (legacy_format or "true").lower() in ("true", "1", "yes", "on")
-        save_intermediate = (save_intermediates or "true").lower() in ("true", "1", "yes", "on")
-
-        metric_scale = 0.0
-        if shoulder_width_cm and shoulder_width_cm != "auto":
-            metric_scale = float(shoulder_width_cm) / 100.0
-        elif patient_height_cm and patient_height_cm != "auto":
-            metric_scale = float(patient_height_cm) * 0.255 / 100.0
-        else:
-            try:
-                from depth_estimator import estimate_shoulder_width_m
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    fut = pool.submit(estimate_shoulder_width_m, str(video_path))
-                    metric_scale = fut.result(timeout=30)
-            except Exception:
-                metric_scale = 0.0
-
-        _set_job_progress(job_id, 2, "Queued for analysis...")
-        background_tasks.add_task(_run_analysis_job, job_id, video_path, phase, resolved_arm, quality_report, cutoff, order, legacy, save_intermediate, metric_scale)
-
-        return {"job_id": job_id, "status": "started"}
-    except Exception as exc:
-        _set_job_progress(job_id, 0, "Error", done=True, error=str(exc))
-        return JSONResponse(status_code=500, content={"error": f"Server error: {str(exc)}"})
-
-
-@app.get("/analyze-progress/{job_id}")
-async def analyze_progress(job_id: str):
-    info = job_progress.get(job_id, {"pct": 0, "step": "Waiting...", "done": False})
-    return {
-        "job_id": job_id,
-        "pct": info.get("pct", 0),
-        "step": info.get("step", ""),
-        "done": info.get("done", False),
-        "error": info.get("error"),
-    }
-
-
-@app.post("/analyze-result/{job_id}")
-async def analyze_result(job_id: str):
-    info = job_progress.get(job_id)
-    if not info:
-        return JSONResponse(status_code=404, content={"error": "Job not found"})
-    if info.get("error"):
-        return JSONResponse(status_code=400, content={"error": info["error"]})
-    if not info.get("done"):
-        return {"done": False, "pct": info.get("pct", 0), "step": info.get("step", "")}
-    return info.get("result", {"done": True})
-
-
-# Legacy synchronous analyze endpoint kept for backward compatibility.
-@app.post("/analyze-sync")
-async def analyze_video_sync(
     video: UploadFile = File(...),
     phase: str = Form("pre"),
     arm_type: str = Form("paretic"),
@@ -621,12 +508,10 @@ async def analyze_video_sync(
                 },
             )
 
-        # — 2. Validate uploaded video (literature-backed gates, but never block analysis) —
+        # — 2. Validate uploaded video (non-blocking) —
         try:
             validation_result = validate_video(video_path)
             quality_report = validation_result.to_dict()
-            # Keep validation warnings but do not block analysis; many clinical recordings
-            # are slightly below literature-preferred specs yet still usable.
             quality_report["passed"] = True
             if validation_result.errors and not validation_result.warnings:
                 quality_report["warnings"] = validation_result.errors[:]
@@ -667,7 +552,7 @@ async def analyze_video_sync(
                 model_path=model_path,
                 affected_side=resolved_arm,
                 camera_view="auto",
-                use_clahe=not legacy,  # legacy mode: no CLAHE per original pipeline
+                use_clahe=not legacy,
                 max_interpolate_gap=8,
                 butterworth_cutoff_hz=cutoff,
                 butterworth_order=order,
@@ -740,7 +625,6 @@ async def analyze_video_sync(
         mot_filename = None
         try:
             print(" Running OpenSim IK skipped (pipeline disabled)...")
-            # run_opensim(str(csv_path), output_dir=str(OUTPUT_DIR), copy_to_desktop=False)
             mot_name = base_name + "_ik.mot"
             if (OUTPUT_DIR / mot_name).exists():
                 mot_filename = mot_name
@@ -764,7 +648,7 @@ async def analyze_video_sync(
         # — 7. Clinical plausibility checks —
         plausibility = _check_clinical_plausibility(analysis, phase, resolved_arm)
 
-        # — 8. Generate unified validation video immediately (so it appears instantly) —
+        # — 8. Generate unified validation video immediately —
         unified_validation_video = None
         unified_validation_video_b64 = None
         validation_summary = None
@@ -827,6 +711,65 @@ async def analyze_video_sync(
             status_code=500,
             content={"error": f"Server error: {str(e)}"},
         )
+
+
+@app.get("/analyze-progress/{job_id}")
+async def analyze_progress(job_id: str):
+    info = job_progress.get(job_id, {"pct": 0, "step": "Waiting...", "done": False})
+    return {
+        "job_id": job_id,
+        "pct": info.get("pct", 0),
+        "step": info.get("step", ""),
+        "done": info.get("done", False),
+        "error": info.get("error"),
+    }
+
+
+@app.post("/analyze-result/{job_id}")
+async def analyze_result(job_id: str):
+    info = job_progress.get(job_id)
+    if not info:
+        return JSONResponse(status_code=404, content={"error": "Job not found"})
+    if info.get("error"):
+        return JSONResponse(status_code=400, content={"error": info["error"]})
+    if not info.get("done"):
+        return {"done": False, "pct": info.get("pct", 0), "step": info.get("step", "")}
+    return info.get("result", {"done": True})
+
+
+# Synchronous analyze kept as canonical endpoint.
+@app.post("/analyze-sync")
+async def analyze_video_sync(
+    video: UploadFile = File(...),
+    phase: str = Form("pre"),
+    arm_type: str = Form("paretic"),
+    affected_side: str = Form("auto"),
+    stroke_side: str = Form("auto"),
+    trial_count: str = Form("1"),
+    best_trial_metric: str = Form("sparc"),
+    patient_height_cm: str = Form("auto"),
+    shoulder_width_cm: str = Form("auto"),
+    cutoff_frequency: str = Form("4.0"),
+    filter_order: str = Form("4"),
+    legacy_format: str = Form("false"),
+    save_intermediates: str = Form("true"),
+):
+    # Proxy to canonical synchronous /analyze endpoint for backward compatibility.
+    return await analyze_video(
+        video=video,
+        phase=phase,
+        arm_type=arm_type,
+        affected_side=affected_side,
+        stroke_side=stroke_side,
+        trial_count=trial_count,
+        best_trial_metric=best_trial_metric,
+        patient_height_cm=patient_height_cm,
+        shoulder_width_cm=shoulder_width_cm,
+        cutoff_frequency=cutoff_frequency,
+        filter_order=filter_order,
+        legacy_format=legacy_format,
+        save_intermediates=save_intermediates,
+    )
 
 
 # — Analyze CSV only (skip pose extraction) —
