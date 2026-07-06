@@ -1224,7 +1224,15 @@ def _draw_panel_pil(
     speed_peak = float(np.nanmax(speed)) if len(speed) else 0.0
     nvp_prominence = speed_std * 0.30 if speed_std > 0 else speed_peak * 0.05
     nvp_peak_indices = find_peaks(speed, prominence=nvp_prominence)[0]
+    computed_nvp = len(nvp_peak_indices)
+    official_nvp = int(_safe_float(analysis.get("nvp")))
+    if profile_speed is None:
+        print(f"UV renderer fallback: velocity_profile missing, computed_nvp={computed_nvp}, official_nvp={official_nvp}")
+    # Normalize the animated counter so it lands on the official table value.
     nvp_so_far = int(np.sum(nvp_peak_indices <= row_idx)) if row_idx > 0 else 0
+    if computed_nvp > 0 and official_nvp > 0 and computed_nvp != official_nvp:
+        nvp_so_far = int(round(nvp_so_far * official_nvp / computed_nvp))
+    nvp_so_far = max(0, min(nvp_so_far, official_nvp))
     speed_threshold = 0.05 * speed_peak if speed_peak > 0 else 1.0
     is_pause = cur_speed < speed_threshold
 
@@ -1259,9 +1267,16 @@ def _draw_panel_pil(
         if unit:
             uw, _ = _text_size_pil(unit, 13)
             _draw_text_pil(draw, unit, x + width - _s(12) - uw, y + _s(11), 13, text_muted)
-        # value
+        # value (align precision with the kinematics table: 3 decimals for small
+        # values such as straightness / shoulder elevation, 2 for medium, 1 for large)
         if isinstance(value, float):
-            value_text = f"{value:.1f}" if abs(value) >= 10 else f"{value:.2f}"
+            av = abs(value)
+            if av >= 10:
+                value_text = f"{value:.1f}"
+            elif av >= 1:
+                value_text = f"{value:.2f}"
+            else:
+                value_text = f"{value:.3f}"
         else:
             value_text = str(value)
         if value_text.lower() == "nan":
