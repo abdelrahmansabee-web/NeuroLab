@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 
 from kinematics_analyzer import analyze_reach_and_wipe
 from unified_validation_renderer import render_unified_validation_video
+from unified_kinematics import compute_unified_kinematic_metrics
 
 _BASE = Path(__file__).resolve().parent
 _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_robust.py").exists() else _BASE
@@ -34,7 +35,7 @@ from mediapipe_csv_extractor import extract_from_video  # noqa: E402
 from stroke_kinematic_pipeline import resolve_analysis_arm  # noqa: E402
 from video_quality_validator import validate_video, VideoValidationResult  # noqa: E402
 
-DEPLOY_VERSION = "25.9"
+DEPLOY_VERSION = "26.0"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -606,6 +607,33 @@ async def analyze_video(
 
         if isinstance(analysis, dict) and analysis.get("error"):
             return JSONResponse(status_code=400, content={"error": analysis["error"]})
+
+        # Compute a unified set of metrics from the exact same landmarks used by
+        # the validation video renderer. These override the pipeline values so the
+        # table and the video overlay are guaranteed to come from one source.
+        print("Computing unified metrics from validation-video landmarks...")
+        unified = compute_unified_kinematic_metrics(
+            str(analysis_csv_path),
+            affected_side=resolved_arm,
+            target_fs=float(analysis.get("analysis_fs_hz", analysis.get("fs_hz", 60.0))),
+            cutoff_hz=cutoff,
+            filter_order=order,
+            velocity_threshold_px_s=float(analysis.get("velocity_threshold_px_s", 5.0)),
+            name=phase.upper(),
+        )
+        if isinstance(unified, dict) and not unified.get("error"):
+            for key in [
+                "nvp", "straightness", "pause_time_sec", "number_of_stops",
+                "movement_time_sec", "peak_velocity_px_s", "time_to_peak_velocity_sec",
+                "elbow_angle_mean_deg", "elbow_angle_range_deg",
+                "shoulder_elevation_norm", "shoulder_vert_norm", "trunk_ratio",
+                "movement_onset_frame", "movement_offset_frame",
+            ]:
+                if key in unified and unified[key] is not None:
+                    analysis[key] = unified[key]
+            print(f"Unified metrics: nvp={unified.get('nvp')} straightness={unified.get('straightness'):.4f}")
+        else:
+            print(f"Unified metrics skipped: {unified.get('error')}")
 
         print("Analysis complete\n")
 
