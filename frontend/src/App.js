@@ -2416,7 +2416,8 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       // Always generate the unified validation video in the background if it wasn't
       // returned inline. Free HF Spaces can time out, so we queue a background job and
       // poll until it is ready. Pass the result explicitly to avoid a race with React state.
-      setTimeout(() => generateUnifiedValidation(phase, { result: resultWithoutB64 }), 300);
+      const uvPayload = { ...resultWithoutB64, video_filename: result.video_filename || file.name };
+      setTimeout(() => generateUnifiedValidation(phase, { result: uvPayload }), 300);
     } catch (err) {
       if (err.name === "AbortError") {
         showToast(`✕ Analysis cancelled for ${phase}`, "info");
@@ -2599,8 +2600,10 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       const formData = new FormData();
       formData.append("csv_filename", result.csv_filename);
       formData.append("video_filename", result.video_filename);
+      console.log(`[UV] queueing for ${phase}: csv=${result.csv_filename} video=${result.video_filename}`);
       const res = await fetch(`${API_BASE}/unified-validation`, { method: "POST", body: formData });
       const data = await res.json();
+      console.log(`[UV] queue response for ${phase}:`, data);
       if (!res.ok || data.error) throw new Error(data.error || `Failed (${res.status})`);
       const jobId = data.job_id;
       if (!jobId) throw new Error("No job id returned");
@@ -2616,6 +2619,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
           }
           const statusRes = await fetch(`${API_BASE}/unified-validation-status/${jobId}`);
           const status = await statusRes.json();
+          console.log(`[UV] status for ${phase} attempt ${attempts}:`, status);
           if (!statusRes.ok || status.error) throw new Error(status.error || "Status check failed");
           if (status.done) {
             if (status.unified_validation_video) {
