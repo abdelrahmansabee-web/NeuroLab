@@ -15,10 +15,6 @@ import numpy as np
 import pandas as pd
 
 
-def _to_float_list(a: np.ndarray) -> List[float]:
-    return [float(x) if np.isfinite(x) else None for x in a]
-
-
 def _norm_series(df: pd.DataFrame, name: str, coord: str) -> pd.Series:
     """Return a normalized [0,1] series for a MediaPipe-style landmark column."""
     cols = [f"{name}_{coord}", f"{name}_{coord.upper()}", f"{name.lower()}_{coord.lower()}"]
@@ -26,6 +22,16 @@ def _norm_series(df: pd.DataFrame, name: str, coord: str) -> pd.Series:
         if c in df.columns:
             return pd.to_numeric(df[c], errors="coerce")
     return pd.Series(np.nan, index=df.index)
+
+
+def _resample(col: pd.Series, old_t: np.ndarray, new_t: np.ndarray) -> np.ndarray:
+    y = pd.to_numeric(col, errors="coerce").values
+    if np.all(np.isnan(y)):
+        return np.full(len(new_t), np.nan)
+    mask = np.isfinite(y)
+    if mask.sum() < 2:
+        return np.full(len(new_t), np.nan)
+    return np.interp(new_t, old_t[mask], y[mask])
 
 
 def build_overlay_data(
@@ -45,26 +51,20 @@ def build_overlay_data(
           "frames": [{
               "time": float,
               "speed": float,
-              "palm": [x, y],
-              "wrist": [x, y],
-              "shoulder": [x, y],
-              "elbow": [x, y],
-              "trunk": [x, y],
-              "nose": [x, y],
-              "lshoulder": [x, y],
-              "rshoulder": [x, y],
-              "lelbow": [x, y],
-              "relbow": [x, y],
-              "lwrist": [x, y],
-              "rwrist": [x, y],
-              "lhip": [x, y],
-              "rhip": [x, y],
-              "lindex": [x, y],
-              "rindex": [x, y],
+              "palm": [x, y] | null,
+              "wrist": [x, y] | null,
+              "shoulder": [x, y] | null,
+              "elbow": [x, y] | null,
+              "trunk": [x, y] | null,
+              "nose": [x, y] | null,
+              ...
           }],
           "metrics": {...},
           "movement_window": {"start_idx": int, "end_idx": int},
           "peak_velocity_px_s": float,
+          "velocity_profile": {"t": [...], "v": [...]},
+          "start_palm": [x, y] | null,
+          "end_palm": [x, y] | null,
         }
     """
     try:
@@ -91,25 +91,15 @@ def build_overlay_data(
         if np.isnan(t).any():
             t = np.arange(len(df)) / target_fs
 
-        # Resample to target_fs.
         t0, t1 = float(t[0]), float(t[-1])
         if t1 <= t0:
             return {"error": "Invalid time range"}
         n_target = max(2, int(round((t1 - t0) * target_fs)) + 1)
         new_t = np.linspace(t0, t1, n_target)
 
-        def _resample(col: pd.Series) -> np.ndarray:
-            y = pd.to_numeric(col, errors="coerce").values
-            if np.all(np.isnan(y)):
-                return np.full(len(new_t), np.nan)
-            mask = np.isfinite(y)
-            if mask.sum() < 2:
-                return np.full(len(new_t), np.nan)
-            return np.interp(new_t, t[mask], y[mask])
-
         def _pair(name: str):
-            x = _resample(_norm_series(df, name, "x"))
-            y = _resample(_norm_series(df, name, "y"))
+            x = _resample(_norm_series(df, name, "x"), t, new_t)
+            y = _resample(_norm_series(df, name, "y"), t, new_t)
             return x, y
 
         # Affected-side canonical points from the unified kinematics module.
@@ -123,14 +113,12 @@ def build_overlay_data(
             filter_order=4,
         )
         if len(canon) != len(new_t):
-            # Interpolate canonical columns to new_t as well.
             canon_t = pd.to_numeric(canon["time"], errors="coerce").values
             for col in canon.columns:
                 if col == "time":
                     continue
                 canon[col] = np.interp(new_t, canon_t, pd.to_numeric(canon[col], errors="coerce").values)
 
-        # Canonical columns are in pixels; normalize to [0,1].
         frame_w = float(pd.to_numeric(canon.get("frame_width_px", pd.Series(1920.0)), errors="coerce").iloc[0] or 1920.0)
         frame_h = float(pd.to_numeric(canon.get("frame_height_px", pd.Series(1080.0)), errors="coerce").iloc[0] or 1080.0)
         if frame_w <= 0:
@@ -164,37 +152,55 @@ def build_overlay_data(
         rw_x, rw_y = _pair("RIGHT_WRIST")
         lh_x, lh_y = _pair("LEFT_HIP")
         rh_x, rh_y = _pair("RIGHT_HIP")
-        li_x, li_y = _pair("LEFT_INDEX")
-        ri_x, ri_y = _pair("RIGHT_INDEX")
 
-        # Clamp coordinates to [0,1].
-        def _clamp01(a: np.ndarray) -> np.ndarray:
-            return np.clip(np.nan_to_num(a, nan=0.0), 0.0, 1.0)
-
+        # Build coordinate pairs. Missing values become null instead of clamped 0,0
+        # so the frontend can skip drawing stray lines.
         def _make_pair(x: np.ndarray, y: np.ndarray) -> List[Optional[float]]:
-            return [[float(_clamp01(x[i])), float(_clamp01(y[i]))] for i in range(len(new_t))]
+            out = []
+            for i in range(len(new_t)):
+                if np.isfinite(x[i]) and np.isfinite(y[i]):
+                    out.append([float(np.clip(x[i], 0.0, 1.0)), float(np.clip(y[i], 0.0, 1.0))])
+                else:
+                    out.append(None)
+            return out
+
+        palm_pairs = _make_pair(palm_x, palm_y)
+        wrist_pairs = _make_pair(wrist_x, wrist_y)
+        shoulder_pairs = _make_pair(shoulder_x, shoulder_y)
+        elbow_pairs = _make_pair(elbow_x, elbow_y)
+        trunk_pairs = _make_pair(trunk_x, trunk_y)
+        nose_pairs = _make_pair(nose_x, nose_y)
+        ls_pairs = _make_pair(ls_x, ls_y)
+        rs_pairs = _make_pair(rs_x, rs_y)
+        le_pairs = _make_pair(le_x, le_y)
+        re_pairs = _make_pair(re_x, re_y)
+        lw_pairs = _make_pair(lw_x, lw_y)
+        rw_pairs = _make_pair(rw_x, rw_y)
+        lh_pairs = _make_pair(lh_x, lh_y)
+        rh_pairs = _make_pair(rh_x, rh_y)
+
+        start_palm = palm_pairs[onset_idx] if onset_idx < len(palm_pairs) else None
+        end_palm = palm_pairs[offset_idx] if offset_idx < len(palm_pairs) else None
 
         frames = []
         for i in range(len(new_t)):
             frames.append({
                 "time": round(float(new_t[i]), 4),
                 "speed": round(float(speed[i]) if np.isfinite(speed[i]) else 0.0, 2),
-                "palm": [float(_clamp01(palm_x[i])), float(_clamp01(palm_y[i]))],
-                "wrist": [float(_clamp01(wrist_x[i])), float(_clamp01(wrist_y[i]))],
-                "shoulder": [float(_clamp01(shoulder_x[i])), float(_clamp01(shoulder_y[i]))],
-                "elbow": [float(_clamp01(elbow_x[i])), float(_clamp01(elbow_y[i]))],
-                "trunk": [float(_clamp01(trunk_x[i])), float(_clamp01(trunk_y[i]))],
-                "nose": [float(_clamp01(nose_x[i])), float(_clamp01(nose_y[i]))],
-                "lshoulder": [float(_clamp01(ls_x[i])), float(_clamp01(ls_y[i]))],
-                "rshoulder": [float(_clamp01(rs_x[i])), float(_clamp01(rs_y[i]))],
-                "lelbow": [float(_clamp01(le_x[i])), float(_clamp01(le_y[i]))],
-                "relbow": [float(_clamp01(re_x[i])), float(_clamp01(re_y[i]))],
-                "lwrist": [float(_clamp01(lw_x[i])), float(_clamp01(lw_y[i]))],
-                "rwrist": [float(_clamp01(rw_x[i])), float(_clamp01(rw_y[i]))],
-                "lhip": [float(_clamp01(lh_x[i])), float(_clamp01(lh_y[i]))],
-                "rhip": [float(_clamp01(rh_x[i])), float(_clamp01(rh_y[i]))],
-                "lindex": [float(_clamp01(li_x[i])), float(_clamp01(li_y[i]))],
-                "rindex": [float(_clamp01(ri_x[i])), float(_clamp01(ri_y[i]))],
+                "palm": palm_pairs[i],
+                "wrist": wrist_pairs[i],
+                "shoulder": shoulder_pairs[i],
+                "elbow": elbow_pairs[i],
+                "trunk": trunk_pairs[i],
+                "nose": nose_pairs[i],
+                "lshoulder": ls_pairs[i],
+                "rshoulder": rs_pairs[i],
+                "lelbow": le_pairs[i],
+                "relbow": re_pairs[i],
+                "lwrist": lw_pairs[i],
+                "rwrist": rw_pairs[i],
+                "lhip": lh_pairs[i],
+                "rhip": rh_pairs[i],
             })
 
         metrics = {}
@@ -204,12 +210,22 @@ def build_overlay_data(
                 "movement_time_sec", "peak_velocity_px_s", "time_to_peak_velocity_sec",
                 "elbow_angle_mean_deg", "elbow_angle_range_deg",
                 "shoulder_elevation_norm", "trunk_ratio", "sparc",
+                "hand_displacement_px", "hand_displacement_cm", "hand_displacement_norm",
+                "shoulder_elevation_cm", "shoulder_elevation_abs_px",
+                "shoulder_width_px", "shoulder_width_cm", "cm_per_px",
             ]:
                 if k in analysis and analysis[k] is not None:
                     try:
                         metrics[k] = float(analysis[k]) if not isinstance(analysis[k], (str, bool)) else analysis[k]
                     except Exception:
                         pass
+
+        velocity_profile = None
+        if fs := float(analysis.get("analysis_fs_hz", analysis.get("fs_hz", target_fs))) if analysis else target_fs:
+            velocity_profile = {
+                "t": (np.arange(len(speed)) / fs).tolist(),
+                "v": [float(v) if np.isfinite(v) else 0.0 for v in speed],
+            }
 
         return {
             "fps": round(float(target_fs), 2),
@@ -219,6 +235,9 @@ def build_overlay_data(
             "metrics": metrics,
             "movement_window": {"start_idx": int(onset_idx), "end_idx": int(offset_idx)},
             "peak_velocity_px_s": round(float(np.nanmax(speed)) if np.any(np.isfinite(speed)) else 0.0, 2),
+            "velocity_profile": velocity_profile,
+            "start_palm": start_palm,
+            "end_palm": end_palm,
         }
     except Exception as e:
         traceback.print_exc()
