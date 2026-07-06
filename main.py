@@ -646,6 +646,15 @@ async def analyze_video(
         unified_validation_video_b64 = None
         validation_summary = None
 
+        # Persist the official analysis so the background UV renderer uses the exact
+        # same numbers shown in the results table.
+        analysis_json_path = OUTPUT_DIR / f"{base_name}_analysis.json"
+        try:
+            with analysis_json_path.open("w", encoding="utf-8") as f:
+                json.dump(analysis, f, indent=2, default=str)
+        except Exception as exc:
+            print(f"Warning: could not save analysis JSON: {exc}")
+
         response = {
             "success": True,
             "phase": phase,
@@ -654,6 +663,7 @@ async def analyze_video(
             "fps": round(fps, 2),
             "csv_filename": Path(analysis_csv_path).name,
             "video_filename": video_path.name,
+            "analysis_json": analysis_json_path.name,
             "trc_filename": None,
             "mot_filename": mot_filename,
             "validation_video": validation_video,
