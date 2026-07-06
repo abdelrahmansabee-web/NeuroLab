@@ -1226,7 +1226,7 @@ def _draw_panel_pil(
     nvp_peak_indices = find_peaks(speed, prominence=nvp_prominence)[0]
     computed_nvp = len(nvp_peak_indices)
     official_nvp = int(_safe_float(analysis.get("nvp")))
-    if profile_speed is None:
+    if not analysis.get("velocity_profile"):
         print(f"UV renderer fallback: velocity_profile missing, computed_nvp={computed_nvp}, official_nvp={official_nvp}")
     # Normalize the animated counter so it lands on the official table value.
     nvp_so_far = int(np.sum(nvp_peak_indices <= row_idx)) if row_idx > 0 else 0

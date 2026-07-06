@@ -832,7 +832,7 @@ async def analyze_csv(
             "success": True,
             "phase": phase,
             "csv_filename": csv_path.name,
-            "video_filename": None,
+            "video_filename": video_path.name,
             "mot_filename": mot_filename,
             **_pipeline_meta(),
             **analysis,
