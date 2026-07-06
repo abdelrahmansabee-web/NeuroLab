@@ -35,7 +35,7 @@ from mediapipe_csv_extractor import extract_from_video  # noqa: E402
 from stroke_kinematic_pipeline import resolve_analysis_arm  # noqa: E402
 from video_quality_validator import validate_video, VideoValidationResult  # noqa: E402
 
-DEPLOY_VERSION = "26.0"
+DEPLOY_VERSION = "26.1"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -934,7 +934,7 @@ def _run_uv_generation(job_id: str, csv_path: Path, video_path: Path, rotation: 
             landmarks_csv=str(csv_path),
             force_rotation=rotation,
             resolution="native",
-            panel_width=640,
+            panel_width=480,
         )
         validation_summary = uv_result.get("summary") if isinstance(uv_result, dict) else None
         uv_path = uv_result.get("path") if isinstance(uv_result, dict) else str(uv_result)
