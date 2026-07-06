@@ -2202,7 +2202,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   const [mediaPreview, setMediaPreview] = useState(null);
   const [analysisStatus, setAnalysisStatus] = useState({});
   const [analysisProgress, setAnalysisProgress] = useState({});
-  const [showResultsTable, setShowResultsTable] = useState(true);
+  const [showResultsTable, setShowResultsTable] = useState(false);
   const [videoBlobs, setVideoBlobs] = useState({});
   const [videoLoading, setVideoLoading] = useState({});
   const [videoAttempts, setVideoAttempts] = useState({});
@@ -2411,7 +2411,6 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
         [statusKey(phase)]: "completed",
       });
       showToast(`✓ Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials → mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
-      setShowResultsTable(false);
       setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
       // Always generate the unified validation video in the background if it wasn't
       // returned inline. Free HF Spaces can time out, so we queue a background job and
@@ -2596,6 +2595,11 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     }
     setUvErrors((prev) => ({ ...prev, [phase]: null }));
     setAnalysisStatus((prev) => ({ ...prev, [phase]: "generating_unified" }));
+
+    // Hide the results table while any analyzed phase is still waiting for its
+    // unified validation video.
+    setShowResultsTable(false);
+
     try {
       const formData = new FormData();
       formData.append("csv_filename", result.csv_filename);
@@ -2652,6 +2656,23 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       setAnalysisStatus((prev) => ({ ...prev, [phase]: "idle" }));
     }
   };
+
+  // Hide the kinematic results table until every analyzed phase has either
+  // a ready unified validation video or a permanent generation error. This
+  // guarantees the user watches/verifies the visual validation before reading
+  // the numbers.
+  useEffect(() => {
+    const analyzedPhases = phases.filter((ph) => kinematicsResults[ph.k]);
+    if (analyzedPhases.length === 0) {
+      setShowResultsTable(false);
+      return;
+    }
+    const anyPending = analyzedPhases.some(
+      (ph) =>
+        !kinematicsResults[ph.k]?.unified_validation_video && !uvErrors[ph.k]
+    );
+    setShowResultsTable(!anyPending);
+  }, [kinematicsResults, uvErrors]);
 
   const toggleResult = (phase) => {
     setExpandedResults((prev) => ({ ...prev, [phase]: !prev[phase] }));
