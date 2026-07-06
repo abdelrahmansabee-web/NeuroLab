@@ -10,7 +10,7 @@ import {
   Menu, X, ChevronRight, Play, Square, RotateCcw, Copy, Check,
   Info, Save, BarChart3, Stethoscope, Brain, Image as ImageIcon,
   RefreshCw, FileSpreadsheet, Upload, FileUp,
-  Database, Search, Edit3, Trash2, Plus, PlusCircle,
+  Database, Search, Edit3, Trash2, Plus, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -19,7 +19,7 @@ import {
   STUDY_DESIGN, SPSS_WORKFLOW, KINEMATIC_VARS, orderedKinematicVars, CLINICAL_VARS,
   buildMasterDataset, buildMasterRow, generateStudySPSSSyntax, analyzeAllOutcomes,
   fmtP, sigStars,   getPatientKinPhase, pickKinField,
-  calcImprovement, calcGap, formatKinPrePostPct, formatKinPostHealthyPct,
+  calcImprovement, calcGap, formatKinPrePostPct, formatKinPostHealthyPct, formatKinValue,
   RECOVERY_SUMMARY_KEYS, kinCrossPhaseComparable,
 } from "./analysisPlan";
 import {
@@ -621,24 +621,51 @@ const calculateClinicalDelta = (pre, post, direction) => {
 
 const kinPrePostBadge = (pre, post, direction) => {
   const pct = calcImprovement(pre, post, direction);
-  const text = formatKinPrePostPct(pct);
+  const text = formatKinPrePostPct(pct, direction);
   if (!text) return null;
+  const improved = pct > 0;
+  const stable = pct === 0;
   return {
     text,
-    colorClass:
-      pct >= 0
+    colorClass: stable
+      ? "text-white/60 bg-white/[0.06] border-white/[0.12]"
+      : improved
         ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20"
         : "text-rose-400 bg-rose-400/10 border-rose-400/20",
   };
 };
 
-const kinPostHealthyBadge = (post, healthy, direction) => {
+const kinPostHealthyBadge = (pre, post, healthy, direction) => {
   const pct = calcGap(post, healthy, direction);
-  const text = formatKinPostHealthyPct(pct);
+  const text = formatKinPostHealthyPct(pct, direction);
   if (!text) return null;
+
+  // Prefer a relative improvement check when Pre is available:
+  // green if Post moved closer to Healthy compared with Pre,
+  // amber if Post is within 5% of Healthy but not improving,
+  // rose if Post moved away from Healthy.
+  const preN = Number(pre);
+  const postN = Number(post);
+  const helN = Number(healthy);
+  if (!Number.isNaN(preN) && !Number.isNaN(postN) && !Number.isNaN(helN)) {
+    const preGap = Math.abs(preN - helN);
+    const postGap = Math.abs(postN - helN);
+    if (postGap < preGap) {
+      return { text, colorClass: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20" };
+    }
+    if (postGap > preGap) {
+      return { text, colorClass: "text-rose-400 bg-rose-400/10 border-rose-400/20" };
+    }
+  }
+
+  const absPct = Math.abs(pct);
+  const healthyZero = Number(healthy) === 0;
+  const nearZero = healthyZero ? absPct < 1e-9 : absPct <= 5;
   return {
     text,
-    colorClass: "text-amber-300/90 bg-amber-400/10 border-amber-400/25",
+    colorClass: nearZero
+      ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20"
+      : "text-amber-300/90 bg-amber-400/10 border-amber-400/25",
   };
 };
 
@@ -1995,6 +2022,107 @@ function KinFilmStripLoop({ accent = "amber" }) {
   );
 }
 
+function InlineValidationVideo({ src, phaseLabel, autoPlay = false, onEnded, onError }) {
+  const ref = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(autoPlay);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return;
+    const handleTimeUpdate = () => {
+      const pct = video.duration ? (video.currentTime / video.duration) * 100 : 0;
+      setProgress(pct);
+    };
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      onEnded?.();
+    };
+    const handleError = () => {
+      onError?.();
+    };
+    video.addEventListener("timeupdate", handleTimeUpdate);
+    video.addEventListener("play", handlePlay);
+    video.addEventListener("pause", handlePause);
+    video.addEventListener("ended", handleEnded);
+    video.addEventListener("error", handleError);
+    if (autoPlay) {
+      video.muted = true;
+      video.play().catch(() => setIsPlaying(false));
+    }
+    return () => {
+      video.removeEventListener("timeupdate", handleTimeUpdate);
+      video.removeEventListener("play", handlePlay);
+      video.removeEventListener("pause", handlePause);
+      video.removeEventListener("ended", handleEnded);
+      video.removeEventListener("error", handleError);
+    };
+  }, [src, autoPlay, onEnded, onError]);
+
+  const togglePlay = () => {
+    const video = ref.current;
+    if (!video) return;
+    if (video.paused) video.play();
+    else video.pause();
+  };
+
+  const handleSeek = (e) => {
+    const video = ref.current;
+    if (!video || !video.duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    video.currentTime = pct * video.duration;
+  };
+
+  const requestFullscreen = () => {
+    const video = ref.current;
+    if (!video) return;
+    if (video.requestFullscreen) video.requestFullscreen();
+    else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
+  };
+
+  return (
+    <div className="relative w-full rounded-lg bg-black overflow-hidden group">
+      <video
+        ref={ref}
+        src={src}
+        playsInline
+        muted
+        className="w-full rounded-lg bg-black block"
+        onClick={togglePlay}
+      />
+      <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <button
+            type="button"
+            onClick={togglePlay}
+            className="text-white/90 hover:text-white text-xs font-bold px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+          >
+            {isPlaying ? "⏸ Pause" : "▶ Play"}
+          </button>
+          <button
+            type="button"
+            onClick={requestFullscreen}
+            className="text-white/90 hover:text-white text-xs font-bold px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+          >
+            ⛶ Full
+          </button>
+        </div>
+        <div
+          className="mt-1 h-1 bg-white/20 rounded cursor-pointer pointer-events-auto"
+          onClick={handleSeek}
+        >
+          <div
+            className="h-full bg-sky-400 rounded"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 function KinPhaseAnalyzingOverlay({ accent = "amber" }) {
   const blur = {
     backdropFilter: "blur(80px) saturate(180%)",
@@ -2003,20 +2131,19 @@ function KinPhaseAnalyzingOverlay({ accent = "amber" }) {
   return (
     <motion.div
       key="kin-analyzing"
-      className="kin-analyzing-overlay absolute inset-0 z-30 flex items-center justify-center rounded-2xl overflow-hidden"
+      className="kin-analyzing-overlay absolute -inset-2 z-30 flex items-center justify-center rounded-[20px] overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
     >
-      <div className="absolute inset-0 z-0 rounded-2xl" style={blur} />
+      <div className="absolute inset-0 z-0 rounded-[20px]" style={blur} />
       <div className="relative z-20 w-full px-3 flex justify-center">
         <KinFilmStripLoop accent={accent} />
       </div>
     </motion.div>
   );
 }
-
 const kinPhaseCardCls = (c, status, hasResult) => {
   const a = KIN_PHASE_ACCENT[c] || KIN_PHASE_ACCENT.amber;
   const base = `relative flex flex-col rounded-2xl border border-t-[3px] bg-gradient-to-b ${a.top} to-white/[0.02] min-h-[240px] transition-all duration-300 overflow-hidden`;
@@ -2056,7 +2183,8 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     try {
       const ls = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {};
       const fd = data?.analysisResults || {};
-      const merged = { ...fd, ...ls };
+      // Current form/session data takes precedence over stale localStorage.
+      const merged = { ...ls, ...fd };
       delete merged.during;
       return merged;
     } catch {
@@ -2073,13 +2201,28 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   const [kinResultsTab, setKinResultsTab] = useState("compare");
   const [mediaPreview, setMediaPreview] = useState(null);
   const [analysisStatus, setAnalysisStatus] = useState({});
+  const [analysisProgress, setAnalysisProgress] = useState({});
   const [showResultsTable, setShowResultsTable] = useState(true);
+  const [videoBlobs, setVideoBlobs] = useState({});
+  const [videoLoading, setVideoLoading] = useState({});
+  const [videoAttempts, setVideoAttempts] = useState({});
+  const videoBlobsRef = useRef(videoBlobs);
+  const videoLoadingRef = useRef(videoLoading);
+  useEffect(() => { videoBlobsRef.current = videoBlobs; }, [videoBlobs]);
+  useEffect(() => { videoLoadingRef.current = videoLoading; }, [videoLoading]);
 
   const abortRef = useRef({});
 
   useEffect(() => {
     localStorage.setItem(KIN_LS_KEY, JSON.stringify(kinematicsResults));
   }, [kinematicsResults]);
+
+  // Revoke object URLs for cached validation videos on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(videoBlobsRef.current).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   // Reload kinematics when switching patient session
   useEffect(() => {
@@ -2217,6 +2360,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     const controller = new AbortController();
     abortRef.current[phase] = controller;
     onChange({ ...data, [statusKey(phase)]: "analyzing" });
+    setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 5, step: "Uploading…" } }));
 
     try {
       const fd = new FormData();
@@ -2256,18 +2400,23 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
         return;
       }
 
-      const nextResults = { ...kinematicsResults, [phase]: { ...result, video_filename: result.video_filename || file.name } };
+      // Strip the huge base64 payload before persisting; keep only the filename.
+      const { unified_validation_video_b64: _, ...resultWithoutB64 } = result;
+      const nextResults = { ...kinematicsResults, [phase]: { ...resultWithoutB64, video_filename: result.video_filename || file.name } };
       setKinematicsResults(nextResults);
       onChange({
         ...data,
         analysisResults: nextResults,
-        [resultKey(phase)]: result,
+        [resultKey(phase)]: resultWithoutB64,
         [statusKey(phase)]: "completed",
       });
       showToast(`✓ Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials → mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
-      // Auto-generate unified validation video after analysis and hide results until it finishes
       setShowResultsTable(false);
-      setTimeout(() => generateUnifiedValidation(phase), 300);
+      setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
+      // Always generate the unified validation video in the background if it wasn't
+      // returned inline. Free HF Spaces can time out, so we queue a background job and
+      // poll until it is ready. Pass the result explicitly to avoid a race with React state.
+      setTimeout(() => generateUnifiedValidation(phase, { result: resultWithoutB64 }), 300);
     } catch (err) {
       if (err.name === "AbortError") {
         showToast(`✕ Analysis cancelled for ${phase}`, "info");
@@ -2275,8 +2424,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
         const errorMsg = `Backend request failed: ${err.message}`;
         showToast(errorMsg, "error");
         console.error("ANALYSIS ERROR:", err);
-        // Keep the error message visible longer or alert it
-        alert(errorMsg); 
+        alert(errorMsg);
       }
       onChange({ ...data, [statusKey(phase)]: "uploaded" });
     }
@@ -2292,16 +2440,40 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     if (type === "trc") filename = result.trc_filename;
     if (type === "mot") filename = result.mot_filename;
     if (type === "video") filename = result.validation_video;
-    if (type === "unified") filename = result.unified_validation_video;
+    if (type === "unified" || type === "unified-download") filename = result.unified_validation_video;
     if (!filename) {
       if (type === "video") showToast("Skeleton validation video not available — re-analyze the video file", "error");
-      if (type === "unified") showToast("Unified validation video not available — generate it first", "error");
+      if (type === "unified" || type === "unified-download") showToast("Unified validation video not available — generate it first", "error");
       return;
     }
 
     const url = `${API_BASE}/download/${encodeURIComponent(filename)}`;
 
     if (type === "unified-download") {
+      // Prefer already-cached blob to avoid a second server round-trip and 404s
+      // when the ephemeral HF Space has discarded the file.
+      const blobUrl = videoBlobs[phase];
+      if (blobUrl) {
+        try {
+          const res = await fetch(blobUrl);
+          if (!res.ok) throw new Error(`Blob read failed (${res.status})`);
+          const blob = await res.blob();
+          if (isIOSDevice() || isStandalonePWA()) {
+            const objectUrl = URL.createObjectURL(blob);
+            const newTab = window.open(objectUrl, "_blank");
+            if (!newTab) downloadBlob(blob, filename);
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+            showToast("Video opened — long-press to save", "success");
+          } else {
+            downloadBlob(blob, filename);
+            showToast("Validation video downloaded", "success");
+          }
+        } catch (err) {
+          console.error("Download from blob error:", err);
+          showToast("Failed to download validation video", "error");
+        }
+        return;
+      }
       try {
         const res = await fetch(url);
         if (res.status === 404) {
@@ -2335,7 +2507,18 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     // Play video inside app — iOS PWA has no back button if we navigate away
     if (type === "video" || type === "unified") {
       const title = type === "unified" ? "Unified Validation Video" : "Skeleton Video";
-      setMediaPreview({ url: `${API_BASE}/video/${encodeURIComponent(filename)}`, title: `${phases.find((p) => p.k === phase)?.l || phase} — ${title}` });
+      const blobUrl = videoBlobs[phase];
+      if (blobUrl) {
+        setMediaPreview({
+          phase,
+          url: blobUrl,
+          title: `${phases.find((p) => p.k === phase)?.l || phase} — ${title}`,
+        });
+      } else {
+        const uv = kinematicsResults[phase]?.unified_validation_video;
+        if (uv) loadVideoBlob(phase, uv);
+        showToast("Loading validation video — try again in a moment", "info");
+      }
       return;
     }
 
@@ -2349,12 +2532,68 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     }
   };
 
-  const generateUnifiedValidation = async (phase) => {
-    const result = kinematicsResults[phase];
+  // Fetch a validation video as a blob object URL so it plays reliably even when
+  // the hosting proxy blocks HEAD/range requests (e.g. some browsers/PWAs).
+  const loadVideoBlob = useCallback(async (phase, filename, { silent = false } = {}) => {
+    if (!filename || videoLoadingRef.current[phase]) return;
+    videoLoadingRef.current[phase] = true;
+    setVideoLoading((prev) => ({ ...prev, [phase]: true }));
+    try {
+      const url = `${API_BASE}/download/${encodeURIComponent(filename)}`;
+      const res = await fetch(url);
+      if (res.status === 404) {
+        if (!silent) showToast("Validation video expired on server — please re-analyze", "error");
+        setVideoBlobs((prev) => {
+          if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+          return { ...prev, [phase]: null };
+        });
+        return;
+      }
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      setVideoBlobs((prev) => {
+        if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+        return { ...prev, [phase]: objectUrl };
+      });
+    } catch (err) {
+      console.error("Failed to cache validation video:", err);
+      if (!silent) showToast("Validation video could not be loaded — try expanding it", "error");
+      setVideoBlobs((prev) => {
+        if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+        return { ...prev, [phase]: null };
+      });
+    } finally {
+      videoLoadingRef.current[phase] = false;
+      setVideoLoading((prev) => ({ ...prev, [phase]: false }));
+      setVideoAttempts((prev) => ({ ...prev, [phase]: (prev[phase] || 0) + 1 }));
+    }
+  }, [showToast]);
+
+
+  const [uvErrors, setUvErrors] = useState({});
+
+  // Auto-load validation video blobs as soon as they are referenced.
+  // The /video/ streaming endpoint is unreliable behind HF Spaces' proxy because
+  // the browser sends HEAD requests that return 405, so we always fetch the full
+  // file once as a blob object URL and play from that.
+  useEffect(() => {
+    phases.forEach((ph) => {
+      const uv = kinematicsResults[ph.k]?.unified_validation_video;
+      const attempts = videoAttempts[ph.k] || 0;
+      if (uv && !videoBlobsRef.current[ph.k] && !videoLoadingRef.current[ph.k] && attempts < 5) {
+        setTimeout(() => loadVideoBlob(ph.k, uv, { silent: true }), 0);
+      }
+    });
+  }, [kinematicsResults, loadVideoBlob, videoAttempts]);
+
+  const generateUnifiedValidation = async (phase, { isRetry = false, result: explicitResult = null } = {}) => {
+    const result = explicitResult || kinematicsResults[phase];
     if (!result || !result.csv_filename || !result.video_filename) {
       showToast("Analyze the video first", "error");
       return;
     }
+    setUvErrors((prev) => ({ ...prev, [phase]: null }));
     setAnalysisStatus((prev) => ({ ...prev, [phase]: "generating_unified" }));
     try {
       const formData = new FormData();
@@ -2363,17 +2602,49 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       const res = await fetch(`${API_BASE}/unified-validation`, { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || `Failed (${res.status})`);
-      setKinematicsResults((prev) => ({
-        ...prev,
-        [phase]: { ...prev[phase], unified_validation_video: data.unified_validation_video },
-      }));
-      showToast("Unified validation video ready", "success");
-      // Hide results table until validation video finishes
-      setShowResultsTable(false);
+      const jobId = data.job_id;
+      if (!jobId) throw new Error("No job id returned");
+
+      let attempts = 0;
+      const maxAttempts = 80; // ~3.5 minutes
+
+      const poll = async () => {
+        try {
+          attempts += 1;
+          if (attempts > maxAttempts) {
+            throw new Error("Video generation is taking too long. Please retry.");
+          }
+          const statusRes = await fetch(`${API_BASE}/unified-validation-status/${jobId}`);
+          const status = await statusRes.json();
+          if (!statusRes.ok || status.error) throw new Error(status.error || "Status check failed");
+          if (status.done) {
+            if (status.unified_validation_video) {
+              setKinematicsResults((prev) => ({
+                ...prev,
+                [phase]: { ...prev[phase], unified_validation_video: status.unified_validation_video, validation_summary: status.validation_summary },
+              }));
+              loadVideoBlob(phase, status.unified_validation_video);
+              showToast("Unified validation video ready", "success");
+              setShowResultsTable(false);
+            } else {
+              throw new Error(status.error || "Video generation failed");
+            }
+            setAnalysisStatus((prev) => ({ ...prev, [phase]: "idle" }));
+            return;
+          }
+          setTimeout(poll, 2500);
+        } catch (err) {
+          console.error(err);
+          setUvErrors((prev) => ({ ...prev, [phase]: err.message || "Failed to generate unified validation video" }));
+          setAnalysisStatus((prev) => ({ ...prev, [phase]: "idle" }));
+        }
+      };
+      setTimeout(poll, 1000);
     } catch (err) {
       console.error(err);
-      showToast(err.message || "Failed to generate unified validation video", "error");
-    } finally {
+      const msg = err.message || "Failed to generate unified validation video";
+      setUvErrors((prev) => ({ ...prev, [phase]: msg }));
+      showToast(msg, "error");
       setAnalysisStatus((prev) => ({ ...prev, [phase]: "idle" }));
     }
   };
@@ -2385,6 +2656,12 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   const getMetricValue = (phase, key) => {
     const result = kinematicsResults[phase];
     if (!result) return "—";
+    // Prefer the exact summary used to render the validation video overlay so
+    // the table and the video always show the same numbers.
+    if (result.validation_summary && typeof result.validation_summary === "object") {
+      const vsNum = pickKinField(result.validation_summary, key);
+      if (vsNum !== null) return vsNum;
+    }
     const num = pickKinField(result, key);
     if (num !== null) return num;
     if (key === "side_analyzed" || key === "side") {
@@ -2397,22 +2674,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
 
   const displayMetricValue = (phase, key) => {
     const val = getMetricValue(phase, key);
-    if (val === "—" || typeof val === "string") return val;
-    if (typeof val !== "number") return val;
-    if (key === "nvp") return val.toFixed(0);
-    if (key === "straightness") return val.toFixed(3);
-    if (key === "pause_time_sec") return val.toFixed(2);
-    if (key === "number_of_stops") return val.toFixed(0);
-    if (key === "trunk_ratio") return (val * 100).toFixed(1);
-    if (key === "shoulder_vert_norm") return (val * 100).toFixed(1);
-    if (key === "elbow_angle_mean_deg") return val.toFixed(1);
-    if (key === "movement_time_sec") return val.toFixed(2);
-    if (key === "peak_velocity_px_s") return val.toFixed(1);
-    if (key === "peak_velocity_cm_s") return `${val.toFixed(1)} cm/s`;
-    if (key === "sparc") return val.toFixed(3);
-    if (key === "hand_displacement_norm") return `${val.toFixed(1)} cm`;
-    if (key.includes("ratio") || key.includes("trunk") || key.includes("_sw") || key.includes("path_eff")) return val.toFixed(3);
-    return val.toFixed(2);
+    return formatKinValue(key, val);
   };
 
   const KIN_TIPS = {
@@ -2464,7 +2726,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
           key,
           label: meta.label,
           prePost: kinPrePostBadge(preV, postV, meta.dir),
-          postHealthy: kinPostHealthyBadge(postV, helV, meta.dir),
+          postHealthy: kinPostHealthyBadge(preV, postV, helV, meta.dir),
         };
       }).filter(Boolean)
     : [];
@@ -2484,8 +2746,8 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     c === "emerald" ? "text-emerald-300" : "text-amber-300";
 
   const kinDirArrow = (dir) => {
-    if (dir === "higher") return { sym: "↑", tip: "↑ higher = improvement" };
-    if (dir === "lower") return { sym: "↓", tip: "↓ lower = improvement" };
+    if (dir === "higher") return { sym: "↑", tip: "↑ higher = better" };
+    if (dir === "lower") return { sym: "↓", tip: "↓ lower = better" };
     return null;
   };
 
@@ -2498,7 +2760,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     const deltaPrePost = kinComparable && preVal !== "—" && postVal !== "—"
       ? kinPrePostBadge(preVal, postVal, metric.direction) : null;
     const deltaPostHealthy = kinComparable && postVal !== "—" && baselineVal !== "—"
-      ? kinPostHealthyBadge(postVal, baselineVal, metric.direction) : null;
+      ? kinPostHealthyBadge(preVal, postVal, baselineVal, metric.direction) : null;
     const arrow = kinDirArrow(metric.direction);
 
     return (
@@ -2595,9 +2857,11 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                 </div>
 
                 <div className="px-4 py-2 flex flex-col flex-1 min-h-0">
-                  <label htmlFor={`kin-file-${ph.k}`} className={`${kinUploadZoneCls(ph.c, !!data[vidKey(ph.k)])} relative mb-3 min-h-[130px] overflow-hidden ${status === "analyzing" ? "pointer-events-none" : ""}`}>
+                  <label htmlFor={`kin-file-${ph.k}`} className={`${kinUploadZoneCls(ph.c, !!data[vidKey(ph.k)])} relative mb-3 min-h-[130px] ${status === "analyzing" ? "overflow-visible pointer-events-none" : "overflow-hidden"} `}>
                   <AnimatePresence>
-                    {status === "analyzing" && <KinPhaseAnalyzingOverlay accent={ph.c} />}
+                    {status === "analyzing" && (
+                      <KinPhaseAnalyzingOverlay accent={ph.c} />
+                    )}
                   </AnimatePresence>
                   <div className={status === "analyzing" ? "invisible" : "flex flex-col items-center justify-center gap-1.5 w-full"}>
                   <input
@@ -2735,34 +2999,59 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                     >
                       ↓ Download
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => downloadFile(ph.k, "unified")}
-                      className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
-                      title="Expand video"
-                    >
-                      ▣ Expand
-                    </button>
                   </div>
                 </div>
-                <video
-                  src={`${API_BASE}/video/${encodeURIComponent(kinematicsResults[ph.k].unified_validation_video)}`}
-                  controls
-                  playsInline
-                  muted
-                  className="w-full rounded-lg bg-black"
-                  onError={() => showToast(`${ph.l} validation video expired — please re-analyze`, "error")}
-                  onEnded={() => setShowResultsTable(true)}
-                />
+                {videoBlobs[ph.k] ? (
+                  <InlineValidationVideo
+                    src={videoBlobs[ph.k]}
+                    phaseLabel={ph.l}
+                    autoPlay
+                    onEnded={() => setShowResultsTable(true)}
+                    onError={() => {
+                      showToast(`${ph.l} validation video could not be played`, "error");
+                      setShowResultsTable(true);
+                    }}
+                  />
+                ) : videoLoading[ph.k] ? (
+                  <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3">
+                    <p className="text-[11px] text-white/50 mb-2">Loading validation video…</p>
+                    <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3 gap-2">
+                    <p className="text-[11px] text-white/50">Validation video could not be loaded.</p>
+                    <button
+                      type="button"
+                      onClick={() => loadVideoBlob(ph.k, kinematicsResults[ph.k].unified_validation_video)}
+                      className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
             {phases.filter((ph) => kinematicsResults[ph.k] && !kinematicsResults[ph.k]?.unified_validation_video).map((ph) => (
               <div key={ph.k} className={`rounded-xl border p-3 ${phaseValueCls(ph.c)}`}>
                 <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)} mb-2`}>{ph.l} — Unified Validation</p>
-                <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3">
-                  <p className="text-[11px] text-white/50 mb-2">Generating unified validation video…</p>
-                  <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
-                </div>
+                {uvErrors[ph.k] ? (
+                  <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3 gap-2">
+                    <p className="text-[11px] text-rose-300/90 max-w-[90%]">{uvErrors[ph.k]}</p>
+                    <button
+                      type="button"
+                      onClick={() => generateUnifiedValidation(ph.k, { isRetry: true })}
+                      disabled={analysisStatus[ph.k] === "generating_unified"}
+                      className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors disabled:opacity-50"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3">
+                    <p className="text-[11px] text-white/50 mb-2">Generating unified validation video…</p>
+                    <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -2777,7 +3066,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                 Pre → Post · Post → Healthy
               </p>
               <p className="text-[11px] text-white/45 leading-relaxed mb-3">
-                calc_improvement / calc_gap — same formulas as manuscript table.
+                Pre→Post and Post→Healthy change formulas — same as the manuscript table.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {recoverySummaryRows.map(({ key, label, prePost, postHealthy }) => (
@@ -2905,7 +3194,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                     : null;
 
                   const deltaPostHealthy = kinComparable && postVal !== "—" && baselineVal !== "—"
-                    ? kinPostHealthyBadge(postVal, baselineVal, metric.direction)
+                    ? kinPostHealthyBadge(preVal, postVal, baselineVal, metric.direction)
                     : null;
 
                   return (
@@ -3048,11 +3337,12 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
             </div>
             <div className="flex-1 flex items-center justify-center px-3 pb-6 min-h-0" onClick={(e) => e.stopPropagation()}>
               <video
-                key={mediaPreview.url}
-                src={mediaPreview.url}
+                key={videoBlobs[mediaPreview.phase] || mediaPreview.url}
+                src={videoBlobs[mediaPreview.phase] || mediaPreview.url}
                 controls
                 playsInline
                 autoPlay
+                preload="auto"
                 className="w-full max-h-full rounded-xl bg-black"
                 style={{ maxHeight: "calc(100dvh - 5rem)" }}
                 onError={() => {
@@ -3396,7 +3686,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       const row = [v.label, v.unit];
       phases.forEach((p) => {
         const val = kr[p]?.[v.key];
-        row.push(val != null ? (typeof val === "number" ? val.toFixed(2) : String(val)) : "—");
+        row.push(formatKinValue(v.key, val));
       });
       return row;
     });
@@ -3704,7 +3994,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           const postVal = parseFloat(row[postIdx]);
           const helVal = parseFloat(row[healthyIdx]);
           if (!isNaN(postVal) && !isNaN(helVal)) {
-            const badge = kinPostHealthyBadge(postVal, helVal, dir);
+            const badge = kinPostHealthyBadge(null, postVal, helVal, dir);
             postHealthyHtml = `<td class="num">${esc(badge?.text || "—")}</td>`;
           } else {
             postHealthyHtml = '<td class="num">—</td>';
@@ -3733,8 +4023,8 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           return !isNaN(preVal) && !isNaN(postVal);
         }).length;
         if (total > 0) {
-          const impLabel = imp > total / 2 ? "Most kinematic metrics improved" : imp > 0 ? "Some kinematic metrics improved" : "No kinematic improvement";
-          videoInterp = `<div class="tool-interp">${impLabel} (${imp} improved, ${wors} worsened, ${total - imp - wors} stable)</div>`;
+          const impLabel = imp > total / 2 ? "Most metrics changed favorably" : imp > 0 ? "Some metrics changed favorably" : "No favorable change";
+          videoInterp = `<div class="tool-interp">${impLabel} (${imp} better, ${wors} worse, ${total - imp - wors} stable)</div>`;
         }
       }
       videoSection = `
@@ -4637,7 +4927,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                       const postVal = parseFloat(row[postIdx]);
                       const helVal = parseFloat(row[healthyIdx]);
                       if (!isNaN(postVal) && !isNaN(helVal)) {
-                        const badge = kinPostHealthyBadge(postVal, helVal, dir);
+                        const badge = kinPostHealthyBadge(null, postVal, helVal, dir);
                         postHealthyHtml = (
                           <span className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold ${badge?.colorClass || "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>
                             {badge?.text || "—"}
