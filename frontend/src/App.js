@@ -623,6 +623,10 @@ const kinPrePostBadge = (pre, post, direction) => {
   const pct = calcImprovement(pre, post, direction);
   const text = formatKinPrePostPct(pct, direction);
   if (!text) return null;
+
+  // pct is positive when the change is clinically desirable:
+  //   lower-is-better: preN - postN > 0  =>  improvement
+  //   higher-is-better: postN - preN > 0 =>  improvement
   const improved = pct > 0;
   const stable = pct === 0;
   return {
