@@ -35,7 +35,7 @@ from mediapipe_csv_extractor import extract_from_video  # noqa: E402
 from stroke_kinematic_pipeline import resolve_analysis_arm  # noqa: E402
 from video_quality_validator import validate_video, VideoValidationResult  # noqa: E402
 
-DEPLOY_VERSION = "26.1"
+DEPLOY_VERSION = "26.2"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -668,20 +668,64 @@ async def analyze_video(
         plausibility = _check_clinical_plausibility(analysis, phase, resolved_arm)
 
         # — 8. Unified validation video —
-        # Video generation is deferred to a background job via /unified-validation
-        # so that /analyze returns quickly and does not hit the HF Spaces request timeout.
+        # Try to render the validation video synchronously first. Short clips finish
+        # quickly; if rendering takes too long we fall back to a background job so
+        # /analyze still returns within the HF Spaces request timeout.
         unified_validation_video = None
         unified_validation_video_b64 = None
         validation_summary = None
 
-        # Persist the official analysis so the background UV renderer uses the exact
-        # same numbers shown in the results table.
+        # Persist the official analysis so any fallback background renderer uses the
+        # exact same numbers shown in the results table.
         analysis_json_path = OUTPUT_DIR / f"{base_name}_analysis.json"
         try:
             with analysis_json_path.open("w", encoding="utf-8") as f:
                 json.dump(analysis, f, indent=2, default=str)
         except Exception as exc:
             print(f"Warning: could not save analysis JSON: {exc}")
+
+        uv_out_name = f"{Path(analysis_csv_path).stem}_unified_validation.mp4"
+        uv_out_path = OUTPUT_DIR / uv_out_name
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(
+                    render_unified_validation_video,
+                    video_path=str(video_path),
+                    output_path=str(uv_out_path),
+                    analysis=analysis,
+                    landmarks_csv=str(analysis_csv_path),
+                    force_rotation="auto",
+                    resolution="native",
+                    panel_width=480,
+                )
+                uv_result = fut.result(timeout=50)
+                if uv_result and Path(uv_result).exists() and Path(uv_result).stat().st_size > 1000:
+                    unified_validation_video = uv_out_name
+                    try:
+                        with uv_out_path.open("rb") as f:
+                            unified_validation_video_b64 = base64.b64encode(f.read()).decode("utf-8")
+                    except Exception as exc:
+                        print(f"Could not base64 encode UV video: {exc}")
+                    validation_summary = {
+                        "nvp": _safe_float(analysis.get("nvp")),
+                        "straightness": _safe_float(analysis.get("straightness")),
+                        "pause_time_sec": _safe_float(analysis.get("pause_time_sec")),
+                        "number_of_stops": _safe_float(analysis.get("number_of_stops")),
+                        "trunk_ratio": _safe_float(analysis.get("trunk_ratio")),
+                        "shoulder_elevation_norm": _safe_float(analysis.get("shoulder_elevation_norm")),
+                        "shoulder_vert_norm": _safe_float(analysis.get("shoulder_elevation_norm")),
+                        "elbow_angle_mean_deg": _safe_float(analysis.get("elbow_angle_mean_deg")),
+                        "elbow_angle_range_deg": _safe_float(analysis.get("elbow_angle_range_deg")),
+                        "movement_time_sec": _safe_float(analysis.get("movement_time_sec")),
+                        "peak_velocity_px_s": _safe_float(analysis.get("peak_velocity_px_s")),
+                        "peak_velocity_cm_s": _safe_float(analysis.get("peak_velocity_cm_s")),
+                        "time_to_peak_velocity_sec": _safe_float(analysis.get("time_to_peak_velocity_sec")),
+                    }
+                    print(f"Unified validation video rendered inline: {uv_out_name}")
+        except concurrent.futures.TimeoutError:
+            print("Unified validation video timed out; will generate in background via /unified-validation")
+        except Exception as exc:
+            print(f"Unified validation video inline render failed: {exc}")
 
         response = {
             "success": True,

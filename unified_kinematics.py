@@ -355,6 +355,17 @@ def compute_unified_kinematic_metrics(
                 if palm_disp > 0:
                     trunk_ratio = trunk_disp / palm_disp
 
+        # Velocity profile for charting (same speed signal as metrics)
+        velocity_profile = None
+        if fs > 0:
+            velocity_profile = {
+                "time": (np.arange(len(speed)) / fs).tolist(),
+                "speed": speed.tolist(),
+                "fs_hz": fs,
+                "onset_frame": int(start_idx),
+                "offset_frame": int(end_idx),
+            }
+
         return {
             "nvp": int(nvp),
             "straightness": float(straightness) if np.isfinite(straightness) else float("nan"),
@@ -368,6 +379,7 @@ def compute_unified_kinematic_metrics(
             "shoulder_elevation_norm": float(shoulder_elev_norm),
             "shoulder_vert_norm": float(shoulder_elev_norm),
             "trunk_ratio": float(trunk_ratio),
+            "velocity_profile": velocity_profile,
             "fs_hz": float(fs),
             "analysis_fs_hz": float(fs),
             "movement_onset_frame": int(start_idx),
