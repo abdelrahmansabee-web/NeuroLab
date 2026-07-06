@@ -35,7 +35,7 @@ from mediapipe_csv_extractor import extract_from_video  # noqa: E402
 from stroke_kinematic_pipeline import resolve_analysis_arm  # noqa: E402
 from video_quality_validator import validate_video, VideoValidationResult  # noqa: E402
 
-DEPLOY_VERSION = "26.4"
+DEPLOY_VERSION = "26.5"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -627,7 +627,7 @@ async def analyze_video(
                 "movement_time_sec", "peak_velocity_px_s", "time_to_peak_velocity_sec",
                 "elbow_angle_mean_deg", "elbow_angle_range_deg",
                 "shoulder_elevation_norm", "shoulder_vert_norm", "trunk_ratio",
-                "movement_onset_frame", "movement_offset_frame",
+                "movement_onset_frame", "movement_offset_frame", "velocity_profile",
             ]:
                 if key in unified and unified[key] is not None:
                     analysis[key] = unified[key]
