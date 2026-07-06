@@ -828,11 +828,19 @@ async def analyze_csv(
             except Exception as exc:
                 return {"backend_version": DEPLOY_VERSION, "pipeline_error": str(exc)}
 
+        analysis_json_path = OUTPUT_DIR / f"{base_name}_analysis.json"
+        try:
+            with analysis_json_path.open("w", encoding="utf-8") as f:
+                json.dump(analysis, f, indent=2, default=str)
+        except Exception as exc:
+            print(f"Warning: could not save analysis JSON: {exc}")
+
         response = {
             "success": True,
             "phase": phase,
             "csv_filename": csv_path.name,
             "video_filename": video_path.name,
+            "analysis_json": analysis_json_path.name,
             "mot_filename": mot_filename,
             **_pipeline_meta(),
             **analysis,
@@ -851,11 +859,31 @@ def _run_uv_generation(job_id: str, csv_path: Path, video_path: Path, rotation: 
     try:
         uv_jobs[job_id]["status"] = "analyzing"
         uv_jobs[job_id]["updated_at"] = datetime.now().isoformat()
-        from stroke_kinematic_pipeline import analyze_stroke_kinematic_csv
-        analysis = analyze_stroke_kinematic_csv(str(csv_path), video_path=str(video_path))
-        if analysis.get("error"):
-            uv_jobs[job_id].update({"status": "failed", "error": analysis["error"], "done": True, "updated_at": datetime.now().isoformat()})
-            return
+
+        # Prefer the official analysis saved by /analyze so the validation video
+        # overlay matches the results table exactly. Fall back to recomputing if
+        # the JSON is missing (ephemeral filesystem) or unreadable.
+        analysis = None
+        base_stem = video_path.stem.replace("_rotated", "")
+        candidate_json = OUTPUT_DIR / f"{base_stem}_analysis.json"
+        if not candidate_json.exists():
+            csv_stem = csv_path.stem.replace("_raw_pose", "")
+            candidate_json = OUTPUT_DIR / f"{csv_stem}_analysis.json"
+        if candidate_json.exists():
+            try:
+                with candidate_json.open("r", encoding="utf-8") as f:
+                    analysis = json.load(f)
+                print(f"UV worker loaded official analysis from {candidate_json.name}")
+            except Exception as exc:
+                print(f"UV worker failed to load analysis JSON: {exc}; recomputing...")
+                analysis = None
+
+        if analysis is None:
+            from stroke_kinematic_pipeline import analyze_stroke_kinematic_csv
+            analysis = analyze_stroke_kinematic_csv(str(csv_path), video_path=str(video_path))
+            if analysis.get("error"):
+                uv_jobs[job_id].update({"status": "failed", "error": analysis["error"], "done": True, "updated_at": datetime.now().isoformat()})
+                return
 
         out_name = f"{csv_path.stem}_unified_validation.mp4"
         out_path = OUTPUT_DIR / out_name
