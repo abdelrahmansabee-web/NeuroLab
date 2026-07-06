@@ -410,32 +410,10 @@ def _run_analysis_job(
             _set_job_progress(job_id, 0, "Analysis failed", done=True, error=analysis["error"])
             return
 
-        _set_job_progress(job_id, 80, "Rendering validation video...")
+        _set_job_progress(job_id, 80, "Rendering validation video (deferred)...")
         unified_validation_video = None
         unified_validation_video_b64 = None
         validation_summary = None
-        try:
-            out_name = f"{base_name}_unified_validation.mp4"
-            out_path = OUTPUT_DIR / out_name
-            uv_result = render_unified_validation_video(
-                video_path=str(video_path),
-                output_path=str(out_path),
-                analysis=analysis,
-                landmarks_csv=str(analysis_csv_path),
-                force_rotation="auto",
-                resolution="native",
-                panel_width=480,
-            )
-            uv_path = uv_result.get("path") if isinstance(uv_result, dict) else str(uv_result)
-            if uv_path and Path(uv_path).exists() and Path(uv_path).stat().st_size > 1000:
-                unified_validation_video = out_name
-                try:
-                    unified_validation_video_b64 = base64.b64encode(Path(uv_path).read_bytes()).decode("utf-8")
-                except Exception as e64:
-                    print(f"Failed to embed validation video: {e64}")
-                validation_summary = uv_result.get("summary") if isinstance(uv_result, dict) else None
-        except Exception as e:
-            print(f"Unified validation video generation failed: {e}")
 
         _set_job_progress(job_id, 95, "Finalizing results...")
         response = {
@@ -661,39 +639,12 @@ async def analyze_video(
         # — 7. Clinical plausibility checks —
         plausibility = _check_clinical_plausibility(analysis, phase, resolved_arm)
 
-        # — 8. Generate unified validation video immediately —
+        # — 8. Unified validation video —
+        # Video generation is deferred to a background job via /unified-validation
+        # so that /analyze returns quickly and does not hit the HF Spaces request timeout.
         unified_validation_video = None
         unified_validation_video_b64 = None
         validation_summary = None
-        try:
-            out_name = f"{base_name}_unified_validation.mp4"
-            out_path = OUTPUT_DIR / out_name
-            print(f"Starting unified validation video generation: {out_name}")
-            uv_result = render_unified_validation_video(
-                video_path=str(video_path),
-                output_path=str(out_path),
-                analysis=analysis,
-                landmarks_csv=str(analysis_csv_path),
-                force_rotation="auto",
-                resolution="native",
-                panel_width=480,
-            )
-            uv_path = uv_result.get("path") if isinstance(uv_result, dict) else str(uv_result)
-            print(f"UV renderer returned path: {uv_path}, exists={bool(uv_path and Path(uv_path).exists())}")
-            if uv_path and Path(uv_path).exists() and Path(uv_path).stat().st_size > 1000:
-                unified_validation_video = out_name
-                try:
-                    unified_validation_video_b64 = base64.b64encode(Path(uv_path).read_bytes()).decode("utf-8")
-                    print(f"Embedded validation video base64 length: {len(unified_validation_video_b64)}")
-                except Exception as e64:
-                    print(f"Failed to embed validation video: {e64}")
-                validation_summary = uv_result.get("summary") if isinstance(uv_result, dict) else None
-                print(f"Unified validation video generated: {out_name}")
-            else:
-                print(f"Unified validation video path missing or empty: {uv_path}")
-        except Exception as e:
-            traceback.print_exc()
-            print(f"Unified validation video generation failed: {e}")
 
         response = {
             "success": True,
