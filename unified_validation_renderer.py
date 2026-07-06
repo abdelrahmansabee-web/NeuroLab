@@ -1218,21 +1218,44 @@ def _draw_panel_pil(
     cur_speed = speed[row_idx] if row_idx < len(speed) else 0.0
     cur_straightness = straightness[row_idx] if row_idx < len(straightness) else float("nan")
 
-    # Compute NVP exactly the same way as stroke_kinematic_pipeline.calculate_nvp()
-    # (prominence = 0.30 * std) so the animated counter matches the table value.
+    # Official metrics come from the analysis dict (same numbers as the table).
+    # We display those directly so the video overlay is guaranteed to match the table.
+    official_nvp = int(_safe_float(analysis.get("nvp")))
+    official_straightness = _safe_float(analysis.get("straightness"))
+    official_pause_time = _safe_float(analysis.get("pause_time_sec"))
+    official_n_stops = int(_safe_float(analysis.get("number_of_stops")))
+    official_trunk_ratio = _safe_float(analysis.get("trunk_ratio"))
+    official_shoulder_elev = _safe_float(analysis.get("shoulder_elevation_norm"))
+    official_elbow_mean = _safe_float(analysis.get("elbow_angle_mean_deg"))
+    official_elbow_range = _safe_float(analysis.get("elbow_angle_range_deg"))
+    official_movement_time = _safe_float(analysis.get("movement_time_sec"))
+    official_peak_velocity = _safe_float(analysis.get("peak_velocity_cm_s") or analysis.get("peak_velocity_px_s"))
+    official_time_to_peak = _safe_float(analysis.get("time_to_peak_velocity_sec"))
+
+    # For the animated NVP counter we still want it to grow with peaks, but it must
+    # land exactly on the official table value at the end of the video.
     speed_std = float(np.nanstd(speed)) if len(speed) else 0.0
     speed_peak = float(np.nanmax(speed)) if len(speed) else 0.0
     nvp_prominence = speed_std * 0.30 if speed_std > 0 else speed_peak * 0.05
     nvp_peak_indices = find_peaks(speed, prominence=nvp_prominence)[0]
     computed_nvp = len(nvp_peak_indices)
-    official_nvp = int(_safe_float(analysis.get("nvp")))
     if not analysis.get("velocity_profile"):
         print(f"UV renderer fallback: velocity_profile missing, computed_nvp={computed_nvp}, official_nvp={official_nvp}")
-    # Normalize the animated counter so it lands on the official table value.
-    nvp_so_far = int(np.sum(nvp_peak_indices <= row_idx)) if row_idx > 0 else 0
-    if computed_nvp > 0 and official_nvp > 0 and computed_nvp != official_nvp:
+
+    # Scale peak count so the final frame equals official_nvp.
+    if computed_nvp > 0 and official_nvp > 0:
+        nvp_so_far = int(np.sum(nvp_peak_indices <= row_idx))
         nvp_so_far = int(round(nvp_so_far * official_nvp / computed_nvp))
-    nvp_so_far = max(0, min(nvp_so_far, official_nvp))
+    elif official_nvp > 0:
+        # No speed profile — show official value immediately.
+        nvp_so_far = official_nvp
+    else:
+        nvp_so_far = computed_nvp
+    nvp_so_far = max(0, min(nvp_so_far, official_nvp if official_nvp > 0 else computed_nvp))
+    # Hard guarantee: the final frame must show the official table value.
+    if frame_i >= n_frames_video - 1 and official_nvp > 0:
+        nvp_so_far = official_nvp
+
     speed_threshold = 0.05 * speed_peak if speed_peak > 0 else 1.0
     is_pause = cur_speed < speed_threshold
 
@@ -1355,7 +1378,8 @@ def _draw_panel_pil(
     # STRAIGHTNESS ---------------------------------------------------------
     section_header("STRAIGHTNESS", (252, 211, 77))  # amber-300
     x = m
-    metric_card("Path Straightness", cur_straightness, "", (252, 211, 77), width=W - 2 * m)
+    # Use the official table straightness so the big card matches the kinematics table.
+    metric_card("Path Straightness", official_straightness, "", (252, 211, 77), width=W - 2 * m)
     y += box_h + _s(8)
     mini_graph(straightness, (252, 211, 77), "Straightness")
 
@@ -1975,8 +1999,8 @@ def render_unified_validation_video(
             if use_cm_velocity and cm_per_px and cm_per_px > 0:
                 spd_text = f"{cur_speed * cm_per_px:.0f} cm/s"
             _draw_label_near_pil(canvas, wr_pt, spd_text, (100, 200, 255), offset=(_s(12), _s(20)), orig_w=orig_w, orig_h=orig_h)
-            cur_straightness_label = straightness[row_idx] if row_idx < len(straightness) else float("nan")
-            _draw_label_near_pil(canvas, wr_pt, f"Str {cur_straightness_label:.2f}", (252, 211, 77), offset=(_s(12), _s(36)), orig_w=orig_w, orig_h=orig_h)
+            # Use the official table straightness so the on-screen label matches the results table.
+            _draw_label_near_pil(canvas, wr_pt, f"Str {official_straightness:.2f}", (252, 211, 77), offset=(_s(12), _s(36)), orig_w=orig_w, orig_h=orig_h)
 
         # Straightness trajectory overlay
         _draw_straightness_trajectory(
