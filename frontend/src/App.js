@@ -2983,7 +2983,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       {Object.keys(kinematicsResults).length > 0 && (
         <Glass className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3 gap-2">
-            <p className="text-sm font-extrabold text-white/80">Validation Video / Doğrulama Videosu</p>
+            <p className="text-sm font-extrabold text-white/80">Validation Video</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {phases.filter((ph) => kinematicsResults[ph.k]?.unified_validation_video).map((ph) => (
@@ -3307,7 +3307,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
 
       {Object.keys(kinematicsResults).filter(k => kinematicsResults[k]?.velocity_profile).length >= 1 && (
         <Glass className="p-4 sm:p-5">
-          <p className="text-sm font-extrabold text-white/80 mb-3">Combined Velocity Profile / Birleşik Hız Profili</p>
+          <p className="text-sm font-extrabold text-white/80 mb-3">Combined Velocity Profile</p>
           <div
             className="w-full overflow-hidden rounded-xl border border-white/[0.08] bg-black/30 p-3 kin-phase-chart"
             dangerouslySetInnerHTML={{ __html: buildCombinedVelChart({
