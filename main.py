@@ -655,6 +655,7 @@ async def analyze_video(
         try:
             out_name = f"{base_name}_unified_validation.mp4"
             out_path = OUTPUT_DIR / out_name
+            print(f"Starting unified validation video generation: {out_name}")
             uv_result = render_unified_validation_video(
                 video_path=str(video_path),
                 output_path=str(out_path),
@@ -665,15 +666,20 @@ async def analyze_video(
                 panel_width=480,
             )
             uv_path = uv_result.get("path") if isinstance(uv_result, dict) else str(uv_result)
+            print(f"UV renderer returned path: {uv_path}, exists={bool(uv_path and Path(uv_path).exists())}")
             if uv_path and Path(uv_path).exists() and Path(uv_path).stat().st_size > 1000:
                 unified_validation_video = out_name
                 try:
                     unified_validation_video_b64 = base64.b64encode(Path(uv_path).read_bytes()).decode("utf-8")
+                    print(f"Embedded validation video base64 length: {len(unified_validation_video_b64)}")
                 except Exception as e64:
                     print(f"Failed to embed validation video: {e64}")
                 validation_summary = uv_result.get("summary") if isinstance(uv_result, dict) else None
                 print(f"Unified validation video generated: {out_name}")
+            else:
+                print(f"Unified validation video path missing or empty: {uv_path}")
         except Exception as e:
+            traceback.print_exc()
             print(f"Unified validation video generation failed: {e}")
 
         response = {
