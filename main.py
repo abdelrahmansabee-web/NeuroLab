@@ -24,6 +24,7 @@ from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from kinematics_analyzer import analyze_reach_and_wipe
+from overlay_data import build_overlay_data
 from unified_validation_renderer import render_unified_validation_video
 from unified_kinematics import compute_unified_kinematic_metrics
 
@@ -35,7 +36,7 @@ from mediapipe_csv_extractor import extract_from_video  # noqa: E402
 from stroke_kinematic_pipeline import resolve_analysis_arm  # noqa: E402
 from video_quality_validator import validate_video, VideoValidationResult  # noqa: E402
 
-DEPLOY_VERSION = "26.5"
+DEPLOY_VERSION = "26.6"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -697,6 +698,7 @@ async def analyze_video(
             "validation_video": validation_video,
             "unified_validation_video": unified_validation_video,
             "unified_validation_video_b64": unified_validation_video_b64,
+            "overlay_data_url": f"/overlay-data/{Path(analysis_csv_path).name}",
             "validation_summary": validation_summary,
             "quality_report": quality_report,
             "legacy_format": legacy,
@@ -1007,6 +1009,50 @@ async def unified_validation(
         loop = asyncio.get_event_loop()
         loop.run_in_executor(None, _run_uv_generation, job_id, csv_path, video_path, rotation)
         return {"success": True, "job_id": job_id, "status": "queued"}
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": f"Server error: {str(e)}"})
+
+
+@app.get("/overlay-data/{csv_filename}")
+async def get_overlay_data(csv_filename: str):
+    """
+    Return lightweight per-frame landmarks and metrics for browser-side
+    validation video overlay rendering.
+    """
+    try:
+        csv_path = OUTPUT_DIR / csv_filename
+        if csv_path.name.endswith("_raw_pose.csv"):
+            cleaned_name = csv_path.name.replace("_raw_pose.csv", ".csv")
+            cleaned_candidate = csv_path.with_name(cleaned_name)
+            if cleaned_candidate.exists():
+                csv_path = cleaned_candidate
+        if not csv_path.exists():
+            return JSONResponse(status_code=404, content={"error": f"CSV not found: {csv_filename}"})
+
+        # Load the official analysis JSON if available so metrics match the table.
+        analysis = None
+        base_stem = csv_path.stem.replace("_raw_pose", "")
+        candidate_json = OUTPUT_DIR / f"{base_stem}_analysis.json"
+        if candidate_json.exists():
+            try:
+                with candidate_json.open("r", encoding="utf-8") as f:
+                    analysis = json.load(f)
+            except Exception as exc:
+                print(f"Overlay data could not load analysis JSON: {exc}")
+
+        target_fs = 60.0
+        if analysis:
+            target_fs = float(analysis.get("analysis_fs_hz", analysis.get("fs_hz", 60.0)))
+
+        data = build_overlay_data(
+            str(csv_path),
+            analysis=analysis,
+            target_fs=target_fs,
+        )
+        if data.get("error"):
+            return JSONResponse(status_code=500, content={"error": data["error"]})
+        return JSONResponse(content=data)
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": f"Server error: {str(e)}"})
