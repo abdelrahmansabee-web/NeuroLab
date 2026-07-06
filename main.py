@@ -82,6 +82,9 @@ for d in [UPLOAD_DIR, OUTPUT_DIR, MODEL_DIR, DATA_DIR]:
 # In-memory job progress store (small, transient; HF Spaces is single-instance).
 job_progress: Dict[str, Dict[str, Any]] = {}
 
+# In-memory unified-validation background job store.
+uv_jobs: Dict[str, Dict[str, Any]] = {}
+
 
 def _set_job_progress(job_id: str, pct: float, step: str, done: bool = False, error: Optional[str] = None, result: Optional[Dict[str, Any]] = None):
     job_progress[job_id] = {
@@ -106,6 +109,16 @@ def _cleanup_old_jobs(max_age_minutes: int = 30):
             cutoff_keys.append(job_id)
     for k in cutoff_keys:
         job_progress.pop(k, None)
+    uv_cutoff_keys = []
+    for job_id, info in list(uv_jobs.items()):
+        try:
+            updated = datetime.fromisoformat(info.get("updated_at", "2000-01-01T00:00:00"))
+            if (now - updated).total_seconds() > max_age_minutes * 60:
+                uv_cutoff_keys.append(job_id)
+        except Exception:
+            uv_cutoff_keys.append(job_id)
+    for k in uv_cutoff_keys:
+        uv_jobs.pop(k, None)
 
 
 def ensure_pose_model() -> bool:
@@ -882,6 +895,48 @@ async def analyze_csv(
 
 # — Unified validation video —
 
+def _run_uv_generation(job_id: str, csv_path: Path, video_path: Path, rotation: str):
+    """Background worker for unified validation video generation."""
+    try:
+        uv_jobs[job_id]["status"] = "analyzing"
+        uv_jobs[job_id]["updated_at"] = datetime.now().isoformat()
+        from stroke_kinematic_pipeline import analyze_stroke_kinematic_csv
+        analysis = analyze_stroke_kinematic_csv(str(csv_path), video_path=str(video_path))
+        if analysis.get("error"):
+            uv_jobs[job_id].update({"status": "failed", "error": analysis["error"], "done": True, "updated_at": datetime.now().isoformat()})
+            return
+
+        out_name = f"{csv_path.stem}_unified_validation.mp4"
+        out_path = OUTPUT_DIR / out_name
+        uv_jobs[job_id]["status"] = "rendering"
+        uv_jobs[job_id]["updated_at"] = datetime.now().isoformat()
+        uv_result = render_unified_validation_video(
+            video_path=str(video_path),
+            output_path=str(out_path),
+            analysis=analysis,
+            landmarks_csv=str(csv_path),
+            force_rotation=rotation,
+            resolution="native",
+            panel_width=640,
+        )
+        validation_summary = uv_result.get("summary") if isinstance(uv_result, dict) else None
+        uv_path = uv_result.get("path") if isinstance(uv_result, dict) else str(uv_result)
+        if uv_path and Path(uv_path).exists() and Path(uv_path).stat().st_size > 1000:
+            uv_jobs[job_id].update({
+                "status": "done",
+                "done": True,
+                "unified_validation_video": out_name,
+                "download_url": f"/download/{out_name}",
+                "validation_summary": validation_summary,
+                "updated_at": datetime.now().isoformat(),
+            })
+        else:
+            uv_jobs[job_id].update({"status": "failed", "error": "Rendered video file is missing or empty", "done": True, "updated_at": datetime.now().isoformat()})
+    except Exception as exc:
+        traceback.print_exc()
+        uv_jobs[job_id].update({"status": "failed", "error": str(exc), "done": True, "updated_at": datetime.now().isoformat()})
+
+
 @app.post("/unified-validation")
 async def unified_validation(
     csv_filename: str = Form(...),
@@ -889,16 +944,11 @@ async def unified_validation(
     rotation: str = Form("auto"),
 ):
     """
-    Generate the unified validation video (video + metrics panel) for an
-    already-analyzed trial.  The numbers come from the analysis dict so they
-    match the kinematics table.
-
-    rotation: auto | 0 | 90 | 180 | 270 | -90  (clockwise degrees)
+    Queue unified validation video generation and return a job id.
+    The frontend polls /unified-validation-status/{job_id} until done.
     """
     try:
         csv_path = OUTPUT_DIR / csv_filename
-        # The frontend may store the raw_pose CSV name; the renderer needs the
-        # cleaned landmarks CSV (with palm_x, wrist_x, ... columns).
         if csv_path.name.endswith("_raw_pose.csv"):
             cleaned_name = csv_path.name.replace("_raw_pose.csv", ".csv")
             cleaned_candidate = csv_path.with_name(cleaned_name)
@@ -908,7 +958,6 @@ async def unified_validation(
         if not csv_path.exists():
             return JSONResponse(status_code=404, content={"error": f"CSV not found: {csv_filename}"})
 
-        # — Resolve video path across possible folders / naming variants —
         search_dirs = [UPLOAD_DIR, OUTPUT_DIR]
         video_path = None
         for folder in search_dirs:
@@ -916,7 +965,6 @@ async def unified_validation(
             if candidate.exists():
                 video_path = candidate
                 break
-            # If frontend sent original name but server renamed it, try suffix match
             suffix = Path(video_filename).suffix.lower()
             if suffix:
                 for candidate2 in folder.glob(f"*{suffix}"):
@@ -928,42 +976,38 @@ async def unified_validation(
         if not video_path or not video_path.exists():
             return JSONResponse(
                 status_code=404,
-                content={
-                    "error": f"Video not found: {video_filename}. "
-                             "HF Space storage is ephemeral — please re-upload and re-analyze the video, then generate the UV video."
-                },
+                content={"error": f"Video not found: {video_filename}. HF Space storage is ephemeral — please re-upload and re-analyze the video."},
             )
 
-        # Re-run lightweight analysis to obtain the exact same numbers
-        from stroke_kinematic_pipeline import analyze_stroke_kinematic_csv
-
-        analysis = analyze_stroke_kinematic_csv(str(csv_path), video_path=str(video_path))
-        if analysis.get("error"):
-            return JSONResponse(status_code=400, content={"error": analysis["error"]})
-
-        out_name = f"{csv_path.stem}_unified_validation.mp4"
-        out_path = OUTPUT_DIR / out_name
-
-        uv_result = render_unified_validation_video(
-            video_path=str(video_path),
-            output_path=str(out_path),
-            analysis=analysis,
-            landmarks_csv=str(csv_path),
-            force_rotation=rotation,
-            resolution="native",
-            panel_width=640,
-        )
-        validation_summary = uv_result.get("summary") if isinstance(uv_result, dict) else None
-
-        return {
-            "success": True,
-            "unified_validation_video": out_name,
-            "download_url": f"/download/{out_name}",
-            "validation_summary": validation_summary,
+        job_id = str(uuid.uuid4())
+        uv_jobs[job_id] = {
+            "status": "queued",
+            "done": False,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
         }
+        # Run in a background thread so the HTTP response returns immediately.
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(None, _run_uv_generation, job_id, csv_path, video_path, rotation)
+        return {"success": True, "job_id": job_id, "status": "queued"}
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": f"Server error: {str(e)}"})
+
+
+@app.get("/unified-validation-status/{job_id}")
+async def unified_validation_status(job_id: str):
+    info = uv_jobs.get(job_id)
+    if not info:
+        return JSONResponse(status_code=404, content={"error": "Job not found"})
+    return {
+        "status": info.get("status"),
+        "done": info.get("done", False),
+        "error": info.get("error"),
+        "unified_validation_video": info.get("unified_validation_video"),
+        "download_url": info.get("download_url"),
+        "validation_summary": info.get("validation_summary"),
+    }
 
 
 # — Download Endpoints —
