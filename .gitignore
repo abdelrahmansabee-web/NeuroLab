@@ -16,3 +16,7 @@ frontend/build/bg.jpg
 
 assets/skeleton_v4/*.png
 
+frontend/node_modules/
+frontend/dist/
+
+
