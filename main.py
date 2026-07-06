@@ -35,7 +35,7 @@ from mediapipe_csv_extractor import extract_from_video  # noqa: E402
 from stroke_kinematic_pipeline import resolve_analysis_arm  # noqa: E402
 from video_quality_validator import validate_video, VideoValidationResult  # noqa: E402
 
-DEPLOY_VERSION = "26.3"
+DEPLOY_VERSION = "26.4"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 

@@ -359,8 +359,8 @@ def compute_unified_kinematic_metrics(
         velocity_profile = None
         if fs > 0:
             velocity_profile = {
-                "time": (np.arange(len(speed)) / fs).tolist(),
-                "speed": speed.tolist(),
+                "t": (np.arange(len(speed)) / fs).tolist(),
+                "v": speed.tolist(),
                 "fs_hz": fs,
                 "onset_frame": int(start_idx),
                 "offset_frame": int(end_idx),
