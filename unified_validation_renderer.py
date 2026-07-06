@@ -1379,7 +1379,7 @@ def _draw_panel_pil(
     section_header("STRAIGHTNESS", (252, 211, 77))  # amber-300
     x = m
     # Use the official table straightness so the big card matches the kinematics table.
-    metric_card("Path Straightness", official_straightness, "", (252, 211, 77), width=W - 2 * m)
+    metric_card("Path Straightness", summary["straightness"], "", (252, 211, 77), width=W - 2 * m)
     y += box_h + _s(8)
     mini_graph(straightness, (252, 211, 77), "Straightness")
 
@@ -2000,7 +2000,7 @@ def render_unified_validation_video(
                 spd_text = f"{cur_speed * cm_per_px:.0f} cm/s"
             _draw_label_near_pil(canvas, wr_pt, spd_text, (100, 200, 255), offset=(_s(12), _s(20)), orig_w=orig_w, orig_h=orig_h)
             # Use the official table straightness so the on-screen label matches the results table.
-            _draw_label_near_pil(canvas, wr_pt, f"Str {official_straightness:.2f}", (252, 211, 77), offset=(_s(12), _s(36)), orig_w=orig_w, orig_h=orig_h)
+            _draw_label_near_pil(canvas, wr_pt, f"Str {summary['straightness']:.2f}", (252, 211, 77), offset=(_s(12), _s(36)), orig_w=orig_w, orig_h=orig_h)
 
         # Straightness trajectory overlay
         _draw_straightness_trajectory(
