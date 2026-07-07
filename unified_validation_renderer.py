@@ -675,6 +675,7 @@ def _draw_mediapipe_skeleton(
     frame_w: int,
     frame_h: int,
     active_side: str = "right",
+    trunk_xy: Optional[np.ndarray] = None,
 ) -> None:
     """Draw a clean, accurate skeleton overlay with temporal smoothing to remove jitter."""
 
@@ -713,6 +714,26 @@ def _draw_mediapipe_skeleton(
                     xy_s = _smooth_positions(np.column_stack([x, y]), window=15)
                     x_s, y_s = xy_s[:, 0], xy_s[:, 1]
                 smooth[n] = np.column_stack([x_s, y_s])
+
+        # Hip fallback: if detected hips are missing or on the table/occluded, estimate
+        # from the trunk/shoulder relationship (same logic as browser overlay).
+        if trunk_xy is not None and "LEFT_SHOULDER" in smooth and "RIGHT_SHOULDER" in smooth:
+            ls_smooth = smooth["LEFT_SHOULDER"]
+            rs_smooth = smooth["RIGHT_SHOULDER"]
+            shoulder_center = (ls_smooth + rs_smooth) / 2.0
+            est_hip_center = 2 * trunk_xy - shoulder_center
+            est_lh = est_hip_center + (ls_smooth - shoulder_center) * 0.7
+            est_rh = est_hip_center + (rs_smooth - shoulder_center) * 0.7
+            threshold = 0.25 * min(frame_w, frame_h)
+            for side, est in [("LEFT_HIP", est_lh), ("RIGHT_HIP", est_rh)]:
+                if side in smooth:
+                    arr = smooth[side]
+                    missing = ~(np.isfinite(arr[:, 0]) & np.isfinite(arr[:, 1]))
+                    dist = np.hypot(arr[:, 0] - est[:, 0], arr[:, 1] - est[:, 1])
+                    bad = dist > threshold
+                    replace = missing | bad
+                    arr[replace] = est[replace]
+
         smooth_cache = {"key": cache_key, "smooth": smooth}
         _draw_mediapipe_skeleton._smooth_cache = smooth_cache
     smooth = smooth_cache["smooth"]
@@ -1966,10 +1987,17 @@ def render_unified_validation_video(
 
         # Skeleton overlay from raw MediaPipe landmarks (most faithful to detector)
         if raw_df is not None:
+            trunk_xy = None
+            if "trunk_x" in df.columns and "trunk_y" in df.columns:
+                trunk_xy = np.column_stack([
+                    df["trunk_x"].astype(float).values * scale,
+                    df["trunk_y"].astype(float).values * scale,
+                ])
             _draw_mediapipe_skeleton(
                 canvas, raw_df, row_idx,
                 orig_w, orig_h,
                 active_side=active_side,
+                trunk_xy=trunk_xy,
             )
 
         # Landmark-aware metric labels (Pillow anti-aliased)
