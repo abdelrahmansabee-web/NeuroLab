@@ -235,7 +235,7 @@ def build_overlay_data(
             y = np.asarray(y, dtype=float)
             missing = ~(np.isfinite(x) & np.isfinite(y))
             dist = np.hypot(x - est_x, y - est_y)
-            bad = dist > 0.18  # detected hip far from the expected body position
+            bad = dist > 0.25  # detected hip far from the expected body position
             replace = missing | bad
             x[replace] = est_x[replace]
             y[replace] = est_y[replace]
