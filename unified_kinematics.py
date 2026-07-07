@@ -350,13 +350,19 @@ def compute_unified_kinematic_metrics(
         if end_idx <= start_idx:
             end_idx = min(n - 1, start_idx + 1)
 
-        nvp, nvp_peak_indices = _compute_nvp(speed, prominence_frac=0.30)
+        # Zero-out speed outside the movement window so metrics and charts do not
+        # include pre-movement jitter or post-movement drift.
+        speed_clipped = speed.copy()
+        speed_clipped[:start_idx] = 0.0
+        speed_clipped[end_idx + 1:] = 0.0
+
+        nvp, nvp_peak_indices = _compute_nvp(speed_clipped, prominence_frac=0.30)
         straightness = _compute_straightness(df)
-        pause_time_sec, number_of_stops = _compute_pause_time_and_stops(speed, fs=fs)
+        pause_time_sec, number_of_stops = _compute_pause_time_and_stops(speed_clipped, fs=fs)
 
         movement_time_sec = (end_idx - start_idx) / fs
 
-        window_speed = speed[start_idx : end_idx + 1]
+        window_speed = speed_clipped[start_idx : end_idx + 1]
         peak_velocity_px_s = float(np.nanmax(window_speed)) if len(window_speed) else 0.0
         peak_idx = start_idx + int(np.nanargmax(window_speed)) if len(window_speed) else start_idx
         time_to_peak_velocity_sec = peak_idx / fs
@@ -392,12 +398,13 @@ def compute_unified_kinematic_metrics(
                 if palm_disp > 0:
                     trunk_ratio = trunk_disp / palm_disp
 
-        # Velocity profile for charting (same speed signal as metrics)
+        # Velocity profile for charting (uses the clipped speed signal so the
+        # chart starts when the elbow angle begins to change and ends at movement offset)
         velocity_profile = None
         if fs > 0:
             velocity_profile = {
-                "t": (np.arange(len(speed)) / fs).tolist(),
-                "v": speed.tolist(),
+                "t": (np.arange(len(speed_clipped)) / fs).tolist(),
+                "v": speed_clipped.tolist(),
                 "fs_hz": fs,
                 "onset_frame": int(start_idx),
                 "offset_frame": int(end_idx),

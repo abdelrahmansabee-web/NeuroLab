@@ -172,6 +172,10 @@ def build_overlay_data(
         rw_x, rw_y = _pair("RIGHT_WRIST")
         lh_x, lh_y = _pair("LEFT_HIP")
         rh_x, rh_y = _pair("RIGHT_HIP")
+        lk_x, lk_y = _pair("LEFT_KNEE")
+        rk_x, rk_y = _pair("RIGHT_KNEE")
+        la_x, la_y = _pair("LEFT_ANKLE")
+        ra_x, ra_y = _pair("RIGHT_ANKLE")
 
         # Build coordinate pairs. Missing values become null instead of clamped 0,0
         # so the frontend can skip drawing stray lines.
@@ -199,8 +203,18 @@ def build_overlay_data(
         lh_pairs = _make_pair(lh_x, lh_y)
         rh_pairs = _make_pair(rh_x, rh_y)
 
+        lk_pairs = _make_pair(lk_x, lk_y)
+        rk_pairs = _make_pair(rk_x, rk_y)
+        la_pairs = _make_pair(la_x, la_y)
+        ra_pairs = _make_pair(ra_x, ra_y)
+
         start_palm = palm_pairs[onset_idx] if onset_idx < len(palm_pairs) else None
         end_palm = palm_pairs[offset_idx] if offset_idx < len(palm_pairs) else None
+
+        # Clip speed so the chart/gauge ignore pre/post movement noise.
+        for i in range(len(speed)):
+            if i < onset_idx or i > offset_idx:
+                speed[i] = 0.0
 
         frames = []
         for i in range(len(new_t)):
@@ -222,6 +236,10 @@ def build_overlay_data(
                 "rwrist": rw_pairs[i],
                 "lhip": lh_pairs[i],
                 "rhip": rh_pairs[i],
+                "lknee": lk_pairs[i],
+                "rknee": rk_pairs[i],
+                "lankle": la_pairs[i],
+                "rankle": ra_pairs[i],
             })
 
         metrics = {}
@@ -262,6 +280,21 @@ def build_overlay_data(
                 "v": [float(v) if np.isfinite(v) else 0.0 for v in speed],
             }
 
+        elbow_angle_profile = None
+        if fs and elbow_angle is not None:
+            elbow_angle_profile = {
+                "t": (np.arange(len(elbow_angle)) / fs).tolist(),
+                "v": [float(v) if np.isfinite(v) else 0.0 for v in elbow_angle],
+            }
+
+        trunk_x_profile = None
+        if fs and "trunk_x" in canon.columns:
+            trunk_x = pd.to_numeric(canon["trunk_x"], errors="coerce").values
+            trunk_x_profile = {
+                "t": (np.arange(len(trunk_x)) / fs).tolist(),
+                "v": [float(v) if np.isfinite(v) else 0.0 for v in trunk_x],
+            }
+
         return {
             "fps": round(float(target_fs), 2),
             "duration_sec": round(float(t1 - t0), 3),
@@ -271,6 +304,8 @@ def build_overlay_data(
             "movement_window": {"start_idx": int(onset_idx), "end_idx": int(offset_idx)},
             "peak_velocity_px_s": round(float(np.nanmax(speed)) if np.any(np.isfinite(speed)) else 0.0, 2),
             "velocity_profile": velocity_profile,
+            "elbow_angle_profile": elbow_angle_profile,
+            "trunk_x_profile": trunk_x_profile,
             "peak_frames": nvp_peaks,
             "start_palm": start_palm,
             "end_palm": end_palm,
