@@ -76,6 +76,15 @@ def build_overlay_data(
         if len(df) < 2:
             return {"error": "Too few frames"}
 
+        # Use raw pose CSV (if available) for full skeleton landmarks; otherwise
+        # fall back to the provided CSV (which may already be the raw pose file).
+        raw_csv_path = csv_path.with_name(csv_path.name.replace(".csv", "_raw_pose.csv"))
+        if raw_csv_path == csv_path:
+            raw_csv_path = csv_path.with_name(csv_path.name.replace("_raw_pose.csv", "_raw_pose.csv"))
+        if not raw_csv_path.exists():
+            raw_csv_path = csv_path
+        raw_df = pd.read_csv(raw_csv_path) if raw_csv_path.exists() else df
+
         # Determine side.
         side = affected_side.lower() if affected_side else "auto"
         if side not in ("left", "right"):
@@ -98,8 +107,8 @@ def build_overlay_data(
         new_t = np.linspace(t0, t1, n_target)
 
         def _pair(name: str):
-            x = _resample(_norm_series(df, name, "x"), t, new_t)
-            y = _resample(_norm_series(df, name, "y"), t, new_t)
+            x = _resample(_norm_series(raw_df, name, "x"), t, new_t)
+            y = _resample(_norm_series(raw_df, name, "y"), t, new_t)
             return x, y
 
         # Affected-side canonical points from the unified kinematics module.
