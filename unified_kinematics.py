@@ -263,14 +263,45 @@ def _compute_elbow_angle(df: pd.DataFrame) -> np.ndarray:
     return np.degrees(np.arccos(cosang))
 
 
-def _movement_window(speed: np.ndarray, fs: float = 60.0, velocity_threshold_px_s: float = 5.0) -> tuple:
-    """Return (start_idx, end_idx) of active movement."""
+def _movement_window(
+    speed: np.ndarray,
+    elbow_angle: Optional[np.ndarray] = None,
+    fs: float = 60.0,
+    velocity_threshold_px_s: float = 5.0,
+    elbow_angle_change_deg: float = 2.0,
+) -> tuple:
+    """Return (start_idx, end_idx) of active movement.
+
+    Onset is determined by the first meaningful elbow-angle change or by the
+    palm speed crossing the velocity threshold, whichever is earlier. Using elbow
+    angle avoids counting pre-movement hand jitter as the start of the reach.
+    """
     speed = np.asarray(speed, dtype=float)
+    n = len(speed)
     above = speed >= velocity_threshold_px_s
     indices = np.where(above)[0]
-    if len(indices) == 0:
-        return 0, len(speed) - 1
-    return int(indices[0]), int(indices[-1])
+    start_speed = int(indices[0]) if len(indices) else 0
+    end_speed = int(indices[-1]) if len(indices) else n - 1
+
+    start_angle = None
+    if elbow_angle is not None and len(elbow_angle) > 0:
+        ea = np.asarray(elbow_angle, dtype=float)
+        # baseline from first ~0.2 s (or first frame if shorter)
+        baseline_frames = max(1, min(int(round(fs * 0.2)), n))
+        baseline = float(np.nanmedian(ea[:baseline_frames]))
+        change = np.abs(ea - baseline)
+        above_angle = change >= elbow_angle_change_deg
+        angle_indices = np.where(above_angle)[0]
+        if len(angle_indices):
+            start_angle = int(angle_indices[0])
+
+    if start_angle is not None:
+        # Trust the elbow-angle onset more than the noisy palm-speed threshold.
+        # This prevents counting pre-movement hand jitter as the start of the reach.
+        start = start_angle
+    else:
+        start = start_speed
+    return start, end_speed
 
 
 def compute_unified_kinematic_metrics(
@@ -308,7 +339,14 @@ def compute_unified_kinematic_metrics(
         speed = _compute_speed(df, fs=fs)
         time = np.arange(n) / fs
 
-        start_idx, end_idx = _movement_window(speed, fs=fs, velocity_threshold_px_s=velocity_threshold_px_s)
+        elbow_angle = _compute_elbow_angle(df)
+
+        start_idx, end_idx = _movement_window(
+            speed,
+            elbow_angle=elbow_angle,
+            fs=fs,
+            velocity_threshold_px_s=velocity_threshold_px_s,
+        )
         if end_idx <= start_idx:
             end_idx = min(n - 1, start_idx + 1)
 
@@ -323,7 +361,6 @@ def compute_unified_kinematic_metrics(
         peak_idx = start_idx + int(np.nanargmax(window_speed)) if len(window_speed) else start_idx
         time_to_peak_velocity_sec = peak_idx / fs
 
-        elbow_angle = _compute_elbow_angle(df)
         elbow_window = elbow_angle[start_idx : end_idx + 1]
         elbow_angle_mean_deg = float(np.nanmean(elbow_window)) if len(elbow_window) else float("nan")
         elbow_angle_range_deg = float(np.nanmax(elbow_window) - np.nanmin(elbow_window)) if len(elbow_window) else float("nan")

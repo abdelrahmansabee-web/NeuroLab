@@ -138,8 +138,28 @@ def build_overlay_data(
         trunk_y = pd.to_numeric(canon.get("trunk_y", pd.Series(np.nan)), errors="coerce").values / frame_h
 
         speed = _compute_speed(canon, fs=target_fs)
+        elbow_angle = None
+        if {"shoulder_x", "shoulder_y", "elbow_x", "elbow_y", "wrist_x", "wrist_y"}.issubset(set(canon.columns)):
+            sx = pd.to_numeric(canon["shoulder_x"], errors="coerce").values
+            sy = pd.to_numeric(canon["shoulder_y"], errors="coerce").values
+            ex = pd.to_numeric(canon["elbow_x"], errors="coerce").values
+            ey = pd.to_numeric(canon["elbow_y"], errors="coerce").values
+            wx = pd.to_numeric(canon["wrist_x"], errors="coerce").values
+            wy = pd.to_numeric(canon["wrist_y"], errors="coerce").values
+            v1x, v1y = sx - ex, sy - ey
+            v2x, v2y = wx - ex, wy - ey
+            dot = v1x * v2x + v1y * v2y
+            norm1 = np.hypot(v1x, v1y)
+            norm2 = np.hypot(v2x, v2y)
+            cosang = dot / (norm1 * norm2 + 1e-9)
+            cosang = np.clip(cosang, -1.0, 1.0)
+            elbow_angle = np.degrees(np.arccos(cosang))
+
         onset_idx, offset_idx = _movement_window(
-            speed, fs=target_fs, velocity_threshold_px_s=float(analysis.get("velocity_threshold_px_s", 5.0)) if analysis else 5.0
+            speed,
+            elbow_angle=elbow_angle,
+            fs=target_fs,
+            velocity_threshold_px_s=float(analysis.get("velocity_threshold_px_s", 5.0)) if analysis else 5.0,
         )
 
         # Full skeleton points (all normalized).
@@ -187,6 +207,7 @@ def build_overlay_data(
             frames.append({
                 "time": round(float(new_t[i]), 4),
                 "speed": round(float(speed[i]) if np.isfinite(speed[i]) else 0.0, 2),
+                "elbow_angle": round(float(elbow_angle[i]) if elbow_angle is not None and np.isfinite(elbow_angle[i]) else 0.0, 2),
                 "palm": palm_pairs[i],
                 "wrist": wrist_pairs[i],
                 "shoulder": shoulder_pairs[i],
@@ -225,6 +246,14 @@ def build_overlay_data(
             nvp_peaks = [int(x) for x in (analysis.get("nvp_peak_indices") or []) if isinstance(x, (int, float, np.integer))]
             if not nvp_peaks and "nvp_peak_indices" in analysis and analysis["nvp_peak_indices"]:
                 nvp_peaks = [int(x) for x in analysis["nvp_peak_indices"]]
+        if not nvp_peaks:
+            from unified_kinematics import _compute_nvp
+            _, peak_arr = _compute_nvp(speed, prominence_frac=0.30)
+            nvp_peaks = [int(x) for x in peak_arr]
+
+        # Ensure nvp is always present in metrics even if analysis is missing.
+        if ("nvp" not in metrics or metrics["nvp"] is None) and len(nvp_peaks):
+            metrics["nvp"] = len(nvp_peaks)
 
         velocity_profile = None
         if fs := float(analysis.get("analysis_fs_hz", analysis.get("fs_hz", target_fs))) if analysis else target_fs:
