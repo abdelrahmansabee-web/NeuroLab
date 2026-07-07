@@ -178,16 +178,16 @@ def _compute_speed(df: pd.DataFrame, fs: float = 60.0) -> np.ndarray:
     return speed
 
 
-def _compute_nvp(speed: np.ndarray, prominence_frac: float = 0.30) -> int:
-    """Number of velocity peaks using renderer-style prominence."""
+def _compute_nvp(speed: np.ndarray, prominence_frac: float = 0.30) -> tuple:
+    """Number of velocity peaks and their indices using renderer-style prominence."""
     speed = np.asarray(speed, dtype=float)
     if len(speed) < 5:
-        return 0
+        return 0, np.array([])
     std = float(np.nanstd(speed))
     peak = float(np.nanmax(speed)) if np.any(np.isfinite(speed)) else 0.0
     prominence = std * prominence_frac if std > 0 else peak * 0.05
     peaks, _ = find_peaks(speed, prominence=prominence)
-    return int(len(peaks))
+    return int(len(peaks)), peaks
 
 
 def _compute_straightness(df: pd.DataFrame) -> float:
@@ -312,7 +312,7 @@ def compute_unified_kinematic_metrics(
         if end_idx <= start_idx:
             end_idx = min(n - 1, start_idx + 1)
 
-        nvp = _compute_nvp(speed, prominence_frac=0.30)
+        nvp, nvp_peak_indices = _compute_nvp(speed, prominence_frac=0.30)
         straightness = _compute_straightness(df)
         pause_time_sec, number_of_stops = _compute_pause_time_and_stops(speed, fs=fs)
 
@@ -368,6 +368,7 @@ def compute_unified_kinematic_metrics(
 
         return {
             "nvp": int(nvp),
+            "nvp_peak_indices": nvp_peak_indices.tolist(),
             "straightness": float(straightness) if np.isfinite(straightness) else float("nan"),
             "pause_time_sec": float(pause_time_sec),
             "number_of_stops": int(number_of_stops),

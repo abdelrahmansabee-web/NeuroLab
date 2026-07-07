@@ -36,7 +36,7 @@ from mediapipe_csv_extractor import extract_from_video  # noqa: E402
 from stroke_kinematic_pipeline import resolve_analysis_arm  # noqa: E402
 from video_quality_validator import validate_video, VideoValidationResult  # noqa: E402
 
-DEPLOY_VERSION = "27.5"
+DEPLOY_VERSION = "27.6"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -624,7 +624,7 @@ async def analyze_video(
         )
         if isinstance(unified, dict) and not unified.get("error"):
             for key in [
-                "nvp", "straightness", "pause_time_sec", "number_of_stops",
+                "nvp", "nvp_peak_indices", "straightness", "pause_time_sec", "number_of_stops",
                 "movement_time_sec", "peak_velocity_px_s", "time_to_peak_velocity_sec",
                 "elbow_angle_mean_deg", "elbow_angle_range_deg",
                 "shoulder_elevation_norm", "shoulder_vert_norm", "trunk_ratio",

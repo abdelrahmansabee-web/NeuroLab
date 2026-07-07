@@ -220,6 +220,12 @@ def build_overlay_data(
                     except Exception:
                         pass
 
+        nvp_peaks = []
+        if analysis:
+            nvp_peaks = [int(x) for x in (analysis.get("nvp_peak_indices") or []) if isinstance(x, (int, float, np.integer))]
+            if not nvp_peaks and "nvp_peak_indices" in analysis and analysis["nvp_peak_indices"]:
+                nvp_peaks = [int(x) for x in analysis["nvp_peak_indices"]]
+
         velocity_profile = None
         if fs := float(analysis.get("analysis_fs_hz", analysis.get("fs_hz", target_fs))) if analysis else target_fs:
             velocity_profile = {
@@ -236,6 +242,7 @@ def build_overlay_data(
             "movement_window": {"start_idx": int(onset_idx), "end_idx": int(offset_idx)},
             "peak_velocity_px_s": round(float(np.nanmax(speed)) if np.any(np.isfinite(speed)) else 0.0, 2),
             "velocity_profile": velocity_profile,
+            "peak_frames": nvp_peaks,
             "start_palm": start_palm,
             "end_palm": end_palm,
         }
