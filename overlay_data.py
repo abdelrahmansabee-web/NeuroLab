@@ -34,6 +34,21 @@ def _resample(col: pd.Series, old_t: np.ndarray, new_t: np.ndarray) -> np.ndarra
     return np.interp(new_t, old_t[mask], y[mask])
 
 
+def _smooth_pairs(x: np.ndarray, y: np.ndarray, window: int = 5):
+    """Apply a simple centered moving average to reduce skeleton jitter."""
+    if len(x) < window or window < 2:
+        return x, y
+    kernel = np.ones(window) / window
+    sx = np.convolve(x, kernel, mode="same")
+    sy = np.convolve(y, kernel, mode="same")
+    # Preserve endpoints to avoid boundary drift.
+    sx[: window // 2] = x[: window // 2]
+    sx[-(window // 2) :] = x[-(window // 2) :]
+    sy[: window // 2] = y[: window // 2]
+    sy[-(window // 2) :] = y[-(window // 2) :]
+    return sx, sy
+
+
 def build_overlay_data(
     csv_path: str,
     analysis: Optional[Dict[str, Any]] = None,
@@ -109,7 +124,7 @@ def build_overlay_data(
         def _pair(name: str):
             x = _resample(_norm_series(raw_df, name, "x"), t, new_t)
             y = _resample(_norm_series(raw_df, name, "y"), t, new_t)
-            return x, y
+            return _smooth_pairs(x, y, window=7)
 
         # Affected-side canonical points from the unified kinematics module.
         from unified_kinematics import load_canonical_landmarks, _compute_speed, _movement_window
@@ -268,15 +283,11 @@ def build_overlay_data(
                     except Exception:
                         pass
 
-        nvp_peaks = []
-        if analysis:
-            nvp_peaks = [int(x) for x in (analysis.get("nvp_peak_indices") or []) if isinstance(x, (int, float, np.integer))]
-            if not nvp_peaks and "nvp_peak_indices" in analysis and analysis["nvp_peak_indices"]:
-                nvp_peaks = [int(x) for x in analysis["nvp_peak_indices"]]
-        if not nvp_peaks:
-            from unified_kinematics import _compute_nvp
-            _, peak_arr = _compute_nvp(speed, prominence_frac=0.30)
-            nvp_peaks = [int(x) for x in peak_arr]
+        # Compute NVP peaks on the resampled speed so indices match the frames array.
+        from unified_kinematics import _compute_nvp
+
+        _, peak_arr = _compute_nvp(speed, prominence_frac=0.30)
+        nvp_peaks = [int(x) for x in peak_arr]
 
         # Ensure nvp is always present in metrics even if analysis is missing.
         if ("nvp" not in metrics or metrics["nvp"] is None) and len(nvp_peaks):
