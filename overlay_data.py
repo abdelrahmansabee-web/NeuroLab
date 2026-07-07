@@ -241,8 +241,10 @@ def build_overlay_data(
             y[replace] = est_y[replace]
             return x, y
 
-        lh_x, lh_y = _hip_fallback(lh_x, lh_y, est_lh_x, est_lh_y)
-        rh_x, rh_y = _hip_fallback(rh_x, rh_y, est_rh_x, est_rh_y)
+        # Always use the trunk-based estimate for hip positions. MediaPipe often places
+        # the hips on the table/occluded area; the trunk-shoulder estimate is far more stable.
+        lh_x, lh_y = est_lh_x, est_lh_y
+        rh_x, rh_y = est_rh_x, est_rh_y
 
         # Build coordinate pairs. Missing values become null instead of clamped 0,0
         # so the frontend can skip drawing stray lines.
