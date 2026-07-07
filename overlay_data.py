@@ -24,6 +24,15 @@ def _norm_series(df: pd.DataFrame, name: str, coord: str) -> pd.Series:
     return pd.Series(np.nan, index=df.index)
 
 
+def _visibility(df: pd.DataFrame, name: str) -> pd.Series:
+    """Return a visibility / presence score for a landmark (0..1)."""
+    cols = [f"{name}_visibility", f"{name}_VISIBILITY", f"{name.lower()}_visibility"]
+    for c in cols:
+        if c in df.columns:
+            return pd.to_numeric(df[c], errors="coerce")
+    return pd.Series(1.0, index=df.index)
+
+
 def _resample(col: pd.Series, old_t: np.ndarray, new_t: np.ndarray) -> np.ndarray:
     y = pd.to_numeric(col, errors="coerce").values
     if np.all(np.isnan(y)):
@@ -124,6 +133,9 @@ def build_overlay_data(
         def _pair(name: str):
             x = _resample(_norm_series(raw_df, name, "x"), t, new_t)
             y = _resample(_norm_series(raw_df, name, "y"), t, new_t)
+            vis = _resample(_visibility(raw_df, name), t, new_t)
+            x[vis < 0.5] = np.nan
+            y[vis < 0.5] = np.nan
             return _smooth_pairs(x, y, window=7)
 
         # Affected-side canonical points from the unified kinematics module.
@@ -200,6 +212,37 @@ def build_overlay_data(
         rk_x, rk_y = _pair("RIGHT_KNEE")
         la_x, la_y = _pair("LEFT_ANKLE")
         ra_x, ra_y = _pair("RIGHT_ANKLE")
+
+        # Fallback for hips: if MediaPipe detects them on the table/occluded, estimate
+        # from the trunk/shoulder relationship (trunk = midpoint of shoulders + hips).
+        trunk_x_arr = np.asarray(trunk_x, dtype=float)
+        trunk_y_arr = np.asarray(trunk_y, dtype=float)
+        ls_x_arr = np.asarray(ls_x, dtype=float)
+        ls_y_arr = np.asarray(ls_y, dtype=float)
+        rs_x_arr = np.asarray(rs_x, dtype=float)
+        rs_y_arr = np.asarray(rs_y, dtype=float)
+        shoulder_center_x = (ls_x_arr + rs_x_arr) / 2
+        shoulder_center_y = (ls_y_arr + rs_y_arr) / 2
+        est_hip_center_x = 2 * trunk_x_arr - shoulder_center_x
+        est_hip_center_y = 2 * trunk_y_arr - shoulder_center_y
+        est_lh_x = est_hip_center_x + (ls_x_arr - shoulder_center_x) * 0.7
+        est_lh_y = est_hip_center_y + (ls_y_arr - shoulder_center_y) * 0.7
+        est_rh_x = est_hip_center_x + (rs_x_arr - shoulder_center_x) * 0.7
+        est_rh_y = est_hip_center_y + (rs_y_arr - shoulder_center_y) * 0.7
+
+        def _hip_fallback(x: np.ndarray, y: np.ndarray, est_x: np.ndarray, est_y: np.ndarray):
+            x = np.asarray(x, dtype=float)
+            y = np.asarray(y, dtype=float)
+            missing = ~(np.isfinite(x) & np.isfinite(y))
+            dist = np.hypot(x - est_x, y - est_y)
+            bad = dist > 0.18  # detected hip far from the expected body position
+            replace = missing | bad
+            x[replace] = est_x[replace]
+            y[replace] = est_y[replace]
+            return x, y
+
+        lh_x, lh_y = _hip_fallback(lh_x, lh_y, est_lh_x, est_lh_y)
+        rh_x, rh_y = _hip_fallback(rh_x, rh_y, est_rh_x, est_rh_y)
 
         # Build coordinate pairs. Missing values become null instead of clamped 0,0
         # so the frontend can skip drawing stray lines.
