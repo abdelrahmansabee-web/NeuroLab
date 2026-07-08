@@ -34,4 +34,4 @@ RUN if [ ! -f frontend/build/bg.jpg ]; then \
     fi
 
 EXPOSE 7860
-CMD ["python", "-u", "-c", "print('STARTUP: container entrypoint reached', flush=True); import uvicorn; uvicorn.run('main:app', host='0.0.0.0', port=7860)"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
