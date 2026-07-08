@@ -688,7 +688,8 @@ def _draw_mediapipe_skeleton(
     smooth_cache = getattr(_draw_mediapipe_skeleton, "_smooth_cache", None)
     if smooth_cache is None or smooth_cache.get("key") != cache_key:
         names = ["NOSE", "LEFT_SHOULDER", "RIGHT_SHOULDER", "LEFT_ELBOW", "RIGHT_ELBOW",
-                 "LEFT_WRIST", "RIGHT_WRIST", "LEFT_HIP", "RIGHT_HIP"]
+                 "LEFT_WRIST", "RIGHT_WRIST", "LEFT_HIP", "RIGHT_HIP",
+                 "LEFT_KNEE", "RIGHT_KNEE", "LEFT_ANKLE", "RIGHT_ANKLE"]
         # Infer sampling rate
         fs = 60.0
         if "time" in raw_df.columns:
@@ -715,17 +716,41 @@ def _draw_mediapipe_skeleton(
                     x_s, y_s = xy_s[:, 0], xy_s[:, 1]
                 smooth[n] = np.column_stack([x_s, y_s])
 
-        # Hip fallback: MediaPipe often places hips on the table/occluded area. We always
-        # use the trunk/shoulder estimate because it is far more stable for seated poses.
+        # Hip fallback: MediaPipe often places hips on the table/occluded area. The trunk
+        # in the cleaned CSV is the shoulder-girdle midpoint, so estimate hips from the
+        # shoulder/knee relationship for seated poses.
         if trunk_xy is not None and "LEFT_SHOULDER" in smooth and "RIGHT_SHOULDER" in smooth:
             ls_smooth = smooth["LEFT_SHOULDER"]
             rs_smooth = smooth["RIGHT_SHOULDER"]
+            lk_smooth = smooth.get("LEFT_KNEE")
+            rk_smooth = smooth.get("RIGHT_KNEE")
             shoulder_center = (ls_smooth + rs_smooth) / 2.0
-            est_hip_center = 2 * trunk_xy - shoulder_center
-            est_lh = est_hip_center + (ls_smooth - shoulder_center) * 0.7
-            est_rh = est_hip_center + (rs_smooth - shoulder_center) * 0.7
-            smooth["LEFT_HIP"] = est_lh
-            smooth["RIGHT_HIP"] = est_rh
+
+            def _hip_estimate(s_arr, k_arr, center):
+                if k_arr is None:
+                    return s_arr.copy()
+                est = s_arr + (k_arr - s_arr) * 0.40
+                # pull x toward body center
+                est[:, 0] = center[:, 0] + (est[:, 0] - center[:, 0]) * 0.75
+                return est
+
+            est_lh = _hip_estimate(ls_smooth, lk_smooth, shoulder_center)
+            est_rh = _hip_estimate(rs_smooth, rk_smooth, shoulder_center)
+
+            # Use detected hip only if it is below the shoulder and above the knee.
+            for side, est, s_arr, k_arr in [
+                ("LEFT_HIP", est_lh, ls_smooth, lk_smooth),
+                ("RIGHT_HIP", est_rh, rs_smooth, rk_smooth),
+            ]:
+                if side in smooth:
+                    arr = smooth[side]
+                    missing = ~(np.isfinite(arr[:, 0]) & np.isfinite(arr[:, 1]))
+                    reasonable = np.ones(len(arr), dtype=bool)
+                    if k_arr is not None:
+                        reasonable &= arr[:, 1] > s_arr[:, 1] + 0.05 * frame_h
+                        reasonable &= arr[:, 1] < k_arr[:, 1] - 0.05 * frame_h
+                    replace = missing | ~reasonable
+                    arr[replace] = est[replace]
 
         smooth_cache = {"key": cache_key, "smooth": smooth}
         _draw_mediapipe_skeleton._smooth_cache = smooth_cache
