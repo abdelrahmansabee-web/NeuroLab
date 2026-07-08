@@ -7,15 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libosmesa6-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd -m -u 1000 user
-USER user
-ENV PATH="/home/user/.local/bin:/usr/local/bin:/usr/bin:/bin"
-ENV HOME=/home/user
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY --chown=user . .
+COPY . .
 
 RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
