@@ -213,47 +213,38 @@ def build_overlay_data(
         la_x, la_y = _pair("LEFT_ANKLE")
         ra_x, ra_y = _pair("RIGHT_ANKLE")
 
-        # Fallback for hips: MediaPipe often places hips on the table/occluded area. The
-        # trunk in the cleaned CSV is actually the shoulder-girdle midpoint, so we estimate
-        # the hip from the shoulder and knee instead (closer to real anatomy for seated poses).
+        # Fallback for hips: if MediaPipe detects them on the table/occluded, estimate
+        # from the trunk/shoulder relationship (trunk = midpoint of shoulders + hips).
+        trunk_x_arr = np.asarray(trunk_x, dtype=float)
+        trunk_y_arr = np.asarray(trunk_y, dtype=float)
         ls_x_arr = np.asarray(ls_x, dtype=float)
         ls_y_arr = np.asarray(ls_y, dtype=float)
         rs_x_arr = np.asarray(rs_x, dtype=float)
         rs_y_arr = np.asarray(rs_y, dtype=float)
-        lk_x_arr = np.asarray(lk_x, dtype=float)
-        lk_y_arr = np.asarray(lk_y, dtype=float)
-        rk_x_arr = np.asarray(rk_x, dtype=float)
-        rk_y_arr = np.asarray(rk_y, dtype=float)
         shoulder_center_x = (ls_x_arr + rs_x_arr) / 2
+        shoulder_center_y = (ls_y_arr + rs_y_arr) / 2
+        est_hip_center_x = 2 * trunk_x_arr - shoulder_center_x
+        est_hip_center_y = 2 * trunk_y_arr - shoulder_center_y
+        est_lh_x = est_hip_center_x + (ls_x_arr - shoulder_center_x) * 0.7
+        est_lh_y = est_hip_center_y + (ls_y_arr - shoulder_center_y) * 0.7
+        est_rh_x = est_hip_center_x + (rs_x_arr - shoulder_center_x) * 0.7
+        est_rh_y = est_hip_center_y + (rs_y_arr - shoulder_center_y) * 0.7
 
-        def _hip_estimate(sx, sy, kx, ky, center_x):
-            """Estimate hip from shoulder and knee (40% of the way from shoulder to knee)."""
-            sx = np.asarray(sx, dtype=float)
-            sy = np.asarray(sy, dtype=float)
-            kx = np.asarray(kx, dtype=float)
-            ky = np.asarray(ky, dtype=float)
-            est_x = sx + (kx - sx) * 0.40
-            est_y = sy + (ky - sy) * 0.40
-            # Pull x toward body center so pelvis is narrower than knees/shoulders
-            est_x = center_x + (est_x - center_x) * 0.75
-            return est_x, est_y
-
-        est_lh_x, est_lh_y = _hip_estimate(ls_x_arr, ls_y_arr, lk_x_arr, lk_y_arr, shoulder_center_x)
-        est_rh_x, est_rh_y = _hip_estimate(rs_x_arr, rs_y_arr, rk_x_arr, rk_y_arr, shoulder_center_x)
-
-        def _hip_fallback(x, y, est_x, est_y, shoulder_y, knee_y):
+        def _hip_fallback(x: np.ndarray, y: np.ndarray, est_x: np.ndarray, est_y: np.ndarray):
             x = np.asarray(x, dtype=float)
             y = np.asarray(y, dtype=float)
             missing = ~(np.isfinite(x) & np.isfinite(y))
-            # Hip must be below the shoulder and above the knee to be trustworthy.
-            reasonable = (y > shoulder_y + 0.05) & (y < knee_y - 0.05)
-            replace = missing | ~reasonable
+            dist = np.hypot(x - est_x, y - est_y)
+            bad = dist > 0.25  # detected hip far from the expected body position
+            replace = missing | bad
             x[replace] = est_x[replace]
             y[replace] = est_y[replace]
             return x, y
 
-        lh_x, lh_y = _hip_fallback(lh_x, lh_y, est_lh_x, est_lh_y, ls_y_arr, lk_y_arr)
-        rh_x, rh_y = _hip_fallback(rh_x, rh_y, est_rh_x, est_rh_y, rs_y_arr, rk_y_arr)
+        # Always use the trunk-based estimate for hip positions. MediaPipe often places
+        # the hips on the table/occluded area; the trunk-shoulder estimate is far more stable.
+        lh_x, lh_y = est_lh_x, est_lh_y
+        rh_x, rh_y = est_rh_x, est_rh_y
 
         # Build coordinate pairs. Missing values become null instead of clamped 0,0
         # so the frontend can skip drawing stray lines.
