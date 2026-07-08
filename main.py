@@ -14,6 +14,8 @@ import uuid
 import asyncio
 from typing import Optional, Any, List, Dict
 
+print("STARTUP: stdlib imports ok", flush=True)
+
 import cv2
 from pathlib import Path
 from datetime import datetime
@@ -23,10 +25,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+print("STARTUP: fastapi/cv2 imports ok", flush=True)
+
 from kinematics_analyzer import analyze_reach_and_wipe
 from overlay_data import build_overlay_data
 from unified_validation_renderer import render_unified_validation_video
 from unified_kinematics import compute_unified_kinematic_metrics
+
+print("STARTUP: local top-level imports ok", flush=True)
 
 _BASE = Path(__file__).resolve().parent
 _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_robust.py").exists() else _BASE
@@ -35,6 +41,8 @@ if str(_RAN_DIR) not in sys.path:
 from mediapipe_csv_extractor import extract_from_video  # noqa: E402
 from stroke_kinematic_pipeline import resolve_analysis_arm  # noqa: E402
 from video_quality_validator import validate_video, VideoValidationResult  # noqa: E402
+
+print("STARTUP: pipeline modules imports ok", flush=True)
 
 DEPLOY_VERSION = "27.21"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
@@ -125,20 +133,22 @@ def _cleanup_old_jobs(max_age_minutes: int = 30):
 
 def ensure_pose_model() -> bool:
     """Download MediaPipe pose model if missing (HF / fresh deploy)."""
+    print(f"STARTUP: ensure_pose_model checking {POSE_MODEL_FILE}", flush=True)
     if POSE_MODEL_FILE.exists() and POSE_MODEL_FILE.stat().st_size > 1_000_000:
+        print("STARTUP: pose model already present", flush=True)
         return True
     try:
         import urllib.request
-        print(f"Downloading pose model — {POSE_MODEL_FILE}")
+        print(f"Downloading pose model — {POSE_MODEL_FILE}", flush=True)
         tmp = POSE_MODEL_FILE.with_suffix(".task.tmp")
         urllib.request.urlretrieve(POSE_MODEL_URL, tmp)
         tmp.replace(POSE_MODEL_FILE)
         ok = POSE_MODEL_FILE.exists() and POSE_MODEL_FILE.stat().st_size > 1_000_000
-        print(f"Pose model ready: {ok} ({POSE_MODEL_FILE.stat().st_size if ok else 0} bytes)")
+        print(f"Pose model ready: {ok} ({POSE_MODEL_FILE.stat().st_size if ok else 0} bytes)", flush=True)
         return ok
     except Exception as e:
         traceback.print_exc()
-        print(f"Pose model download failed: {e}")
+        print(f"Pose model download failed: {e}", flush=True)
         return False
 
 
@@ -230,7 +240,9 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def _startup_ensure_models():
+    print("STARTUP: running startup event", flush=True)
     ensure_pose_model()
+    print("STARTUP: startup event done", flush=True)
 
 
 # — Endpoints —
