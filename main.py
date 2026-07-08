@@ -13,36 +13,22 @@ import concurrent.futures
 import uuid
 import asyncio
 from typing import Optional, Any, List, Dict
-
-print("STARTUP: stdlib imports ok", flush=True)
-
-import cv2
 from pathlib import Path
 from datetime import datetime
+
+print("STARTUP: stdlib imports ok", flush=True)
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-print("STARTUP: fastapi/cv2 imports ok", flush=True)
-
-from kinematics_analyzer import analyze_reach_and_wipe
-from overlay_data import build_overlay_data
-from unified_validation_renderer import render_unified_validation_video
-from unified_kinematics import compute_unified_kinematic_metrics
-
-print("STARTUP: local top-level imports ok", flush=True)
+print("STARTUP: fastapi imports ok", flush=True)
 
 _BASE = Path(__file__).resolve().parent
 _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_robust.py").exists() else _BASE
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
-from mediapipe_csv_extractor import extract_from_video  # noqa: E402
-from stroke_kinematic_pipeline import resolve_analysis_arm  # noqa: E402
-from video_quality_validator import validate_video, VideoValidationResult  # noqa: E402
-
-print("STARTUP: pipeline modules imports ok", flush=True)
 
 DEPLOY_VERSION = "27.21"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
@@ -291,6 +277,7 @@ def _auto_rotate_video_with_ffmpeg(video_path: Path) -> Optional[Path]:
     Detect and apply rotation metadata from phone/tablet videos using ffmpeg.
     Returns the path to the rotated video, or None if no rotation is needed.
     """
+    import cv2
     from unified_validation_renderer import _find_ffmpeg
 
     ffmpeg = _find_ffmpeg()
@@ -381,7 +368,7 @@ def _run_analysis_job(
         intermediate_dir = str(OUTPUT_DIR / f"{base_name}_intermediates")
         ensure_pose_model()
         from mediapipe_csv_extractor import extract_from_video
-        from stroke_kinematic_pipeline import resolve_analysis_arm
+        from kinematics_analyzer import analyze_reach_and_wipe
 
         report = extract_from_video(
             video_path=str(video_path),
@@ -477,6 +464,12 @@ async def analyze_video(
     legacy_format: str = Form("false"),
     save_intermediates: str = Form("true"),
 ):
+    from mediapipe_csv_extractor import extract_from_video
+    from stroke_kinematic_pipeline import resolve_analysis_arm
+    from video_quality_validator import validate_video, VideoValidationResult
+    from kinematics_analyzer import analyze_reach_and_wipe
+    from unified_kinematics import compute_unified_kinematic_metrics
+
     try:
         # — 1. Save uploaded video —
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -810,6 +803,9 @@ async def analyze_csv(
     trial_count: str = Form("1"),
     best_trial_metric: str = Form("sparc"),
 ):
+    from stroke_kinematic_pipeline import resolve_analysis_arm
+    from kinematics_analyzer import analyze_reach_and_wipe
+
     """Upload a CSV + run kinematic analysis + OpenSim IK (skip video pose extraction).
     Optional metric_scale (meters) or shoulder_width_cm to get cm values.
     Priority: shoulder_width_cm > height*0.255 > metric_scale > 0 (normalized only).
@@ -908,6 +904,8 @@ async def analyze_csv(
 
 def _run_uv_generation(job_id: str, csv_path: Path, video_path: Path, rotation: str):
     """Background worker for unified validation video generation."""
+    from unified_validation_renderer import render_unified_validation_video
+
     try:
         uv_jobs[job_id]["status"] = "analyzing"
         uv_jobs[job_id]["updated_at"] = datetime.now().isoformat()
@@ -1032,6 +1030,8 @@ async def get_overlay_data(csv_filename: str):
     Return lightweight per-frame landmarks and metrics for browser-side
     validation video overlay rendering.
     """
+    from overlay_data import build_overlay_data
+
     try:
         csv_path = OUTPUT_DIR / csv_filename
         if csv_path.name.endswith("_raw_pose.csv"):
