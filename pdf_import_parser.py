@@ -39,10 +39,13 @@ KVIQ_LABELS = [
 ]
 
 KIN_PDF_VARS = [
-    (re.compile(r"SPARC", re.I), "sparc"),
+    (re.compile(r"Number of Velocity Peaks|NVP", re.I), "nvp"),
+    (re.compile(r"Path straightness|Straightness", re.I), "straightness"),
+    (re.compile(r"Pause time", re.I), "pause_time_sec"),
+    (re.compile(r"Number of stops|Stops", re.I), "number_of_stops"),
     (re.compile(r"Trunk\s*Ratio|Trunk/Palm", re.I), "trunk_ratio"),
     (re.compile(r"Shoulder\s*Vert|Shoulder\s*elevation", re.I), "shoulder_vert_norm"),
-    (re.compile(r"Elbow\s*angle", re.I), "elbow_angle_mean"),
+    (re.compile(r"Elbow\s*angle", re.I), "elbow_angle_mean_deg"),
     (re.compile(r"Movement\s*time|Duration", re.I), "movement_time_sec"),
     (re.compile(r"Peak\s*Velocity", re.I), "peak_velocity_px_s"),
 ]
