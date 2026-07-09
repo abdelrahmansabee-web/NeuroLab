@@ -65,8 +65,9 @@ def _compute_sparc_profile(
     palm_y: np.ndarray,
     fs: float,
     start_idx: int,
+    end_idx: int,
     min_segment_frames: int = 10,
-) -> tuple[List[Optional[float]], List[Optional[str]]]:
+) -> Dict[str, Any]:
     """
     Compute cumulative SPARC smoothness up to every frame from movement start.
 
@@ -75,16 +76,31 @@ def _compute_sparc_profile(
 
     NaNs are linearly interpolated so brief tracking gaps do not prevent SPARC
     computation (the module itself auto-trims static segments).
+
+    A final fallback SPARC is computed across the whole movement window if the
+    cumulative per-frame values remain None.
     """
     palm_x = np.asarray(palm_x, dtype=float)
     palm_y = np.asarray(palm_y, dtype=float)
     n = len(palm_x)
     sparc_values: List[Optional[float]] = [None] * n
     sparc_verdicts: List[Optional[str]] = [None] * n
+    debug: Dict[str, Any] = {
+        "start_idx": int(start_idx),
+        "end_idx": int(end_idx),
+        "input_frames": n,
+        "finite_x": int(np.isfinite(palm_x).sum()),
+        "finite_y": int(np.isfinite(palm_y).sum()),
+        "per_frame_attempts": 0,
+        "per_frame_success": 0,
+        "first_error": None,
+    }
 
     start_idx = max(0, int(start_idx))
+    end_idx = max(start_idx, min(n - 1, int(end_idx)))
     if n - start_idx < min_segment_frames:
-        return sparc_values, sparc_verdicts
+        debug["short_circuit"] = "movement_window_too_short"
+        return {"values": sparc_values, "verdicts": sparc_verdicts, "debug": debug}
 
     def _clean(arr: np.ndarray) -> np.ndarray:
         arr = np.asarray(arr, dtype=float)
@@ -106,6 +122,7 @@ def _compute_sparc_profile(
         y_seg = clean_y[start_idx : i + 1]
         if len(x_seg) < min_segment_frames:
             continue
+        debug["per_frame_attempts"] += 1
         try:
             result = sparc_production(
                 x_seg,
@@ -119,10 +136,43 @@ def _compute_sparc_profile(
             )
             sparc_values[i] = result.get("sparc")
             sparc_verdicts[i] = result.get("verdict")
-        except Exception:
-            pass
+            if result.get("sparc") is not None:
+                debug["per_frame_success"] += 1
+        except Exception as exc:
+            if debug["first_error"] is None:
+                debug["first_error"] = f"{type(exc).__name__}: {exc}"
 
-    return sparc_values, sparc_verdicts
+    # Fallback: compute SPARC across the full movement window once and use it for
+    # every frame in the window if per-frame computation yielded nothing.
+    if debug["per_frame_success"] == 0:
+        full_x = clean_x[start_idx : end_idx + 1]
+        full_y = clean_y[start_idx : end_idx + 1]
+        debug["fallback_window_frames"] = len(full_x)
+        if len(full_x) >= min_segment_frames:
+            try:
+                result = sparc_production(
+                    full_x,
+                    full_y,
+                    fs=fs,
+                    n_points=100,
+                    auto_trim=True,
+                    smooth_sigma=1.5,
+                    speed_threshold_ratio=0.12,
+                    validate=True,
+                )
+                fallback_sparc = result.get("sparc")
+                fallback_verdict = result.get("verdict")
+                debug["fallback_sparc"] = fallback_sparc
+                debug["fallback_verdict"] = fallback_verdict
+                for i in range(start_idx, end_idx + 1):
+                    sparc_values[i] = fallback_sparc
+                    sparc_verdicts[i] = fallback_verdict
+            except Exception as exc:
+                debug["fallback_error"] = f"{type(exc).__name__}: {exc}"
+        else:
+            debug["fallback_skipped"] = "window_too_short"
+
+    return {"values": sparc_values, "verdicts": sparc_verdicts, "debug": debug}
 
 
 def build_overlay_data(
@@ -357,9 +407,12 @@ def build_overlay_data(
         end_palm = palm_pairs[offset_idx] if offset_idx < len(palm_pairs) else None
 
         # Compute cumulative SPARC smoothness up to each frame for the live overlay.
-        sparc_values, sparc_verdicts = _compute_sparc_profile(
-            palm_x, palm_y, fs=target_fs, start_idx=int(onset_idx)
+        sparc_out = _compute_sparc_profile(
+            palm_x, palm_y, fs=target_fs, start_idx=int(onset_idx), end_idx=int(offset_idx)
         )
+        sparc_values = sparc_out["values"]
+        sparc_verdicts = sparc_out["verdicts"]
+        sparc_debug = sparc_out["debug"]
 
         # Clip speed so the chart/gauge ignore pre/post movement noise.
         for i in range(len(speed)):
@@ -475,6 +528,7 @@ def build_overlay_data(
             "elbow_angle_profile": elbow_angle_profile,
             "trunk_x_profile": trunk_x_profile,
             "sparc_profile": sparc_profile,
+            "sparc_debug": sparc_debug,
             "peak_frames": nvp_peaks,
             "start_palm": start_palm,
             "end_palm": end_palm,
