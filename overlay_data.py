@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+from sparc_production import sparc_production
+
 
 def _norm_series(df: pd.DataFrame, name: str, coord: str) -> pd.Series:
     """Return a normalized [0,1] series for a MediaPipe-style landmark column."""
@@ -56,6 +58,52 @@ def _smooth_pairs(x: np.ndarray, y: np.ndarray, window: int = 5):
     sy[: window // 2] = y[: window // 2]
     sy[-(window // 2) :] = y[-(window // 2) :]
     return sx, sy
+
+
+def _compute_sparc_profile(
+    palm_x: np.ndarray,
+    palm_y: np.ndarray,
+    fs: float,
+    start_idx: int,
+    min_segment_frames: int = 10,
+) -> tuple[List[Optional[float]], List[Optional[str]]]:
+    """
+    Compute cumulative SPARC smoothness up to every frame from movement start.
+
+    Returns per-frame SPARC values and verdicts.  Frames before the movement
+    window or with too-short trajectories are returned as None.
+    """
+    palm_x = np.asarray(palm_x, dtype=float)
+    palm_y = np.asarray(palm_y, dtype=float)
+    n = len(palm_x)
+    sparc_values: List[Optional[float]] = [None] * n
+    sparc_verdicts: List[Optional[str]] = [None] * n
+
+    start_idx = max(0, int(start_idx))
+    for i in range(start_idx + min_segment_frames - 1, n):
+        x_seg = palm_x[start_idx : i + 1]
+        y_seg = palm_y[start_idx : i + 1]
+        if np.isnan(x_seg).any() or np.isnan(y_seg).any():
+            continue
+        if len(x_seg) < min_segment_frames:
+            continue
+        try:
+            result = sparc_production(
+                x_seg,
+                y_seg,
+                fs=fs,
+                n_points=100,
+                auto_trim=True,
+                smooth_sigma=1.5,
+                speed_threshold_ratio=0.12,
+                validate=True,
+            )
+            sparc_values[i] = result.get("sparc")
+            sparc_verdicts[i] = result.get("verdict")
+        except Exception:
+            pass
+
+    return sparc_values, sparc_verdicts
 
 
 def build_overlay_data(
@@ -289,6 +337,11 @@ def build_overlay_data(
         start_palm = palm_pairs[onset_idx] if onset_idx < len(palm_pairs) else None
         end_palm = palm_pairs[offset_idx] if offset_idx < len(palm_pairs) else None
 
+        # Compute cumulative SPARC smoothness up to each frame for the live overlay.
+        sparc_values, sparc_verdicts = _compute_sparc_profile(
+            palm_x, palm_y, fs=target_fs, start_idx=int(onset_idx)
+        )
+
         # Clip speed so the chart/gauge ignore pre/post movement noise.
         for i in range(len(speed)):
             if i < onset_idx or i > offset_idx:
@@ -300,6 +353,8 @@ def build_overlay_data(
                 "time": round(float(new_t[i]), 4),
                 "speed": round(float(speed[i]) if np.isfinite(speed[i]) else 0.0, 2),
                 "elbow_angle": round(float(elbow_angle[i]) if elbow_angle is not None and np.isfinite(elbow_angle[i]) else 0.0, 2),
+                "sparc": round(float(sparc_values[i]), 3) if sparc_values[i] is not None else None,
+                "sparc_verdict": sparc_verdicts[i],
                 "palm": palm_pairs[i],
                 "wrist": wrist_pairs[i],
                 "shoulder": shoulder_pairs[i],
@@ -369,6 +424,26 @@ def build_overlay_data(
                 "v": [float(v) if np.isfinite(v) else 0.0 for v in trunk_x],
             }
 
+        sparc_profile = None
+        if fs:
+            sparc_profile = {
+                "t": (np.arange(len(sparc_values)) / fs).tolist(),
+                "v": [float(v) if v is not None and np.isfinite(v) else 0.0 for v in sparc_values],
+            }
+
+        # Prefer final SPARC from the analysis JSON if available; otherwise use the
+        # last computed overlay value (at movement offset) for the metrics panel.
+        final_sparc = None
+        if analysis and "sparc" in analysis and analysis["sparc"] is not None:
+            try:
+                final_sparc = float(analysis["sparc"])
+            except Exception:
+                pass
+        if final_sparc is None and offset_idx < len(sparc_values) and sparc_values[int(offset_idx)] is not None:
+            final_sparc = float(sparc_values[int(offset_idx)])
+        if final_sparc is not None:
+            metrics["sparc"] = final_sparc
+
         return {
             "fps": round(float(target_fs), 2),
             "duration_sec": round(float(t1 - t0), 3),
@@ -380,6 +455,7 @@ def build_overlay_data(
             "velocity_profile": velocity_profile,
             "elbow_angle_profile": elbow_angle_profile,
             "trunk_x_profile": trunk_x_profile,
+            "sparc_profile": sparc_profile,
             "peak_frames": nvp_peaks,
             "start_palm": start_palm,
             "end_palm": end_palm,
