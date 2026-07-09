@@ -155,6 +155,28 @@ export function formatKinPostHealthyPct(pct) {
   return `فرق ${Math.abs(pct).toFixed(1)}%`;
 }
 
+/** Format a raw kinematic value the same way everywhere (table, report, video overlay). */
+export function formatKinValue(key, value) {
+  if (value == null || value === "—") return "—";
+  if (typeof value === "string") return value;
+  const val = Number(value);
+  if (Number.isNaN(val)) return String(value);
+  if (key === "nvp") return val.toFixed(0);
+  if (key === "straightness") return val.toFixed(3);
+  if (key === "pause_time_sec") return val.toFixed(2);
+  if (key === "number_of_stops") return val.toFixed(0);
+  if (key === "trunk_ratio") return `${(val * 100).toFixed(1)}%`;
+  if (key === "shoulder_vert_norm") return `${val.toFixed(3)} SW`;
+  if (key === "elbow_angle_mean_deg") return val.toFixed(1);
+  if (key === "movement_time_sec") return val.toFixed(2);
+  if (key === "peak_velocity_px_s") return val.toFixed(1);
+  if (key === "peak_velocity_cm_s") return `${val.toFixed(1)} cm/s`;
+  if (key === "sparc") return val.toFixed(3);
+  if (key === "hand_displacement_norm") return `${val.toFixed(1)} cm`;
+  if (key.includes("ratio") || key.includes("trunk") || key.includes("_sw") || key.includes("path_eff")) return val.toFixed(3);
+  return val.toFixed(2);
+}
+
 /**
  * Recovery toward healthy-side baseline (Fugl-Meyer style index).
  * higher-is-better: 100×(post−pre)/(healthy−pre)
