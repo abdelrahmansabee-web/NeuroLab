@@ -56,7 +56,7 @@ def _sparc_core(velocity, fs):
     Vf_norm = Vf_pos / vmax
     dV = np.gradient(Vf_norm, freqs_pos)
     integrand = np.sqrt((1.0 / freqs_pos) ** 2 + dV ** 2)
-    arc_length = simpson(integrand, freqs_pos)
+    arc_length = simpson(integrand, x=freqs_pos)
     return -float(arc_length)
 
 
