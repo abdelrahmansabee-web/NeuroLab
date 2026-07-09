@@ -72,6 +72,9 @@ def _compute_sparc_profile(
 
     Returns per-frame SPARC values and verdicts.  Frames before the movement
     window or with too-short trajectories are returned as None.
+
+    NaNs are linearly interpolated so brief tracking gaps do not prevent SPARC
+    computation (the module itself auto-trims static segments).
     """
     palm_x = np.asarray(palm_x, dtype=float)
     palm_y = np.asarray(palm_y, dtype=float)
@@ -80,11 +83,27 @@ def _compute_sparc_profile(
     sparc_verdicts: List[Optional[str]] = [None] * n
 
     start_idx = max(0, int(start_idx))
+    if n - start_idx < min_segment_frames:
+        return sparc_values, sparc_verdicts
+
+    def _clean(arr: np.ndarray) -> np.ndarray:
+        arr = np.asarray(arr, dtype=float)
+        finite = np.isfinite(arr)
+        if finite.all():
+            return arr
+        idx = np.arange(len(arr))
+        if finite.sum() < 2:
+            return arr
+        arr = arr.copy()
+        arr[~finite] = np.interp(idx[~finite], idx[finite], arr[finite])
+        return arr
+
+    clean_x = _clean(palm_x)
+    clean_y = _clean(palm_y)
+
     for i in range(start_idx + min_segment_frames - 1, n):
-        x_seg = palm_x[start_idx : i + 1]
-        y_seg = palm_y[start_idx : i + 1]
-        if np.isnan(x_seg).any() or np.isnan(y_seg).any():
-            continue
+        x_seg = clean_x[start_idx : i + 1]
+        y_seg = clean_y[start_idx : i + 1]
         if len(x_seg) < min_segment_frames:
             continue
         try:
