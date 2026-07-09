@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-from analyze_wiping_video import analyze_wiping
+from sparc_production import sparc_production
 
 
 def _norm_series(df: pd.DataFrame, name: str, coord: str) -> pd.Series:
@@ -60,21 +60,41 @@ def _smooth_pairs(x: np.ndarray, y: np.ndarray, window: int = 5):
     return sx, sy
 
 
-def _compute_wiping_analysis(
-    wrist_x: np.ndarray,
-    wrist_y: np.ndarray,
+def _compute_sparc_profile(
+    palm_x: np.ndarray,
+    palm_y: np.ndarray,
     fs: float,
+    start_idx: int,
+    end_idx: int,
+    min_segment_frames: int = 10,
 ) -> Dict[str, Any]:
     """
-    Compute wiping-task analysis for the wrist trajectory.
+    Compute SPARC smoothness for the movement window.
 
-    The trajectory is expected to be in pixel units so that the default
-    min_distance=5.0 corresponds to a few pixels.  The result is computed once
-    for the whole video and exposed as a single representative value for every
-    frame so it appears in the live overlay.
+    This follows the user's sparc_production module exactly: it expects the full
+    trajectory and auto-trims static start/end periods internally.  We compute
+    SPARC once over the detected movement window, then expose that single
+    representative value for every frame inside the window so it appears in the
+    live overlay without being computed from partial/unrepresentative segments.
     """
-    wrist_x = np.asarray(wrist_x, dtype=float)
-    wrist_y = np.asarray(wrist_y, dtype=float)
+    palm_x = np.asarray(palm_x, dtype=float)
+    palm_y = np.asarray(palm_y, dtype=float)
+    n = len(palm_x)
+    sparc_values: List[Optional[float]] = [None] * n
+    sparc_verdicts: List[Optional[str]] = [None] * n
+    debug: Dict[str, Any] = {
+        "start_idx": int(start_idx),
+        "end_idx": int(end_idx),
+        "input_frames": n,
+        "finite_x": int(np.isfinite(palm_x).sum()),
+        "finite_y": int(np.isfinite(palm_y).sum()),
+    }
+
+    start_idx = max(0, int(start_idx))
+    end_idx = max(start_idx, min(n - 1, int(end_idx)))
+    if end_idx - start_idx + 1 < min_segment_frames:
+        debug["short_circuit"] = "movement_window_too_short"
+        return {"values": sparc_values, "verdicts": sparc_verdicts, "debug": debug}
 
     def _clean(arr: np.ndarray) -> np.ndarray:
         arr = np.asarray(arr, dtype=float)
@@ -88,17 +108,50 @@ def _compute_wiping_analysis(
         arr[~finite] = np.interp(idx[~finite], idx[finite], arr[finite])
         return arr
 
-    x_clean = _clean(wrist_x)
-    y_clean = _clean(wrist_y)
+    # Use the movement window (or whole video if needed) and let the module's
+    # auto-trim find the actual reach segment.
+    candidates = [
+        ("movement_window", _clean(palm_x[start_idx : end_idx + 1]), _clean(palm_y[start_idx : end_idx + 1])),
+        ("whole_video", _clean(palm_x), _clean(palm_y)),
+    ]
 
-    result = analyze_wiping(x_clean, y_clean, fs=fs, auto_trim=True, smooth_sigma=1.5)
-    n = len(wrist_x)
-    verdicts: List[Optional[str]] = [None] * n
-    if result.get("valid"):
+    result = None
+    for label, x_seg, y_seg in candidates:
+        if len(x_seg) < min_segment_frames:
+            continue
+        try:
+            result = sparc_production(
+                x_seg,
+                y_seg,
+                fs=fs,
+                n_points=100,
+                auto_trim=True,
+                smooth_sigma=1.5,
+                speed_threshold_ratio=0.12,
+                validate=True,
+            )
+            debug["used_source"] = label
+            debug["trimmed_frames"] = result.get("trimmed_frames")
+            debug["sparc"] = result.get("sparc")
+            debug["verdict"] = result.get("verdict")
+            debug["warning"] = result.get("warning")
+            if result.get("sparc") is not None:
+                break
+        except Exception as exc:
+            if debug.get("first_error") is None:
+                debug["first_error"] = f"{type(exc).__name__}: {exc}"
+
+    if result and result.get("sparc") is not None:
+        sparc = result.get("sparc")
         verdict = result.get("verdict")
-        for i in range(n):
-            verdicts[i] = verdict
-    return {"result": result, "verdicts": verdicts}
+        for i in range(start_idx, end_idx + 1):
+            sparc_values[i] = sparc
+            sparc_verdicts[i] = verdict
+    else:
+        debug["failed"] = True
+
+    summary = {k: (float(v) if isinstance(v, (np.floating, float)) else (int(v) if isinstance(v, (np.integer, int)) else v)) for k, v in (result or {}).items()}
+    return {"values": sparc_values, "verdicts": sparc_verdicts, "debug": debug, "summary": summary}
 
 
 def build_overlay_data(
@@ -332,26 +385,14 @@ def build_overlay_data(
         start_palm = palm_pairs[onset_idx] if onset_idx < len(palm_pairs) else None
         end_palm = palm_pairs[offset_idx] if offset_idx < len(palm_pairs) else None
 
-        # Compute wiping-task analysis on the raw wrist pixel trajectory.
-        side_prefix = "RIGHT" if side == "right" else "LEFT"
-        raw_wrist_x = (
-            pd.to_numeric(raw_df.get(f"{side_prefix}_WRIST_X", pd.Series(np.nan)), errors="coerce").values
-            * frame_w
+        # Compute cumulative SPARC smoothness up to each frame for the live overlay.
+        sparc_out = _compute_sparc_profile(
+            palm_x, palm_y, fs=target_fs, start_idx=int(onset_idx), end_idx=int(offset_idx)
         )
-        raw_wrist_y = (
-            pd.to_numeric(raw_df.get(f"{side_prefix}_WRIST_Y", pd.Series(np.nan)), errors="coerce").values
-            * frame_h
-        )
-        valid = ~np.isnan(raw_wrist_x)
-        if valid.sum() > 2:
-            idx = np.arange(len(raw_wrist_x))
-            raw_wrist_x = np.interp(idx, np.where(valid)[0], raw_wrist_x[valid])
-            raw_wrist_y = np.interp(idx, np.where(valid)[0], raw_wrist_y[valid])
-        raw_fs = float(len(raw_wrist_x) / (t[-1] - t[0])) if len(t) > 1 and (t[-1] - t[0]) > 0 else target_fs
-        wiping_out = _compute_wiping_analysis(raw_wrist_x, raw_wrist_y, fs=raw_fs)
-        wiping_result = wiping_out["result"]
-        wiping_verdict = wiping_result.get("verdict") if wiping_result.get("valid") else None
-        wiping_verdicts = [wiping_verdict] * len(new_t)
+        sparc_values = sparc_out["values"]
+        sparc_verdicts = sparc_out["verdicts"]
+        sparc_debug = sparc_out["debug"]
+        sparc_summary = sparc_out.get("summary", {})
 
         # Clip speed so the chart/gauge ignore pre/post movement noise.
         for i in range(len(speed)):
@@ -364,7 +405,8 @@ def build_overlay_data(
                 "time": round(float(new_t[i]), 4),
                 "speed": round(float(speed[i]) if np.isfinite(speed[i]) else 0.0, 2),
                 "elbow_angle": round(float(elbow_angle[i]) if elbow_angle is not None and np.isfinite(elbow_angle[i]) else 0.0, 2),
-                "wiping_verdict": wiping_verdicts[i],
+                "sparc": round(float(sparc_values[i]), 3) if sparc_values[i] is not None else None,
+                "sparc_verdict": sparc_verdicts[i],
                 "palm": palm_pairs[i],
                 "wrist": wrist_pairs[i],
                 "shoulder": shoulder_pairs[i],
@@ -391,7 +433,7 @@ def build_overlay_data(
                 "nvp", "straightness", "pause_time_sec", "number_of_stops",
                 "movement_time_sec", "peak_velocity_px_s", "time_to_peak_velocity_sec",
                 "elbow_angle_mean_deg", "elbow_angle_range_deg",
-                "shoulder_elevation_norm", "trunk_ratio",
+                "shoulder_elevation_norm", "trunk_ratio", "sparc",
                 "hand_displacement_px", "hand_displacement_cm", "hand_displacement_norm",
                 "shoulder_elevation_cm", "shoulder_elevation_abs_px",
                 "shoulder_width_px", "shoulder_width_cm", "cm_per_px",
@@ -434,6 +476,26 @@ def build_overlay_data(
                 "v": [float(v) if np.isfinite(v) else 0.0 for v in trunk_x],
             }
 
+        sparc_profile = None
+        if fs:
+            sparc_profile = {
+                "t": (np.arange(len(sparc_values)) / fs).tolist(),
+                "v": [float(v) if v is not None and np.isfinite(v) else 0.0 for v in sparc_values],
+            }
+
+        # Prefer final SPARC from the analysis JSON if available; otherwise use the
+        # last computed overlay value (at movement offset) for the metrics panel.
+        final_sparc = None
+        if analysis and "sparc" in analysis and analysis["sparc"] is not None:
+            try:
+                final_sparc = float(analysis["sparc"])
+            except Exception:
+                pass
+        if final_sparc is None and offset_idx < len(sparc_values) and sparc_values[int(offset_idx)] is not None:
+            final_sparc = float(sparc_values[int(offset_idx)])
+        if final_sparc is not None:
+            metrics["sparc"] = final_sparc
+
         return {
             "fps": round(float(target_fs), 2),
             "duration_sec": round(float(t1 - t0), 3),
@@ -445,7 +507,9 @@ def build_overlay_data(
             "velocity_profile": velocity_profile,
             "elbow_angle_profile": elbow_angle_profile,
             "trunk_x_profile": trunk_x_profile,
-            "wiping": wiping_result,
+            "sparc_profile": sparc_profile,
+            "sparc_debug": sparc_debug,
+            "sparc_summary": sparc_summary,
             "peak_frames": nvp_peaks,
             "start_palm": start_palm,
             "end_palm": end_palm,
