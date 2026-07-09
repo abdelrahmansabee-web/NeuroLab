@@ -1,0 +1,51 @@
+
+=== Control Group (n=12) ===
+Age: 23.1 +/- 2.5
+Sex: {'Female': 7, 'Male': 5}
+Grip (kg): Pre=35.12, Post=35.66, Delta=0.54, paired t p=0.3956
+WPM: Pre=26.17, Post=27.92, Delta=1.75, paired t p=0.0271
+RT (ms): Pre=414.22, Post=414.98, Delta=0.76, paired t p=0.9432
+NHPT (sec): Pre=14.75, Post=14.00, Delta=-0.75, paired t p=0.0316
+Vas-Performance: mean=46.7 +/- 18.6
+VAS-Ease: mean=63.3 +/- 13.5
+VAS-Comfort: mean=72.1 +/- 15.7
+GRC: mean=1.7 +/- 0.9
+
+=== Real-KT (n=12) ===
+Age: 23.5 +/- 3.1
+Sex: {'Female': 7, 'Male': 5}
+Grip (kg): Pre=36.11, Post=37.84, Delta=1.73, paired t p=0.0008
+WPM: Pre=26.33, Post=29.00, Delta=2.67, paired t p=0.0011
+RT (ms): Pre=403.64, Post=391.16, Delta=-12.48, paired t p=0.3849
+NHPT (sec): Pre=14.50, Post=13.08, Delta=-1.42, paired t p=0.0015
+Vas-Performance: mean=77.1 +/- 15.3
+VAS-Ease: mean=82.5 +/- 12.3
+VAS-Comfort: mean=79.6 +/- 24.8
+GRC: mean=5.0 +/- 0.9
+
+=== Sham-KT (n=12) ===
+Age: 22.2 +/- 4.6
+Sex: {'Female': 7, 'Male': 5}
+Grip (kg): Pre=33.74, Post=34.90, Delta=1.16, paired t p=0.0332
+WPM: Pre=30.67, Post=33.25, Delta=2.58, paired t p=0.0495
+RT (ms): Pre=398.42, Post=380.51, Delta=-17.91, paired t p=0.2963
+NHPT (sec): Pre=14.58, Post=12.83, Delta=-1.75, paired t p=0.0077
+Vas-Performance: mean=42.9 +/- 31.0
+VAS-Ease: mean=60.4 +/- 17.4
+VAS-Comfort: mean=79.6 +/- 31.1
+GRC: mean=2.8 +/- 2.0
+
+=== Baseline equivalence (Pre scores) ===
+Grip-Pre: F=0.07, p=0.9281
+WPM-Pre: F=0.61, p=0.5514
+Mean RT-Pre(ms): F=0.19, p=0.8239
+NHPT-Pre (sec): F=0.06, p=0.9445
+Age: F=0.39, p=0.6781
+
+=== Normality of change scores (Shapiro) ===
+Control Group delta Grip: W=0.843, p=0.0305
+Real-KT delta Grip: W=0.912, p=0.2274
+Sham-KT delta Grip: W=0.952, p=0.6697
+Control Group delta WPM: W=0.940, p=0.4919
+Real-KT delta WPM: W=0.850, p=0.0363
+Sham-KT delta WPM: W=0.685, p=0.0006

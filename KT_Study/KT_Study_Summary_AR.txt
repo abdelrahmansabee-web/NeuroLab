@@ -1,0 +1,119 @@
+═══════════════════════════════════════════════════════════════
+  دراسة Kinesio Taping — ملخص التحليل وخطة SPSS
+  Abeer Mohamed — KT Study (n=36)
+  تاريخ: يونيو 2026
+═══════════════════════════════════════════════════════════════
+
+■ 1. موضوع الدراسة
+──────────────────
+العنوان: Immediate Effects of Kinesio Taping on Upper Extremity
+Motor Performance and Perceived Function in Healthy Adults
+
+التصميم: RCT أحادي التعمية — 3 مجموعات × 2 قياس (Pre/Post)
+• Real-KT (n=12)
+• Sham-KT (n=12)
+• Control (n=12)
+
+الهدف: مقارنة التأثير الفوري للـ KT الحقيقي vs Sham vs Control
+على الأداء الحركي والإدراك الذاتي.
+
+
+■ 2. الخلاصة من التحليل الأولي
+──────────────────────────────
+⚠️ هذه نتائج أولية (paired t داخل كل مجموعة) — ليست النتيجة النهائية.
+التحليل النهائي = Mixed ANOVA (Group × Time) في SPSS.
+
+✓ Baseline متكافئ بين المجموعات (Grip, WPM, RT, NHPT, Age — p > .05)
+
+Primary — Grip Strength (kg):
+  Real-KT:  Pre 36.1 → Post 37.8  (Δ +1.73, p=.0008)
+  Sham-KT:  Pre 33.7 → Post 34.9  (Δ +1.16, p=.033)
+  Control:  Pre 35.1 → Post 35.7  (Δ +0.54, ns)
+
+Secondary — WPM:
+  Real-KT:  Δ +2.67 (p=.001)
+  Sham-KT:  Δ +2.58 (p=.049)
+  Control:  Δ +1.75 (p=.027)  ← practice effect محتمل
+
+Secondary — NHPT (sec، أقل = أفضل):
+  Real-KT:  Δ -1.42 (p=.002)
+  Sham-KT:  Δ -1.75 (p=.008)
+  Control:  Δ -0.75 (p=.032)
+
+Secondary — Reaction Time: لا فرق واضح في أي مجموعة
+
+Subjective (Post only):
+  VAS Performance:  Real 77 · Sham 43 · Control 47
+  GRC:                Real 5.0 · Sham 2.8 · Control 1.7
+
+► الرسالة المحتملة:
+  التحسن الموضوعي ليس خاصًا بـ Real-KT فقط (Sham أيضًا تحسّن).
+  الفرق الأوضح في الإدراك الذاتي (Real > Sham ≈ Control) — يدعم placebo.
+
+
+■ 3. تعديلات مطلوبة قبل SPSS
+────────────────────────────
+□ توحيد "Dominant Hand" (إزالة مسافة زائدة في "Right ")
+□ توثيق ID 25 المفقود (dropout) في CONSORT
+□ مراجعة ID 37 — Accuracy Pre = 31.55% (outlier محتمل)
+□ توحيد تسمية VAS (Vas-Performance → VAS_Performance)
+□ التأكد: قيم 0 في VAS — حقيقية أم missing؟
+□ التأكد: WPM في الداتا = Corrected WPM حسب البروبوزال؟
+
+
+■ 4. خطة SPSS (خطوة بخطوة)
+──────────────────────────
+
+① تنظيف Excel → تصدير KT_Study_clean.csv
+② Table 1: Descriptives (Age, Sex, Height, Weight) by Group
+③ Baseline Equivalence: One-way ANOVA على Pre scores + Chi² للجنس
+④ Assumptions: Shapiro-Wilk + Levene على Pre, Post, Δ
+⑤ Primary: 3×2 Mixed ANOVA — Grip Strength
+   → التركيز على Group × Time interaction
+⑥ Post-hoc: Simple effects + Bonferroni (Real vs Sham vs Control)
+⑦ Secondary ×4 (منفصل لكل outcome، Bonferroni α=.0125):
+   • WPM (↑ أفضل)
+   • Accuracy (↑ أفضل)
+   • Mean RT (↓ أفضل)
+   • NHPT (↓ أفضل)
+⑧ Subjective Post-only: One-way ANOVA/Kruskal-Wallis
+   • VAS Performance, VAS Ease, VAS Comfort, GRC
+⑨ Exploratory H₄: Correlation بين Δ objective و VAS/GRC (by Group)
+⑩ Sensitivity: إعادة Primary بدون ID 37
+⑪ Effect sizes: Partial η² · Cohen's d · r
+
+
+■ 5. SPSS Syntax — Primary (Grip)
+─────────────────────────────────
+GLM Grip_Pre Grip_Post BY Group
+  /WSFACTOR=Time 2
+  /METHOD=SSTYPE(3)
+  /EMMEANS=TABLES(Group*Time) COMPARE(Time)
+  /PRINT=DESCRIPTIVE ETASQ
+  /WSDESIGN=Time.
+
+
+■ 6. الجداول المتوقعة للرسالة
+────────────────────────────
+Table 1: Characteristics by Group
+Table 2: Grip Pre/Post/Δ — Primary
+Table 3: Secondary outcomes Pre/Post/Δ
+Table 4: VAS + GRC by Group
+Table 5: Correlation Δ objective vs subjective
+
+
+■ 7. ملفات المشروع (KT_Study)
+─────────────────────────────
+D:\Thesis app\KT_Study\
+  data\KT_Study_Database.xlsx       ← الداتا
+  analysis\kt_preliminary_stats.txt ← تحليل أولي
+  analysis\run_preliminary_stats.py ← سكربت Python
+  extracts\proposal_extract.txt     ← نص البروبوزال
+  extracts\database_extract.txt     ← نسخة نصية للداتا
+  KT_Study_Summary_AR.txt           ← هذا الملف
+
+ملفات SPSS لم تُنشأ بعد:
+  → KT_Study_clean.csv
+  → kt_study_analysis.sps
+
+═══════════════════════════════════════════════════════════════

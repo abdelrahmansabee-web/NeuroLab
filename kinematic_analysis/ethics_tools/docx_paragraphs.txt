@@ -1,0 +1,536 @@
+Number of paragraphs: 242
+
+[0]
+	                                                                                                                                              Tarih:18/08/2026
+
+[2]
+İnsan ARASTIRMALARI ETİK Kurulu Basvuru Formu
+
+[4]
+PROJENİN ADI:
+
+[5]
+İnme Sonrası Tek Seans PETTLEP Temelli Eylem Gözlemi ve Motor İmgeleme (AOMI) Uygulamasının Üst Ekstremite Kinematiği Üzerindeki Anlık Etkileri: Randomize Kontrollü Çalışma 
+
+[8]
+BAŞVURU BİLGİLERİ
+
+[9]
+Başvurunun Şekli
+
+[10]
+ İlk Başvuru  
+
+[11]
+ Düzeltme
+
+[12]
+ Onaylanmış Projenin Devamı
+
+[13]
+ Onaylanan Projede Değişiklik Bildirimi
+
+[14]
+ Bu araştırmanın sonuçları bilimsel bir dergide yayınlanacaktır.
+
+[16]
+Araştırmanın Niteliği
+
+[17]
+ Öğretim Üyesi Araştırması
+
+[18]
+ Yüksek Lisans   Doktora Tez Çalışması
+
+[19]
+ Bu Araştırmanın Sonuçları Bilimsel Bir Dergide Yayınlanacaktır
+
+[20]
+ Diğer (Lütfen açıklayınız)
+
+[22]
+PROJE DANIŞMANI ÖĞRETİM ÜYESİ
+
+[24]
+SORUMLU ARAŞTIRMACI
+
+[26]
+YARDIMCI ARAŞTIRMACILAR
+
+[37]
+ARAŞTIRMANIN GEREKÇESİ, AMACI VE KAYNAKLARI
+
+
+[38]
+İnme, dünya genelinde yetişkinlerde uzun süreli engelliliğin önde gelen nedenlerinden biridir ve bireylerin önemli bir kısmında üst ekstremite fonksiyonu, hareket kontrolü ve koordinasyonunda kalıcı bozukluklara yol açmaktadır (1). Kortikal ve subkortikal motor yapılardaki hasar sonucunda istemli hareketlerin planlanması ve yürütülmesi etkilenmekte, bu durum hareket pürüzsüzlüğünün azalması ve telafi edici hareket stratejilerinin ortaya çıkmasıyla sonuçlanmaktadır. İnme sonrası bireylerde özellikle gövde kompanzasyonu ve omuz kuşağı elevasyonu gibi telafi edici hareketler sıklıkla gözlenmektedir (2,3).
+
+[39]
+Geleneksel nörorehabilitasyon yaklaşımları büyük ölçüde aktif görev pratiğine dayanmaktadır. Ancak birçok inme hastası, özellikle üst ekstremite etkilenimi belirgin olan bireyler, bu tür uygulamalara yeterli düzeyde katılım sağlayamamaktadır (4). Bu nedenle fiziksel hareket üretimi gerektirmeyen, ancak motor ağları aktive edebilen alternatif yaklaşımlara ihtiyaç duyulmaktadır.
+
+[40]
+Motor İmgeleme (Mİ), herhangi bir fiziksel hareket gerçekleştirmeden hareketin zihinsel olarak canlandırılması sürecidir ve gerçek hareket ile büyük ölçüde ortak nöral mekanizmaları kullanmaktadır (4,5). Son yıllarda, Motor İmgelemenin Eylem Gözlemi (AO) ile birleştirilmesiyle oluşturulan Eylem Gözlemi ve Motor İmgeleme (AOMI) yaklaşımının, motor öğrenme ve motor performans üzerinde tek başına Mİ uygulamalarına kıyasla daha güçlü etkiler sağlayabileceği bildirilmiştir (6).
+
+[41]
+Motor imgelemenin etkinliği, imgelemenin gerçek hareket deneyimine ne ölçüde benzediği ile yakından ilişkilidir. Bu amaçla geliştirilen PETTLEP modeli (Physical, Environment, Task, Timing, Learning, Emotion, Perspective), imgeleme ile gerçek hareket arasındaki işlevsel benzerliği artırmayı hedefleyen kanıta dayalı bir yaklaşımdır (7). PETTLEP ilkelerine göre yapılandırılmış bir AOMI uygulamasının, inme sonrası üst ekstremite performansını destekleyebilecek etkili bir rehabilitasyon aracı olabileceği düşünülmektedir.
+
+[42]
+Bu çalışmada, PETTLEP temelli AOMI uygulamasının üst ekstremite hareket kalitesi üzerindeki kısa dönemli etkileri, MediaPipe Pose Landmarker tabanlı işaretsiz hareket analizi sistemi kullanılarak değerlendirilecektir. Hareket pürüzsüzlüğü (SPARC), gövde kompanzasyonu (trunk ratio), omuz kuşağı elevasyonu (shoulder elevation), dirsek açısı, hareket süresi ve tepe hız gibi kinematik parametreler objektif olarak ölçülecektir (8). Ayrıca Wolf Motor Function Test kısa formu (WMFT-4) kullanılarak fonksiyonel üst ekstremite performansı değerlendirilecektir (9).
+
+[43]
+Bu çalışmanın amacı, tek seanslık PETTLEP temelli AOMI uygulamasının inme geçirmiş bireylerde üst ekstremite hareket pürüzsüzlüğü, telafi edici hareket stratejileri ve fonksiyonel performans üzerindeki akut etkilerini incelemektir. Elde edilecek bulguların, AOMI uygulamalarının nörorehabilitasyondaki kullanımına ilişkin mevcut literatüre katkı sağlaması beklenmektedir.
+
+[45]
+Anahtar Kelimeler: Motor imgeleme, eylem gözlemi, AOMI, PETTLEP, inme, MediaPipe, kinematik, üst ekstremite rehabilitasyonu.
+
+[47]
+Araştırma Sorusu
+
+[48]
+Tek seanslık PETTLEP temelli AOMI uygulaması, inme geçirmiş bireylerde imgeleme ve zihinsel arınma kontrol müdahalesine kıyasla üst ekstremite hareket pürüzsüzlüğü, telafi edici hareket stratejileri ve fonksiyonel performansta akut değişikliklere yol açmakta mıdır?
+
+[50]
+Hipotezler
+
+[51]
+H₀: PETTLEP temelli AOMI uygulaması ile kontrol müdahalesi arasında, üst ekstremite hareket pürüzsüzlüğü (SPARC), telafi edici hareket stratejileri ve fonksiyonel performanstaki değişim açısından anlamlı bir fark yoktur.
+
+[52]
+H₁: PETTLEP temelli AOMI uygulaması, kontrol müdahalesine kıyasla üst ekstremite hareket pürüzsüzlüğü (SPARC), telafi edici hareket stratejileri ve fonksiyonel performansta anlamlı iyileşmeler sağlar.
+
+[54]
+REVİZYON (Onaylanmış Protokolde Değişiklikler)
+
+[55]
+Çalışma çok merkezli olarak yeniden yapılandırılmış olup, Biruni Üniversitesi Hastanesi Fiziksel Tıp ve Rehabilitasyon Polikliniği ikinci veri toplama merkezi olarak araştırmaya dahil edilmiştir. Bu kapsamda, Doç. Dr. Çiğdem Çınar yardımcı araştırmacı olarak araştırma ekibine eklenmiştir. Araştırmanın bilimsel tasarımı, randomizasyon yöntemi ve planlanan örneklem büyüklüğü (n = 28) değiştirilmemiştir.
+
+[56]
+Ek olarak, müdahale protokolü ve sonuç ölçütleri daha ayrıntılı şekilde tanımlanmıştır. Çalışmada kullanılan motor görev “Reach & Return (uzanma ve geri dönüş)” olarak belirlenmiştir. Deneysel müdahale, PETTLEP temelli Eylem Gözlemi ve Motor İmgeleme (AOMI) protokolü kapsamında dört adet 3 dakikalık bloktan oluşacak şekilde (toplam yaklaşık 13 dakika) yapılandırılmıştır. Kontrol koşulu ise süre ve dikkat yükü açısından eşleştirilmiş imgeleme ve zihinsel arınma protokolü olarak düzenlenmiştir.
+
+[57]
+Birincil sonuç ölçütü olarak hareket pürüzsüzlüğünü değerlendiren Spectral Arc Length (SPARC) parametresi belirlenmiştir. İkincil sonuç ölçütleri arasında gövde kompanzasyonu (trunk_ratio), omuz kuşağı elevasyonu (shoulder_vert_norm; ZoeDepth tabanlı metrik ölçekleme ile), dirsek açısı (elbow_angle_mean), hareket süresi (movement_time_sec) ve tepe hız (peak_velocity_px_s) yer almaktadır.
+
+[60]
+  (Ayrıntılı olarak yazılmalıdır.)
+
+[61]
+Çalışma ile ilgili gördüğünüz literatür başlıkları yazılmalıdır.
+
+[62]
+KAYNAKLAR:
+
+
+[63]
+1. World Stroke Organization (WSO). Global Stroke Fact Sheet 2022. Geneva: World Stroke Organization; 2022.
+
+[64]
+2. Facciorusso S, Guanziroli E, Brambilla C, Spina S, Giraud M, Molinari Tosatti L, et al. Muscle synergies in upper limb stroke rehabilitation: a scoping review. Eur J Phys Rehabil Med. 2024 Oct;60(5):767-792.
+
+[65]
+3. Schwarz A, Bhagubai MMC, Nies SHG, Held JPO, Veltink PH, Buurke JH, Luft AR. Characterization of stroke-related upper limb motor impairments across various upper limb activities by use of kinematic core set measures. J Neuroeng Rehabil. 2022 Jan 12;19(1):2.
+
+[66]
+4. Guerra ZF, Lucchetti AL, Lucchetti G. Motor Imagery Training After Stroke: A Systematic Review. J Neurol Phys Ther. 2017;41(4):205-214.
+
+[67]
+5. Lakshminarayanan K, Shahbazi M, Janouch C, Ladda AM. Editorial: Recent advancements in motor imagery. Front Neurol. 2023;14:1248023.
+
+[68]
+6. Kim JH, Lee BH. The Effect of Action Observation Combined with Motor Imagery Training on Upper Extremity Function and Corticospinal Excitability in Stroke Patients: A Randomized Controlled Trial. Int J Environ Res Public Health. 2022;19(19):12048.
+
+[69]
+7. Holmes PS, Collins DJ. The PETTLEP Approach to Motor Imagery: A Functional Equivalence Model for Sport Psychologists. J Appl Sport Psychol. 2001;13(1):60–83.
+
+[70]
+8. Wagh V, Scott MW, Andrushko JW, Jones CB, Larssen BC, Boyd LA, Kraeutner SN. Using MediaPipe to track upper-limb reaching movements after stroke: a proof-of-principle study. J Neuroeng Rehabil. 2025 Nov 25;22(1):268.
+
+[71]
+9. Wolf SL, Catlin PA, Ellis M, et al. Assessing Wolf Motor Function Test scores against normative values. Arch Phys Med Rehabil. 2001;82(5):609-614.
+
+[72]
+10. Caires TA, Fernandes LFRM, Patrizzi LJ, de Almeida Oliveira R, de Souza LAPS. Immediate effect of mental practice with and without mirror therapy on muscle activation in hemiparetic stroke patients. J Bodyw Mov Ther. 2017;21(4):1024-1027.
+
+[73]
+11. Bijur PE, Silver W, Gallagher EJ. Reliability of the visual analog scale for measurement of acute pain. Acad Emerg Med. 2001;8(12):1153–1157.
+
+[74]
+12. Malouin F, Richards CL, Jackson PL, et al. The Kinesthetic and Visual Imagery Questionnaire (KVIQ) for assessing motor imagery in persons with physical disabilities: a reliability and construct validity study. J Neurol Phys Ther. 2007;31(1):20-29.
+
+[75]
+13. Schuster C, Hilfiker R, Amft O, Scheidhauer A, Andrews B, Butler J, et al. Best practice for motor imagery: a systematic literature review on motor imagery training elements in five different disciplines. BMC Med. 2011;9:75.
+
+[76]
+14. Di Rienzo F, et al. Motor imagery training in stroke: a systematic review. Front Hum Neurosci. 2016.
+
+[77]
+15. Balasubramanian S, Melendez-Calderon A, Burdet E. A robust and sensitive metric for quantifying movement smoothness. IEEE Trans Biomed Eng. 2012;59(8):2126-2136.
+
+[78]
+16. Balasubramanian S, Melendez-Calderon A, Roby-Brami A, Burdet E. On the analysis of movement smoothness. J NeuroEngineering Rehabil. 2015;12:112.
+
+[79]
+17. Refai MIM, Saes M, Scheltinga BL, van Kordelaar J, Bussmann JBJ, Veltink PH, et al. Smoothness metrics for reaching performance after stroke. Part 1: which one to choose? J Neuroeng Rehabil. 2021;18(1):154.
+
+[80]
+18. Saes M, Refai MIM, van Kordelaar J, Scheltinga BL, van Beijnum B-JF, Bussmann JB, et al. Smoothness metric during reach-to-grasp after stroke. Part 2. Longitudinal association with motor impairment. J Neuroeng Rehabil. 2021;18(1):144.          
+
+[83]
+GÖNÜLLÜLERİN NİTELİĞİ 
+
+[87]
+ARAŞTIRMANIN YAPILACAĞI YER
+
+[88]
+Kurum/Kuruluş Adı ve Adresi:
+
+[89]
+İstinye Üniversitesi Liv Bahçeşehir Hastanesi, Nörorehabilitasyon Kliniği, İstanbul
+
+[90]
+Biruni Üniversitesi Hastanesi, Fiziksel Tıp ve Rehabilitasyon Polikliniği, İstanbul (çok merkezli veri toplama merkezi — revizyon kapsamında eklenmiştir)
+
+[92]
+(Varsa birden fazla belirtiniz):
+
+[94]
+ Hastane (İzin Yazısı Alınmalıdır)		Saha 
+
+[95]
+   Poliklinik (İzin Yazısı Alınmalıdır)		Diğer (lütfen belirtiniz)
+
+[96]
+ Sağlık Ocağı (İzin Yazısı Alınmalıdır)
+
+[98]
+VERİ TOPLAMA YÖNTEMİ
+
+[99]
+Çalışma Tasarımı:
+
+[100]
+Bu çalışmada, deneysel koşul (PETTLEP modeli temelli Eylem Gözlemi ve Motor İmgeleme [AOMI]) ile kontrol koşulunun (bilişsel ve somatik kontrol) karşılaştırılacağı, tek kör, ön test-son test tasarımlı, prospektif randomize kontrollü bir çalışma (RCT) yürütülecektir. Çalışma, iki kollu bir tasarıma sahip olup deneysel grup PETTLEP temelli AOMI uygulamasını, kontrol grubu ise bilişsel ve somatik kontrol müdahalesini alacaktır.
+
+[101]
+Bu araştırmada, işaretsiz hareket yakalama sistemi kullanılarak uygulanan tek seanslık PETTLEP temelli AOMI görevinin, inme geçirmiş bireylerde etkilenen üst ekstremitenin kinematik özellikleri ve fonksiyonel performansı üzerindeki akut etkilerinin öncül olarak incelenmesi amaçlanmaktadır. Çalışmaya başlanmadan önce ilgili etik kurul onayı alınacak ve tüm katılımcılardan yazılı bilgilendirilmiş gönüllü olur formu temin edilecektir. Çalışmanın toplam süresi, etik kurul onayının alınmasını takiben 12 ay olarak planlanmıştır.
+
+[102]
+Araştırma çok merkezli olarak yürütülecek olup, katılımcılar İstinye Üniversitesi Liv Bahçeşehir Hastanesi Nörorehabilitasyon Kliniği ile Biruni Üniversitesi Hastanesi Fiziksel Tıp ve Rehabilitasyon Polikliniğinden temin edilecektir.
+
+[103]
+Örneklem Büyüklüğü ve Randomizasyon:
+
+[104]
+Örneklem büyüklüğü, G*Power (v3.1.9.2) programı kullanılarak, 2 (Grup: Motor İmgeleme ve Kontrol) × 2 (Zaman: Ön test ve Son test) karma desenli tekrarlı ölçümler ANOVA modeli için a priori güç analizi ile hesaplanmıştır. Benzer akut motor imgeleme çalışmalarından elde edilen bulgular doğrultusunda etki büyüklüğü f = 0.40 (yaklaşık Cohen's d = 1.2) olarak kabul edilmiştir. Bununla birlikte, mevcut çalışmanın tek seanslık ve akut etkiyi inceleyen yapısı göz önüne alındığında, bu etki büyüklüğünün iyimser bir varsayım olduğu düşünülmektedir. %95 güç (1−β = 0.95) ve %5 tip I hata düzeyi (α = 0.05) ile anlamlı bir grup × zaman etkileşimini tespit edebilmek için toplam 24 katılımcının (her grupta 12 kişi) gerekli olduğu belirlenmiştir. Olası takip kayıpları ve veri kayıplarını telafi etmek amacıyla örneklem büyüklüğü %15 artırılmış ve toplam 28 katılımcının (her grupta 14 kişi) çalışmaya dahil edilmesi planlanmıştır (10).
+
+[105]
+Katılımcılar, 1:1 oranında deneysel grup (motor imgeleme) veya kontrol grubuna atanmak üzere tabakalandırılmış permütasyonlu blok randomizasyon yöntemi ile randomize edilecektir. Tabakalandırma kriterleri; (i) cinsiyet (erkek/kadın) ve (ii) etkilenen üst ekstremitedeki spastisite düzeyi olacaktır. Spastisite düzeyi, Modifiye Ashworth Skalası (MAS) kullanılarak değerlendirilecek ve hafif spastisite (MAS 0–1+) ile orta düzey spastisite (MAS 2) olmak üzere iki kategoriye ayrılacaktır.
+
+[106]
+Bağımsız bir araştırmacı tarafından, gruplar arasında dengeyi ve tahsisatın öngörülemezliğini sağlamak amacıyla, her bir tabaka için değişken blok büyüklükleri (4–6 kişi) kullanılarak bilgisayar tabanlı randomizasyon listeleri oluşturulacaktır. Tahsisat gizliliği, çalışmaya katılımcı alım sürecinde yer almayan bir araştırmacı tarafından hazırlanan sıralı numaralandırılmış, opak ve kapalı zarflar aracılığıyla sağlanacaktır. Bir tabaka içerisinde planlanan blok büyüklüğünü tamamlayacak sayıda katılımcıya ulaşılamaması durumunda, ilgili tabakadaki son katılımcılar randomizasyon dengesini koruyacak şekilde rastgele atanacaktır.
+
+[108]
+Değerlendirmeler: Güvenilirlik ve tutarlılığı sağlamak amacıyla, çevresel koşullar tüm değerlendirmeler için standardize edilecektir. Her katılımcı, müdahale seansının hemen öncesinde ve hemen sonrasında olmak üzere iki kez değerlendirilecektir. Bu ön test–son test protokolü, motor imgeleme veya kontrol görevi sonrası (hareket pürüzsüzlüğü, Gövde Yer Değiştirmesi, Omuz Kuşağı Elevasyonu) parametrelerindeki geçici değişikliklerin tespit edilmesini sağlar. Değerlendiriciler arası değişkenliği önlemek amacıyla testler her merkezde tek bir eğitimli fizyoterapist tarafından yürütülecektir.
+
+[109]
+Kinematik parametreler, MediaPipe Pose Landmarker (33 landmark) kullanılarak video kayıtlarından otomatik olarak çıkarılacaktır. MediaPipe tabanlı işaretsiz hareket analizinin inme sonrası bireylerde üst ekstremite ulaşma kinematiğini izlemede geçerliliği daha önce gösterilmiştir (8).
+
+[111]
+Deneysel Koşulların Standardizasyonu:
+
+[112]
+Bu çalışmadaki katılımcılara, düzenli eğitim kıyafetlerinin bir parçası olan uzun kollu, koyu mor bir tişört giydirilecektir. Örgüler/at kuyrukları, boyun ve omuz işaretleyicilerinin kamera tarafından engellenmeden görülmesini sağlayacak şekilde sabitlenmelidir. Deneysel koşullar (sandalye ve masa yüksekliği ile katılımcı ve hedef arasındaki mesafe) tek tip olacak ve her bir katılımcı için ön ve son test prosedürleri arasında değişmeden kalacaktır. Eğitimin diğer anlık etkilerini önlemek amacıyla, katılımcılardan test seansının yapıldığı gün başka bir üst ekstremite rehabilitasyon tedavisine katılmamaları istenecektir.
+
+[113]
+Görevin Yürütülmesi (Reach & Return — Ulaşma–Dönüş):
+
+[114]
+Ulaşma–Dönüş görevi için sözlü talimat, dikkatte yanlılığı önlemek amacıyla aynı standart metinden verilecektir. Katılımcıların her değerlendirme zaman noktasında (önce ve sonra) kaydedilmek üzere üç deneme tamamlamaları gerekmektedir; analiz için üç denemenin ortalaması kullanılacaktır. Yerleşik hareket davranışlarını yakalamak için "hızlı" veya "yavaş" gitmeleri yönünde açık bir talimat verilmeksizin, görevi kendileri için doğal olan bir hızda (rahat hareket hızı) tamamlamaları söylenecektir.
+
+[115]
+Çalışmanın birincil sonucu, etkilenen üst ekstremitenin hareket pürüzsüzlüğündeki değişimdir (SPARC). MediaPipe tabanlı pipeline akıllı telefon veya web kamerası videosundan avuç yörüngesi türetir (8). SPARC (Spectral Arc Length — Spektral Ark Uzunluğu): Avuç merkezinin X–Y yörüngesinden teğetsel hız profili hesaplanır; hız sinyali normalize edilir ve hızlı Fourier dönüşümü (FFT) ile frekans spektrumu elde edilir (fc ≤ 10 Hz). Spektral eğrinin ark uzunluğu alınır (15,16). İnme sonrası ulaşma görevlerinde değerlendirilen 32 pürüzsüzlük metriği arasından yalnızca SPARC'nin matematiksel olarak geçerli bulunduğu gösterilmiştir (17). 
+SPARC'nin FM-UE ile uzunlamasına pozitif ilişkisi doğrulanmıştır (18). Daha negatif SPARC değerleri daha pürüzsüz, kesintisiz hareketi; daha az negatif (veya pozitif) değerler stop-and-go davranışını yansıtır.
+
+[116]
+Anlık kinematik değişiklikleri değerlendirmek amacıyla, tek eğitim seansının öncesinde ve hemen sonrasında kayıtlar alınacaktır. Sensör tutarlılığını sağlamak için tüm katılımcılarda aynı akıllı telefon veya web kamerası modeli kullanılacaktır. Kamera, sabit bir yüksekliğe monte edilen tripod üzerine yerleştirilecek ve katılımcıya göre yan görünümde (90°) yaklaşık 1,5–2,0 m standart mesafede konumlandırılacaktır.
+Kayıtlar 1080p çözünürlükte ve saniyede 60 kare (fps) yapılacaktır. Yapay zeka takibini engelleyebilecek arkadan aydınlatma veya gölgeleri önlemek için kayıtlar tutarlı, dağınık aydınlatmaya sahip bir odada gerçekleştirilecektir. Video verileri MediaPipe Pose Landmarker (33 landmark, 2D) ile işlenecek; omuz elevasyonu için ZoeDepth monoküler derinlik ağı ile omuz genişliği metrik ölçeklemesi uygulanacaktır.
+
+[117]
+
+Birincil Sonuç Ölçütü:
+
+[118]
+Çalışmanın birincil sonuç ölçütü, etkilenen üst ekstremitenin hareket pürüzsüzlüğündeki değişim olacaktır. Hareket pürüzsüzlüğü, Spektral Ark Uzunluğu (Spectral Arc Length, SPARC) yöntemi kullanılarak değerlendirilecektir. Bu amaçla, MediaPipe tabanlı işaretsiz hareket analizi sistemi aracılığıyla akıllı telefon veya web kamerası ile kaydedilen videolardan avuç içi merkezinin hareket yörüngesi elde edilecektir (8).
+
+[119]
+SPARC hesaplamasında, avuç içi merkezinin iki boyutlu (X–Y) hareket yörüngesinden teğetsel hız profili oluşturulacaktır. Hız sinyali normalize edildikten sonra hızlı Fourier dönüşümü (Fast Fourier Transform, FFT) uygulanarak frekans spektrumu elde edilecek ve 10 Hz'e kadar olan frekans bileşenleri analiz edilecektir. Ardından spektral eğrinin ark uzunluğu hesaplanarak SPARC değeri belirlenecektir (Balasubramanian ve ark., 2012; 2015).
+
+[120]
+SPARC, hareket pürüzsüzlüğünü değerlendirmede geçerli ve güvenilir bir kinematik ölçüttür. Daha düşük (daha negatif) SPARC değerleri daha pürüzsüz ve kesintisiz hareketi gösterirken, daha yüksek (daha az negatif) değerler hareket sırasında dur-kalk karakterindeki düzensizliklerin arttığını ifade etmektedir.
+
+[121]
+
+
+İkincil Sonuç Ölçütleri:
+
+[122]
+1. Gövde Kompanzasyonu (Trunk Ratio)
+
+[123]
+Amaç: Etkilenen üst ekstremitedeki hareket kısıtlılığını telafi etmek amacıyla kullanılan gövde yer değiştirme miktarını nicel olarak değerlendirmek.
+
+[124]
+Ölçüm Yöntemi: Gövde kompanzasyonu, hareket sırasında gövde ve el hareketlerinin göreceli katkısını yansıtan Trunk Ratio parametresi kullanılarak hesaplanacaktır. Daha yüksek değerler, görevin gerçekleştirilmesi sırasında gövde kompanzasyonunun daha fazla kullanıldığını gösterecektir.
+
+[126]
+2. Omuz Kuşağı Elevasyonu (Shoulder Elevation)
+
+[127]
+Amaç: Hareket sırasında ortaya çıkan telafi edici omuz elevasyonunun düzeyini değerlendirmek.
+
+[128]
+Ölçüm Yöntemi: Omuz elevasyonu, etkilenen omuz landmark’ının dikey (Y ekseni) yer değiştirmesinin omuz genişliğine normalize edilmesiyle hesaplanacaktır (shoulder_vert_norm). Omuz genişliği için metrik ölçek, ZoeDepth monoküler derinlik ağı kullanılarak elde edilecektir. Daha yüksek değerler daha fazla telafi edici omuz elevasyonunu gösterecektir.
+
+[130]
+3. Dirsek Açısı (Elbow Angle Mean)
+
+[131]
+Amaç: Uzanma hareketi sırasında dirsek ekleminin pozisyonunu ve hareket stratejisini değerlendirmek.
+
+[132]
+Ölçüm Yöntemi: Dirsek açısı, omuz–dirsek–el bileği noktaları arasında oluşturulan vektörler arasındaki açının hareket süresince her karede hesaplanması ve ortalama değerinin alınmasıyla belirlenecektir. Ölçüm özellikle sagittal düzlemden elde edilen görüntülerde yüksek doğruluk sağlamaktadır.
+
+[134]
+4. Hareket Süresi (Movement Time)
+
+[135]
+Amaç: Hedefe yönelik hareketin tamamlanması için gereken süreyi değerlendirmek.
+
+[136]
+Ölçüm Yöntemi: Hareket süresi, avuç içi teğetsel hızının önceden belirlenen eşik değerin üzerinde kaldığı zaman aralığı (başlangıç–bitiş) olarak tanımlanacak ve saniye cinsinden hesaplanacaktır. Daha kısa süreler daha hızlı hareket performansını gösterecektir.
+
+[138]
+5. Tepe Hız (Peak Velocity)
+
+[139]
+Amaç: Hedefe yönelik hareket sırasında ulaşılan maksimum hareket hızını değerlendirmek.
+
+[140]
+Ölçüm Yöntemi: Tepe hız, hareket penceresi içerisinde avuç içi teğetsel hızının ulaştığı en yüksek değer olarak hesaplanacak ve piksel/saniye (px/s) cinsinden raporlanacaktır. Daha yüksek değerler daha hızlı hareket üretimini yansıtmaktadır.
+
+[142]
+6. Üst Ekstremite Fonksiyonu – Wolf Motor Function Test Kısa Formu (WMFT-4)
+
+[143]
+Amaç: Kinematik parametrelerde gözlenen değişimlerin fonksiyonel performansa yansıyıp yansımadığını değerlendirmek.
+
+[144]
+Ölçüm Yöntemi: Üst ekstremite fonksiyonu, Wolf Motor Function Test’in dört maddelik kısa formu (WMFT-4) kullanılarak değerlendirilecektir. Her görev için tamamlanma süresi ve fonksiyonel performans puanı kaydedilecektir. WMFT, inme sonrası üst ekstremite fonksiyonunu değerlendirmede geçerliliği ve güvenirliği gösterilmiş, yaygın olarak kullanılan standart bir klinik değerlendirme aracıdır (9).
+
+[146]
+7. Ağrı – Görsel Analog Skalası (VAS)
+
+[147]
+Amaç: Etkilenen üst ekstremitedeki ağrı şiddetini değerlendirmek ve müdahalenin güvenliğini izlemek amacıyla kısa dönemli ağrı algısındaki değişiklikleri belirlemek.
+
+[148]
+Ölçüm Yöntemi: Katılımcılar ağrı şiddetini, bir ucunda “ağrı yok” (0), diğer ucunda ise “hayal edilebilecek en şiddetli ağrı” (10) ifadelerinin yer aldığı 10 cm uzunluğundaki yatay bir çizgi üzerinde işaretleyerek değerlendirirler (11). VAS, klinik uygulamada yaygın olarak kullanılan, geçerli ve güvenilir bir ağrı değerlendirme aracıdır.
+
+[150]
+8. Hareket İmgeleme Yeteneği – Kinestetik ve Görsel İmgeleme Anketi-10 (KVIQ-10)
+
+[151]
+Amaç: Katılımcıların hareket imgeleme kapasitesini görsel ve kinestetik boyutlarda değerlendirmek.
+
+[152]
+Ölçüm Yöntemi: Katılımcıdan belirli hareketleri gerçekleştirmesi veya gözlemlemesi istenir. Ardından aynı hareketi zihinsel olarak canlandırması ve imgelemenin canlılığını değerlendirmesi talep edilir. Görsel ve kinestetik imgeleme canlılığı Likert tipi ölçek kullanılarak puanlanır; yüksek puanlar daha güçlü imgeleme kapasitesini gösterir (12).
+
+[154]
+9. Duygu Durumu – Görsel Analog Duygu Durumu Ölçeği-4 (VAMS-4)
+
+[155]
+Amaç: Müdahalenin katılımcıların duygusal durumu üzerindeki etkilerini değerlendirmek.
+
+[156]
+Ölçüm Yöntemi: Duygu durumu; mutlu, sakin, üzgün ve gergin olmak üzere dört boyutta değerlendirilir. Ölçek müdahale öncesinde ve sonrasında uygulanacaktır.
+
+[158]
+10. Fiziksel Aktivite Düzeyi – Uluslararası Fiziksel Aktivite Anketi (IPAQ)
+
+[159]
+Amaç: Katılımcıların başlangıçtaki fiziksel aktivite düzeylerini belirlemek.
+
+[160]
+Ölçüm Yöntemi: Uluslararası Fiziksel Aktivite Anketi (IPAQ), çalışmanın başlangıcında katılımcıların fiziksel aktivite düzeylerini değerlendirmek amacıyla uygulanacaktır.
+
+[162]
+11. Motor Değişim Derecelendirme Ölçeği (Motor Difference Rating Scale, MDRS)
+
+[163]
+Amaç: Katılımcının müdahale sonrasında algıladığı motor performans değişimini değerlendirmek.
+
+[164]
+Ölçüm Yöntemi: Motor Değişim Derecelendirme Ölçeği, müdahale sonrasında uygulanarak katılımcının algıladığı motor performans değişim düzeyi belirlenecektir. Daha yüksek puanlar, katılımcının algıladığı daha fazla olumlu değişimi göstermektedir.
+
+[166]
+Müdahale
+
+[167]
+Müdahale protokolü, Eylem Gözlemi (Action Observation, AO) ile birlikte uygulanan PETTLEP temelli Motor İmgeleme (Motor Imagery, MI) yaklaşımına dayanmaktadır. Çalışma prosedürü; ön değerlendirme, müdahale ve son değerlendirme olmak üzere üç aşamadan oluşmaktadır. Müdahale süresi yaklaşık 13 dakikadır. Müdahale sırasında herhangi bir fiziksel uygulama yaptırılmayacak, Reach & Return (uzanma ve geri dönüş) görevi yalnızca ön ve son değerlendirmelerde gerçekleştirilecektir.
+
+[169]
+Ön Değerlendirme
+
+[170]
+Sistem kalibrasyonunun ardından katılımcılardan Reach & Return görevini üç kez gerçekleştirmeleri istenecektir. Hareketler, MediaPipe tabanlı işaretsiz hareket yakalama sistemi ile kaydedilecek ve hareket pürüzsüzlüğü (SPARC), gövde kompanzasyonu (trunk ratio) ve diğer kinematik parametreler analiz edilecektir.
+
+[172]
+Müdahale Aşaması
+
+[173]
+Katılımcılar randomizasyon sonrasında deneysel grup veya kontrol grubuna atanacaktır. Her iki grup da benzer süre ve dikkat yüküne sahip yaklaşık 13 dakikalık bir oturuma katılacaktır. Tüm girişimler ve değerlendirmeler aynı oda, sandalye düzeni, kulaklık sistemi ve seans süresi ile gerçekleştirilecektir.
+
+[176]
+Deneysel Grup (PETTLEP Temelli AO + MI)
+
+[177]
+Müdahale, 60 saniyelik bir hazırlık aşamasını takiben dört eğitim bloğundan oluşacaktır. Her blok sırasıyla 45 saniye eylem gözlemi, 90 saniye motor imgeleme ve 45 saniye dinlenme dönemlerini içerecektir.
+
+[178]
+Hazırlık aşamasında katılımcılardan etkilenmemiş üst ekstremiteleri ile bir kez yavaşça uzanma hareketi yapmaları ve hareket sırasında oluşan hissi fark ederek etkilenen üst ekstremitelerine aktarmaları istenecektir. Eylem gözlemi aşamasında katılımcılar, etkilenen üst ekstremite ile gerçekleştirilen Reach & Return hareketinin birinci şahıs bakış açısından kaydedilmiş videosunu izleyecektir. Videolarda gövde stabilitesi, omuz kontrolü, dirsek hareketi ve ulaşma–geri dönüş sekansı vurgulanacaktır. Motor imgeleme aşamasında katılımcılar gözleri kapalı şekilde, hareketi birinci şahıs ve kinestetik perspektiften, gerçek zamanlı olarak zihinsel olarak canlandıracaktır. Son iki blokta ulaşma, kısa bekleme ve geri dönüş fazlarının zamanlamasını desteklemek amacıyla sesli zamanlama ipuçları kullanılacaktır. Dinlenme aşamasında katılımcılar herhangi bir görev yerine getirmeden rahat şekilde oturacak ve normal solunumlarını sürdürecektir.
+
+[180]
+Müdahale Sadakati 
+
+[181]
+Tüm imgeleme talimatları standartlaştırılmış önceden kaydedilmiş ses dosyaları aracılığıyla kulaklık kullanılarak sunulacaktır. Her imgeleme bloğunun ardından katılımcılara imgelemenin normal hareket hızına uygun olup olmadığı sorulacaktır. Müdahale süresince katılımcının katılımı, gözlerin kapalı tutulması, istemli hareket yapılmaması ve olası yan etkiler/istenmeyen durumlar araştırmacı tarafından kayıt altına alınacaktır. 
+
+[183]
+Kontrol Grubu
+
+[184]
+Kontrol grubundaki katılımcılar süre ve dikkat yükü açısından deneysel grupla eşleştirilmiş motor olmayan zihinsel görevler uygulayacaktır. Müdahale; 60 saniyelik hazırlık aşaması ve dört adet 3 dakikalık bloktan oluşacaktır.
+
+[185]
+Hazırlık aşamasında katılımcılardan rahat oturmaları, nefeslerine odaklanmaları ve günlük düşüncelerinden uzaklaşmaları istenecektir. Eğitim bloklarında sakin doğa sahneleri, renkler veya ışık gibi hareket içermeyen zihinsel imgeler oluşturmaları istenecektir. Katılımcılardan üst ekstremite hareketlerini veya Reach & Return görevini zihinsel olarak canlandırmamaları özellikle talep edilecektir. 
+
+[186]
+PETTLEP İlkelerinin Uygulanması
+
+[187]
+Motor imgeleme oturumu PETTLEP modelinin Fiziksel, Çevre, Görev, Zamanlama, Öğrenme, Duygu ve Perspektif bileşenleri doğrultusunda yapılandırılmıştır. Katılımcılar değerlendirme ile aynı oturma pozisyonunda bulunacak, aynı çevresel koşullarda çalışacak ve günlük yaşamda sık kullanılan Reach & Return görevini zihinsel olarak canlandıracaktır. İmgeleme gerçek zamanlı olarak gerçekleştirilecek, kinestetik duyumlar vurgulanacak ve hareketler birinci şahıs perspektifinden hayal edilecektir. Talimatlarda rahatlık, akıcılık ve güven duygularını destekleyen ifadeler kullanılacaktır.
+
+[189]
+Veri Toplama Yöntemleri
+
+[190]
+Veriler görüntü kaydı, klinik ölçekler, performans testleri ve yapay zekâ tabanlı hareket analizi sistemi (MediaPipe) kullanılarak toplanacaktır. Katılımcı bilgileri araştırma kodları ile kodlanacak ve analizler kimliksizleştirilmiş veriler üzerinden gerçekleştirilecektir.
+
+[192]
+BAP Destek Talebi: Yok
+
+[196]
+ARAŞTIRMAYA DAHİL EDİLME, HARİÇ TUTULMA VE ARAŞTIRMADAN ÇIKARILMA KRİTERLERİ
+
+[197]
+Dahil edilme kriterlerini karşılayan toplam 28 inme hastasının (her grupta 14 katılımcı) çalışmaya dahil edilmesi planlanmaktadır. Katılımcılar, randomizasyon yöntemi kullanılarak deneysel grup veya kontrol grubuna atanacaktır.
+
+[198]
+Çalışma popülasyonu, İstanbul, Türkiye'de bulunan İstinye Üniversitesi Liv Bahçeşehir Hastanesi Nörorehabilitasyon Kliniği ile Biruni Üniversitesi Hastanesi Fiziksel Tıp ve Rehabilitasyon Polikliniğine başvuran veya bu merkezlerde takip edilen inme hastalarından oluşacaktır. Araştırma çok merkezli olarak yürütülecektir.
+
+[199]
+Çalışmaya ilişkin tüm bilgiler potansiyel katılımcılara ayrıntılı olarak açıklanacak ve çalışmaya katılmayı kabul eden bireylerden yazılı bilgilendirilmiş gönüllü olur formu alınacaktır. Katılımcı alımı, etik kurul onayının alınmasını takiben başlayacak ve hedeflenen örneklem büyüklüğüne ulaşılıncaya kadar sürdürülecektir.
+
+[201]
+Araştırmaya Dahil Olma Kriterleri: 
+
+
+[202]
+40-80 yaş arası yetişkin kadın veya erkek bireyler.
+
+[203]
+BT (Bilgisayarlı Tomografi) veya MRG (Manyetik Rezonans Görüntüleme) ile doğrulanmış ilk kez geçirilmiş tek taraflı iskemik veya hemorajik inme ya da önceki inmelerden kalıcı motor sekel bırakmamış tekrarlayan inme öyküsü.
+
+[204]
+MRC kas kuvveti derecesi ≥ 2.
+
+[205]
+Hafif veya orta düzey spastisite (Modifiye Ashworth Ölçeği ≤ 2).
+
+[206]
+Basit talimatları anlayabilecek ve kısa süreli motor imgeleme görevlerini yerine getirebilecek yeterli bilişsel işlev düzeyi (değerlendirici tarafından klinik olarak belirlenmiş).
+
+[207]
+Aktif veya kontrol altında olmayan sistemik hastalığı bulunmayan, tıbbi açıdan stabil bireyler.
+
+[208]
+En az 30 dakika boyunca desteksiz oturabilme.
+
+[209]
+Protokolde yer alan kısa bilişsel-motor egzersizleri uygulayabilme.        
+
+[211]
+Araştırmaya Hariç Olma Kriterleri: 
+
+
+[212]
+İnme dışında başka bir merkezi sinir sistemi hastalığının bulunması (ör. Parkinson hastalığı, multipl skleroz, travmatik beyin hasarı).
+
+[213]
+Üst ekstremite hareketini kısıtlayan kas-iskelet sistemi veya ortopedik problemler; sabit kontraktürler, ciddi eklem deformiteleri veya klinik muayenede saptanan glenohumeral subluksasyon (>1 parmak genişliği) dahil.
+
+[214]
+Orta veya ileri derecede duyu kaybı (NIHSS duyu skoru ≥ 2) ya da orta veya ileri derecede ihmal (neglect) varlığı (NIHSS ekstinksiyon/dikkatsizlik skoru ≥ 2).
+
+[215]
+Kontrol altına alınmamış nöbetler, ciddi kardiyovasküler instabilite veya imgeleme temelli müdahaleler için herhangi bir kontrendikasyonun bulunması.
+
+[218]
+UYGULANACAK YAKLAŞIM VE İSTATİSTİKSEL YÖNTEM
+
+[219]
+Tüm istatistiksel analizler IBM SPSS Statistics for Mac, sürüm 24.0 (IBM Corp., Armonk, NY, ABD) kullanılarak gerçekleştirilecektir. Katılımcıların demografik ve klinik özellikleri tanımlayıcı istatistiklerle sunulacaktır. Sürekli değişkenler normal dağılım göstermeleri durumunda ortalama ± standart sapma, normal dağılım göstermemeleri durumunda medyan (çeyrekler arası aralık) olarak raporlanacaktır. Kategorik değişkenler ise sayı ve yüzde olarak ifade edilecektir. Sürekli değişkenlerin normal dağılıma uygunluğu Shapiro–Wilk testi ile değerlendirilecektir.
+
+[220]
+Birincil ve ikincil sonuç ölçütlerinin analizinde, verilerin normal dağılım göstermesi durumunda 2 × 2 Karma Model Varyans Analizi (Mixed ANOVA) kullanılacaktır. Analizde grup (Deneysel/Kontrol) gruplar arası faktör, zaman (Müdahale Öncesi/Müdahale Sonrası) ise grup içi faktör olarak tanımlanacaktır. Müdahalenin etkisi öncelikli olarak Grup × Zaman etkileşimi üzerinden değerlendirilecektir. Normal dağılım varsayımının sağlanmadığı durumlarda, grup içi karşılaştırmalar için Wilcoxon İşaretli Sıralar Testi, gruplar arası karşılaştırmalar için ise Mann–Whitney U Testi kullanılacaktır.
+
+[221]
+Hareket imgeleme yeteneği ile performans değişiklikleri arasındaki ilişkiyi incelemek amacıyla, KVIQ-10 puanları ile kinematik değişkenlerdeki değişim skorları (ΔSPARC, ΔTrunk Ratio vb.) arasındaki ilişkiler Pearson veya Spearman korelasyon analizleri kullanılarak değerlendirilecektir.
+
+[222]
+Müdahale etkisinin büyüklüğünü değerlendirmek amacıyla parametrik analizlerde kısmi eta kare (ηp²), parametrik olmayan analizlerde ise rank-biserial korelasyon katsayısı hesaplanacak ve ilgili güven aralıkları ile birlikte raporlanacaktır. Çoklu karşılaştırmalardan kaynaklanabilecek Tip I hata olasılığını azaltmak amacıyla ikincil kinematik sonuç değişkenleri için Holm–Bonferroni düzeltmesi uygulanacaktır.
+
+[223]
+Analizler Intention-to-Treat (ITT) yaklaşımına göre gerçekleştirilecek olup, eksik verilerin bulunması durumunda uygun istatistiksel yöntemler (çoklu atama veya karma modeller) kullanılacaktır. Tüm analizlerde istatistiksel anlamlılık düzeyi p < 0.05 olarak kabul edilecektir.
+
+[224]
+ DESTEK VE BÜTÇE BİLGİSİ
+
+[225]
+Bu araştırma herhangi bir kurum tarafından desteklenmemektedir (TÜBİTAK/BAP: Hayır).
+
+[226]
+Gider Kalemleri:
+
+[227]
+Baskı maliyeti (bilgilendirilmiş onam formları, veri formları): 1000 TL
+
+[228]
+Genel Toplam: 1000 TL — Sorumlu araştırmacı tarafından karşılanacaktır.
+
+[230]
+Bu araştırma herhangi bir kurum veya kuruluş (TÜBİTAK, BAP vb.) tarafından destekleniyor mu? Bütçe miktarı ve kaynağı belirtilmelidir.
+
+[234]
+* Bu formda yer alan araştırma projesine ait veri toplama yöntemi ve çalışma dizaynına sadık kalınacağını, bilgilerin doğruluğunu, başka amaçla kullanılmayacağını taahhüt ederim.
+
+[238]
+Sorumlu Araştırmacı   					
+
+[239]
+El yazısıyla adı soyadı: Abdelrahman Walid Hamza Mohamed Elsayed Sabee 					
+
+[240]
+Tarih (gün/ay/yıl olarak): …/…/….                              	
+
+[241]
+İmza:							
+

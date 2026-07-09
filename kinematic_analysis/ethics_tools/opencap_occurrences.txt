@@ -1,0 +1,33 @@
+[29]
+For this purpose, the integration of OpenCap, a recently developed markerless motion capture system that utilizes artificial intelligence to enable accurate clinical quantification of three‐dimensional (3D) kinematic measures, is introduced (8). Hence, by quantifying objectively parameters of motion, such as movement smoothness, trunk displacement and Shoulder Girdle Elevation we can quantify the "how" of a movement, which is an important mediator between central neural planning and peripheral motor execution (8). Furthermore, the combination of this kinematic analysis with the Box and Block Test (BBT) allows to relate the quality of movement with functional dexterity in everyday life (9).
+
+[31]
+Therefore, the expectation of this study is to fill a critical gap in neuro-rehabilitation literature. Using OpenCap technology in combination with a customized PETTLEP based AOMI protocol, this study seeks to investigate whether specific mental practice can lead to measurable short-term changes in movement smoothness, compensatory strategies and functional dexterity in persons post-stroke. 
+
+[33]
+Keywords: Motor imagery, action observation, stroke, OpenCap, kinematics, upper limb rehabilitation.
+
+[104]
+The cameras will be configured to record at 1080p resolution and 60 frames per second (fps). Recordings will be conducted in a room with consistent, diffuse lighting to avoid backlighting or shadows that could interfere with AI tracking. The same OpenCap model and processing parameters will be used for all participant analyses to ensure data comparability.
+
+[107]
+The video data is processed by uploading the video to the OpenCap cloud platform to obtain 3D OpenSim musculoskeletal models. The following specific kinematic measures will be computed according to their functional importance (8).
+
+[113]
+·     The primary outcome of this study is the change in movement smoothness of the affected upper limb, as measured by the OpenCap System. Instead of classic marker-based motion capture systems, OpenCap derives 3D human movement dynamics from videos taken with smartphones. The video will be processed by submitting the video to the OpenCap cloud platform to generate 3D OpenSim musculoskeletal models. Due to their functional meaning, the following specific kinematic parameters will be derived from the curves (8) .
+
+[131]
+o Measurement Method: Calculated by measuring the change in the Lumbar Extension angle (lower back extension) in the sagittal plane during the reaching phase, obtained from the OpenSim kinematic model.
+
+[134]
+The OpenCap system has been made available to all researchers by its developers (Stanford University) as an open-source and web-based platform for use in scientific research; therefore, specific author permission is not required for its use [8].
+
+[175]
+1. Baseline Assessment: After the system calibration, active 3 runs of a routine Reach-to-Grasp task will be performed by each subject. Their movement kinematics will be recorded using the OpenCap system (pre-intervention movement quality: Movement Smoothness and Trunk Displacement) to capture.
+
+[241]
+· The Transport Phase (The Reach & The Trunk): Shoulder flexion and elbow extension are distance-related components. Forward leaning Trunk Compensation and Shoulder Girdle Elevation are in fact a very a very common compensatory mechanism in this phase of post-stroke patients. To treat this phase, the "Glued Back" constraint is introduced as it attempts to recover to real limb range-of-motion (ROM) not compensatory motion, a motion pattern that can be numerically expressed in OpenCap through ay quantifiable measure ('Trunk Displacement' and '” Shoulder Girdle Elevation” variables).
+
+[297]
+8.   Uhlrich SD, Falisse A, Kidziński Ł, Muccini J, Ko M, Chaudhari AS, et al. OpenCap: 3D human movement dynamics from smartphone videos. PLOS Comput Biol. 2023;19(10):e1011462.
+

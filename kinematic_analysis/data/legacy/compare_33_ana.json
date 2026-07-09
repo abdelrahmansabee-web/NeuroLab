@@ -1,0 +1,28 @@
+{
+  "healthy": {
+    "video": "D:\\Thesis app\\participants\\3 مرضى\\33\\انا\\Healthy.MOV",
+    "side": "left",
+    "sparc": -2.562,
+    "reach_amplitude_sw": 4.841,
+    "movement_time_sec": 1.378,
+    "peak_velocity_cm_s": 399.57,
+    "trunk_ratio": 0.0432,
+    "sparc_rating": "moderate"
+  },
+  "affected": {
+    "video": "D:\\Thesis app\\participants\\3 مرضى\\33\\انا\\Affected .mov",
+    "side": "right",
+    "sparc": -4.556,
+    "reach_amplitude_sw": 8.304,
+    "movement_time_sec": 3.515,
+    "peak_velocity_cm_s": 144.16,
+    "trunk_ratio": 0.3584,
+    "sparc_rating": "poor"
+  },
+  "relative_to_healthy_percent": {
+    "reach_amplitude_sw": 171.5,
+    "movement_time_sec": 255.1,
+    "peak_velocity_cm_s": 36.1,
+    "trunk_ratio": 828.7
+  }
+}

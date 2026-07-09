@@ -1,0 +1,44 @@
+{
+  "healthy": {
+    "video": "D:\\Thesis app\\participants\\3 مرضى\\33\\انا\\Healthy.MOV",
+    "side": "left",
+    "sparc": -1.951,
+    "path_straightness_index": 0.2199,
+    "normalized_jerk_cost": 9921063889.3,
+    "cv_speed": 1.3739,
+    "reach_amplitude_sw": 3.686,
+    "movement_time_sec": 2.274,
+    "peak_velocity_px_s": 5831.6,
+    "trunk_ratio": 0.0394,
+    "shoulder_elevation_cm": 8.48,
+    "elbow_angle_deg": 171.3,
+    "peak_velocity_pct": 100.0
+  },
+  "affected": {
+    "video": "D:\\Thesis app\\participants\\3 مرضى\\33\\انا\\Affected .mov",
+    "side": "right",
+    "sparc": -4.383,
+    "path_straightness_index": 0.5613,
+    "normalized_jerk_cost": 26649363424.32,
+    "cv_speed": 0.7219,
+    "reach_amplitude_sw": 6.393,
+    "movement_time_sec": 3.515,
+    "peak_velocity_px_s": 488.2,
+    "trunk_ratio": 0.3584,
+    "shoulder_elevation_cm": 9.37,
+    "elbow_angle_deg": 44.8,
+    "peak_velocity_pct": 8.4
+  },
+  "relative_to_healthy_percent": {
+    "sparc": 224.7,
+    "path_straightness_index": 255.3,
+    "normalized_jerk_cost": 268.6,
+    "cv_speed": 52.5,
+    "reach_amplitude_sw": 173.4,
+    "movement_time_sec": 154.6,
+    "peak_velocity_pct": 8.4,
+    "trunk_ratio": 909.6,
+    "shoulder_elevation_cm": 110.5,
+    "elbow_angle_deg": 26.2
+  }
+}

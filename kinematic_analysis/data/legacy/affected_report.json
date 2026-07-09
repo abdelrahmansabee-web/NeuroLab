@@ -1,0 +1,18 @@
+{
+  "video": "D:\\Thesis app\\participants\\3 مرضى\\انا\\affected.mov",
+  "label": "affected",
+  "side": "right",
+  "camera_view": "oblique",
+  "sparc": -3.2454,
+  "sparc_interpretation": null,
+  "reach_amplitude_sw": 0.162,
+  "native_reach_amplitude_sw": 0.462,
+  "movement_time_sec": 1.074,
+  "peak_velocity_cm_s": 9.47,
+  "trunk_ratio": 0.1586,
+  "sparc_window": "125-186",
+  "fs_hz": 58.69,
+  "native_fs_hz": 58.69,
+  "sparc_method": "literature_5pct",
+  "valid_for_comparison": true
+}

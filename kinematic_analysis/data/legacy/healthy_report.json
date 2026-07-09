@@ -1,0 +1,18 @@
+{
+  "video": "D:\\Thesis app\\participants\\3 مرضى\\انا\\healthy.mov",
+  "label": "healthy",
+  "side": "right",
+  "camera_view": "oblique",
+  "sparc": -4.0008,
+  "sparc_interpretation": null,
+  "reach_amplitude_sw": 0.235,
+  "native_reach_amplitude_sw": 0.121,
+  "movement_time_sec": 3.506,
+  "peak_velocity_cm_s": 70.67,
+  "trunk_ratio": 0.0501,
+  "sparc_window": "112-310",
+  "fs_hz": 56.75,
+  "native_fs_hz": 56.75,
+  "sparc_method": "literature_5pct",
+  "valid_for_comparison": true
+}

@@ -1,0 +1,34 @@
+{
+  "healthy": {
+    "video": "D:\\Thesis app\\participants\\mediapipe\\movs\\zeyneb\\baseline_20260603_165330_baseline.csv",
+    "side": "right",
+    "sparc": -4.764,
+    "reach_amplitude_sw": 0.821,
+    "movement_time_sec": 2.828,
+    "peak_velocity_pct": 100.0,
+    "trunk_ratio": 0.3644,
+    "shoulder_elevation_cm": 1.97,
+    "elbow_angle_deg": 165.4,
+    "sparc_rating": "poor"
+  },
+  "post": {
+    "video": "D:\\Thesis app\\participants\\mediapipe\\movs\\zeyneb\\post_20260603_165651_post.csv",
+    "side": "left",
+    "sparc": -5.527,
+    "reach_amplitude_sec": 0.899,
+    "movement_time_sec": 3.463,
+    "peak_velocity_pct": 46.5,
+    "trunk_ratio": 0.1256,
+    "shoulder_elevation_cm": 0.99,
+    "elbow_angle_deg": 162.2,
+    "sparc_rating": "very poor"
+  },
+  "relative_to_healthy_percent": {
+    "reach_amplitude_sw": 109.5,
+    "movement_time_sec": 122.5,
+    "peak_velocity_pct": 46.5,
+    "trunk_ratio": 34.5,
+    "shoulder_elevation_cm": 50.3,
+    "elbow_angle_deg": 98.1
+  }
+}

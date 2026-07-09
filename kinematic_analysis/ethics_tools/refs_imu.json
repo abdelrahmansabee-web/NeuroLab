@@ -1,0 +1,107 @@
+[
+  {
+    "title": "USING OF ACCELEROMETER IN REHABILITATION OF UPPER LIMB PARESIS",
+    "authors": [
+      "Sladkova"
+    ],
+    "doi": "10.26226/morressier.5ab4d4f0d462b80296ca5038",
+    "year": null,
+    "query": "smartphone accelerometer upper limb stroke reaching"
+  },
+  {
+    "title": "Accelerometer-Based Monitoring of Upper Limb Movement in Older Adults With Acute and Subacute Stroke",
+    "authors": [
+      "Narai",
+      "Hagino",
+      "Komatsu"
+    ],
+    "doi": "10.1519/jpt.0000000000000067",
+    "year": 2016,
+    "query": "smartphone accelerometer upper limb stroke reaching"
+  },
+  {
+    "title": "Inertial characteristics of upper extremity motions in upper extremity stroke rehabilitation based tasks",
+    "authors": [
+      "Delva",
+      "Menon"
+    ],
+    "doi": "10.1109/biorob.2016.7523737",
+    "year": 2016,
+    "query": "inertial measurement unit upper extremity stroke rehabilitation"
+  },
+  {
+    "title": "Upper extremity stroke rehabilitation detailing electrical stimulation",
+    "authors": [
+      null,
+      "Tenberg"
+    ],
+    "doi": "10.21248/gups.92432",
+    "year": null,
+    "query": "inertial measurement unit upper extremity stroke rehabilitation"
+  },
+  {
+    "title": "Machine Learning-Based Estimation of Upper Extremity Function in Stroke Rehabilitation Using Body-Worn Inertial Sensors",
+    "authors": [
+      "Okita",
+      "Berry",
+      "Khazanchi"
+    ],
+    "doi": "10.1109/icorr66766.2025.11063104",
+    "year": 2025,
+    "query": "inertial measurement unit upper extremity stroke rehabilitation"
+  },
+  {
+    "title": "Machine Learning to Determine Upper Extremity Motion from Inertial Measurement Unit Signals",
+    "authors": [
+      "Tobar",
+      "Lopez",
+      "Trujillo"
+    ],
+    "doi": "10.1109/etcm56276.2022.9935735",
+    "year": 2022,
+    "query": "inertial measurement unit upper extremity stroke rehabilitation"
+  },
+  {
+    "title": "Reaching to inhibit a prepotent response: a wearable 3-axis accelerometer kinematic analysis",
+    "authors": [
+      "Angeli",
+      "Valori",
+      "Farroni"
+    ],
+    "doi": "10.1101/2021.01.28.428591",
+    "year": null,
+    "query": "wearable accelerometer reaching movement smoothness stroke"
+  },
+  {
+    "title": "Measurement of jerk-cost using a triaxial piezoelectric accelerometer for the evaluation of jaw movement smoothness",
+    "authors": [
+      "MINAMI",
+      "OOGAI",
+      "NEMOTO"
+    ],
+    "doi": "10.1111/j.1365-2842.2010.02085.x",
+    "year": 2010,
+    "query": "wearable accelerometer reaching movement smoothness stroke"
+  },
+  {
+    "title": "Novel Closed-Loop Vagal Nerve Stimulation for Upper Limb Motor Recovery in Stroke",
+    "authors": [],
+    "doi": "10.1161/blog.20260401.290055",
+    "year": 2026,
+    "query": "smartphone IMU motor control upper limb stroke"
+  },
+  {
+    "title": "ESO-WSO 2020: Vagus Nerve Stimulation Paired With Rehabilitation for Upper Limb Motor Recovery After Stroke",
+    "authors": [],
+    "doi": "10.1161/blog.20201204.220000",
+    "year": 2020,
+    "query": "smartphone IMU motor control upper limb stroke"
+  },
+  {
+    "title": "Article Commentary: &amp;quot;Bilateral Transcutaneous Electrical Nerve Stimulation Improves Upper Limb Motor Recovery in Stroke&amp;quot;",
+    "authors": [],
+    "doi": "10.1161/blog.20220322.193000",
+    "year": 2022,
+    "query": "smartphone IMU motor control upper limb stroke"
+  }
+]

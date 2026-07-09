@@ -1,13 +1,16 @@
-# Stroke Rehab Platform — FastAPI + R an robust reach pipeline
+﻿# Stroke Rehab Platform — FastAPI + R an robust reach pipeline
 # ============================================================
 
 import os
 import re
 import json
 import shutil
+import subprocess
 import sys
 import traceback
 import concurrent.futures
+
+import cv2
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Any, List
@@ -17,7 +20,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from kinematics_analyzer import analyze_reach_and_wipe, analyze_neuro_phase, analyze_neuro_session
+from kinematics_analyzer import analyze_reach_and_wipe
+from unified_validation_renderer import render_unified_validation_video
 
 _BASE = Path(__file__).resolve().parent
 _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_robust.py").exists() else _BASE
@@ -25,9 +29,13 @@ if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 from mediapipe_csv_extractor import extract_from_video  # noqa: E402
 from stroke_kinematic_pipeline import resolve_analysis_arm  # noqa: E402
+from video_quality_validator import validate_video, VideoValidationResult  # noqa: E402
+
+DEPLOY_VERSION = "25.3"
+DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
-# ΓöÇΓöÇΓöÇ Paths ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+# — Paths —
 BASE_DIR = Path(__file__).parent.resolve()
 _build_candidates = [
     BASE_DIR / "frontend" / "build",          # HF Docker / hf_repo layout
@@ -75,7 +83,7 @@ def ensure_pose_model() -> bool:
         return True
     try:
         import urllib.request
-        print(f"Downloading pose model ΓåÆ {POSE_MODEL_FILE}")
+        print(f"Downloading pose model — {POSE_MODEL_FILE}")
         tmp = POSE_MODEL_FILE.with_suffix(".task.tmp")
         urllib.request.urlretrieve(POSE_MODEL_URL, tmp)
         tmp.replace(POSE_MODEL_FILE)
@@ -87,11 +95,82 @@ def ensure_pose_model() -> bool:
         print(f"Pose model download failed: {e}")
         return False
 
-# ΓöÇΓöÇΓöÇ App Init ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+def _check_clinical_plausibility(
+    analysis: dict,
+    phase: str,
+    resolved_arm: str,
+) -> dict:
+    """Lightweight post-hoc clinical plausibility checks for a single analysis.
+
+    These are sanity checks, not strict pass/fail gates, because real clinical
+    variability exists. They flag values that warrant human review.
+    """
+    warnings: List[str] = []
+    checks = {
+        "sparc_present": False,
+        "trunk_ratio_present": False,
+        "movement_time_present": False,
+        "peak_velocity_present": False,
+        "reach_distance_present": False,
+        "sparc_plausible": None,
+        "post_sparc_not_worse_than_pre": None,
+        "peak_velocity_positive": None,
+        "movement_time_positive": None,
+        "trunk_ratio_in_range": None,
+    }
+
+    metrics = analysis.get("metrics", {})
+    if not isinstance(metrics, dict):
+        metrics = {}
+
+    sparc = metrics.get("sparc")
+    trunk_ratio = metrics.get("trunk_ratio")
+    movement_time = metrics.get("movement_time")
+    peak_velocity = metrics.get("peak_velocity")
+    reach_distance = metrics.get("reach_distance")
+
+    if sparc is not None:
+        checks["sparc_present"] = True
+        checks["sparc_plausible"] = bool(-6.0 <= float(sparc) <= 1.0)
+        if not checks["sparc_plausible"]:
+            warnings.append(f"SPARC ({sparc:.3f}) outside literature-typical range [-6, 1].")
+
+    if trunk_ratio is not None:
+        checks["trunk_ratio_present"] = True
+        checks["trunk_ratio_in_range"] = bool(0.0 <= float(trunk_ratio) <= 1.0)
+        if not checks["trunk_ratio_in_range"]:
+            warnings.append(f"Trunk ratio ({trunk_ratio:.3f}) outside [0, 1].")
+
+    if movement_time is not None:
+        checks["movement_time_present"] = True
+        checks["movement_time_positive"] = bool(0.1 <= float(movement_time) <= 30.0)
+        if not checks["movement_time_positive"]:
+            warnings.append(f"Movement time ({movement_time:.3f} s) outside plausible range [0.1, 30].")
+
+    if peak_velocity is not None:
+        checks["peak_velocity_present"] = True
+        checks["peak_velocity_positive"] = bool(0.0 < float(peak_velocity) < 500.0)
+        if not checks["peak_velocity_positive"]:
+            warnings.append(f"Peak velocity ({peak_velocity:.2f} cm/s) outside plausible range (0, 500).")
+
+    if reach_distance is not None:
+        checks["reach_distance_present"] = True
+        if not (0.05 <= float(reach_distance) <= 1.0):
+            warnings.append(f"Reach distance ({reach_distance:.3f} m) outside plausible range [0.05, 1.0].")
+
+    return {
+        "clinical_plausibility_checks": checks,
+        "clinical_warnings": warnings,
+        "requires_review": bool(warnings),
+    }
+
+
+# — App Init —
 app = FastAPI(
     title="Stroke Rehab Backend",
-    description="Pose extraction + kinematic analysis for forward reach task (reach-only, v23)",
-    version="1.0.0"
+    description="Pose extraction + Kinematic analysis for Reach & Wipe task",
+    version=DEPLOY_VERSION,
 )
 
 app.add_middleware(
@@ -108,14 +187,14 @@ async def _startup_ensure_models():
     ensure_pose_model()
 
 
-# ΓöÇΓöÇΓöÇ Endpoints ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+# — Endpoints —
 
 @app.get("/")
 async def serve_index():
     path = FRONTEND_BUILD / "index.html"
     if not path.exists():
         return JSONResponse({"error": "Frontend build not found"}, status_code=404)
-    
+
     content = path.read_text(encoding="utf-8")
     # Total Wipeout: Replace every possible variation of localhost/127.0.0.1
     content = content.replace("http://localhost:8000", "window.location.origin")
@@ -123,7 +202,7 @@ async def serve_index():
     content = content.replace("`http://${window.location.hostname}:8000`", "window.location.origin")
     content = content.replace("localhost:8000", "window.location.origin")
     content = content.replace("127.0.0.1:8000", "window.location.origin")
-    
+
     return HTMLResponse(
         content=content,
         status_code=200,
@@ -142,6 +221,95 @@ async def serve_static(rest_of_path: str):
     raise HTTPException(status_code=404)
 
 
+# Serve root-level static files from the frontend build directory
+# (pdf.worker.min.js, manifest.json, favicon.ico, logos, bg.jpg, etc.)
+@app.get("/{file_name}")
+async def serve_build_root(file_name: str):
+    if file_name in ("index.html",):
+        raise HTTPException(status_code=404)
+    file_path = FRONTEND_BUILD / file_name
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(file_path)
+    raise HTTPException(status_code=404)
+
+
+@app.get("/api/patients")
+async def api_get_patients():
+    return await get_patients()
+
+
+def _auto_rotate_video_with_ffmpeg(video_path: Path) -> Optional[Path]:
+    """
+    Detect and apply rotation metadata from phone/tablet videos using ffmpeg.
+    Returns the path to the rotated video, or None if no rotation is needed.
+    """
+    from unified_validation_renderer import _find_ffmpeg
+
+    ffmpeg = _find_ffmpeg()
+    if not ffmpeg:
+        return None
+
+    import re
+    cmd = [ffmpeg, "-i", str(video_path), "-f", "null", "-"]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+    output = result.stdout + result.stderr
+
+    angle = 0
+    m = re.search(r'rotate\s*[:=]\s*(\-?\d+(?:\.\d+)?)', output, re.IGNORECASE)
+    if m:
+        angle = int(float(m.group(1))) % 360
+    else:
+        m = re.search(r'displaymatrix:\s*rotation\s*(-?\d+(?:\.\d+)?)', output)
+        if m:
+            angle = int(float(m.group(1))) % 360
+        else:
+            m = re.search(r'rotation\s+(-?\d+(?:\.\d+)?)\s*deg', output)
+            if m:
+                angle = int(float(m.group(1))) % 360
+
+    # Fallback: if no metadata but the stored video is landscape while the
+    # typical clinical recording is a portrait phone clip laid on its side,
+    # assume it needs a 90° clockwise rotation to become upright.
+    if angle == 0:
+        try:
+            cap = cv2.VideoCapture(str(video_path))
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cap.release()
+            if w > h:
+                angle = 90
+                print(f"No rotation metadata; landscape video ({w}x{h}) -> assuming 90° clockwise rotation")
+            else:
+                return None
+        except Exception:
+            return None
+
+    # Map clockwise rotation angle to ffmpeg transpose value on the RAW stored
+    # frame (ffmpeg auto-rotation is disabled so the metadata isn't applied
+    # twice).  transpose values: 0=90CCW+vertflip, 1=90CW, 2=90CCW, 3=90CW+vertflip
+    # A video with rotate=90 metadata is stored on its side; rotating it 90°
+    # clockwise produces an upright portrait clip.
+    transpose_map = {90: "1", 180: "1,1", 270: "2"}
+    if angle not in transpose_map:
+        return None
+
+    rotated_path = video_path.with_name(video_path.stem + "_rotated" + video_path.suffix)
+    vf = f"transpose={transpose_map[angle]}"
+    cmd = [
+        ffmpeg, "-y", "-noautorotate", "-i", str(video_path),
+        "-vf", vf,
+        "-metadata:s:v:0", "rotate=0",
+        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+        "-an",
+        str(rotated_path),
+    ]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=300)
+    if result.returncode != 0 or not rotated_path.exists() or rotated_path.stat().st_size < 1000:
+        print(f"ffmpeg rotation failed: {result.stderr[:500]}")
+        return None
+    return rotated_path
+
 
 @app.post("/analyze")
 async def analyze_video(
@@ -156,9 +324,11 @@ async def analyze_video(
     shoulder_width_cm: str = Form("auto"),
     cutoff_frequency: str = Form("4.0"),
     filter_order: str = Form("4"),
+    legacy_format: str = Form("false"),
+    save_intermediates: str = Form("true"),
 ):
     try:
-        # ΓöÇΓöÇ 1. Save uploaded video ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+        # — 1. Save uploaded video —
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = video.filename.replace(" ", "_")
         base_name = f"{phase}_{timestamp}_{Path(safe_name).stem}"
@@ -167,8 +337,18 @@ async def analyze_video(
         with video_path.open("wb") as f:
             shutil.copyfileobj(video.file, f)
 
+        # Auto-rotate phone/tablet footage so the person is upright before
+        # pose extraction.  This guarantees the analysis CSV and any validation
+        # video derived from it share the same upright orientation.
+        try:
+            rotated_path = _auto_rotate_video_with_ffmpeg(video_path)
+            if rotated_path and rotated_path.exists():
+                video_path = rotated_path
+        except Exception as exc:
+            print(f"Video auto-rotation skipped: {exc}")
+
         print(f"\n{'='*60}")
-        print(f"≡ƒôÑ New analysis request")
+        print(f"New analysis request")
         print(f"   Video : {video.filename}")
         print(f"   Phase : {phase}")
         resolved_arm = resolve_analysis_arm(phase, stroke_side, affected_side)
@@ -183,7 +363,22 @@ async def analyze_video(
                 },
             )
 
-        # ΓöÇΓöÇ 2. Parse params ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+        # — 2. Validate uploaded video (strict literature-backed gates) —
+        try:
+            validation_result = validate_video(video_path)
+            quality_report = validation_result.to_dict()
+            if not validation_result.passed:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "Video does not meet minimum quality requirements.",
+                        "quality_report": quality_report,
+                    },
+                )
+        except Exception as exc:
+            quality_report = {"passed": True, "warnings": [f"Validation skipped: {exc}"]}
+
+        # — 3. Parse params —
         try:
             cutoff = float(cutoff_frequency)
         except Exception:
@@ -192,15 +387,19 @@ async def analyze_video(
             order = int(filter_order)
         except Exception:
             order = 4
+        legacy = (legacy_format or "true").lower() in ("true", "1", "yes", "on")
+        save_intermediate = (save_intermediates or "true").lower() in ("true", "1", "yes", "on")
 
+        # — 4. Extract pose —
         if not ensure_pose_model():
             return JSONResponse(
                 status_code=503,
                 content={"error": f"Pose model missing and download failed: {POSE_MODEL_FILE}"},
             )
-        print(f"Step 1: mediapipe_csv_extractor → {video.filename}")
+        print(f"Step 1: mediapipe_csv_extractor -> {video.filename}")
         csv_path = OUTPUT_DIR / f"{base_name}.csv"
-        model_path = str(MODEL_DIR / POSE_MODEL_FILE)
+        model_path = str(POSE_MODEL_FILE)
+        intermediate_dir = str(OUTPUT_DIR / f"{base_name}_intermediates")
         try:
             report = extract_from_video(
                 video_path=str(video_path),
@@ -208,12 +407,16 @@ async def analyze_video(
                 model_path=model_path,
                 affected_side=resolved_arm,
                 camera_view="auto",
-                use_clahe=True,
+                use_clahe=not legacy,  # legacy mode: no CLAHE per original pipeline
                 max_interpolate_gap=8,
                 butterworth_cutoff_hz=cutoff,
                 butterworth_order=order,
                 save_raw_pose=True,
                 show_progress=True,
+                legacy_format=legacy,
+                save_intermediate_frames=save_intermediate,
+                intermediate_dir=intermediate_dir,
+                save_resampled=save_intermediate,
             )
         except Exception as e:
             print(f"CRITICAL EXTRACTION ERROR: {e}")
@@ -222,8 +425,19 @@ async def analyze_video(
         frames_detected = int(report.get("frames", 0))
         total_frames = frames_detected
         fps = float(report.get("fps", 30.0))
+
         print(f"Pose extraction done — {frames_detected} frames\n")
 
+        # Use raw pose CSV for analysis (matches legacy pipeline / report numbers)
+        analysis_csv_path = csv_path
+        raw_pose_csv = report.get("raw_pose_csv")
+        if raw_pose_csv:
+            raw_pose_p = Path(raw_pose_csv)
+            if raw_pose_p.exists():
+                analysis_csv_path = raw_pose_p
+                print(f"Using raw pose CSV for analysis: {analysis_csv_path.name}")
+
+        # — 5. Metric scale —
         metric_scale = 0.0
         if shoulder_width_cm and shoulder_width_cm != "auto":
             metric_scale = float(shoulder_width_cm) / 100.0
@@ -239,9 +453,10 @@ async def analyze_video(
             except Exception:
                 metric_scale = 0.0
 
+        # — 6. Kinematic analysis —
         print(f"Running kinematic analysis (arm={resolved_arm})...")
         analysis = analyze_reach_and_wipe(
-            file_path=str(csv_path),
+            file_path=str(analysis_csv_path),
             cutoff_frequency=cutoff,
             filter_order=order,
             affected_side=resolved_arm,
@@ -250,20 +465,64 @@ async def analyze_video(
             best_trial_metric=best_trial_metric or "sparc",
             phase_name=phase.upper(),
             camera_view="auto",
+            video_path=str(video_path),
         )
 
         if isinstance(analysis, dict) and analysis.get("error"):
             return JSONResponse(status_code=400, content={"error": analysis["error"]})
 
-        # Locked metrics from stroke_kinematic_pipeline only — no neurolab overwrite.
-
-        print("✅ Analysis complete\n")
+        print("Analysis complete\n")
 
         validation_video = report.get("validation_video")
         if validation_video and not (OUTPUT_DIR / validation_video).exists():
             validation_video = None
 
         mot_filename = None
+        try:
+            print(" Running OpenSim IK skipped (pipeline disabled)...")
+            # run_opensim(str(csv_path), output_dir=str(OUTPUT_DIR), copy_to_desktop=False)
+            mot_name = base_name + "_ik.mot"
+            if (OUTPUT_DIR / mot_name).exists():
+                mot_filename = mot_name
+                print(f"   IK .mot saved: {mot_name}")
+        except Exception as e:
+            print(f"   OpenSim IK skipped: {e}")
+
+        def _pipeline_meta() -> dict:
+            try:
+                from kinematic_locked_config import LOCKED_CODE_VERSION, LOCKED_SPARC_TRUNK  # noqa: WPS433
+
+                return {
+                    "backend_version": DEPLOY_VERSION,
+                    "pipeline": "reach_only_v24_locked",
+                    "pipeline_version": LOCKED_CODE_VERSION,
+                    "trunk_metric": LOCKED_SPARC_TRUNK.get("trunk_metric", "trunk_path_ratio"),
+                }
+            except Exception as exc:
+                return {"backend_version": DEPLOY_VERSION, "pipeline_error": str(exc)}
+
+        # — 7. Clinical plausibility checks —
+        plausibility = _check_clinical_plausibility(analysis, phase, resolved_arm)
+
+        # — 8. Generate unified validation video immediately (so it appears instantly) —
+        unified_validation_video = None
+        try:
+            out_name = f"{base_name}_unified_validation.mp4"
+            out_path = OUTPUT_DIR / out_name
+            render_unified_validation_video(
+                video_path=str(video_path),
+                output_path=str(out_path),
+                analysis=analysis,
+                landmarks_csv=str(analysis_csv_path),
+                force_rotation="auto",
+                resolution="native",
+                panel_width=480,
+            )
+            if out_path.exists() and out_path.stat().st_size > 1000:
+                unified_validation_video = out_name
+                print(f"Unified validation video generated: {out_name}")
+        except Exception as e:
+            print(f"Unified validation video generation failed: {e}")
 
         response = {
             "success": True,
@@ -271,13 +530,25 @@ async def analyze_video(
             "frames_detected": frames_detected,
             "total_frames": total_frames,
             "fps": round(fps, 2),
-            "csv_filename": Path(csv_path).name,
+            "csv_filename": Path(analysis_csv_path).name,
+            "video_filename": video_path.name,
             "trc_filename": None,
             "mot_filename": mot_filename,
             "validation_video": validation_video,
+            "unified_validation_video": unified_validation_video,
+            "quality_report": quality_report,
+            "legacy_format": legacy,
+            "intermediate_files": {
+                "raw_pose_csv": report.get("raw_pose_csv"),
+                "filtered_landmarks_csv": report.get("filtered_landmarks_csv"),
+                "resampled_landmarks_csv": report.get("resampled_landmarks_csv"),
+                "intermediate_dir": report.get("intermediate_dir"),
+                "quality_json": report.get("quality_json"),
+            },
+            **plausibility,
+            **_pipeline_meta(),
             **analysis,
         }
-
         return response
 
     except Exception as e:
@@ -288,59 +559,7 @@ async def analyze_video(
         )
 
 
-@app.post("/analyze-neuro")
-async def analyze_neuro_video(
-    video: UploadFile = File(...),
-    phase: str = Form("pre"),
-    stroke_side: str = Form("auto"),
-):
-    """Kinematic analysis via neuro_kinematics (table 60cm + MediaPipe + SPARC mapping)."""
-    try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_name = video.filename.replace(" ", "_")
-        video_path = UPLOAD_DIR / f"neuro_{phase}_{timestamp}_{Path(safe_name).stem}{Path(safe_name).suffix}"
-        with video_path.open("wb") as f:
-            shutil.copyfileobj(video.file, f)
-
-        analysis = analyze_neuro_phase(str(video_path), phase=phase, stroke_side=stroke_side)
-        if analysis.get("error"):
-            return JSONResponse(status_code=400, content={"error": analysis["error"]})
-
-        return JSONResponse(content={"success": True, "phase": phase, **analysis})
-    except Exception as e:
-        traceback.print_exc()
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-@app.post("/analyze-neuro-session")
-async def analyze_neuro_session_endpoint(
-    pre: UploadFile = File(...),
-    post: UploadFile = File(...),
-    healthy: UploadFile = File(...),
-):
-    """Analyze Pre + Post + Healthy in one call (auto side detection from Pre)."""
-    try:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        paths = {}
-        for label, upload in [("pre", pre), ("post", post), ("healthy", healthy)]:
-            safe = upload.filename.replace(" ", "_")
-            p = UPLOAD_DIR / f"neuro_{label}_{ts}_{Path(safe).stem}{Path(safe).suffix}"
-            with p.open("wb") as f:
-                shutil.copyfileobj(upload.file, f)
-            paths[label] = p
-
-        result = analyze_neuro_session(
-            str(paths["healthy"]), str(paths["post"]), str(paths["pre"])
-        )
-        if result.get("error"):
-            return JSONResponse(status_code=400, content={"error": result["error"]})
-        return JSONResponse(content={"success": True, **result})
-    except Exception as e:
-        traceback.print_exc()
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-# ΓöÇΓöÇΓöÇ Analyze CSV only (skip pose extraction) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+# — Analyze CSV only (skip pose extraction) —
 
 @app.post("/analyze-csv")
 async def analyze_csv(
@@ -413,11 +632,26 @@ async def analyze_csv(
         except Exception as e:
             print(f"   OpenSim IK skipped: {e}")
 
+        def _pipeline_meta() -> dict:
+            try:
+                from kinematic_locked_config import LOCKED_CODE_VERSION, LOCKED_SPARC_TRUNK  # noqa: WPS433
+
+                return {
+                    "backend_version": DEPLOY_VERSION,
+                    "pipeline": "reach_only_v24_locked",
+                    "pipeline_version": LOCKED_CODE_VERSION,
+                    "trunk_metric": LOCKED_SPARC_TRUNK.get("trunk_metric", "trunk_path_ratio"),
+                }
+            except Exception as exc:
+                return {"backend_version": DEPLOY_VERSION, "pipeline_error": str(exc)}
+
         response = {
             "success": True,
             "phase": phase,
             "csv_filename": csv_path.name,
+            "video_filename": None,
             "mot_filename": mot_filename,
+            **_pipeline_meta(),
             **analysis,
         }
         return response
@@ -427,7 +661,91 @@ async def analyze_csv(
         return JSONResponse(status_code=500, content={"error": f"Server error: {str(e)}"})
 
 
-# ΓöÇΓöÇΓöÇ Download Endpoints ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+# — Unified validation video —
+
+@app.post("/unified-validation")
+async def unified_validation(
+    csv_filename: str = Form(...),
+    video_filename: str = Form(...),
+    rotation: str = Form("auto"),
+):
+    """
+    Generate the unified validation video (video + metrics panel) for an
+    already-analyzed trial.  The numbers come from the analysis dict so they
+    match the kinematics table.
+
+    rotation: auto | 0 | 90 | 180 | 270 | -90  (clockwise degrees)
+    """
+    try:
+        csv_path = OUTPUT_DIR / csv_filename
+        # The frontend may store the raw_pose CSV name; the renderer needs the
+        # cleaned landmarks CSV (with palm_x, wrist_x, ... columns).
+        if csv_path.name.endswith("_raw_pose.csv"):
+            cleaned_name = csv_path.name.replace("_raw_pose.csv", ".csv")
+            cleaned_candidate = csv_path.with_name(cleaned_name)
+            if cleaned_candidate.exists():
+                csv_path = cleaned_candidate
+
+        if not csv_path.exists():
+            return JSONResponse(status_code=404, content={"error": f"CSV not found: {csv_filename}"})
+
+        # — Resolve video path across possible folders / naming variants —
+        search_dirs = [UPLOAD_DIR, OUTPUT_DIR]
+        video_path = None
+        for folder in search_dirs:
+            candidate = folder / video_filename
+            if candidate.exists():
+                video_path = candidate
+                break
+            # If frontend sent original name but server renamed it, try suffix match
+            suffix = Path(video_filename).suffix.lower()
+            if suffix:
+                for candidate2 in folder.glob(f"*{suffix}"):
+                    if candidate2.name.lower().endswith(video_filename.lower()):
+                        video_path = candidate2
+                        break
+                if video_path:
+                    break
+        if not video_path or not video_path.exists():
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": f"Video not found: {video_filename}. "
+                             "HF Space storage is ephemeral — please re-upload and re-analyze the video, then generate the UV video."
+                },
+            )
+
+        # Re-run lightweight analysis to obtain the exact same numbers
+        from stroke_kinematic_pipeline import analyze_stroke_kinematic_csv
+
+        analysis = analyze_stroke_kinematic_csv(str(csv_path), video_path=str(video_path))
+        if analysis.get("error"):
+            return JSONResponse(status_code=400, content={"error": analysis["error"]})
+
+        out_name = f"{csv_path.stem}_unified_validation.mp4"
+        out_path = OUTPUT_DIR / out_name
+
+        render_unified_validation_video(
+            video_path=str(video_path),
+            output_path=str(out_path),
+            analysis=analysis,
+            landmarks_csv=str(csv_path),
+            force_rotation=rotation,
+            resolution="native",
+            panel_width=640,
+        )
+
+        return {
+            "success": True,
+            "unified_validation_video": out_name,
+            "download_url": f"/download/{out_name}",
+        }
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": f"Server error: {str(e)}"})
+
+
+# — Download Endpoints —
 
 def _send_file(folder: Path, filename: str, media_type: str):
     fp = folder / filename
@@ -444,294 +762,136 @@ def _send_file_any(folders: List[Path], filename: str, media_type: str):
     raise HTTPException(status_code=404, detail=f"File not found: {filename}")
 
 
-@app.get("/download-csv/{filename}")
-def download_csv(filename: str):
-    return _send_file(OUTPUT_DIR, filename, "text/csv")
+@app.get("/download/{filename}")
+async def download_file(filename: str):
+    return _send_file_any([OUTPUT_DIR, UPLOAD_DIR], filename, "application/octet-stream")
 
 
-@app.get("/download-trc/{filename}")
-def download_trc(filename: str):
-    return _send_file(OUTPUT_DIR, filename, "text/plain")
-
-
-@app.get("/download-video/{filename}")
-def download_video_2d(filename: str):
+@app.get("/video/{filename}")
+async def serve_video(filename: str):
     return _send_file_any([OUTPUT_DIR, UPLOAD_DIR], filename, "video/mp4")
 
 
-@app.get("/download-mot/{filename}")
-def download_mot(filename: str):
-    return _send_file(OUTPUT_DIR, filename, "text/plain")
+@app.get("/csv/{filename}")
+async def serve_csv(filename: str):
+    return _send_file(OUTPUT_DIR, filename, "text/csv")
 
 
-@app.get("/download-json/{filename}")
-def download_json(filename: str):
-    return _send_file(OUTPUT_DIR, filename, "application/json")
-
-
-# ΓöÇΓöÇΓöÇ Additional Endpoints ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-
-@app.get("/health")
-def health():
-    """Health check with model status."""
-    model_path = POSE_MODEL_FILE
-    return {
-        "status": "ok",
-        "service": "Stroke Rehab Backend",
-        "version": "1.0.0",
-        "models": {
-            "pose_landmarker": model_path.exists(),
-            "pose_landmarker_bytes": model_path.stat().st_size if model_path.exists() else 0,
-        },
-        "uptime": datetime.now().isoformat(),
-    }
-
-
-@app.get("/debug-video")
-def debug_video():
-    try:
-        import cv2
-        video_files = list(UPLOAD_DIR.glob("*"))
-        if not video_files:
-            return {"error": "No video files in uploads"}
-        video_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-        latest = video_files[0]
-        cap = cv2.VideoCapture(str(latest))
-        if not cap.isOpened():
-            return {"error": f"Cannot open {latest.name}"}
-        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        rotation = cap.get(cv2.CAP_PROP_ORIENTATION_META)
-        ret, frame = cap.read()
-        actual_h, actual_w = frame.shape[:2] if ret else (0, 0)
-        cap.release()
-        return {
-            "file": latest.name,
-            "width": w,
-            "height": h,
-            "actual_width": actual_w,
-            "actual_height": actual_h,
-            "fps": fps,
-            "frames": frames,
-            "rotation_meta": rotation,
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.get("/debug-csv")
-def debug_csv():
-    try:
-        import pandas as pd
-        import numpy as np
-        csv_files = list(OUTPUT_DIR.glob("pre_*.csv"))
-        if not csv_files:
-            return {"error": "No CSV files in outputs"}
-        csv_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-        latest = csv_files[0]
-        df = pd.read_csv(latest)
-        key_cols = ["LEFT_WRIST_X", "LEFT_WRIST_Y", "RIGHT_WRIST_X", "RIGHT_WRIST_Y",
-                     "LEFT_SHOULDER_X", "LEFT_SHOULDER_Y", "RIGHT_SHOULDER_X", "RIGHT_SHOULDER_Y",
-                     "LEFT_HIP_X", "LEFT_HIP_Y", "RIGHT_HIP_X", "RIGHT_HIP_Y",
-                     "LEFT_ELBOW_X", "LEFT_ELBOW_Y", "RIGHT_ELBOW_X", "RIGHT_ELBOW_Y"]
-        existing = [c for c in key_cols if c in df.columns]
-        stats = {
-            "file": latest.name,
-            "rows": len(df),
-        }
-        for c in existing:
-            vals = df[c].values
-            stats[c] = {
-                "mean": round(float(vals.mean()), 6),
-                "std": round(float(vals.std()), 6),
-                "min": round(float(vals.min()), 6),
-                "max": round(float(vals.max()), 6),
-            }
-        stats["first_5_rows"] = df.head(5).to_dict(orient="records")
-        stats["row_100"] = df.iloc[100].to_dict() if len(df) > 100 else None
-        stats["row_400"] = df.iloc[400].to_dict() if len(df) > 400 else None
-        stats["row_700"] = df.iloc[700].to_dict() if len(df) > 700 else None
-        return stats
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.post("/statistics")
-async def run_statistics(body: dict):
-    """
-    Statistical analysis endpoint.
-    Expects JSON:
-    {
-      "group_a": [[val1, val2, ...], ...],  // each inner array = one variable
-      "group_b": [[val1, val2, ...], ...],
-      "variable_names": ["var1", "var2", ...],
-      "paired": false,
-      "test_type": "auto"  // "auto", "parametric", "nonparametric"
-    }
-    Returns p-values, effect sizes, and normality flags.
-    """
-    try:
-        from scipy import stats as sp_stats
-        import numpy as np
-
-        ga = body.get("group_a", [])
-        gb = body.get("group_b", [])
-        names = body.get("variable_names", [f"var{i}" for i in range(len(ga))])
-        paired = body.get("paired", False)
-        test_type = body.get("test_type", "auto")
-
-        if not ga or not gb:
-            raise HTTPException(status_code=400, detail="group_a and group_b are required")
-
-        results = []
-        for i in range(len(ga)):
-            a = np.array(ga[i], dtype=float)
-            b = np.array(gb[i], dtype=float)
-            name = names[i] if i < len(names) else f"var{i}"
-
-            # Normality
-            norm_a = sp_stats.shapiro(a).pvalue > 0.05 if len(a) >= 3 else None
-            norm_b = sp_stats.shapiro(b).pvalue > 0.05 if len(b) >= 3 else None
-            both_normal = (norm_a is True and norm_b is True) if test_type == "auto" else (test_type == "parametric")
-
-            # Choose test
-            if both_normal:
-                if paired and len(a) == len(b):
-                    t_stat, p_val = sp_stats.ttest_rel(a, b)
-                    d = np.mean(a - b) / np.std(a - b, ddof=1) if np.std(a - b, ddof=1) > 0 else 0
-                    test_used = "Paired t-test"
-                else:
-                    t_stat, p_val = sp_stats.ttest_ind(a, b, equal_var=False)
-                    pooled = np.sqrt((np.var(a, ddof=1) * (len(a) - 1) + np.var(b, ddof=1) * (len(b) - 1)) / (len(a) + len(b) - 2))
-                    d = (np.mean(a) - np.mean(b)) / pooled if pooled > 0 else 0
-                    test_used = "Welch t-test"
-                es_type = "Cohen's d"
-            else:
-                if paired and len(a) == len(b):
-                    t_stat, p_val = sp_stats.wilcoxon(a, b)
-                    z = sp_stats.norm.ppf(1 - p_val / 2) if p_val < 1 else 0
-                    d = z / np.sqrt(len(a)) if len(a) > 0 else 0
-                    test_used = "Wilcoxon signed-rank"
-                else:
-                    t_stat, p_val = sp_stats.mannwhitneyu(a, b, alternative="two-sided")
-                    n_total = len(a) + len(b)
-                    z = sp_stats.norm.ppf(1 - p_val / 2) if p_val < 1 else 0
-                    d = z / np.sqrt(n_total) if n_total > 0 else 0
-                    test_used = "Mann-Whitney U"
-                es_type = "Rank-biserial r"
-
-            results.append({
-                "variable": name,
-                "test": test_used,
-                "statistic": round(float(t_stat), 4),
-                "p_value": round(float(p_val), 4),
-                "effect_size": round(float(d), 4),
-                "effect_type": es_type,
-                "normal_a": bool(norm_a) if norm_a is not None else None,
-                "normal_b": bool(norm_b) if norm_b is not None else None,
-                "mean_a": round(float(np.mean(a)), 3),
-                "mean_b": round(float(np.mean(b)), 3),
-                "sd_a": round(float(np.std(a, ddof=1)), 3),
-                "sd_b": round(float(np.std(b, ddof=1)), 3),
-                "n_a": int(len(a)),
-                "n_b": int(len(b)),
-            })
-
-        return {"results": results}
-
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/study-analysis")
-async def study_analysis_endpoint(body: dict):
-    """
-    Full RCT analysis from master_study_data rows (JSON array).
-    Returns mixed ANOVA Group├ùTime per outcome + descriptives.
-    """
-    try:
-        import tempfile
-        from study_analysis import run_study_analysis, format_report
-
-        rows = body.get("rows", [])
-        if not rows:
-            raise HTTPException(status_code=400, detail="rows array required")
-
-        df = __import__("pandas").DataFrame(rows)
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False, encoding="utf-8-sig", newline="") as f:
-            df.to_csv(f.name, index=False)
-            tmp = f.name
-
-        try:
-            results = run_study_analysis(tmp)
-            results["report_text"] = format_report(results)
-            return results
-        finally:
-            import os
-            if os.path.exists(tmp):
-                os.unlink(tmp)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-def _load_patients_db():
+@app.get("/patients")
+async def get_patients():
     if not PATIENTS_FILE.exists():
         return []
     try:
-        raw = json.loads(PATIENTS_FILE.read_text(encoding="utf-8"))
-        if isinstance(raw, list):
-            return raw
-        if isinstance(raw, dict) and isinstance(raw.get("patients"), list):
-            return raw["patients"]
+        data = json.loads(PATIENTS_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
     except Exception:
-        traceback.print_exc()
-    return []
-
-
-def _save_patients_db(patients: list):
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = PATIENTS_FILE.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(patients, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(PATIENTS_FILE)
-
-
-@app.get("/api/patients")
-async def get_patients():
-    """Return all saved patient records (cross-device sync)."""
-    return _load_patients_db()
+        return []
 
 
 @app.post("/api/patients")
-async def save_patients(patients: List[Any] = Body(..., embed=True)):
-    """Persist patient list from frontend localStorage sync."""
+async def save_patients(body: dict):
     try:
-        _save_patients_db(patients)
-        return {"ok": True, "count": len(patients), "saved_at": datetime.utcnow().isoformat() + "Z"}
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        PATIENTS_FILE.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"success": True}
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@app.post("/api/study-analysis")
+async def study_analysis_endpoint(body: dict):
+    try:
+        from study_analysis import run_study_analysis, format_report
+
+        tmp = OUTPUT_DIR / f"study_input_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        tmp.write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
+        results = run_study_analysis(tmp)
+        return {"success": True, "results": results}
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-# ─── Static Frontend (for single-port / remote/ngrok access) ───
-if FRONTEND_BUILD.exists():
-    app.mount("/", StaticFiles(directory=str(FRONTEND_BUILD), html=True), name="frontend")
-    print(f"Frontend : {FRONTEND_BUILD} (mounted at /)")
+@app.post("/api/parse-pdf")
+async def parse_pdf(file: UploadFile = File(...)):
+    """Parse a NeuroLab Clinical Assessment Report PDF server-side.
 
-# ΓöÇΓöÇΓöÇ Run ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    Returns the same patient-object shape produced by the frontend
+    patientImport.js parser.
+    """
+    try:
+        from pdf_import_parser import extract_pdf_text, parse_clinical_report_pdf
+
+        contents = await file.read()
+        text = extract_pdf_text(contents)
+        patient = parse_clinical_report_pdf(text)
+        return {
+            "success": True,
+            "patient": patient,
+            "extracted_text": text,
+        }
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e), "traceback": traceback.format_exc()},
+        )
+
+
+@app.get("/debug-pdf")
+async def debug_pdf_page():
+    """Simple HTML form to test PDF parsing without rebuilding the frontend."""
+    html = """<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>NeuroLab PDF Parser Debug</title>
+<style>
+body { font-family: ui-sans-serif, system-ui, sans-serif; background:#121820; color:#e2e8f0; padding:2rem; }
+input[type=file] { margin:1rem 0; color:#fff; }
+pre { background:#0f172a; padding:1rem; border-radius:.5rem; overflow:auto; max-height:60vh; }
+.card { background:#1e293b; border:1px solid #334155; border-radius:.5rem; padding:1rem; margin-top:1rem; }
+</style>
+</head>
+<body>
+<h1>NeuroLab PDF Import Debug</h1>
+<p>Upload the Clinical Assessment Report PDF. The page will show the raw extracted text and the parsed fields.</p>
+<form id="form" enctype="multipart/form-data">
+<input type="file" id="file" name="file" accept=".pdf">
+<button type="submit">Parse PDF</button>
+</form>
+<div id="result"></div>
+<script>
+document.getElementById('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const file = document.getElementById('file').files[0];
+  if (!file) return alert('Choose a PDF');
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch('/api/parse-pdf', { method: 'POST', body: fd });
+  const data = await res.json();
+  const out = document.getElementById('result');
+  if (data.error) {
+    out.innerHTML = '<div class="card"><h3>Error</h3><pre>' + JSON.stringify(data, null, 2) + '</pre></div>';
+    return;
+  }
+  out.innerHTML =
+    '<div class="card"><h3>Parsed patient</h3><pre>' + JSON.stringify(data.patient, null, 2) + '</pre></div>' +
+    '<div class="card"><h3>Extracted text</h3><pre>' + (data.extracted_text || '').replace(/</g,'&lt;') + '</pre></div>';
+});
+</script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "version": DEPLOY_VERSION}
+
+
 if __name__ == "__main__":
     import uvicorn
-    print("\n" + "="*60)
-    print("Stroke Rehab Backend Starting...")
-    print(f"URL      : http://localhost:8000")
-    print(f"API Docs : http://localhost:8000/docs")
-    print("="*60 + "\n")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+    uvicorn.run(app, host="0.0.0.0", port=7860)

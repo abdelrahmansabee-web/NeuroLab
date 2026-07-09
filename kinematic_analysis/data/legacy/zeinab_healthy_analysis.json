@@ -1,0 +1,18 @@
+{
+  "video": "D:\\Thesis app\\participants\\mediapipe\\movs\\zeyneb\\baseline_20260603_165330_baseline.csv",
+  "label": "healthy",
+  "side": "right",
+  "camera_view": "oblique",
+  "sparc": -1.5997,
+  "sparc_interpretation": "good",
+  "reach_amplitude_sw": 1.236,
+  "native_reach_amplitude_sw": 1.236,
+  "movement_time_sec": 1.117,
+  "peak_velocity_cm_s": 69.79,
+  "trunk_ratio": 0.0849,
+  "sparc_window": "4-70",
+  "fs_hz": 60.0,
+  "native_fs_hz": 30.06,
+  "sparc_method": "literature_5pct",
+  "valid_for_comparison": true
+}

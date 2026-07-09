@@ -2262,9 +2262,6 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       peakVelocityPxS: "peak_velocity_px_s",
       peakVelocityCmS: "peak_velocity_cm_s",
       duration: "movement_time_sec",
-      // Legacy keys kept for backward compatibility
-      sparc: "sparc",
-      handDisplacementNorm: "hand_displacement_norm",
     };
     const converted = {};
     const phaseMap = { pre: "pre", post: "post", healthy: "baseline" };
@@ -2384,7 +2381,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       if (!isCsv) {
         fd.append("arm_type", "paretic");
         fd.append("trial_count", "1");
-        fd.append("best_trial_metric", "nvp");
+        fd.append("best_trial_metric", "sparc");
       }
 
       const endpoint = isCsv ? "/analyze-csv" : "/analyze";
@@ -2733,13 +2730,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   }));
 
   const activeResultPhases = phases.filter((ph) => kinematicsResults[ph.k]);
-  const kinViewWarning = (() => {
-    const lowAmp = activeResultPhases.filter((ph) => kinematicsResults[ph.k]?.sparc_comparable === false);
-    if (lowAmp.length) {
-      return `Reach amplitude low in ${lowAmp.map((ph) => ph.label).join(", ")} — kinematic smoothness metrics may be less reliable`;
-    }
-    return null;
-  })();
+  const kinViewWarning = (() => null)();
   const hasKinTriple =
     kinematicsResults.pre && kinematicsResults.post && kinematicsResults.baseline;
   const recoverySummaryRows = hasKinTriple
