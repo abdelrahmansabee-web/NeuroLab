@@ -30,7 +30,7 @@ _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_r
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 
-DEPLOY_VERSION = "27.22"
+DEPLOY_VERSION = "27.23"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -150,13 +150,13 @@ def _check_clinical_plausibility(
     """
     warnings: List[str] = []
     checks = {
-        "sparc_present": False,
+        "wiping_present": False,
         "trunk_ratio_present": False,
         "movement_time_present": False,
         "peak_velocity_present": False,
         "reach_distance_present": False,
-        "sparc_plausible": None,
-        "post_sparc_not_worse_than_pre": None,
+        "wiping_plausible": None,
+        "post_wiping_not_worse_than_pre": None,
         "peak_velocity_positive": None,
         "movement_time_positive": None,
         "trunk_ratio_in_range": None,
@@ -166,17 +166,22 @@ def _check_clinical_plausibility(
     if not isinstance(metrics, dict):
         metrics = {}
 
-    sparc = metrics.get("sparc")
+    wiping_n_strokes = metrics.get("wiping_n_strokes")
+    wiping_cv_speed = metrics.get("wiping_cv_speed")
     trunk_ratio = metrics.get("trunk_ratio")
     movement_time = metrics.get("movement_time")
     peak_velocity = metrics.get("peak_velocity")
     reach_distance = metrics.get("reach_distance")
 
-    if sparc is not None:
-        checks["sparc_present"] = True
-        checks["sparc_plausible"] = bool(-6.0 <= float(sparc) <= 1.0)
-        if not checks["sparc_plausible"]:
-            warnings.append(f"SPARC ({sparc:.3f}) outside literature-typical range [-6, 1].")
+    if wiping_n_strokes is not None or wiping_cv_speed is not None:
+        checks["wiping_present"] = True
+        checks["wiping_plausible"] = True
+        if wiping_cv_speed is not None and not (0.0 <= float(wiping_cv_speed) <= 5.0):
+            checks["wiping_plausible"] = False
+            warnings.append(f"Wiping CV speed ({wiping_cv_speed:.3f}) outside plausible range [0, 5].")
+        if wiping_n_strokes is not None and not (0 <= int(wiping_n_strokes) <= 50):
+            checks["wiping_plausible"] = False
+            warnings.append(f"Wiping stroke count ({wiping_n_strokes}) outside plausible range [0, 50].")
 
     if trunk_ratio is not None:
         checks["trunk_ratio_present"] = True
