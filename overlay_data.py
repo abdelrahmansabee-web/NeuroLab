@@ -150,7 +150,8 @@ def _compute_sparc_profile(
     else:
         debug["failed"] = True
 
-    return {"values": sparc_values, "verdicts": sparc_verdicts, "debug": debug}
+    summary = {k: (float(v) if isinstance(v, (np.floating, float)) else (int(v) if isinstance(v, (np.integer, int)) else v)) for k, v in (result or {}).items()}
+    return {"values": sparc_values, "verdicts": sparc_verdicts, "debug": debug, "summary": summary}
 
 
 def build_overlay_data(
@@ -391,6 +392,7 @@ def build_overlay_data(
         sparc_values = sparc_out["values"]
         sparc_verdicts = sparc_out["verdicts"]
         sparc_debug = sparc_out["debug"]
+        sparc_summary = sparc_out.get("summary", {})
 
         # Clip speed so the chart/gauge ignore pre/post movement noise.
         for i in range(len(speed)):
@@ -507,6 +509,7 @@ def build_overlay_data(
             "trunk_x_profile": trunk_x_profile,
             "sparc_profile": sparc_profile,
             "sparc_debug": sparc_debug,
+            "sparc_summary": sparc_summary,
             "peak_frames": nvp_peaks,
             "start_palm": start_palm,
             "end_palm": end_palm,
