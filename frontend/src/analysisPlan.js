@@ -10,47 +10,42 @@ export const STUDY_DESIGN = {
   targetN: 28,
   perGroup: 14,
   alpha: 0.05,
-  primaryOutcome: "NVP / straightness / pause time / stops",
+  primaryOutcome: "wiping_cv_speed / straightness / strokes / coverage",
 };
 
-/** Reach-to-grasp protocol kinematic variables (ethics-form final set) */
+/** Wiping-task protocol kinematic variables */
 export const KINEMATIC_VARS = [
   // Primary outcomes
-  { key: "nvp", label: "Number of Velocity Peaks (NVP)", unit: "count", dir: "lower", tier: "primary" },
-  { key: "straightness", label: "Path straightness", unit: "ratio", dir: "higher", tier: "primary" },
-  { key: "pause_time_sec", label: "Pause time", unit: "s", dir: "lower", tier: "primary" },
-  { key: "number_of_stops", label: "Number of stops", unit: "count", dir: "lower", tier: "primary" },
+  { key: "wiping_verdict", label: "Wiping verdict", unit: "", dir: "none", tier: "primary" },
+  { key: "wiping_n_strokes", label: "Number of strokes", unit: "count", dir: "none", tier: "primary" },
+  { key: "wiping_cv_speed", label: "Speed coefficient of variation", unit: "ratio", dir: "lower", tier: "primary" },
+  { key: "wiping_straightness", label: "Stroke straightness", unit: "ratio", dir: "higher", tier: "primary" },
   // Secondary outcomes
-  { key: "trunk_ratio", label: "Trunk ratio", unit: "ratio", dir: "lower", tier: "secondary" },
-  { key: "shoulder_vert_norm", label: "Shoulder elevation (norm)", unit: "norm", dir: "lower", tier: "secondary", fallback: "shoulder_elevation_norm" },
-  { key: "elbow_angle_mean_deg", label: "Elbow angle (mean)", unit: "deg", dir: "none", tier: "secondary", fallback: "elbow_angle_range_deg" },
+  { key: "wiping_coverage", label: "Wiping coverage", unit: "px²", dir: "higher", tier: "secondary" },
+  { key: "wiping_duration", label: "Wiping duration", unit: "s", dir: "none", tier: "secondary" },
   { key: "movement_time_sec", label: "Movement time", unit: "s", dir: "lower", tier: "secondary" },
   { key: "peak_velocity_cm_s", label: "Peak velocity", unit: "cm/s", dir: "higher", tier: "secondary", fallback: "peak_velocity_px_s" },
 ];
 
 export const KINEMATIC_DISPLAY_ORDER = [
-  "nvp",
-  "straightness",
-  "pause_time_sec",
-  "number_of_stops",
-  "trunk_ratio",
-  "shoulder_vert_norm",
-  "elbow_angle_mean_deg",
+  "wiping_verdict",
+  "wiping_n_strokes",
+  "wiping_cv_speed",
+  "wiping_straightness",
+  "wiping_coverage",
+  "wiping_duration",
   "movement_time_sec",
   "peak_velocity_cm_s",
 ];
 
 /** Manuscript / ethics-form reference pattern (Pre → Post → Healthy) */
 export const MANUSCRIPT_KINEMATIC_TARGETS = {
-  nvp: { pre: 3.5, post: 2.5, healthy: 1.5 },
-  straightness: { pre: 0.82, post: 0.88, healthy: 0.94 },
-  pause_time_sec: { pre: 0.45, post: 0.25, healthy: 0.10 },
-  number_of_stops: { pre: 2.5, post: 1.5, healthy: 0.5 },
-  trunk_ratio: { pre: 32.0, post: 18.0, healthy: 3.0 },
-  shoulder_vert_norm: { pre: 18.0, post: 12.0, healthy: 6.5 },
-  elbow_angle_mean_deg: { pre: 125, post: 130, healthy: 135 },
-  movement_time_sec: { pre: 2.2, post: 1.7, healthy: 1.2 },
-  peak_velocity_cm_s: { pre: 45.0, post: 55.0, healthy: 65.0 },
+  wiping_n_strokes: { pre: 3, post: 4, healthy: 5 },
+  wiping_cv_speed: { pre: 1.2, post: 0.8, healthy: 0.3 },
+  wiping_straightness: { pre: 0.6, post: 0.75, healthy: 0.9 },
+  wiping_coverage: { pre: 5000, post: 8000, healthy: 12000 },
+  movement_time_sec: { pre: 2.5, post: 2.0, healthy: 1.5 },
+  peak_velocity_cm_s: { pre: 50, post: 60, healthy: 70 },
 };
 
 export function orderedKinematicVars() {
@@ -87,18 +82,14 @@ export const SPSS_WORKFLOW = [
 ];
 
 const LEGACY_KIN_MAP = {
-  nvp: ["nvp"],
-  straightness: ["straightness"],
-  pause_time_sec: ["pause_time_sec", "pause_time"],
-  number_of_stops: ["number_of_stops", "n_stops", "stops"],
-  trunk_ratio: ["trunk_ratio", "total_trunk_palm_ratio"],
-  shoulder_vert_norm: ["shoulder_vert_norm", "shoulder_elevation_norm"],
-  elbow_angle_mean_deg: ["elbow_angle_mean_deg", "elbow_angle_mean", "elbow_angle_range_deg"],
+  wiping_verdict: ["wiping_verdict"],
+  wiping_n_strokes: ["wiping_n_strokes", "n_strokes"],
+  wiping_cv_speed: ["wiping_cv_speed", "cv_speed"],
+  wiping_straightness: ["wiping_straightness", "straightness"],
+  wiping_coverage: ["wiping_coverage", "coverage"],
+  wiping_duration: ["wiping_duration", "duration"],
   movement_time_sec: ["movement_time_sec", "total_duration_s", "duration"],
   peak_velocity_cm_s: ["peak_velocity_cm_s", "peak_velocity_px_s", "peak_velocity_m_s", "total_peak_velocity"],
-  // Keep old SPARC / hand displacement keys for backward compatibility
-  sparc: ["sparc"],
-  hand_displacement_norm: ["hand_displacement_norm", "hand_disp_sw", "reach_amplitude_sw", "lat_range_sw"],
 };
 
 export function pickKinField(result, canonicalKey, fallbackKey = null) {
@@ -125,9 +116,11 @@ export function normalizeKinematicResult(result) {
 
 /** Pre→Post % (calc_improvement — exact Python port). */
 export function calcImprovement(pre, post, direction) {
+  if (direction === "none") return null;
   const preN = Number(pre);
   const postN = Number(post);
   if (Number.isNaN(preN) || Number.isNaN(postN)) return null;
+  if (preN === 0) return null;
   if (direction === "higher") {
     return (postN - preN) / Math.abs(preN) * 100;
   }
@@ -136,23 +129,92 @@ export function calcImprovement(pre, post, direction) {
 
 /** Post→Healthy % or gap (calc_gap — exact Python port). */
 export function calcGap(post, healthy, direction) {
+  if (direction === "none") return null;
   const postN = Number(post);
   const healthyN = Number(healthy);
   if (Number.isNaN(postN) || Number.isNaN(healthyN)) return null;
   if (direction === "higher") {
-    return Math.abs(healthyN - postN) / Math.abs(healthyN) * 100;
+    if (Math.abs(healthyN) < 1e-9) return null;
+    return (healthyN - postN) / Math.abs(healthyN) * 100;
   }
-  return postN - healthyN;
+  // lower-is-better: positive gap = still above healthy baseline
+  if (Math.abs(healthyN) < 1e-9) return postN - healthyN;
+  return (postN - healthyN) / Math.abs(healthyN) * 100;
 }
 
-export function formatKinPrePostPct(pct) {
+export function formatKinPrePostPct(pct, direction) {
   if (pct == null || Number.isNaN(pct)) return null;
-  return `تحسن ${Math.abs(pct).toFixed(0)}%`;
+  const abs = Math.abs(pct);
+  let arrow = "";
+  if (direction === "higher") arrow = pct >= 0 ? "↑" : "↓";
+  else if (direction === "lower") arrow = pct >= 0 ? "↓" : "↑";
+  return `${arrow} ${abs.toFixed(0)}%`.trim();
 }
 
-export function formatKinPostHealthyPct(pct) {
+export function formatKinPostHealthyPct(pct, direction) {
   if (pct == null || Number.isNaN(pct)) return null;
-  return `فرق ${Math.abs(pct).toFixed(1)}%`;
+  const abs = Math.abs(pct);
+  let arrow = "";
+  if (direction === "higher") arrow = pct >= 0 ? "↑" : "↓";
+  else if (direction === "lower") arrow = pct >= 0 ? "↓" : "↑";
+  return `${arrow} ${abs.toFixed(1)}%`.trim();
+}
+
+/** Format a raw kinematic value the same way everywhere (table, report, video overlay). */
+export function formatKinValue(key, value) {
+  if (value == null || value === "—") return "—";
+  if (typeof value === "string") return value;
+  const val = Number(value);
+  if (Number.isNaN(val)) return String(value);
+  if (key === "wiping_verdict") return String(value);
+  if (key === "wiping_n_strokes") return val.toFixed(0);
+  if (key === "wiping_cv_speed") return val.toFixed(3);
+  if (key === "wiping_straightness") return val.toFixed(3);
+  if (key === "wiping_coverage") return val.toFixed(0);
+  if (key === "wiping_duration") return val.toFixed(2);
+  if (key === "movement_time_sec") return val.toFixed(2);
+  if (key === "peak_velocity_px_s") return val.toFixed(1);
+  if (key === "peak_velocity_cm_s") return `${val.toFixed(1)} cm/s`;
+  if (key.includes("ratio") || key.includes("trunk") || key.includes("_sw") || key.includes("path_eff")) return val.toFixed(3);
+  return val.toFixed(2);
+}
+
+/** Compute final kinematic metrics from browser-side overlay data (matches the video overlay panel). */
+export function computeOverlayMetrics(overlayData) {
+  if (!overlayData) return null;
+  const frames = overlayData.frames || [];
+  const metrics = overlayData.metrics || {};
+  const win = overlayData.movement_window || { start_idx: 0, end_idx: frames.length - 1 };
+  const fps = overlayData.fps || 60;
+  const startIdx = Math.max(0, Math.min(frames.length - 1, win.start_idx));
+  const endIdx = Math.max(0, Math.min(frames.length - 1, win.end_idx));
+
+  const wiping = overlayData.wiping || {};
+  const out = {
+    wiping_verdict: wiping.verdict || null,
+    wiping_n_strokes: wiping.n_strokes ?? null,
+    wiping_cv_speed: wiping.overall?.cv_speed ?? null,
+    wiping_straightness: wiping.overall?.straightness ?? null,
+    wiping_coverage: wiping.coverage ?? null,
+    wiping_duration: wiping.overall?.duration ?? null,
+  };
+
+  // Movement time from the reach movement window.
+  const startTime = frames[startIdx]?.time || startIdx / fps;
+  const endTime = frames[endIdx]?.time || endIdx / fps;
+  out.movement_time_sec = Math.max(0, endTime - startTime);
+
+  // Peak velocity converted to cm/s if pixel scale is known.
+  let peakVelocityPxS = overlayData.peak_velocity_px_s || 0;
+  if (!peakVelocityPxS && frames.length) {
+    for (let i = 0; i < frames.length; i++) {
+      peakVelocityPxS = Math.max(peakVelocityPxS, frames[i]?.speed || 0);
+    }
+  }
+  const cmPerPx = metrics.cm_per_px || 0;
+  out.peak_velocity_cm_s = cmPerPx > 0 ? peakVelocityPxS * cmPerPx : 0;
+
+  return out;
 }
 
 /**
@@ -193,8 +255,8 @@ export function kinCrossPhaseComparable(kinematicsResults, metricKey, armForPhas
   if (phases.length < 2) return true;
 
   // Smoothness metrics require sufficient reach amplitude to be comparable across phases.
-  if (["sparc", "nvp", "straightness", "pause_time_sec", "number_of_stops"].includes(metricKey)) {
-    return phases.every((p) => kinematicsResults[p]?.sparc_comparable !== false);
+  if (["wiping_cv_speed", "wiping_straightness", "wiping_n_strokes"].includes(metricKey)) {
+    return phases.every((p) => kinematicsResults[p]?.wiping_comparable !== false);
   }
 
   return true;
@@ -202,13 +264,11 @@ export function kinCrossPhaseComparable(kinematicsResults, metricKey, armForPhas
 
 /** Key metrics for per-patient recovery summary. */
 export const RECOVERY_SUMMARY_KEYS = [
-  "nvp",
-  "straightness",
-  "pause_time_sec",
-  "number_of_stops",
-  "trunk_ratio",
-  "shoulder_vert_norm",
-  "elbow_angle_mean_deg",
+  "wiping_n_strokes",
+  "wiping_cv_speed",
+  "wiping_straightness",
+  "wiping_coverage",
+  "movement_time_sec",
   "peak_velocity_cm_s",
 ];
 
@@ -406,7 +466,7 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv") {
   l("* =================================================================");
   l("* PETTLEP AOMI RCT — SPSS Analysis Syntax (NeuroLab v6 auto-generated)");
   l("* Design: 2 (Group: AOMI vs Control) × 2 (Time: Pre, Post) mixed ANOVA");
-  l("* Primary outcome: SPARC (α=.05 uncorrected); secondary kinematics Holm k=5");
+  l("* Primary outcome: wiping_cv_speed (α=.05 uncorrected); secondary kinematics Holm k=5");
   l("* References: Field (2018); Cohen (1988); Schulz et al. CONSORT 2010");
   l("* =================================================================");
   l("");
@@ -454,21 +514,21 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv") {
 
   l("* --- 4. BASELINE EQUIVALENCE ---");
   l("T-TEST GROUPS=Group(1 2)");
-  l("  /VARIABLES=Age TimeSinceStroke MAS MRC sparc_Pre trunk_ratio_Pre shoulder_vert_norm_Pre.");
+  l("  /VARIABLES=Age TimeSinceStroke MAS MRC wiping_cv_speed_Pre movement_time_sec_Pre.");
   l("CROSSTABS Sex StrokeType AffectedSide BY Group /STATISTICS=CHISQ.");
   l("NPAR TESTS /MANN-WHITNEY MAS MRC BY Group(1 2).");
   l("");
 
   l("* --- 5. NORMALITY (Shapiro–Wilk via EXAMINE) ---");
   l("* Run for each DV if needed; example for primary:");
-  l("EXAMINE VARIABLES=sparc_Pre sparc_Post delta_sparc BY Group(1 2)");
+  l("EXAMINE VARIABLES=wiping_cv_speed_Pre wiping_cv_speed_Post delta_wiping_cv_speed BY Group(1 2)");
   l("  /PLOT BOXPLOT HISTOGRAM NPPLOT");
   l("  /STATISTICS DESCRIPTIVES");
   l("  /CINEMETRIC ALPHA(0.05).");
   l("* Decision: p≥.05 → parametric GLM; p<.05 → Wilcoxon (within) + Mann-Whitney (Δ between).");
   l("");
 
-  l("* --- 6. PRIMARY OUTCOME (SPARC, α=.05 uncorrected) ---");
+  l("* --- 6. PRIMARY OUTCOME (wiping_cv_speed, α=.05 uncorrected) ---");
   kinPrimary.forEach(({ key, label }) => {
     spssMixedGlm(l, key, label, { primary: true });
   });
@@ -515,23 +575,23 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv") {
   l("* --- 11. MODERATORS & EXPLORATORY CORRELATIONS ---");
   l("SPLIT FILE LAYERED BY Group.");
   l("CORRELATIONS /VARIABLES=KVIQ_Vis_Pre KVIQ_Kin_Pre");
-  l("  delta_sparc delta_trunk_ratio delta_shoulder_vert_norm delta_hand_displacement_norm delta_movement_time_sec delta_peak_velocity_px_s");
+  l("  delta_wiping_cv_speed delta_wiping_straightness delta_wiping_coverage delta_movement_time_sec delta_peak_velocity_px_s");
   l("  /PRINT=TWOTAIL NOSIG /MISSING=PAIRWISE.");
   l("SPLIT FILE OFF.");
-  l("CORRELATIONS /VARIABLES=delta_VAMS_Happy delta_VAMS_Calm delta_sparc delta_trunk_ratio /PRINT=TWOTAIL NOSIG.");
+  l("CORRELATIONS /VARIABLES=delta_VAMS_Happy delta_VAMS_Calm delta_wiping_cv_speed delta_wiping_straightness /PRINT=TWOTAIL NOSIG.");
   l("FREQUENCIES IPAQ_MET /STATISTICS=MEAN STDDEV MEDIAN.");
   l("");
 
   l("* --- 12. NON-PARAMETRIC BACKUP (if Shapiro p < .05) ---");
-  l("* Within AOMI: NPAR TESTS /WILCOXON sparc_Pre WITH sparc_Post (PAIRED).");
+  l("* Within AOMI: NPAR TESTS /WILCOXON wiping_cv_speed_Pre WITH wiping_cv_speed_Post (PAIRED).");
   l("* Within Control: repeat Wilcoxon per group.");
-  l("* Between groups on Δ: NPAR TESTS /MANN-WHITNEY delta_sparc BY Group(1 2).");
+  l("* Between groups on Δ: NPAR TESTS /MANN-WHITNEY delta_wiping_cv_speed BY Group(1 2).");
   l("");
 
   l("* --- 13. SENSITIVITY: LOCF + MIXED MODELS (ITT) ---");
   l("* LOCF: replace missing Post with Pre (document n imputed per variable).");
   l("* Example mixed model for primary:");
-  l("* MIXED sparc BY Group time /FIXED=Group time Group*time /REPEATED=time | SUBJECT(ID) COVTYPE(AR1).");
+  l("* MIXED wiping_cv_speed BY Group time /FIXED=Group time Group*time /REPEATED=time | SUBJECT(ID) COVTYPE(AR1).");
   l("");
 
   l("* --- 14. SAVE ---");
@@ -579,7 +639,7 @@ export function analyzeOutcome(rows, spec) {
   stats.betweenDelta = dA.length >= 2 && dC.length >= 2 ? welchTest(dA, dC) : null;
   stats.baseline = aPre.length >= 2 && cPre.length >= 2 ? welchTest(aPre, cPre) : null;
   stats.dir = dir;
-  stats.isPrimary = pre.includes("sparc");
+  stats.isPrimary = pre.includes("wiping_cv_speed");
 
   return stats;
 }

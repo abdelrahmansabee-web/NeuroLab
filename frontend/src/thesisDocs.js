@@ -61,9 +61,9 @@ Holmes & Collins (2001) defined seven dimensions — Physical, Environment, Task
 
 ## 7. Kinematic measurement
 
-Ordinal scales (e.g., FMA) cannot capture subtle trajectory quality (Massie et al., 2012). **Markerless pipelines** (MediaPipe + monocular depth scaling in NeuroLab) enable clinic-feasible, objective metrics: SPARC smoothness, trunk-to-palm ratio, shoulder elevation, elbow angle, movement time, and peak velocity (Schwarz et al., 2022).
+Ordinal scales (e.g., FMA) cannot capture subtle trajectory quality (Massie et al., 2012). **Markerless pipelines** (MediaPipe + monocular depth scaling in NeuroLab) enable clinic-feasible, objective metrics: wiping stroke count, speed coefficient of variation, stroke straightness, coverage, trunk-to-palm ratio, shoulder elevation, elbow angle, movement time, and peak velocity (Schwarz et al., 2022).
 
-**Primary outcome:** \`sparc\` — spectral arc length of palm velocity (Balasubramanian et al., 2012/2015). More negative values indicate smoother movement.
+**Primary outcome:** \`wiping_cv_speed\` — coefficient of variation of wrist speed during wiping. Lower values indicate more consistent, smoother wiping.
 
 ---
 
@@ -153,14 +153,14 @@ export function generateConsortSapMarkdown() {
 ### Primary (α = .05, no correction)
 | Variable | SPSS columns | Direction | Test |
 |----------|--------------|-----------|------|
-| SPARC | \`sparc_Pre\`, \`sparc_Post\` | More negative = smoother | 2×2 Mixed ANOVA |
+| Speed CV | \`wiping_cv_speed_Pre\`, \`wiping_cv_speed_Post\` | Lower = smoother | 2×2 Mixed ANOVA |
 
 ### Secondary kinematic (5 tests — **Holm–Bonferroni**, k=5)
 | # | Variable | Columns | Better |
-|---|----------|---------|--------|
-| 1 | Trunk ratio | trunk_ratio_Pre/Post | ↓ |
-| 2 | Shoulder elevation (norm) | shoulder_vert_norm_Pre/Post | ↓ |
-| 3 | Elbow angle (mean) | elbow_angle_mean_Pre/Post | ↑ |
+|---|---|----------|---------|--------|
+| 1 | Number of strokes | wiping_n_strokes_Pre/Post | ↑ |
+| 2 | Stroke straightness | wiping_straightness_Pre/Post | ↑ |
+| 3 | Wiping coverage | wiping_coverage_Pre/Post | ↑ |
 | 4 | Movement time | movement_time_sec_Pre/Post | ↓ |
 | 5 | Peak velocity | peak_velocity_px_s_Pre/Post | ↑ |
 
@@ -184,12 +184,12 @@ MDRS motor control change; IPAQ MET-min/wk.
 
 ---
 
-## E. Holm–Bonferroni procedure (secondary kinematic, k=8)
+## E. Holm–Bonferroni procedure (secondary kinematic, k=5)
 
-1. Run 8 separate GLMs (see \`neuro_study_analysis.sps\` section 7).  
+1. Run 5 separate GLMs (see \`neuro_study_analysis.sps\` section 7).  
 2. Extract Group×Time interaction **p** for each.  
-3. Sort: p₁ ≤ p₂ ≤ … ≤ p₈.  
-4. Find largest k where pₖ ≤ 0.05 / (8 − k + 1).  
+3. Sort: p₁ ≤ p₂ ≤ … ≤ p₅.  
+4. Find largest k where pₖ ≤ 0.05 / (5 − k + 1).  
 5. Report uncorrected and Holm-adjusted results in Table 3.
 
 ---

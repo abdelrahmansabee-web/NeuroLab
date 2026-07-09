@@ -23,7 +23,12 @@ const KVIQ_LABELS = [
 ];
 
 const KIN_PDF_VARS = [
-  { re: /SPARC/i, key: "sparc" },
+  { re: /Wiping verdict/i, key: "wiping_verdict" },
+  { re: /Number of strokes|Strokes detected/i, key: "wiping_n_strokes" },
+  { re: /CV speed|Coefficient of variation/i, key: "wiping_cv_speed" },
+  { re: /Stroke straightness|Straightness/i, key: "wiping_straightness" },
+  { re: /Coverage/i, key: "wiping_coverage" },
+  { re: /Wiping duration/i, key: "wiping_duration" },
   { re: /Trunk\s*Ratio|Trunk\/Palm/i, key: "trunk_ratio" },
   { re: /Shoulder Vert|Shoulder elevation/i, key: "shoulder_vert_norm" },
   { re: /Elbow angle/i, key: "elbow_angle_mean" },
