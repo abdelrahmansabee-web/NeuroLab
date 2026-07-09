@@ -69,16 +69,13 @@ def _compute_sparc_profile(
     min_segment_frames: int = 10,
 ) -> Dict[str, Any]:
     """
-    Compute cumulative SPARC smoothness up to every frame from movement start.
+    Compute SPARC smoothness for the movement window.
 
-    Returns per-frame SPARC values and verdicts.  Frames before the movement
-    window or with too-short trajectories are returned as None.
-
-    NaNs are linearly interpolated so brief tracking gaps do not prevent SPARC
-    computation (the module itself auto-trims static segments).
-
-    A final fallback SPARC is computed across the whole movement window if the
-    cumulative per-frame values remain None.
+    This follows the user's sparc_production module exactly: it expects the full
+    trajectory and auto-trims static start/end periods internally.  We compute
+    SPARC once over the detected movement window, then expose that single
+    representative value for every frame inside the window so it appears in the
+    live overlay without being computed from partial/unrepresentative segments.
     """
     palm_x = np.asarray(palm_x, dtype=float)
     palm_y = np.asarray(palm_y, dtype=float)
@@ -91,14 +88,11 @@ def _compute_sparc_profile(
         "input_frames": n,
         "finite_x": int(np.isfinite(palm_x).sum()),
         "finite_y": int(np.isfinite(palm_y).sum()),
-        "per_frame_attempts": 0,
-        "per_frame_success": 0,
-        "first_error": None,
     }
 
     start_idx = max(0, int(start_idx))
     end_idx = max(start_idx, min(n - 1, int(end_idx)))
-    if n - start_idx < min_segment_frames:
+    if end_idx - start_idx + 1 < min_segment_frames:
         debug["short_circuit"] = "movement_window_too_short"
         return {"values": sparc_values, "verdicts": sparc_verdicts, "debug": debug}
 
@@ -114,15 +108,17 @@ def _compute_sparc_profile(
         arr[~finite] = np.interp(idx[~finite], idx[finite], arr[finite])
         return arr
 
-    clean_x = _clean(palm_x)
-    clean_y = _clean(palm_y)
+    # Use the movement window (or whole video if needed) and let the module's
+    # auto-trim find the actual reach segment.
+    candidates = [
+        ("movement_window", _clean(palm_x[start_idx : end_idx + 1]), _clean(palm_y[start_idx : end_idx + 1])),
+        ("whole_video", _clean(palm_x), _clean(palm_y)),
+    ]
 
-    for i in range(start_idx + min_segment_frames - 1, n):
-        x_seg = clean_x[start_idx : i + 1]
-        y_seg = clean_y[start_idx : i + 1]
+    result = None
+    for label, x_seg, y_seg in candidates:
         if len(x_seg) < min_segment_frames:
             continue
-        debug["per_frame_attempts"] += 1
         try:
             result = sparc_production(
                 x_seg,
@@ -134,43 +130,25 @@ def _compute_sparc_profile(
                 speed_threshold_ratio=0.12,
                 validate=True,
             )
-            sparc_values[i] = result.get("sparc")
-            sparc_verdicts[i] = result.get("verdict")
+            debug["used_source"] = label
+            debug["trimmed_frames"] = result.get("trimmed_frames")
+            debug["sparc"] = result.get("sparc")
+            debug["verdict"] = result.get("verdict")
+            debug["warning"] = result.get("warning")
             if result.get("sparc") is not None:
-                debug["per_frame_success"] += 1
+                break
         except Exception as exc:
-            if debug["first_error"] is None:
+            if debug.get("first_error") is None:
                 debug["first_error"] = f"{type(exc).__name__}: {exc}"
 
-    # Fallback: compute SPARC across the full movement window once and use it for
-    # every frame in the window if per-frame computation yielded nothing.
-    if debug["per_frame_success"] == 0:
-        full_x = clean_x[start_idx : end_idx + 1]
-        full_y = clean_y[start_idx : end_idx + 1]
-        debug["fallback_window_frames"] = len(full_x)
-        if len(full_x) >= min_segment_frames:
-            try:
-                result = sparc_production(
-                    full_x,
-                    full_y,
-                    fs=fs,
-                    n_points=100,
-                    auto_trim=True,
-                    smooth_sigma=1.5,
-                    speed_threshold_ratio=0.12,
-                    validate=True,
-                )
-                fallback_sparc = result.get("sparc")
-                fallback_verdict = result.get("verdict")
-                debug["fallback_sparc"] = fallback_sparc
-                debug["fallback_verdict"] = fallback_verdict
-                for i in range(start_idx, end_idx + 1):
-                    sparc_values[i] = fallback_sparc
-                    sparc_verdicts[i] = fallback_verdict
-            except Exception as exc:
-                debug["fallback_error"] = f"{type(exc).__name__}: {exc}"
-        else:
-            debug["fallback_skipped"] = "window_too_short"
+    if result and result.get("sparc") is not None:
+        sparc = result.get("sparc")
+        verdict = result.get("verdict")
+        for i in range(start_idx, end_idx + 1):
+            sparc_values[i] = sparc
+            sparc_verdicts[i] = verdict
+    else:
+        debug["failed"] = True
 
     return {"values": sparc_values, "verdicts": sparc_verdicts, "debug": debug}
 
