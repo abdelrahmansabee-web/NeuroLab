@@ -6163,8 +6163,13 @@ export default function App() {
         style={{ marginLeft: isDesktop && sidebar ? sidebarPush : 0 }}
       >
           <div
-            className="sticky top-0 z-[60] px-3 sm:px-4 pb-0 transition-transform duration-300 ease-out"
-            style={{ paddingTop: SAFE_TOP, transform: topBarHidden ? "translateY(-100%)" : "translateY(0)" }}
+            className="sticky top-0 z-[60] px-3 sm:px-4 pb-0"
+            style={{
+              paddingTop: SAFE_TOP,
+              transform: topBarHidden ? "translateY(-110%)" : "translateY(0)",
+              transition: "transform 0.3s ease-out",
+              willChange: "transform",
+            }}
           >
             {topBar}
           </div>
