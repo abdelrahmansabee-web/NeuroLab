@@ -5722,8 +5722,18 @@ export default function App() {
 
   useEffect(() => {
     let lastY = 0;
-    const onScroll = () => {
-      const y = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    let lastTime = 0;
+    const onScroll = (e) => {
+      const now = Date.now();
+      if (now - lastTime < 16) return;
+      lastTime = now;
+      const target = e?.target;
+      const y =
+        (target && target.scrollTop != null ? target.scrollTop : null) ??
+        window.scrollY ??
+        document.documentElement.scrollTop ??
+        document.body.scrollTop ??
+        0;
       const goingDown = y > lastY;
       const goingUp = y < lastY;
       if (y < 50) {
@@ -5735,11 +5745,15 @@ export default function App() {
       }
       lastY = y;
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    document.addEventListener("scroll", onScroll, { passive: true, capture: true });
+
+    const targets = [window, document, document.body, document.getElementById("root")].filter(Boolean);
+    targets.forEach((t) => t.addEventListener("scroll", onScroll, { passive: true }));
+    const mainEl = document.querySelector("main");
+    if (mainEl) mainEl.addEventListener("scroll", onScroll, { passive: true });
+
     return () => {
-      window.removeEventListener("scroll", onScroll);
-      document.removeEventListener("scroll", onScroll, { capture: true });
+      targets.forEach((t) => t.removeEventListener("scroll", onScroll));
+      if (mainEl) mainEl.removeEventListener("scroll", onScroll);
     };
   }, []);
 
