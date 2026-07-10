@@ -5723,15 +5723,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    let ticking = false;
-    const handleScroll = (e) => {
-      const target = e?.target;
-      const currentY =
-        (target && target.scrollTop != null ? target.scrollTop : null) ??
-        window.scrollY ??
-        document.documentElement.scrollTop ??
-        document.body.scrollTop ??
-        0;
+    const handleScroll = () => {
+      const currentY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
       const delta = currentY - lastScrollY.current;
       if (currentY <= 30) {
         setTopBarHidden(false);
@@ -5742,13 +5735,8 @@ export default function App() {
       }
       lastScrollY.current = currentY;
     };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    const mainEl = mainRef.current;
-    if (mainEl) mainEl.addEventListener("scroll", handleScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      if (mainEl) mainEl.removeEventListener("scroll", handleScroll);
-    };
+    document.addEventListener("scroll", handleScroll, { passive: true, capture: true });
+    return () => document.removeEventListener("scroll", handleScroll, { capture: true });
   }, []);
 
   useEffect(() => {
