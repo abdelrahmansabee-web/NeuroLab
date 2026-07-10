@@ -2262,6 +2262,9 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       peakVelocityPxS: "peak_velocity_px_s",
       peakVelocityCmS: "peak_velocity_cm_s",
       duration: "movement_time_sec",
+      // Legacy keys kept for backward compatibility
+      sparc: "sparc",
+      handDisplacementNorm: "hand_displacement_norm",
     };
     const converted = {};
     const phaseMap = { pre: "pre", post: "post", healthy: "baseline" };
@@ -2413,9 +2416,11 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       });
       showToast(`✓ Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials → mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
       setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
-      // Unified validation video is now manual-only to avoid HF Spaces CPU delays
-      // and to prevent background jobs from being lost when a new session starts.
-      // The user can still generate it from the Validation Video card.
+      // Always generate the unified validation video in the background if it wasn't
+      // returned inline. Free HF Spaces can time out, so we queue a background job and
+      // poll until it is ready. Pass the result explicitly to avoid a race with React state.
+      const uvPayload = { ...resultWithoutB64, video_filename: result.video_filename || file.name };
+      setTimeout(() => generateUnifiedValidation(phase, { result: uvPayload }), 300);
     } catch (err) {
       if (err.name === "AbortError") {
         showToast(`✕ Analysis cancelled for ${phase}`, "info");
@@ -2728,7 +2733,13 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   }));
 
   const activeResultPhases = phases.filter((ph) => kinematicsResults[ph.k]);
-  const kinViewWarning = (() => null)();
+  const kinViewWarning = (() => {
+    const lowAmp = activeResultPhases.filter((ph) => kinematicsResults[ph.k]?.sparc_comparable === false);
+    if (lowAmp.length) {
+      return `Reach amplitude low in ${lowAmp.map((ph) => ph.label).join(", ")} — kinematic smoothness metrics may be less reliable`;
+    }
+    return null;
+  })();
   const hasKinTriple =
     kinematicsResults.pre && kinematicsResults.post && kinematicsResults.baseline;
   const recoverySummaryRows = hasKinTriple
@@ -5745,8 +5756,6 @@ export default function App() {
   }, [fd, showToast]);
 
   const newSession = useCallback(() => {
-    // Auto-save current session before resetting so days of work are not lost.
-    saveSession();
     localStorage.setItem("neuro_last_session_backup", JSON.stringify(fd));
     localStorage.removeItem(KIN_LS_KEY);
     setFd({
@@ -5762,7 +5771,7 @@ export default function App() {
     setActive("demographics");
     if (!isDesktop) setSidebar(false);
     showToast("✓ New session started / Yeni seans başlatıldı");
-  }, [fd, showToast, isDesktop, saveSession]);
+  }, [fd, showToast, isDesktop]);
 
   const handleLoadSession = useCallback((record) => {
     const { _id, _savedAt, _hasPre, _hasPost, ...sessionData } = record;

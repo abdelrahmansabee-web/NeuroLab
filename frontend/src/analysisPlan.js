@@ -1,6 +1,6 @@
 /**
  * PETTLEP AOMI RCT — Analysis plan, master dataset, SPSS syntax, preliminary stats.
- * Aligned with manuscript: 2×2 mixed ANOVA (Group × Time), n=28, primary = NVP.
+ * Aligned with manuscript: 2×2 mixed ANOVA (Group × Time), n=28, primary = SPARC.
  */
 
 export const STUDY_DESIGN = {
@@ -10,10 +10,10 @@ export const STUDY_DESIGN = {
   targetN: 28,
   perGroup: 14,
   alpha: 0.05,
-  primaryOutcome: "nvp",
+  primaryOutcome: "NVP / straightness / pause time / stops",
 };
 
-/** Manuscript-aligned kinematic variables (reach-to-grasp protocol) */
+/** Reach-to-grasp protocol kinematic variables (ethics-form final set) */
 export const KINEMATIC_VARS = [
   // Primary outcomes
   { key: "nvp", label: "Number of Velocity Peaks (NVP)", unit: "count", dir: "lower", tier: "primary" },
@@ -22,10 +22,10 @@ export const KINEMATIC_VARS = [
   { key: "number_of_stops", label: "Number of stops", unit: "count", dir: "lower", tier: "primary" },
   // Secondary outcomes
   { key: "trunk_ratio", label: "Trunk ratio", unit: "ratio", dir: "lower", tier: "secondary" },
-  { key: "shoulder_vert_norm", label: "Shoulder elevation (norm)", unit: "SW", dir: "lower", tier: "secondary", fallback: "shoulder_elevation_norm" },
+  { key: "shoulder_vert_norm", label: "Shoulder elevation (norm)", unit: "norm", dir: "lower", tier: "secondary", fallback: "shoulder_elevation_norm" },
   { key: "elbow_angle_mean_deg", label: "Elbow angle (mean)", unit: "deg", dir: "none", tier: "secondary", fallback: "elbow_angle_range_deg" },
   { key: "movement_time_sec", label: "Movement time", unit: "s", dir: "lower", tier: "secondary" },
-  { key: "peak_velocity_px_s", label: "Peak velocity", unit: "px/s", dir: "higher", tier: "secondary", fallback: "peak_velocity_cm_s" },
+  { key: "peak_velocity_cm_s", label: "Peak velocity", unit: "cm/s", dir: "higher", tier: "secondary", fallback: "peak_velocity_px_s" },
 ];
 
 export const KINEMATIC_DISPLAY_ORDER = [
@@ -37,7 +37,7 @@ export const KINEMATIC_DISPLAY_ORDER = [
   "shoulder_vert_norm",
   "elbow_angle_mean_deg",
   "movement_time_sec",
-  "peak_velocity_px_s",
+  "peak_velocity_cm_s",
 ];
 
 /** Manuscript / ethics-form reference pattern (Pre → Post → Healthy) */
@@ -45,12 +45,12 @@ export const MANUSCRIPT_KINEMATIC_TARGETS = {
   nvp: { pre: 3.5, post: 2.5, healthy: 1.5 },
   straightness: { pre: 0.82, post: 0.88, healthy: 0.94 },
   pause_time_sec: { pre: 0.45, post: 0.25, healthy: 0.10 },
-  number_of_stops: { pre: 3.0, post: 2.0, healthy: 1.0 },
-  trunk_ratio: { pre: 0.20, post: 0.12, healthy: 0.03 },
-  shoulder_vert_norm: { pre: 0.12, post: 0.08, healthy: 0.04 },
-  elbow_angle_mean_deg: { pre: 95.0, post: 100.0, healthy: 105.0 },
-  movement_time_sec: { pre: 3.8, post: 3.0, healthy: 2.4 },
-  peak_velocity_px_s: { pre: 520.0, post: 650.0, healthy: 720.0 },
+  number_of_stops: { pre: 2.5, post: 1.5, healthy: 0.5 },
+  trunk_ratio: { pre: 32.0, post: 18.0, healthy: 3.0 },
+  shoulder_vert_norm: { pre: 18.0, post: 12.0, healthy: 6.5 },
+  elbow_angle_mean_deg: { pre: 125, post: 130, healthy: 135 },
+  movement_time_sec: { pre: 2.2, post: 1.7, healthy: 1.2 },
+  peak_velocity_cm_s: { pre: 45.0, post: 55.0, healthy: 65.0 },
 };
 
 export function orderedKinematicVars() {
@@ -78,7 +78,7 @@ export const SPSS_WORKFLOW = [
   { step: 3, title: "Baseline equivalence", spss: "T-TEST / Mann-Whitney / Chi-square on Pre scores & demographics" },
   { step: 4, title: "Normality (Shapiro–Wilk)", spss: "EXAMINE … BY Group on Pre, Post, and Δ for each DV" },
   { step: 5, title: "Primary analysis", spss: "GLM nvp straightness pause_time_sec number_of_stops Pre Post BY Group /WSFACTOR=time 2 — Holm–Bonferroni k=4" },
-  { step: 6, title: "Secondary kinematic (5 GLMs)", spss: "trunk_ratio, shoulder_vert_norm, elbow_angle_mean_deg, movement_time_sec, peak_velocity_px_s; Holm–Bonferroni k=5" },
+  { step: 6, title: "Secondary kinematic (5 GLMs)", spss: "trunk_ratio, shoulder_vert_norm, elbow_angle_mean_deg, movement_time_sec, peak_velocity_cm_s; Holm–Bonferroni k=5" },
   { step: 8, title: "Clinical scales", spss: "GLM WMFT-4, VAMS-4, VAS, KVIQ; MWU/Wilcoxon if non-normal" },
   { step: 9, title: "MDRS post-only", spss: "Mann-Whitney MDRS_Difference_Post BY Group" },
   { step: 10, title: "Moderators", spss: "CORRELATIONS KVIQ-10 Pre with Δ kinematic; split by Group" },
@@ -90,12 +90,15 @@ const LEGACY_KIN_MAP = {
   nvp: ["nvp"],
   straightness: ["straightness"],
   pause_time_sec: ["pause_time_sec", "pause_time"],
-  number_of_stops: ["number_of_stops", "stops_n"],
+  number_of_stops: ["number_of_stops", "n_stops", "stops"],
   trunk_ratio: ["trunk_ratio", "total_trunk_palm_ratio"],
   shoulder_vert_norm: ["shoulder_vert_norm", "shoulder_elevation_norm"],
-  elbow_angle_mean_deg: ["elbow_angle_mean_deg", "elbow_angle_mean", "elbow_angle"],
+  elbow_angle_mean_deg: ["elbow_angle_mean_deg", "elbow_angle_mean", "elbow_angle_range_deg"],
   movement_time_sec: ["movement_time_sec", "total_duration_s", "duration"],
-  peak_velocity_px_s: ["peak_velocity_px_s", "peak_velocity_cm_s", "peak_velocity_m_s", "total_peak_velocity"],
+  peak_velocity_cm_s: ["peak_velocity_cm_s", "peak_velocity_px_s", "peak_velocity_m_s", "total_peak_velocity"],
+  // Keep old SPARC / hand displacement keys for backward compatibility
+  sparc: ["sparc"],
+  hand_displacement_norm: ["hand_displacement_norm", "hand_disp_sw", "reach_amplitude_sw", "lat_range_sw"],
 };
 
 export function pickKinField(result, canonicalKey, fallbackKey = null) {
@@ -162,12 +165,14 @@ export function formatKinValue(key, value) {
   if (key === "straightness") return val.toFixed(3);
   if (key === "pause_time_sec") return val.toFixed(2);
   if (key === "number_of_stops") return val.toFixed(0);
-  if (key === "trunk_ratio") return val.toFixed(3);
+  if (key === "trunk_ratio") return `${(val * 100).toFixed(1)}%`;
   if (key === "shoulder_vert_norm") return `${val.toFixed(3)} SW`;
   if (key === "elbow_angle_mean_deg") return val.toFixed(1);
   if (key === "movement_time_sec") return val.toFixed(2);
-  if (key === "peak_velocity_px_s") return `${val.toFixed(1)} px/s`;
+  if (key === "peak_velocity_px_s") return val.toFixed(1);
   if (key === "peak_velocity_cm_s") return `${val.toFixed(1)} cm/s`;
+  if (key === "sparc") return val.toFixed(3);
+  if (key === "hand_displacement_norm") return `${val.toFixed(1)} cm`;
   if (key.includes("ratio") || key.includes("trunk") || key.includes("_sw") || key.includes("path_eff")) return val.toFixed(3);
   return val.toFixed(2);
 }
@@ -204,19 +209,29 @@ export function computeRecoveryPct(pre, post, healthy, direction) {
   return { valid: true, pct, improved, text };
 }
 
-//** Whether pre/post/baseline values are comparable for cross-phase deltas (view/arm gates). */
+/** Whether pre/post/baseline values are comparable for cross-phase deltas (view/arm gates). */
 export function kinCrossPhaseComparable(kinematicsResults, metricKey, armForPhase = null) {
   const phases = ["pre", "post", "baseline"].filter((p) => kinematicsResults?.[p]);
   if (phases.length < 2) return true;
+
+  // Smoothness metrics require sufficient reach amplitude to be comparable across phases.
+  if (["sparc", "nvp", "straightness", "pause_time_sec", "number_of_stops"].includes(metricKey)) {
+    return phases.every((p) => kinematicsResults[p]?.sparc_comparable !== false);
+  }
+
   return true;
 }
 
-//** Key metrics for per-patient recovery summary (when re-recording is not possible). */
+/** Key metrics for per-patient recovery summary. */
 export const RECOVERY_SUMMARY_KEYS = [
   "nvp",
   "straightness",
+  "pause_time_sec",
+  "number_of_stops",
   "trunk_ratio",
   "shoulder_vert_norm",
+  "elbow_angle_mean_deg",
+  "peak_velocity_cm_s",
 ];
 
 /** Read pre/post/baseline kinematics from patient record. */
@@ -413,7 +428,7 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv") {
   l("* =================================================================");
   l("* PETTLEP AOMI RCT — SPSS Analysis Syntax (NeuroLab v6 auto-generated)");
   l("* Design: 2 (Group: AOMI vs Control) × 2 (Time: Pre, Post) mixed ANOVA");
-  l("* Primary outcome: NVP / straightness / pause_time / stops (Holm–Bonferroni k=4); secondary kinematics Holm k=5");
+  l("* Primary outcome: SPARC (α=.05 uncorrected); secondary kinematics Holm k=5");
   l("* References: Field (2018); Cohen (1988); Schulz et al. CONSORT 2010");
   l("* =================================================================");
   l("");

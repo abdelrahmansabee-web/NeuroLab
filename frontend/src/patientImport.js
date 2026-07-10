@@ -23,15 +23,12 @@ const KVIQ_LABELS = [
 ];
 
 const KIN_PDF_VARS = [
-  { re: /Number of Velocity Peaks|NVP/i, key: "nvp" },
-  { re: /Path straightness|Straightness/i, key: "straightness" },
-  { re: /Pause time/i, key: "pause_time_sec" },
-  { re: /Number of stops|Stops/i, key: "number_of_stops" },
+  { re: /SPARC/i, key: "sparc" },
   { re: /Trunk\s*Ratio|Trunk\/Palm/i, key: "trunk_ratio" },
-  { re: /Shoulder\s*Vert|Shoulder\s*elevation/i, key: "shoulder_vert_norm" },
-  { re: /Elbow\s*angle/i, key: "elbow_angle_mean_deg" },
-  { re: /Movement\s*time|Duration/i, key: "movement_time_sec" },
-  { re: /Peak\s*Velocity/i, key: "peak_velocity_px_s" },
+  { re: /Shoulder Vert|Shoulder elevation/i, key: "shoulder_vert_norm" },
+  { re: /Elbow angle/i, key: "elbow_angle_mean" },
+  { re: /Movement time|Duration/i, key: "movement_time_sec" },
+  { re: /Peak Velocity/i, key: "peak_velocity_px_s" },
 ];
 
 const WMFT_PDF = [
