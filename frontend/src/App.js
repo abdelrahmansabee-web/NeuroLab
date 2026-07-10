@@ -5704,6 +5704,7 @@ export default function App() {
   const [bgUrl, setBgUrl] = useState(BG);
   const bgRef = useRef(null);
   const importRef = useRef(null);
+  const mainRef = useRef(null);
   const [topBarHidden, setTopBarHidden] = useState(false);
   const lastScrollY = useRef(0);
   useEffect(() => {
@@ -5723,25 +5724,31 @@ export default function App() {
 
   useEffect(() => {
     let ticking = false;
-    const handleScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      window.requestAnimationFrame(() => {
-        const currentY = window.scrollY || document.documentElement.scrollTop || 0;
-        const delta = currentY - lastScrollY.current;
-        if (currentY <= 0) {
-          setTopBarHidden(false);
-        } else if (delta > 4) {
-          setTopBarHidden(true);
-        } else if (delta < -4) {
-          setTopBarHidden(false);
-        }
-        lastScrollY.current = currentY;
-        ticking = false;
-      });
+    const handleScroll = (e) => {
+      const target = e?.target;
+      const currentY =
+        (target && target.scrollTop != null ? target.scrollTop : null) ??
+        window.scrollY ??
+        document.documentElement.scrollTop ??
+        document.body.scrollTop ??
+        0;
+      const delta = currentY - lastScrollY.current;
+      if (currentY <= 30) {
+        setTopBarHidden(false);
+      } else if (delta > 2) {
+        setTopBarHidden(true);
+      } else if (delta < -2) {
+        setTopBarHidden(false);
+      }
+      lastScrollY.current = currentY;
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    const mainEl = mainRef.current;
+    if (mainEl) mainEl.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (mainEl) mainEl.removeEventListener("scroll", handleScroll);
+    };
   }, []);
 
   useEffect(() => {
@@ -6152,6 +6159,7 @@ export default function App() {
           </motion.aside>
 
       <main
+        ref={mainRef}
         className="flex-1 relative z-10 transition-[margin] duration-300"
         style={{ marginLeft: isDesktop && sidebar ? sidebarPush : 0 }}
       >
