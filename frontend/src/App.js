@@ -5723,20 +5723,48 @@ export default function App() {
 
   useEffect(() => {
     const sentinel = topBarSentinelRef.current;
-    if (!sentinel || typeof IntersectionObserver === "undefined") return;
+    let observer;
+    if (sentinel && typeof IntersectionObserver !== "undefined") {
+      observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) setTopBarHidden(false);
+        },
+        { root: null, threshold: 0 }
+      );
+      observer.observe(sentinel);
+    }
+
+    let rafId;
+    let lastY = 0;
+    let lastTime = 0;
 
     const updateHidden = (hide) => {
       setTopBarHidden((prev) => (prev === hide ? prev : hide));
     };
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        updateHidden(!entry.isIntersecting);
-      },
-      { root: null, threshold: 0, rootMargin: "16px 0px 0px 0px" }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
+    const tick = () => {
+      const now = Date.now();
+      if (now - lastTime >= 16) {
+        lastTime = now;
+        const y = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+        const dy = y - lastY;
+        if (y < 50) {
+          updateHidden(false);
+        } else if (dy > 2) {
+          updateHidden(true);
+        } else if (dy < -2) {
+          updateHidden(false);
+        }
+        lastY = y;
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => {
+      if (observer) observer.disconnect();
+      cancelAnimationFrame(rafId);
+    };
   }, []);
 
   useEffect(() => {
