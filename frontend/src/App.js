@@ -2381,7 +2381,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       if (!isCsv) {
         fd.append("arm_type", "paretic");
         fd.append("trial_count", "1");
-        fd.append("best_trial_metric", "sparc");
+        fd.append("best_trial_metric", "nvp");
       }
 
       const endpoint = isCsv ? "/analyze-csv" : "/analyze";
@@ -2413,11 +2413,9 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       });
       showToast(`✓ Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials → mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
       setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
-      // Always generate the unified validation video in the background if it wasn't
-      // returned inline. Free HF Spaces can time out, so we queue a background job and
-      // poll until it is ready. Pass the result explicitly to avoid a race with React state.
-      const uvPayload = { ...resultWithoutB64, video_filename: result.video_filename || file.name };
-      setTimeout(() => generateUnifiedValidation(phase, { result: uvPayload }), 300);
+      // Unified validation video is now manual-only to avoid HF Spaces CPU delays
+      // and to prevent background jobs from being lost when a new session starts.
+      // The user can still generate it from the Validation Video card.
     } catch (err) {
       if (err.name === "AbortError") {
         showToast(`✕ Analysis cancelled for ${phase}`, "info");
@@ -5747,6 +5745,8 @@ export default function App() {
   }, [fd, showToast]);
 
   const newSession = useCallback(() => {
+    // Auto-save current session before resetting so days of work are not lost.
+    saveSession();
     localStorage.setItem("neuro_last_session_backup", JSON.stringify(fd));
     localStorage.removeItem(KIN_LS_KEY);
     setFd({
@@ -5762,7 +5762,7 @@ export default function App() {
     setActive("demographics");
     if (!isDesktop) setSidebar(false);
     showToast("✓ New session started / Yeni seans başlatıldı");
-  }, [fd, showToast, isDesktop]);
+  }, [fd, showToast, isDesktop, saveSession]);
 
   const handleLoadSession = useCallback((record) => {
     const { _id, _savedAt, _hasPre, _hasPost, ...sessionData } = record;
