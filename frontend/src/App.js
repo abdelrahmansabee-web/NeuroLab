@@ -5702,6 +5702,7 @@ export default function App() {
   const [sidebarPush, setSidebarPush] = useState(() => sidebarPushWidth());
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
   const [bgUrl, setBgUrl] = useState(BG);
+  const [topBarHidden, setTopBarHidden] = useState(false);
   const bgRef = useRef(null);
   const importRef = useRef(null);
   useEffect(() => {
