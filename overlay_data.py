@@ -385,6 +385,37 @@ def build_overlay_data(
         start_palm = palm_pairs[onset_idx] if onset_idx < len(palm_pairs) else None
         end_palm = palm_pairs[offset_idx] if offset_idx < len(palm_pairs) else None
 
+        # Compute per-frame shoulder elevation and trunk displacement for live labels.
+        shoulder_y_px = pd.to_numeric(canon.get("shoulder_y", pd.Series(np.nan)), errors="coerce").values
+        baseline_shoulder_y_px = float(np.nanmin(shoulder_y_px)) if np.any(np.isfinite(shoulder_y_px)) else 0.0
+        shoulder_elevation_px = shoulder_y_px - baseline_shoulder_y_px
+
+        trunk_x_px = pd.to_numeric(canon.get("trunk_x", pd.Series(np.nan)), errors="coerce").values
+        trunk_baseline_x = float(trunk_x_px[int(onset_idx)]) if int(onset_idx) < len(trunk_x_px) and np.isfinite(trunk_x_px[int(onset_idx)]) else float(np.nanmedian(trunk_x_px))
+        trunk_displacement_px = np.abs(trunk_x_px - trunk_baseline_x)
+
+        shoulder_width_px = 0.0
+        if analysis and analysis.get("shoulder_width_px"):
+            shoulder_width_px = float(analysis["shoulder_width_px"])
+        else:
+            try:
+                lsx = _norm_series(raw_df, "LEFT_SHOULDER", "x").values
+                rsx = _norm_series(raw_df, "RIGHT_SHOULDER", "x").values
+                lsy = _norm_series(raw_df, "LEFT_SHOULDER", "y").values
+                rsy = _norm_series(raw_df, "RIGHT_SHOULDER", "y").values
+                sw = np.nanmedian(np.hypot(lsx - rsx, lsy - rsy)) * frame_w
+                if np.isfinite(sw) and sw > 0:
+                    shoulder_width_px = float(sw)
+            except Exception:
+                pass
+
+        if shoulder_width_px and shoulder_width_px > 0:
+            shoulder_elevation_norm = shoulder_elevation_px / shoulder_width_px
+            trunk_displacement_norm = trunk_displacement_px / shoulder_width_px
+        else:
+            shoulder_elevation_norm = shoulder_elevation_px
+            trunk_displacement_norm = trunk_displacement_px
+
         # Compute cumulative SPARC smoothness up to each frame for the live overlay.
         sparc_out = _compute_sparc_profile(
             palm_x, palm_y, fs=target_fs, start_idx=int(onset_idx), end_idx=int(offset_idx)
@@ -407,6 +438,8 @@ def build_overlay_data(
                 "elbow_angle": round(float(elbow_angle[i]) if elbow_angle is not None and np.isfinite(elbow_angle[i]) else 0.0, 2),
                 "sparc": round(float(sparc_values[i]), 3) if sparc_values[i] is not None else None,
                 "sparc_verdict": sparc_verdicts[i],
+                "shoulder_elevation_norm": round(float(shoulder_elevation_norm[i]) if i < len(shoulder_elevation_norm) and np.isfinite(shoulder_elevation_norm[i]) else 0.0, 3),
+                "trunk_displacement_norm": round(float(trunk_displacement_norm[i]) if i < len(trunk_displacement_norm) and np.isfinite(trunk_displacement_norm[i]) else 0.0, 3),
                 "palm": palm_pairs[i],
                 "wrist": wrist_pairs[i],
                 "shoulder": shoulder_pairs[i],
@@ -500,6 +533,9 @@ def build_overlay_data(
             "fps": round(float(target_fs), 2),
             "duration_sec": round(float(t1 - t0), 3),
             "affected_side": side,
+            "frame_width_px": round(float(frame_w), 2),
+            "frame_height_px": round(float(frame_h), 2),
+            "shoulder_width_px": round(float(shoulder_width_px), 2) if shoulder_width_px and shoulder_width_px > 0 else 0.0,
             "frames": frames,
             "metrics": metrics,
             "movement_window": {"start_idx": int(onset_idx), "end_idx": int(offset_idx)},
