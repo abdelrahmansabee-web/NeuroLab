@@ -5704,6 +5704,8 @@ export default function App() {
   const [bgUrl, setBgUrl] = useState(BG);
   const bgRef = useRef(null);
   const importRef = useRef(null);
+  const [topBarHidden, setTopBarHidden] = useState(false);
+  const lastScrollY = useRef(0);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const syncLayout = () => {
@@ -5717,6 +5719,23 @@ export default function App() {
       mq.removeEventListener("change", syncLayout);
       window.removeEventListener("resize", syncLayout);
     };
+  }, []);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      const delta = currentY - lastScrollY.current;
+      if (currentY <= 0) {
+        setTopBarHidden(false);
+      } else if (delta > 8) {
+        setTopBarHidden(true);
+      } else if (delta < -8) {
+        setTopBarHidden(false);
+      }
+      lastScrollY.current = currentY;
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   useEffect(() => {
@@ -6124,9 +6143,12 @@ export default function App() {
         className="flex-1 relative z-10 transition-[margin] duration-300"
         style={{ marginLeft: isDesktop && sidebar ? sidebarPush : 0 }}
       >
-          <div className="sticky top-0 z-[60] px-3 sm:px-4 pb-0" style={{ paddingTop: SAFE_TOP }}>
+          <div
+            className="sticky top-0 z-[60] px-3 sm:px-4 pb-0 transition-transform duration-300 ease-out"
+            style={{ paddingTop: SAFE_TOP, transform: topBarHidden ? "translateY(-120%)" : "translateY(0)" }}
+          >
             {topBar}
-                </div>
+          </div>
         <div className="app-main-inner px-3 sm:px-4 py-4 sm:py-6 max-w-5xl w-full mx-auto">
           <div className="content-shell rounded-2xl">
             <div className="content-shell-inner p-4 sm:p-6">
