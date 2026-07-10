@@ -5703,6 +5703,7 @@ export default function App() {
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
   const [bgUrl, setBgUrl] = useState(BG);
   const [topBarHidden, setTopBarHidden] = useState(false);
+  const topBarSentinelRef = useRef(null);
   const bgRef = useRef(null);
   const importRef = useRef(null);
   useEffect(() => {
@@ -5721,68 +5722,21 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    let lastY = 0;
-    let lastScrollTime = 0;
-    let ignoreScrollUntil = 0;
-    let touchStartY = null;
+    const sentinel = topBarSentinelRef.current;
+    if (!sentinel || typeof IntersectionObserver === "undefined") return;
 
     const updateHidden = (hide) => {
       setTopBarHidden((prev) => (prev === hide ? prev : hide));
     };
 
-    const onScroll = () => {
-      const now = Date.now();
-      if (now < ignoreScrollUntil) return;
-      if (now - lastScrollTime < 16) return;
-      lastScrollTime = now;
-      const y = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
-      if (y < 50) {
-        updateHidden(false);
-      } else if (y > lastY + 2) {
-        updateHidden(true);
-      } else if (y < lastY - 2) {
-        updateHidden(false);
-      }
-      lastY = y;
-    };
-
-    const onWheel = (e) => {
-      const now = Date.now();
-      ignoreScrollUntil = now + 100;
-      if (e.deltaY > 2) updateHidden(true);
-      else if (e.deltaY < -2) updateHidden(false);
-    };
-
-    const onTouchStart = (e) => {
-      if (e.touches && e.touches[0]) touchStartY = e.touches[0].clientY;
-    };
-    const onTouchMove = (e) => {
-      if (touchStartY == null || !e.touches || !e.touches[0]) return;
-      const now = Date.now();
-      ignoreScrollUntil = now + 100;
-      const currentY = e.touches[0].clientY;
-      const delta = touchStartY - currentY;
-      if (delta > 6) updateHidden(true);
-      else if (delta < -6) updateHidden(false);
-      touchStartY = currentY;
-    };
-
-    const targets = [window, document, document.body, document.getElementById("root")].filter(Boolean);
-    targets.forEach((t) => t.addEventListener("scroll", onScroll, { passive: true }));
-    const mainEl = document.querySelector("main");
-    if (mainEl) mainEl.addEventListener("scroll", onScroll, { passive: true });
-
-    window.addEventListener("wheel", onWheel, { passive: true });
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
-
-    return () => {
-      targets.forEach((t) => t.removeEventListener("scroll", onScroll));
-      if (mainEl) mainEl.removeEventListener("scroll", onScroll);
-      window.removeEventListener("wheel", onWheel);
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
-    };
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        updateHidden(!entry.isIntersecting);
+      },
+      { root: null, threshold: 0, rootMargin: "16px 0px 0px 0px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -6190,6 +6144,11 @@ export default function App() {
         className="flex-1 relative z-10 transition-[margin] duration-300"
         style={{ marginLeft: isDesktop && sidebar ? sidebarPush : 0 }}
       >
+        <div
+          ref={topBarSentinelRef}
+          aria-hidden="true"
+          style={{ position: "absolute", top: 0, left: 0, width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+        />
           <div
             className="sticky top-0 z-[60] px-3 sm:px-4 pb-0"
             style={{
