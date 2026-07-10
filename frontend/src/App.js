@@ -5704,9 +5704,6 @@ export default function App() {
   const [bgUrl, setBgUrl] = useState(BG);
   const bgRef = useRef(null);
   const importRef = useRef(null);
-  const mainRef = useRef(null);
-  const [topBarHidden, setTopBarHidden] = useState(false);
-  const lastScrollY = useRef(0);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const syncLayout = () => {
@@ -5723,20 +5720,26 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const handleScroll = () => {
-      const currentY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
-      const delta = currentY - lastScrollY.current;
-      if (currentY <= 30) {
+    let lastY = 0;
+    const onScroll = () => {
+      const y = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+      const goingDown = y > lastY;
+      const goingUp = y < lastY;
+      if (y < 50) {
         setTopBarHidden(false);
-      } else if (delta > 2) {
+      } else if (goingDown) {
         setTopBarHidden(true);
-      } else if (delta < -2) {
+      } else if (goingUp) {
         setTopBarHidden(false);
       }
-      lastScrollY.current = currentY;
+      lastY = y;
     };
-    document.addEventListener("scroll", handleScroll, { passive: true, capture: true });
-    return () => document.removeEventListener("scroll", handleScroll, { capture: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      document.removeEventListener("scroll", onScroll, { capture: true });
+    };
   }, []);
 
   useEffect(() => {
@@ -5924,13 +5927,7 @@ export default function App() {
   const nav = NAV_ITEMS.find((n) => n.id === active);
 
   const topBar = (
-    <div
-      className={`app-topbar-glass glass-float flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl transition-transform duration-300 ease-out ${GLASS_CLS}`}
-      style={{
-        boxShadow: FLOAT_M,
-        transform: topBarHidden ? "translateY(-120%)" : "translateY(0)",
-      }}
-    >
+    <div className={`app-topbar-glass glass-float flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl ${GLASS_CLS}`} style={{ boxShadow: FLOAT_M }}>
       <motion.button
         whileTap={{ scale: 0.9 }}
         onClick={() => setSidebar((p) => !p)}
@@ -6147,11 +6144,13 @@ export default function App() {
           </motion.aside>
 
       <main
-        ref={mainRef}
         className="flex-1 relative z-10 transition-[margin] duration-300"
         style={{ marginLeft: isDesktop && sidebar ? sidebarPush : 0 }}
       >
-          <div className="sticky top-0 z-[60] px-3 sm:px-4 pb-0" style={{ paddingTop: SAFE_TOP }}>
+          <div
+            className="sticky top-0 z-[60] px-3 sm:px-4 pb-0 transition-transform duration-300 ease-out"
+            style={{ paddingTop: SAFE_TOP, transform: topBarHidden ? "translateY(-100%)" : "translateY(0)" }}
+          >
             {topBar}
           </div>
         <div className="app-main-inner px-3 sm:px-4 py-4 sm:py-6 max-w-5xl w-full mx-auto">
