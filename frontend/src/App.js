@@ -5722,17 +5722,23 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      const currentY = window.scrollY;
-      const delta = currentY - lastScrollY.current;
-      if (currentY <= 0) {
-        setTopBarHidden(false);
-      } else if (delta > 8) {
-        setTopBarHidden(true);
-      } else if (delta < -8) {
-        setTopBarHidden(false);
-      }
-      lastScrollY.current = currentY;
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        const currentY = window.scrollY || document.documentElement.scrollTop || 0;
+        const delta = currentY - lastScrollY.current;
+        if (currentY <= 0) {
+          setTopBarHidden(false);
+        } else if (delta > 4) {
+          setTopBarHidden(true);
+        } else if (delta < -4) {
+          setTopBarHidden(false);
+        }
+        lastScrollY.current = currentY;
+        ticking = false;
+      });
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
@@ -5923,7 +5929,13 @@ export default function App() {
   const nav = NAV_ITEMS.find((n) => n.id === active);
 
   const topBar = (
-    <div className={`app-topbar-glass glass-float flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl ${GLASS_CLS}`} style={{ boxShadow: FLOAT_M }}>
+    <div
+      className={`app-topbar-glass glass-float flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl transition-transform duration-300 ease-out ${GLASS_CLS}`}
+      style={{
+        boxShadow: FLOAT_M,
+        transform: topBarHidden ? "translateY(-120%)" : "translateY(0)",
+      }}
+    >
       <motion.button
         whileTap={{ scale: 0.9 }}
         onClick={() => setSidebar((p) => !p)}
@@ -6143,10 +6155,7 @@ export default function App() {
         className="flex-1 relative z-10 transition-[margin] duration-300"
         style={{ marginLeft: isDesktop && sidebar ? sidebarPush : 0 }}
       >
-          <div
-            className="sticky top-0 z-[60] px-3 sm:px-4 pb-0 transition-transform duration-300 ease-out"
-            style={{ paddingTop: SAFE_TOP, transform: topBarHidden ? "translateY(-120%)" : "translateY(0)" }}
-          >
+          <div className="sticky top-0 z-[60] px-3 sm:px-4 pb-0" style={{ paddingTop: SAFE_TOP }}>
             {topBar}
           </div>
         <div className="app-main-inner px-3 sm:px-4 py-4 sm:py-6 max-w-5xl w-full mx-auto">
