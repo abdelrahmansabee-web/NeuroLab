@@ -20,7 +20,7 @@ import {
   buildMasterDataset, buildMasterRow, generateStudySPSSSyntax, analyzeAllOutcomes,
   fmtP, sigStars,   getPatientKinPhase, pickKinField,
   calcImprovement, calcGap, formatKinPrePostPct, formatKinPostHealthyPct, formatKinValue,
-  RECOVERY_SUMMARY_KEYS, kinCrossPhaseComparable,
+  kinCrossPhaseComparable,
 } from "./analysisPlan";
 import {
   PROGRAM_GAPS, generateLiteratureReviewMarkdown, generateConsortSapMarkdown,
@@ -2854,23 +2854,6 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   })();
   const hasKinTriple =
     kinematicsResults.pre && kinematicsResults.post && kinematicsResults.baseline;
-  const recoverySummaryRows = hasKinTriple
-    ? RECOVERY_SUMMARY_KEYS.map((key) => {
-        const meta = KINEMATIC_VARS.find((v) => v.key === key);
-        if (!meta) return null;
-        const preV = getMetricValue("pre", key);
-        const postV = getMetricValue("post", key);
-        const helV = getMetricValue("baseline", key);
-        if (!kinCrossPhaseComparable(kinematicsResults, key, analyzedArmForPhase)) return null;
-        if (preV === "—" || postV === "—" || helV === "—") return null;
-        return {
-          key,
-          label: meta.label,
-          prePost: kinPrePostBadge(preV, postV, meta.dir),
-          postHealthy: kinPostHealthyBadge(preV, postV, helV, meta.dir),
-        };
-      }).filter(Boolean)
-    : [];
   const phaseChipCls = (c, on) => {
     if (c === "sky") return on ? "bg-sky-400/20 border-sky-400/40 text-sky-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
     if (c === "violet") return on ? "bg-violet-400/20 border-violet-400/40 text-violet-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
@@ -3220,29 +3203,6 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
 
       {Object.keys(kinematicsResults).length > 0 && showResultsTable && (
         <Glass className="p-4 sm:p-5">
-          {hasKinTriple && recoverySummaryRows.length > 0 && (
-            <div className="mb-5 rounded-xl border border-cyan-400/20 bg-cyan-500/5 p-4">
-              <p className="text-xs font-extrabold uppercase tracking-widest text-cyan-300/90 mb-1">
-                Pre → Post · Post → Healthy
-              </p>
-              <p className="text-[11px] text-white/45 leading-relaxed mb-3">
-                Pre→Post and Post→Healthy change formulas — same as the manuscript table.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {recoverySummaryRows.map(({ key, label, prePost, postHealthy }) => (
-                  <div key={key} className="rounded-lg border border-white/[0.08] bg-black/20 px-2.5 py-2">
-                    <p className="text-[9px] font-bold text-white/45 leading-tight">{label}</p>
-                    <p className={`text-sm font-mono font-extrabold mt-1 ${prePost?.colorClass?.split(" ")[0] || "text-white/80"}`}>
-                      {prePost?.text || "—"}
-                    </p>
-                    <p className={`text-sm font-mono font-extrabold mt-0.5 ${postHealthy?.colorClass?.split(" ")[0] || "text-white/70"}`}>
-                      {postHealthy?.text || "—"}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
           <div className="flex items-center justify-between mb-3 gap-2">
             <p className="text-sm font-extrabold text-white/80">Kinematic Results</p>
             <GBtn variant="danger" onClick={clearAllKin} className="text-[10px] py-1.5 px-3 flex-shrink-0" title="Remove all results">
@@ -5482,7 +5442,7 @@ const AnalysisDashboard = () => {
             </div>
           ))}
         </div>
-        <p className="text-[10px] text-white/35">Healthy baseline collected: {healthyComplete} · LOCF export: {locfExport ? "on" : "off"}</p>
+        <p className="text-[10px] text-white/35">Healthy side collected: {healthyComplete} · LOCF export: {locfExport ? "on" : "off"}</p>
       </Glass>
 
       {tab === "plan" && (

@@ -177,7 +177,7 @@ MDRS motor control change; IPAQ MET-min/wk.
 1. **Normality:** Shapiro–Wilk on Pre, Post, Δ per group (α=.05).  
 2. **If normal:** GLM repeated measures, Type III SS, Group × Time interaction.  
 3. **If non-normal:** Wilcoxon signed-rank (within group); Mann–Whitney on Δ (between groups).  
-4. **Baseline equivalence:** Independent t-test / Mann–Whitney on Pre + demographics.  
+4. **Healthy side equivalence:** Independent t-test / Mann–Whitney on Pre + demographics.  
 5. **Effect sizes:** Partial η² (ANOVA); Cohen's d (pairwise); rank-biserial r (non-parametric).  
 6. **Missing data:** LOCF primary (export checkbox in NeuroLab); Mixed Models sensitivity.  
 7. **Software:** IBM SPSS 24+; confirmatory Python via \`study_analysis.py\`.

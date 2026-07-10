@@ -75,7 +75,7 @@ export const CLINICAL_VARS = [
 export const SPSS_WORKFLOW = [
   { step: 1, title: "Data import", spss: "GET DATA → master_study_data.csv → SAVE master_study.sav" },
   { step: 2, title: "Variable labels & deltas", spss: "COMPUTE delta_* = *_Post − *_Pre for 9 kinematic + clinical vars" },
-  { step: 3, title: "Baseline equivalence", spss: "T-TEST / Mann-Whitney / Chi-square on Pre scores & demographics" },
+  { step: 3, title: "Healthy side equivalence", spss: "T-TEST / Mann-Whitney / Chi-square on Pre scores & demographics" },
   { step: 4, title: "Normality (Shapiro–Wilk)", spss: "EXAMINE … BY Group on Pre, Post, and Δ for each DV" },
   { step: 5, title: "Primary analysis", spss: "GLM nvp straightness pause_time_sec number_of_stops Pre Post BY Group /WSFACTOR=time 2 — Holm–Bonferroni k=4" },
   { step: 6, title: "Secondary kinematic (5 GLMs)", spss: "trunk_ratio, shoulder_vert_norm, elbow_angle_mean_deg, movement_time_sec, peak_velocity_cm_s; Holm–Bonferroni k=5" },
@@ -178,7 +178,7 @@ export function formatKinValue(key, value) {
 }
 
 /**
- * Recovery toward healthy-side baseline (Fugl-Meyer style index).
+ * Recovery toward healthy side (Fugl-Meyer style index).
  * higher-is-better: 100×(post−pre)/(healthy−pre)
  * lower-is-better:    100×(pre−post)/(pre−healthy) — only when pre is worse than healthy.
  */
@@ -209,7 +209,7 @@ export function computeRecoveryPct(pre, post, healthy, direction) {
   return { valid: true, pct, improved, text };
 }
 
-/** Whether pre/post/baseline values are comparable for cross-phase deltas (view/arm gates). */
+/** Whether pre/post/healthy side values are comparable for cross-phase deltas (view/arm gates). */
 export function kinCrossPhaseComparable(kinematicsResults, metricKey, armForPhase = null) {
   const phases = ["pre", "post", "baseline"].filter((p) => kinematicsResults?.[p]);
   if (phases.length < 2) return true;
@@ -234,7 +234,7 @@ export const RECOVERY_SUMMARY_KEYS = [
   "peak_velocity_cm_s",
 ];
 
-/** Read pre/post/baseline kinematics from patient record. */
+/** Read pre/post/healthy side kinematics from patient record. */
 export function getPatientKinPhase(patient, phase) {
   const kin = patient?.kinematics || {};
   const key = phase === "healthy" ? "baseline" : phase;
@@ -474,7 +474,7 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv") {
   l("EXECUTE.");
   l("");
 
-  l("* --- 4. BASELINE EQUIVALENCE ---");
+  l("* --- 4. HEALTHY SIDE EQUIVALENCE ---");
   l("T-TEST GROUPS=Group(1 2)");
   l("  /VARIABLES=Age TimeSinceStroke MAS MRC sparc_Pre trunk_ratio_Pre shoulder_vert_norm_Pre.");
   l("CROSSTABS Sex StrokeType AffectedSide BY Group /STATISTICS=CHISQ.");
