@@ -2,7 +2,7 @@
 // Stroke Rehabilitation Platform — Frontend v6.5
 // ============================================================
 
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import ReactDOM from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -26,6 +26,7 @@ import {
   PROGRAM_GAPS, generateLiteratureReviewMarkdown, generateConsortSapMarkdown,
 } from "./thesisDocs";
 import { importPatientFile, buildImportRecord } from "./patientImport";
+import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 
 const APP_VERSION = "7.2.0-kinematics-60hz";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
@@ -2127,6 +2128,7 @@ function InlineValidationVideo({ src, phaseLabel, autoPlay = false, onEnded, onE
     </div>
   );
 }
+
 function KinPhaseAnalyzingOverlay({ accent = "amber" }) {
   const blur = {
     backdropFilter: "blur(80px) saturate(180%)",
@@ -2210,10 +2212,14 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   const [videoBlobs, setVideoBlobs] = useState({});
   const [videoLoading, setVideoLoading] = useState({});
   const [videoAttempts, setVideoAttempts] = useState({});
+  const [overlayData, setOverlayData] = useState({});
+  const [originalVideoBlobs, setOriginalVideoBlobs] = useState({});
   const videoBlobsRef = useRef(videoBlobs);
   const videoLoadingRef = useRef(videoLoading);
+  const originalVideoBlobsRef = useRef(originalVideoBlobs);
   useEffect(() => { videoBlobsRef.current = videoBlobs; }, [videoBlobs]);
   useEffect(() => { videoLoadingRef.current = videoLoading; }, [videoLoading]);
+  useEffect(() => { originalVideoBlobsRef.current = originalVideoBlobs; }, [originalVideoBlobs]);
 
   const abortRef = useRef({});
 
@@ -2225,6 +2231,13 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   useEffect(() => {
     return () => {
       Object.values(videoBlobsRef.current).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
+
+  // Revoke object URLs for cached original videos on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(originalVideoBlobsRef.current).forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
 
@@ -2292,7 +2305,18 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
 
   const handleFile = (phase, file) => {
     if (!file) return;
-    const upd = { ...data, [vidKey(phase)]: file.name, [`${vidKey(phase)}_file`]: file };
+    const isVideo = !file.name.toLowerCase().endsWith(".csv");
+    let upd;
+    if (isVideo) {
+      const videoUrl = URL.createObjectURL(file);
+      setOriginalVideoBlobs((prev) => {
+        if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+        return { ...prev, [phase]: videoUrl };
+      });
+      upd = { ...data, [vidKey(phase)]: file.name, [`${vidKey(phase)}_file`]: file, [`${vidKey(phase)}_url`]: videoUrl, [`${vidKey(phase)}_isVideo`]: true };
+    } else {
+      upd = { ...data, [vidKey(phase)]: file.name, [`${vidKey(phase)}_file`]: file, [`${vidKey(phase)}_isVideo`]: false };
+    }
     // Clear old result when new video selected
     if (kinematicsResults[phase]) {
       delete upd[resultKey(phase)];
@@ -2320,11 +2344,18 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     const upd = { ...data };
     delete upd[vidKey(phase)];
     delete upd[`${vidKey(phase)}_file`];
+    delete upd[`${vidKey(phase)}_url`];
+    delete upd[`${vidKey(phase)}_isVideo`];
     delete upd[resultKey(phase)];
     upd[statusKey(phase)] = "idle";
     const nextResults = { ...kinematicsResults };
     delete nextResults[phase];
     setKinematicsResults(nextResults);
+    setOverlayData((prev) => { const n = { ...prev }; delete n[phase]; return n; });
+    setOriginalVideoBlobs((prev) => {
+      if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+      const n = { ...prev }; delete n[phase]; return n;
+    });
     onChange({ ...upd, analysisResults: nextResults });
     setExpandedResults((prev) => { const n = { ...prev }; delete n[phase]; return n; });
     showToast(`Cleared ${phase}`);
@@ -2341,18 +2372,82 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     phases.forEach((ph) => {
       delete upd[vidKey(ph.k)];
       delete upd[`${vidKey(ph.k)}_file`];
+      delete upd[`${vidKey(ph.k)}_url`];
+      delete upd[`${vidKey(ph.k)}_isVideo`];
       delete upd[resultKey(ph.k)];
       upd[statusKey(ph.k)] = "idle";
     });
     upd.analysisResults = {};
     setKinematicsResults({});
     setExpandedResults({});
+    setOverlayData({});
+    setOriginalVideoBlobs((prev) => {
+      Object.values(prev).forEach((url) => URL.revokeObjectURL(url));
+      return {};
+    });
     setKinResultsTab("compare");
     localStorage.removeItem(KIN_LS_KEY);
     localStorage.removeItem(KIN_LS_EXP_KEY);
     onChange(upd);
     showToast("All kinematics cleared");
   };
+
+  const fetchOverlayData = useCallback(async (phase, csvFilename) => {
+    if (!csvFilename) return;
+    try {
+      const res = await fetch(`${API_BASE}/overlay-data/${encodeURIComponent(csvFilename)}`);
+      if (!res.ok) throw new Error(`Failed to load overlay data (${res.status})`);
+      const overlay = await res.json();
+      if (overlay.error) throw new Error(overlay.error);
+      setOverlayData((prev) => ({ ...prev, [phase]: overlay }));
+      setKinematicsResults((prev) => {
+        const existing = prev[phase] || {};
+        return {
+          ...prev,
+          [phase]: { ...existing, overlay_metrics: overlay.metrics, validation_summary: overlay.metrics },
+        };
+      });
+    } catch (err) {
+      console.error(`Overlay data error for ${phase}:`, err);
+      showToast(`Overlay data failed for ${phase}`, "error");
+    }
+  }, [showToast]);
+
+  const loadOriginalVideoBlob = useCallback(async (phase, filename) => {
+    if (!filename || originalVideoBlobsRef.current[phase]) return;
+    try {
+      const url = `${API_BASE}/download/${encodeURIComponent(filename)}`;
+      const res = await fetch(url);
+      if (res.status === 404) {
+        showToast("Original video expired on server — please re-upload", "error");
+        return;
+      }
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      setOriginalVideoBlobs((prev) => {
+        if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+        return { ...prev, [phase]: objectUrl };
+      });
+    } catch (err) {
+      console.error(`Failed to cache original video for ${phase}:`, err);
+      showToast("Original video could not be loaded for overlay", "error");
+    }
+  }, [showToast]);
+
+  // Load original video blobs for analyzed phases that don't have one yet.
+  // This handles persisted sessions where the object URL was lost on reload.
+  useEffect(() => {
+    phases.forEach((ph) => {
+      const result = kinematicsResults[ph.k];
+      if (!result || originalVideoBlobsRef.current[ph.k]) return;
+      const filename = result.video_filename;
+      if (!filename) return;
+      // Only load if it is a video file (not CSV-only analysis).
+      if (filename.toLowerCase().endsWith(".csv")) return;
+      loadOriginalVideoBlob(ph.k, filename);
+    });
+  }, [kinematicsResults, loadOriginalVideoBlob]);
 
   const analyzeVideo = async (phase) => {
     const file = data[`${vidKey(phase)}_file`];
@@ -2416,6 +2511,13 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       });
       showToast(`✓ Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials → mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
       setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
+      // Fetch lightweight overlay data so the browser can render the validation overlay live.
+      if (!isCsv) {
+        setTimeout(() => fetchOverlayData(phase, result.csv_filename), 200);
+        if (!originalVideoBlobs[phase]) {
+          setTimeout(() => loadOriginalVideoBlob(phase, result.video_filename || file.name), 100);
+        }
+      }
       // Always generate the unified validation video in the background if it wasn't
       // returned inline. Free HF Spaces can time out, so we queue a background job and
       // poll until it is ready. Pass the result explicitly to avoid a race with React state.
@@ -2662,9 +2764,9 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   };
 
   // Hide the kinematic results table until every analyzed phase has either
-  // a ready unified validation video or a permanent generation error. This
-  // guarantees the user watches/verifies the visual validation before reading
-  // the numbers.
+  // a ready unified validation video, a ready client-side overlay, or a
+  // permanent generation error. This guarantees the user watches/verifies
+  // the visual validation before reading the numbers.
   useEffect(() => {
     const analyzedPhases = phases.filter((ph) => kinematicsResults[ph.k]);
     if (analyzedPhases.length === 0) {
@@ -2673,10 +2775,12 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     }
     const anyPending = analyzedPhases.some(
       (ph) =>
-        !kinematicsResults[ph.k]?.unified_validation_video && !uvErrors[ph.k]
+        !kinematicsResults[ph.k]?.unified_validation_video &&
+        !overlayData[ph.k] &&
+        !uvErrors[ph.k]
     );
     setShowResultsTable(!anyPending);
-  }, [kinematicsResults, uvErrors]);
+  }, [kinematicsResults, uvErrors, overlayData]);
 
   const toggleResult = (phase) => {
     setExpandedResults((prev) => ({ ...prev, [phase]: !prev[phase] }));
@@ -2685,8 +2789,16 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   const getMetricValue = (phase, key) => {
     const result = kinematicsResults[phase];
     if (!result) return "—";
-    // Prefer the exact summary used to render the validation video overlay so
-    // the table and the video always show the same numbers.
+    // Always prefer the values computed from the actual video frames used by the
+    // validation overlay so the table and the video show the exact same numbers.
+    const overlay = overlayData?.[phase];
+    if (overlay?.frames?.length) {
+      const computed = computeOverlayMetrics(overlay);
+      if (computed) {
+        const num = pickKinField(computed, key);
+        if (num !== null) return num;
+      }
+    }
     if (result.validation_summary && typeof result.validation_summary === "object") {
       const vsNum = pickKinField(result.validation_summary, key);
       if (vsNum !== null) return vsNum;
@@ -2856,7 +2968,20 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       <SH icon={Cpu} en="Kinematics AI Laboratory" tr="Kinematik Yapay Zeka Laboratuvarı" badge="Pre · Post · Healthy side" />
 
       <Glass className="p-5 sm:p-6">
-        <p className="text-sm font-extrabold text-white/80 mb-3 text-center sm:text-left">Video Upload & Analysis</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-extrabold text-white/80 text-center sm:text-left">Video Upload &amp; Analysis</p>
+          {Object.keys(kinematicsResults).length > 0 && (
+            <button
+              type="button"
+              onClick={clearAllKin}
+              className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1.5 rounded-md bg-red-500/10 text-red-300 hover:bg-red-500/20 border border-red-400/20 transition-colors"
+              title="Remove all results"
+            >
+              <X className="w-3 h-3" />
+              Clear All
+            </button>
+          )}
+        </div>
         <div className="mb-4 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[11px] text-white/55">
           <span className="font-bold text-white/70">Auto arm:</span>{" "}
           The more active arm during the reach is detected and analyzed automatically for each video.
@@ -3015,55 +3140,61 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
             <p className="text-sm font-extrabold text-white/80">Validation Video</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {phases.filter((ph) => kinematicsResults[ph.k]?.unified_validation_video).map((ph) => (
+            {phases.filter((ph) => kinematicsResults[ph.k]).map((ph) => (
               <div key={ph.k} className={`rounded-xl border p-3 ${phaseValueCls(ph.c)}`}>
                 <div className="flex items-center justify-between mb-2">
-                  <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>{ph.l} — Unified Validation</p>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => downloadFile(ph.k, "unified-download")}
-                      className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
-                      title="Download video"
-                    >
-                      ↓ Download
-                    </button>
-                  </div>
+                  <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>{ph.l} — Validation</p>
+                  {kinematicsResults[ph.k]?.unified_validation_video && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => downloadFile(ph.k, "unified-download")}
+                        className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
+                        title="Download video"
+                      >
+                        ↓ Download
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {videoBlobs[ph.k] ? (
-                  <InlineValidationVideo
-                    src={videoBlobs[ph.k]}
+                {overlayData[ph.k] ? (
+                  <ValidationOverlayPlayer
+                    videoUrl={originalVideoBlobs[ph.k] || `${API_BASE}/download/${encodeURIComponent(kinematicsResults[ph.k]?.video_filename || "")}`}
+                    overlayData={overlayData[ph.k]}
                     phaseLabel={ph.l}
                     autoPlay
-                    onEnded={() => setShowResultsTable(true)}
-                    onError={() => {
-                      showToast(`${ph.l} validation video could not be played`, "error");
-                      setShowResultsTable(true);
-                    }}
+                    onError={() => showToast(`${ph.l} overlay player error`, "error")}
                   />
-                ) : videoLoading[ph.k] ? (
-                  <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3">
-                    <p className="text-[11px] text-white/50 mb-2">Loading validation video…</p>
-                    <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
-                  </div>
-                ) : (
-                  <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3 gap-2">
-                    <p className="text-[11px] text-white/50">Validation video could not be loaded.</p>
-                    <button
-                      type="button"
-                      onClick={() => loadVideoBlob(ph.k, kinematicsResults[ph.k].unified_validation_video)}
-                      className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-            {phases.filter((ph) => kinematicsResults[ph.k] && !kinematicsResults[ph.k]?.unified_validation_video).map((ph) => (
-              <div key={ph.k} className={`rounded-xl border p-3 ${phaseValueCls(ph.c)}`}>
-                <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)} mb-2`}>{ph.l} — Unified Validation</p>
-                {uvErrors[ph.k] ? (
+                ) : kinematicsResults[ph.k]?.unified_validation_video ? (
+                  videoBlobs[ph.k] ? (
+                    <InlineValidationVideo
+                      src={videoBlobs[ph.k]}
+                      phaseLabel={ph.l}
+                      autoPlay
+                      onEnded={() => setShowResultsTable(true)}
+                      onError={() => {
+                        showToast(`${ph.l} validation video could not be played`, "error");
+                        setShowResultsTable(true);
+                      }}
+                    />
+                  ) : videoLoading[ph.k] ? (
+                    <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3">
+                      <p className="text-[11px] text-white/50 mb-2">Loading validation video…</p>
+                      <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3 gap-2">
+                      <p className="text-[11px] text-white/50">Validation video could not be loaded.</p>
+                      <button
+                        type="button"
+                        onClick={() => loadVideoBlob(ph.k, kinematicsResults[ph.k].unified_validation_video)}
+                        className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )
+                ) : uvErrors[ph.k] ? (
                   <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3 gap-2">
                     <p className="text-[11px] text-rose-300/90 max-w-[90%]">{uvErrors[ph.k]}</p>
                     <button
@@ -3077,7 +3208,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                   </div>
                 ) : (
                   <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3">
-                    <p className="text-[11px] text-white/50 mb-2">Generating unified validation video…</p>
+                    <p className="text-[11px] text-white/50 mb-2">Preparing validation overlay…</p>
                     <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
                   </div>
                 )}

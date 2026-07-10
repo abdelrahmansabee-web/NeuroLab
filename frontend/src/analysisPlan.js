@@ -22,10 +22,10 @@ export const KINEMATIC_VARS = [
   { key: "number_of_stops", label: "Number of stops", unit: "count", dir: "lower", tier: "primary" },
   // Secondary outcomes
   { key: "trunk_ratio", label: "Trunk ratio", unit: "ratio", dir: "lower", tier: "secondary" },
-  { key: "shoulder_vert_norm", label: "Shoulder elevation (norm)", unit: "norm", dir: "lower", tier: "secondary", fallback: "shoulder_elevation_norm" },
+  { key: "shoulder_vert_norm", label: "Shoulder elevation (norm)", unit: "ratio", dir: "lower", tier: "secondary", fallback: "shoulder_elevation_norm" },
   { key: "elbow_angle_mean_deg", label: "Elbow angle (mean)", unit: "deg", dir: "none", tier: "secondary", fallback: "elbow_angle_range_deg" },
   { key: "movement_time_sec", label: "Movement time", unit: "s", dir: "lower", tier: "secondary" },
-  { key: "peak_velocity_cm_s", label: "Peak velocity", unit: "cm/s", dir: "higher", tier: "secondary", fallback: "peak_velocity_px_s" },
+  { key: "peak_velocity_cm_s", label: "Peak velocity", unit: "deg/s", dir: "higher", tier: "secondary", fallback: "peak_velocity_px_s" },
 ];
 
 export const KINEMATIC_DISPLAY_ORDER = [
@@ -147,12 +147,12 @@ export function calcGap(post, healthy, direction) {
 
 export function formatKinPrePostPct(pct) {
   if (pct == null || Number.isNaN(pct)) return null;
-  return `تحسن ${Math.abs(pct).toFixed(0)}%`;
+  return `${Math.abs(pct).toFixed(0)}%`;
 }
 
 export function formatKinPostHealthyPct(pct) {
   if (pct == null || Number.isNaN(pct)) return null;
-  return `فرق ${Math.abs(pct).toFixed(1)}%`;
+  return `${Math.abs(pct).toFixed(1)}%`;
 }
 
 /** Format a raw kinematic value the same way everywhere (table, report, video overlay). */
@@ -166,11 +166,11 @@ export function formatKinValue(key, value) {
   if (key === "pause_time_sec") return val.toFixed(2);
   if (key === "number_of_stops") return val.toFixed(0);
   if (key === "trunk_ratio") return `${(val * 100).toFixed(1)}%`;
-  if (key === "shoulder_vert_norm") return `${val.toFixed(3)} SW`;
+  if (key === "shoulder_vert_norm") return val.toFixed(3);
   if (key === "elbow_angle_mean_deg") return val.toFixed(1);
   if (key === "movement_time_sec") return val.toFixed(2);
   if (key === "peak_velocity_px_s") return val.toFixed(1);
-  if (key === "peak_velocity_cm_s") return `${val.toFixed(1)} cm/s`;
+  if (key === "peak_velocity_cm_s") return `${val.toFixed(1)} °/s`;
   if (key === "sparc") return val.toFixed(3);
   if (key === "hand_displacement_norm") return `${val.toFixed(1)} cm`;
   if (key.includes("ratio") || key.includes("trunk") || key.includes("_sw") || key.includes("path_eff")) return val.toFixed(3);
