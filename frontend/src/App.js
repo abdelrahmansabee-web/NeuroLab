@@ -5750,9 +5750,9 @@ export default function App() {
         const dy = y - lastY;
         if (y < 50) {
           updateHidden(false);
-        } else if (dy > 2) {
+        } else if (dy > 1) {
           updateHidden(true);
-        } else if (dy < -2) {
+        } else if (dy < -1) {
           updateHidden(false);
         }
         lastY = y;
@@ -5761,9 +5761,35 @@ export default function App() {
     };
 
     rafId = requestAnimationFrame(tick);
+
+    const onWheel = (e) => {
+      if (e.deltaY > 1) updateHidden(true);
+      else if (e.deltaY < -1) updateHidden(false);
+    };
+
+    let touchStartY = null;
+    const onTouchStart = (e) => {
+      if (e.touches && e.touches[0]) touchStartY = e.touches[0].clientY;
+    };
+    const onTouchMove = (e) => {
+      if (touchStartY == null || !e.touches || !e.touches[0]) return;
+      const y = e.touches[0].clientY;
+      const delta = touchStartY - y;
+      if (delta > 4) updateHidden(true);
+      else if (delta < -4) updateHidden(false);
+      touchStartY = y;
+    };
+
+    window.addEventListener("wheel", onWheel, { passive: true });
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+
     return () => {
       if (observer) observer.disconnect();
       cancelAnimationFrame(rafId);
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
     };
   }, []);
 
