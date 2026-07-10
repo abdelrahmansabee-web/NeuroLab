@@ -5722,28 +5722,49 @@ export default function App() {
 
   useEffect(() => {
     let lastY = 0;
-    let lastTime = 0;
-    const onScroll = (e) => {
+    let lastScrollTime = 0;
+    let ignoreScrollUntil = 0;
+    let touchStartY = null;
+
+    const updateHidden = (hide) => {
+      setTopBarHidden((prev) => (prev === hide ? prev : hide));
+    };
+
+    const onScroll = () => {
       const now = Date.now();
-      if (now - lastTime < 16) return;
-      lastTime = now;
-      const target = e?.target;
-      const y =
-        (target && target.scrollTop != null ? target.scrollTop : null) ??
-        window.scrollY ??
-        document.documentElement.scrollTop ??
-        document.body.scrollTop ??
-        0;
-      const goingDown = y > lastY;
-      const goingUp = y < lastY;
+      if (now < ignoreScrollUntil) return;
+      if (now - lastScrollTime < 16) return;
+      lastScrollTime = now;
+      const y = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
       if (y < 50) {
-        setTopBarHidden(false);
-      } else if (goingDown) {
-        setTopBarHidden(true);
-      } else if (goingUp) {
-        setTopBarHidden(false);
+        updateHidden(false);
+      } else if (y > lastY + 2) {
+        updateHidden(true);
+      } else if (y < lastY - 2) {
+        updateHidden(false);
       }
       lastY = y;
+    };
+
+    const onWheel = (e) => {
+      const now = Date.now();
+      ignoreScrollUntil = now + 100;
+      if (e.deltaY > 2) updateHidden(true);
+      else if (e.deltaY < -2) updateHidden(false);
+    };
+
+    const onTouchStart = (e) => {
+      if (e.touches && e.touches[0]) touchStartY = e.touches[0].clientY;
+    };
+    const onTouchMove = (e) => {
+      if (touchStartY == null || !e.touches || !e.touches[0]) return;
+      const now = Date.now();
+      ignoreScrollUntil = now + 100;
+      const currentY = e.touches[0].clientY;
+      const delta = touchStartY - currentY;
+      if (delta > 6) updateHidden(true);
+      else if (delta < -6) updateHidden(false);
+      touchStartY = currentY;
     };
 
     const targets = [window, document, document.body, document.getElementById("root")].filter(Boolean);
@@ -5751,9 +5772,16 @@ export default function App() {
     const mainEl = document.querySelector("main");
     if (mainEl) mainEl.addEventListener("scroll", onScroll, { passive: true });
 
+    window.addEventListener("wheel", onWheel, { passive: true });
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+
     return () => {
       targets.forEach((t) => t.removeEventListener("scroll", onScroll));
       if (mainEl) mainEl.removeEventListener("scroll", onScroll);
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
     };
   }, []);
 
