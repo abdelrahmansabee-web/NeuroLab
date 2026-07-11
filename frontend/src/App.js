@@ -61,7 +61,7 @@ function isStandalonePWA() {
 
 const SIDEBAR_W = 255;
 const SIDEBAR_X_HIDDEN = -280;
-const SIDEBAR_SPRING = { type: "spring", stiffness: 420, damping: 36, mass: 0.82 };
+const SIDEBAR_SPRING = { type: "spring", stiffness: 180, damping: 26, mass: 1.1 };
 
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
@@ -6170,7 +6170,7 @@ export default function App() {
           </motion.aside>
 
       <main
-        className="flex-1 relative z-30 transition-[margin-left,transform] duration-300 ease-out"
+        className="flex-1 relative z-30 transition-[margin-left,transform] duration-500 ease-in-out"
         style={{
           marginLeft: isDesktop && sidebar ? sidebarPush : 0,
           transform: !isDesktop && sidebar ? "translateX(60%)" : "translateX(0)",
