@@ -34,9 +34,9 @@ const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 const BG = "/bg.jpg";
 
 /* ── Glassmorphism (all Glass containers) ── */
-const GLASS_CLS = "bg-white/[0.08] backdrop-blur-xl border border-white/12";
-const SIDEBAR_CLS = "bg-white/[0.08] backdrop-blur-xl border border-white/12";
-const INPUT_CLS = "bg-white/[0.09] border border-white/12";
+const GLASS_CLS = "bg-white/[0.12] backdrop-blur-2xl border border-white/20";
+const SIDEBAR_CLS = "bg-white/[0.12] backdrop-blur-2xl border border-white/20";
+const INPUT_CLS = "bg-white/[0.12] border border-white/20";
 
 const GSELECT_MENU_BOX = {
   backgroundColor: "#0e1120",
@@ -73,12 +73,12 @@ const MOBILE_TOPBAR_PT = "4.75rem";
 const PTR_THRESHOLD = 72;
 const PTR_MAX_PULL = 118;
 
-const FLOAT_L = "0 36px 80px -40px rgba(0,0,0,0.06)";
-const FLOAT_M = "0 20px 48px -30px rgba(0,0,0,0.04)";
+const FLOAT_L = "0 36px 80px -40px rgba(0,0,0,0.12)";
+const FLOAT_M = "0 20px 48px -30px rgba(0,0,0,0.10)";
 
 const GLASS_FIELD = {
-  backgroundColor: "rgba(255,255,255,0.09)",
-  border: "1px solid rgba(255,255,255,0.12)",
+  backgroundColor: "rgba(255,255,255,0.12)",
+  border: "1px solid rgba(255,255,255,0.20)",
   boxShadow: "none",
 };
 
@@ -578,7 +578,7 @@ const Toast = ({ msg, visible, variant = "success" }) => (
         initial={{ opacity: 0, y: 24, scale: 0.94 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -10 }}
-        className={`fixed bottom-8 right-8 z-[99999] flex items-center gap-2.5 px-5 py-3 rounded-2xl backdrop-blur-xl border text-sm font-semibold shadow-2xl ${
+        className={`fixed bottom-8 right-8 z-[99999] flex items-center gap-2.5 px-5 py-3 rounded-2xl backdrop-blur-2xl border text-sm font-semibold shadow-2xl ${
           variant === "success"
             ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
             : variant === "info"
@@ -6180,34 +6180,34 @@ export default function App() {
           text-shadow: 0 1px 3px rgba(0,0,0,0.25);
         }
 
-        /* Design tokens — glass 8% white / border 12% / inputs 9% */
+        /* Design tokens — glass 12% white / border 20% / inputs 12% */
         [class*="border-white"] {
-          border-color: rgba(255,255,255,0.12) !important;
+          border-color: rgba(255,255,255,0.20) !important;
         }
         .border-b[class*="border-white"],
         .border-t[class*="border-white"] {
-          border-color: rgba(255,255,255,0.08) !important;
+          border-color: rgba(255,255,255,0.14) !important;
           box-shadow: none !important;
         }
 
         .sidebar-shell,
         .glass-float {
-          border-color: rgba(255,255,255,0.12) !important;
+          border-color: rgba(255,255,255,0.20) !important;
         }
 
         .content-shell {
-          border-color: rgba(255,255,255,0.11) !important;
+          border-color: rgba(255,255,255,0.16) !important;
         }
 
         .glass-float {
           box-shadow: none !important;
         }
 
-        /* Inputs — bg 9%, border 12% */
+        /* Inputs — bg 12%, border 20% */
         .glass-field,
         input, select, textarea {
-          background-color: rgba(255,255,255,0.09) !important;
-          border-color: rgba(255,255,255,0.12) !important;
+          background-color: rgba(255,255,255,0.12) !important;
+          border-color: rgba(255,255,255,0.20) !important;
           box-shadow: none !important;
         }
         .glass-float input,

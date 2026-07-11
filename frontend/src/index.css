@@ -55,8 +55,8 @@ input[type="range"]::-webkit-slider-runnable-track {
 
 /* Unified content shell — mid tone, no blur (no flicker on desktop, no clip on iPad) */
 .content-shell {
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow: none;
   overflow: visible;
 }
