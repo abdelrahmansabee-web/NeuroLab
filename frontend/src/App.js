@@ -45,9 +45,9 @@ const GSELECT_MENU_BOX = {
   borderRadius: "12px",
 };
 
-const BG_FILTER = "blur(24px) brightness(0.42) saturate(0.75)";
+const BG_FILTER = "blur(24px) brightness(0.55) saturate(0.80)";
 const BG_SCALE = "scale(1.08)";
-const BG_OVERLAY = "rgba(4, 6, 18, 0.32)";
+const BG_OVERLAY = "rgba(4, 6, 18, 0.18)";
 
 function isIOSDevice() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent)
