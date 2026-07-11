@@ -5702,7 +5702,8 @@ export default function App() {
   const [sidebarPush, setSidebarPush] = useState(() => sidebarPushWidth());
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
   const [bgUrl, setBgUrl] = useState(BG);
-
+  const [topBarHeight, setTopBarHeight] = useState(0);
+  const topBarWrapperRef = useRef(null);
   const bgRef = useRef(null);
   const importRef = useRef(null);
   useEffect(() => {
@@ -5718,6 +5719,18 @@ export default function App() {
       mq.removeEventListener("change", syncLayout);
       window.removeEventListener("resize", syncLayout);
     };
+  }, []);
+
+  useEffect(() => {
+    const el = topBarWrapperRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      const h = entries[0]?.borderBoxSize?.[0]?.blockSize ?? entries[0]?.contentRect?.height;
+      if (typeof h === "number") setTopBarHeight(h);
+    });
+    ro.observe(el);
+    setTopBarHeight(el.getBoundingClientRect().height);
+    return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
@@ -6126,13 +6139,18 @@ export default function App() {
         style={{ marginLeft: isDesktop && sidebar ? sidebarPush : 0 }}
       >
           <div
-            className="sticky top-0 z-[60] px-3 sm:px-4 pb-0"
+            ref={topBarWrapperRef}
+            className="fixed top-0 z-[60] px-3 sm:px-4 pb-0"
             style={{
+              left: isDesktop && sidebar ? sidebarPush : 0,
+              right: 0,
               paddingTop: SAFE_TOP,
             }}
           >
             {topBar}
-          </div>
+          </div
+          >
+          <div aria-hidden="true" style={{ height: topBarHeight }} />
         <div className="app-main-inner px-3 sm:px-4 py-4 sm:py-6 max-w-5xl w-full mx-auto">
           <div className="content-shell rounded-2xl">
             <div className="content-shell-inner p-4 sm:p-6">
