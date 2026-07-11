@@ -6192,8 +6192,31 @@ export default function App() {
 
         .sidebar-shell,
         .glass-float {
+          position: relative;
           border-color: rgba(255,255,255,0.30) !important;
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), 0 24px 60px -30px rgba(0,0,0,0.18) !important;
+          background-image:
+            radial-gradient(circle at 15% 10%, rgba(255,255,255,0.18) 0%, transparent 35%),
+            radial-gradient(circle at 85% 90%, rgba(200,230,255,0.08) 0%, transparent 30%),
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 0%, transparent 60%);
+          background-blend-mode: overlay, overlay, normal;
+        }
+
+        .sidebar-shell::before,
+        .glass-float::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          padding: 1px;
+          background: linear-gradient(135deg, rgba(255,255,255,0.65), rgba(255,255,255,0.08) 35%, rgba(220,240,255,0.18) 60%, rgba(255,255,255,0.45));
+          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          mask-composite: exclude;
+          pointer-events: none;
+          z-index: 0;
+          opacity: 0.8;
         }
 
         .content-shell {
