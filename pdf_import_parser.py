@@ -87,6 +87,163 @@ def _find_kviq_index(label: str) -> int:
     return -1
 
 
+def _extract_first(patterns, text, group=1, flags=re.I):
+    for p in patterns:
+        m = re.search(p, text, flags)
+        if m:
+            return m.group(group)
+    return None
+
+
+def _extract_number_near_label(text, labels, unit=None):
+    """Find a number near one of the given labels."""
+    for label in labels:
+        unit_pat = rf"(?:\s*(?:{unit}))?" if unit else ""
+        m = re.search(rf"{label}\s*[\s:]{{0,3}}([\d.]{{1,5}}){unit_pat}", text, re.I)
+        if m:
+            return m.group(1)
+    return None
+
+
+def enhance_with_generic_extraction(text: str, patient: Dict[str, Any]) -> None:
+    """Fill missing demographic/assessment fields using generic clinical-report patterns."""
+    d = patient.setdefault("demographics", {})
+
+    if not d.get("name"):
+        name = _extract_first(
+            [
+                r"Patient\s*Name\s*[:\-]?\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})",
+                r"Full\s*Name\s*[:\-]?\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})",
+                r"Name\s*[:\-]?\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})",
+            ],
+            text,
+        )
+        if name:
+            d["name"] = name.strip().split()[0]
+
+    if not d.get("participantId"):
+        pid = _extract_first(
+            [
+                r"(?:Participant\s*ID|Patient\s*ID|Record\s*No|Code|ID\s*No)[:\s]+(\d+)",
+                r"\bID\s*[:\-]?\s*(\d{3,})\b",
+                r"\bID:\s*(\d+)\b",
+            ],
+            text,
+        )
+        if pid:
+            d["participantId"] = pid
+
+    if not d.get("age"):
+        age = _extract_first(
+            [
+                r"Age\s*[:\-]?\s*(\d+)",
+                r"\b(\d{1,3})\s*(?:years?|yrs?|y)\s*old\b",
+                r"\b(\d{1,2})\s*(?:yrs?|years?)\b",
+            ],
+            text,
+        )
+        if age:
+            d["age"] = age
+
+    if not d.get("sex"):
+        if re.search(r"\bMale\b", text, re.I):
+            d["sex"] = "1"
+        elif re.search(r"\bFemale\b", text, re.I):
+            d["sex"] = "2"
+
+    if not d.get("strokeType"):
+        if re.search(r"\bIschemic\b", text, re.I):
+            d["strokeType"] = "1"
+        elif re.search(r"\bHemorrhagic\b", text, re.I):
+            d["strokeType"] = "2"
+        elif re.search(r"\bInfarct\b", text, re.I):
+            d["strokeType"] = "1"
+        elif re.search(r"\bHemorrhage\b", text, re.I):
+            d["strokeType"] = "2"
+
+    if not d.get("side"):
+        side = _extract_first(
+            [
+                r"(?:Affected|Paralyzed|Paralytic|Paretic|Lesion|Hemiplegic|Involved)\s+(?:Side|Arm|Limb|Extremity)[:\s\S]{0,30}?\b(Left|Right)\b",
+                r"(?:Affected|Paralyzed|Paralytic|Paretic|Lesion|Hemiplegic|Involved)\s+(?:Side|Arm|Limb)[:\s]*\b(Left|Right)\b",
+                r"\bSide\s*[:\-]?\s*(Left|Right)\b",
+            ],
+            text,
+        )
+        if side:
+            d["side"] = "1" if side.lower() == "left" else "2"
+
+    if not d.get("mas"):
+        mas = _extract_first(
+            [
+                r"(?:Modified\s+Ashworth|Ashworth|MAS)\s*[:\s]*([0-4]\+?)",
+                r"\bMAS\s*[:\s]*([0-4]\+?)\b",
+            ],
+            text,
+        )
+        if mas:
+            d["mas"] = mas
+
+    if not d.get("mrc"):
+        mrc = _extract_first(
+            [
+                r"\bMRC\s*[:\s]*([0-5])\b",
+                r"\bMedical\s+Research\s+Council\s*[:\s]*([0-5])\b",
+            ],
+            text,
+        )
+        if mrc:
+            d["mrc"] = mrc
+
+    if not d.get("height"):
+        ht = _extract_first(
+            [
+                r"(?:Height|Ht)[:\s]*([\d.]+)\s*(?:cm|m)",
+                r"Height\s*[:\-]?\s*([\d.]+)",
+            ],
+            text,
+        )
+        if ht:
+            d["height"] = ht
+
+    if not d.get("weight"):
+        wt = _extract_first(
+            [
+                r"(?:Weight|Wt)[:\s]*([\d.]+)\s*(?:kg|kg)",
+                r"Weight\s*[:\-]?\s*([\d.]+)",
+            ],
+            text,
+        )
+        if wt:
+            d["weight"] = wt
+
+    if not d.get("timeSinceStroke"):
+        tss = _extract_first(
+            [
+                r"(?:Time\s*since\s*stroke|Onset|Duration|Time\s*since)[\s:]*([\d.]+\s*(?:months?|years?|weeks?|days?))",
+                r"(?:Onset)[\s:]*([\d.]+\s*(?:months?|years?|weeks?|days?))",
+            ],
+            text,
+        )
+        if tss:
+            d["timeSinceStroke"] = tss
+
+    # Generic VAS / pain scale extraction
+    vas = patient.setdefault("vas", {})
+    if not vas.get("rest"):
+        m = re.search(r"(?:Pain|VAS)\s*(?:at\s*)?rest\s*[:\s]*([\d.]+|—)", text, re.I)
+        if m and _dash(m.group(1)):
+            vas["rest"] = {"pre": m.group(1)}
+    if not vas.get("activity"):
+        m = re.search(r"(?:Pain|VAS)\s*(?:during\s*)?activity\s*[:\s]*([\d.]+|—)", text, re.I)
+        if m and _dash(m.group(1)):
+            vas["activity"] = {"pre": m.group(1)}
+    if not vas.get("night"):
+        m = re.search(r"(?:Night\s*pain|VAS\s*night)\s*[:\s]*([\d.]+|—)", text, re.I)
+        if m and _dash(m.group(1)):
+            vas["night"] = {"pre": m.group(1)}
+
+
 def extract_pdf_text(file_bytes: bytes) -> str:
     """Extract plain text from a PDF using pdfplumber."""
     if pdfplumber is None:
@@ -240,6 +397,7 @@ def parse_clinical_report_pdf(text: str) -> Dict[str, Any]:
         kin["status_baseline"] = "completed"
     patient["kinematics"] = kin
 
+    enhance_with_generic_extraction(text, patient)
     return patient
 
 
