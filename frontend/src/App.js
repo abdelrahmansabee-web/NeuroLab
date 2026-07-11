@@ -28,7 +28,7 @@ import {
 import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 
-const APP_VERSION = "7.2.0-kinematics-60hz";
+const APP_VERSION = "7.2.1-kinematics-60hz";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
