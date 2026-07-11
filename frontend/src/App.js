@@ -34,9 +34,9 @@ const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 const BG = "/bg.jpg";
 
 /* ── Glassmorphism (all Glass containers) ── */
-const GLASS_CLS = "bg-white/[0.12] backdrop-blur-2xl border border-white/20";
-const SIDEBAR_CLS = "bg-white/[0.12] backdrop-blur-2xl border border-white/20";
-const INPUT_CLS = "bg-white/[0.12] border border-white/20";
+const GLASS_CLS = "bg-white/[0.07] backdrop-blur-3xl backdrop-saturate-150 border border-white/[0.32]";
+const SIDEBAR_CLS = "bg-white/[0.07] backdrop-blur-3xl backdrop-saturate-150 border border-white/[0.32]";
+const INPUT_CLS = "bg-white/[0.09] border border-white/[0.26]";
 
 const GSELECT_MENU_BOX = {
   backgroundColor: "#0e1120",
@@ -45,7 +45,7 @@ const GSELECT_MENU_BOX = {
   borderRadius: "12px",
 };
 
-const BG_FILTER = "blur(16px) brightness(0.48) saturate(0.70)";
+const BG_FILTER = "blur(24px) brightness(0.42) saturate(0.75)";
 const BG_SCALE = "scale(1.08)";
 const BG_OVERLAY = "rgba(4, 6, 18, 0.32)";
 
@@ -73,13 +73,13 @@ const MOBILE_TOPBAR_PT = "4.75rem";
 const PTR_THRESHOLD = 72;
 const PTR_MAX_PULL = 118;
 
-const FLOAT_L = "0 36px 80px -40px rgba(0,0,0,0.12)";
-const FLOAT_M = "0 20px 48px -30px rgba(0,0,0,0.10)";
+const FLOAT_L = "0 36px 90px -40px rgba(0,0,0,0.20)";
+const FLOAT_M = "0 24px 60px -30px rgba(0,0,0,0.18)";
 
 const GLASS_FIELD = {
-  backgroundColor: "rgba(255,255,255,0.12)",
-  border: "1px solid rgba(255,255,255,0.20)",
-  boxShadow: "none",
+  backgroundColor: "rgba(255,255,255,0.09)",
+  border: "1px solid rgba(255,255,255,0.26)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)",
 };
 
 const SLIDER_GRAD = {
@@ -6180,44 +6180,42 @@ export default function App() {
           text-shadow: 0 1px 3px rgba(0,0,0,0.25);
         }
 
-        /* Design tokens — glass 12% white / border 20% / inputs 12% */
+        /* Design tokens — iOS 26 glass: translucent, strong blur, bright border */
         [class*="border-white"] {
-          border-color: rgba(255,255,255,0.20) !important;
+          border-color: rgba(255,255,255,0.30) !important;
         }
         .border-b[class*="border-white"],
         .border-t[class*="border-white"] {
-          border-color: rgba(255,255,255,0.14) !important;
+          border-color: rgba(255,255,255,0.20) !important;
           box-shadow: none !important;
         }
 
         .sidebar-shell,
         .glass-float {
-          border-color: rgba(255,255,255,0.20) !important;
+          border-color: rgba(255,255,255,0.30) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), 0 24px 60px -30px rgba(0,0,0,0.18) !important;
         }
 
         .content-shell {
-          border-color: rgba(255,255,255,0.16) !important;
+          border-color: rgba(255,255,255,0.22) !important;
         }
 
-        .glass-float {
-          box-shadow: none !important;
+        .glass-float .glass-float {
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), 0 24px 60px -30px rgba(0,0,0,0.18) !important;
         }
 
-        /* Inputs — bg 12%, border 20% */
+        /* Inputs — translucent with top highlight */
         .glass-field,
         input, select, textarea {
-          background-color: rgba(255,255,255,0.12) !important;
-          border-color: rgba(255,255,255,0.20) !important;
-          box-shadow: none !important;
+          background-color: rgba(255,255,255,0.09) !important;
+          border-color: rgba(255,255,255,0.26) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.14) !important;
         }
         .glass-float input,
         .glass-float select,
         .glass-float textarea,
         .glass-float .glass-field {
-          box-shadow: none !important;
-        }
-        .glass-float .glass-float {
-          box-shadow: none !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.14) !important;
         }
 
         .shadow-lg, .shadow-xl, .shadow-2xl {
