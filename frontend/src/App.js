@@ -5702,8 +5702,7 @@ export default function App() {
   const [sidebarPush, setSidebarPush] = useState(() => sidebarPushWidth());
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
   const [bgUrl, setBgUrl] = useState(BG);
-  const [topBarHidden, setTopBarHidden] = useState(false);
-  const topBarSentinelRef = useRef(null);
+
   const bgRef = useRef(null);
   const importRef = useRef(null);
   useEffect(() => {
@@ -5718,78 +5717,6 @@ export default function App() {
     return () => {
       mq.removeEventListener("change", syncLayout);
       window.removeEventListener("resize", syncLayout);
-    };
-  }, []);
-
-  useEffect(() => {
-    const sentinel = topBarSentinelRef.current;
-    let observer;
-    if (sentinel && typeof IntersectionObserver !== "undefined") {
-      observer = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) setTopBarHidden(false);
-        },
-        { root: null, threshold: 0 }
-      );
-      observer.observe(sentinel);
-    }
-
-    let rafId;
-    let lastY = 0;
-    let lastTime = 0;
-
-    const updateHidden = (hide) => {
-      setTopBarHidden((prev) => (prev === hide ? prev : hide));
-    };
-
-    const tick = () => {
-      const now = Date.now();
-      if (now - lastTime >= 16) {
-        lastTime = now;
-        const y = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
-        const dy = y - lastY;
-        if (y < 50) {
-          updateHidden(false);
-        } else if (dy > 1) {
-          updateHidden(true);
-        } else if (dy < -1) {
-          updateHidden(false);
-        }
-        lastY = y;
-      }
-      rafId = requestAnimationFrame(tick);
-    };
-
-    rafId = requestAnimationFrame(tick);
-
-    const onWheel = (e) => {
-      if (e.deltaY > 1) updateHidden(true);
-      else if (e.deltaY < -1) updateHidden(false);
-    };
-
-    let touchStartY = null;
-    const onTouchStart = (e) => {
-      if (e.touches && e.touches[0]) touchStartY = e.touches[0].clientY;
-    };
-    const onTouchMove = (e) => {
-      if (touchStartY == null || !e.touches || !e.touches[0]) return;
-      const y = e.touches[0].clientY;
-      const delta = touchStartY - y;
-      if (delta > 4) updateHidden(true);
-      else if (delta < -4) updateHidden(false);
-      touchStartY = y;
-    };
-
-    window.addEventListener("wheel", onWheel, { passive: true });
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
-
-    return () => {
-      if (observer) observer.disconnect();
-      cancelAnimationFrame(rafId);
-      window.removeEventListener("wheel", onWheel);
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
     };
   }, []);
 
@@ -6198,18 +6125,10 @@ export default function App() {
         className="flex-1 relative z-10 transition-[margin] duration-300"
         style={{ marginLeft: isDesktop && sidebar ? sidebarPush : 0 }}
       >
-        <div
-          ref={topBarSentinelRef}
-          aria-hidden="true"
-          style={{ position: "absolute", top: 0, left: 0, width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
-        />
           <div
             className="sticky top-0 z-[60] px-3 sm:px-4 pb-0"
             style={{
               paddingTop: SAFE_TOP,
-              transform: topBarHidden ? "translateY(-110%)" : "translateY(0)",
-              transition: "transform 0.3s ease-out",
-              willChange: "transform",
             }}
           >
             {topBar}
