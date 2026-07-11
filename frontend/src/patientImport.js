@@ -119,6 +119,60 @@ function findKviqIndex(label) {
   return -1;
 }
 
+/** Try to fill missing demographic fields using generic clinical-report patterns. */
+function enhanceWithGenericExtraction(text, patient) {
+  const d = patient.demographics || (patient.demographics = {});
+
+  if (!d.name) {
+    const m = text.match(/Patient\s*Name[:\s]+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})/i) ||
+              text.match(/Full\s*Name[:\s]+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})/i) ||
+              text.match(/Name[:\s]+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})/i);
+    if (m) d.name = m[1].trim().split(/\s+/)[0];
+  }
+  if (!d.participantId) {
+    const m = text.match(/(?:Participant\s*ID|Patient\s*ID|Record\s*No|Code|ID\s*No)[:\s]+(\d+)/i) ||
+              text.match(/\bID[:\s]+(\d+)\b/i);
+    if (m) d.participantId = m[1];
+  }
+  if (!d.age) {
+    const m = text.match(/Age[:\s]+(\d+)/i) || text.match(/\b(\d{1,2})\s*(?:years?|yrs?)\b/i);
+    if (m) d.age = m[1];
+  }
+  if (!d.sex) {
+    if (/\bFemale\b/i.test(text)) d.sex = "2";
+    else if (/\bMale\b/i.test(text)) d.sex = "1";
+  }
+  if (!d.strokeType) {
+    if (/\bIschemic\b|\bInfarct\b/i.test(text)) d.strokeType = "1";
+    else if (/\bHemorrhagic\b|\bHemorrhage\b/i.test(text)) d.strokeType = "2";
+  }
+  if (!d.side) {
+    const m = text.match(/(?:Affected|Paralyzed|Paralytic|Paretic|Lesion|Hemiplegic|Involved)\s+(?:Side|Arm|Limb)[:\s\S]{0,30}?\b(Left|Right)\b/i) ||
+              text.match(/\bSide[:\s]+(Left|Right)\b/i);
+    if (m) d.side = m[1].toLowerCase() === "left" ? "1" : "2";
+  }
+  if (!d.mas) {
+    const m = text.match(/(?:Modified\s+Ashworth|Ashworth|MAS)[:\s]*([0-4]\+?)/i);
+    if (m) d.mas = m[1];
+  }
+  if (!d.mrc) {
+    const m = text.match(/\bMRC[:\s]*([0-5])\b/i);
+    if (m) d.mrc = m[1];
+  }
+  if (!d.height) {
+    const m = text.match(/(?:Height|Ht)[:\s]*([\d.]+)\s*(?:cm|m)/i);
+    if (m) d.height = m[1];
+  }
+  if (!d.weight) {
+    const m = text.match(/(?:Weight|Wt)[:\s]*([\d.]+)\s*(?:kg)/i);
+    if (m) d.weight = m[1];
+  }
+  if (!d.timeSinceStroke) {
+    const m = text.match(/(?:Time\s*since\s*stroke|Onset|Duration)[:\s]*([\d.]+\s*(?:months?|years?|weeks?|days?))/i);
+    if (m) d.timeSinceStroke = m[1];
+  }
+}
+
 /** Parse NeuroLab Clinical Assessment Report PDF text. */
 export function parseClinicalReportPdf(text) {
   const patient = {
@@ -240,6 +294,7 @@ export function parseClinicalReportPdf(text) {
   });
   patient.kinematics = kin;
 
+  enhanceWithGenericExtraction(text, patient);
   return normalizeImportedPatient(patient);
 }
 
