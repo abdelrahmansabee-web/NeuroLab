@@ -6208,15 +6208,24 @@ export default function App() {
           position: absolute;
           inset: 0;
           border-radius: inherit;
-          padding: 1px;
-          background: linear-gradient(135deg, rgba(255,255,255,0.65), rgba(255,255,255,0.08) 35%, rgba(220,240,255,0.18) 60%, rgba(255,255,255,0.45));
+          padding: 2px;
+          background: conic-gradient(
+            from 180deg at 50% 50%,
+            rgba(255,255,255,0.85) 0deg,
+            rgba(220,240,255,0.35) 60deg,
+            rgba(255,255,255,0.15) 120deg,
+            rgba(200,230,255,0.35) 180deg,
+            rgba(255,255,255,0.15) 240deg,
+            rgba(220,240,255,0.35) 300deg,
+            rgba(255,255,255,0.85) 360deg
+          );
           -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
           -webkit-mask-composite: xor;
           mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
           mask-composite: exclude;
           pointer-events: none;
           z-index: 0;
-          opacity: 0.8;
+          opacity: 0.85;
         }
 
         .content-shell {
