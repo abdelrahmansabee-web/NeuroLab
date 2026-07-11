@@ -87,6 +87,73 @@ def _find_kviq_index(label: str) -> int:
     return -1
 
 
+def _extract_key_value_pairs(text: str) -> Dict[str, str]:
+    """Extract label:value pairs from plain text using colons or wide spaces."""
+    pairs: Dict[str, str] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # Colon separated: "Age: 45"
+        if ":" in line:
+            key, _, val = line.partition(":")
+            pairs[key.strip().lower()] = val.strip()
+            continue
+        # Wide-space separated: "Age          45"
+        parts = re.split(r"\s{2,}", line)
+        if len(parts) >= 2:
+            key = parts[0].strip().lower()
+            val = parts[1].strip()
+            if key and val:
+                pairs[key] = val
+    return pairs
+
+
+_LABEL_MAP = {
+    "name": ["name", "patient name", "full name", "pt name", "participant name"],
+    "participantId": ["id", "participant id", "patient id", "record no", "code", "id no", "record number", "patient code"],
+    "age": ["age", "patient age", "years", "yrs"],
+    "sex": ["sex", "gender"],
+    "strokeType": ["stroke type", "diagnosis", "stroke subtype", "pathology"],
+    "side": ["affected side", "paretic side", "paretic arm", "involved side", "affected arm", "hemiplegic side", "side", "lesion side"],
+    "mas": ["mas", "modified ashworth", "ashworth scale"],
+    "mrc": ["mrc", "medical research council"],
+    "height": ["height", "ht"],
+    "weight": ["weight", "wt"],
+    "timeSinceStroke": ["time since stroke", "onset", "duration", "time post stroke", "months since stroke"],
+}
+
+
+def _map_value(key: str, val: str) -> Any:
+    val = val.strip()
+    if key == "sex":
+        if re.search(r"\bmale\b", val, re.I): return "1"
+        if re.search(r"\bfemale\b", val, re.I): return "2"
+        if val.lower() == "m": return "1"
+        if val.lower() == "f": return "2"
+        return None
+    if key == "strokeType":
+        if re.search(r"\bischemic\b|\binfarct\b", val, re.I): return "1"
+        if re.search(r"\bhemorrhagic\b|\bhemorrhage\b|\bbleed\b", val, re.I): return "2"
+        return None
+    if key == "side":
+        if re.search(r"\bleft\b", val, re.I): return "1"
+        if re.search(r"\bright\b", val, re.I): return "2"
+        return None
+    if key in ("mas", "mrc"):
+        m = re.search(r"([0-5]\+?)", val)
+        return m.group(1) if m else None
+    if key == "age":
+        m = re.search(r"(\d+)", val)
+        return m.group(1) if m else None
+    if key == "participantId":
+        m = re.search(r"(\d+)", val)
+        return m.group(1) if m else None
+    if key == "name":
+        return val.split()[0] if val.split() else val
+    return val
+
+
 def _extract_first(patterns, text, group=1, flags=re.I):
     for p in patterns:
         m = re.search(p, text, flags)
@@ -108,18 +175,32 @@ def _extract_number_near_label(text, labels, unit=None):
 def enhance_with_generic_extraction(text: str, patient: Dict[str, Any]) -> None:
     """Fill missing demographic/assessment fields using generic clinical-report patterns."""
     d = patient.setdefault("demographics", {})
+    kvs = _extract_key_value_pairs(text)
+
+    # Map label:value pairs to demographics
+    for target, labels in _LABEL_MAP.items():
+        if d.get(target):
+            continue
+        for label in labels:
+            val = kvs.get(label)
+            if val:
+                mapped = _map_value(target, val)
+                if mapped:
+                    d[target] = mapped
+                break
 
     if not d.get("name"):
         name = _extract_first(
             [
-                r"Patient\s*Name\s*[:\-]?\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})",
-                r"Full\s*Name\s*[:\-]?\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})",
-                r"Name\s*[:\-]?\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})",
+                r"Patient\s*Name\s*[\-\-]?\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})",
+                r"Full\s*Name\s*[\-\-]?\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})",
+                r"Name\s*[\-\-]?\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})",
             ],
             text,
         )
         if name:
             d["name"] = name.strip().split()[0]
+
 
     if not d.get("participantId"):
         pid = _extract_first(
