@@ -5703,6 +5703,7 @@ export default function App() {
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
   const [bgUrl, setBgUrl] = useState(BG);
   const [topBarHeight, setTopBarHeight] = useState(0);
+  const [importPreview, setImportPreview] = useState(null);
   const topBarWrapperRef = useRef(null);
   const bgRef = useRef(null);
   const importRef = useRef(null);
@@ -5893,8 +5894,16 @@ export default function App() {
     e.target.value = "";
     if (!file) return;
     try {
-      const normalized = await importPatientFile(file);
+      const { patient: normalized, extractedText } = await importPatientFile(file);
       const record = buildImportRecord(normalized);
+
+      const demo = record.demographics || {};
+      const hasAnyDemo = Object.values(demo).some((v) => v != null && v !== "");
+      if (!hasAnyDemo) {
+        setImportPreview({ record, extractedText });
+        return;
+      }
+
       const patients = loadPatients();
       const pid = record.demographics?.participantId;
       const idx = pid
@@ -5914,6 +5923,31 @@ export default function App() {
       showToast(`Import failed: ${err?.message || "Unknown error"}`, "error");
     }
   }, [handleLoadSession, showToast]);
+
+  const confirmImportPreview = () => {
+    if (!importPreview) return;
+    const record = importPreview.record;
+    const patients = loadPatients();
+    const pid = record.demographics?.participantId;
+    const idx = pid
+      ? patients.findIndex((p) => p.demographics?.participantId === pid)
+      : -1;
+    if (idx >= 0) {
+      patients[idx] = { ...patients[idx], ...record, _id: patients[idx]._id };
+      record._id = patients[idx]._id;
+    } else {
+      patients.push(record);
+    }
+    savePatients(patients);
+    window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: patients.length } }));
+    handleLoadSession(record);
+    syncPatientsWithServer({ silent: true });
+    setImportPreview(null);
+  };
+
+  const cancelImportPreview = () => {
+    setImportPreview(null);
+  };
 
   const nav = NAV_ITEMS.find((n) => n.id === active);
 
@@ -6288,6 +6322,50 @@ export default function App() {
         }
 
       `}</style>
+
+      {importPreview && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={cancelImportPreview}>
+          <div
+            className={`w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl ${GLASS_CLS}`}
+            style={{ boxShadow: FLOAT_M }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+              <h3 className="text-sm font-extrabold text-white">Import Preview — No fields found</h3>
+              <button onClick={cancelImportPreview} className="text-white/50 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-auto p-4 space-y-4">
+              <p className="text-xs text-white/60">
+                The parser could not find any recognizable fields. This usually means the PDF is scanned/image-only, or the text layout is not supported. Below is the raw text extracted from the file.
+              </p>
+              <div className="rounded-xl bg-black/40 border border-white/10 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-white/40 mb-1">Extracted text ({importPreview.extractedText.length} chars)</p>
+                <pre className="text-xs text-white/70 whitespace-pre-wrap font-mono max-h-[40vh] overflow-auto">
+                  {importPreview.extractedText || "(empty — PDF is likely an image)"}
+                </pre>
+              </div>
+              <div className="rounded-xl bg-black/40 border border-white/10 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-white/40 mb-1">Parsed record</p>
+                <pre className="text-xs text-white/70 whitespace-pre-wrap font-mono">{JSON.stringify(importPreview.record, null, 2)}</pre>
+              </div>
+            </div>
+            <div className="p-4 border-t border-white/10 flex gap-3 justify-end">
+              <button
+                onClick={cancelImportPreview}
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-white/70 hover:bg-white/10 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmImportPreview}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-violet-500/20 text-violet-200 border border-violet-500/30 hover:bg-violet-500/30 transition-colors"
+              >
+                Load anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Toast msg={toast.msg} visible={toast.visible} variant={toast.variant} />
     </div>

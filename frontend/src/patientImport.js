@@ -332,27 +332,27 @@ export function parseClinicalReportPdf(text) {
   return normalizeImportedPatient(patient);
 }
 
-/** Import from File — JSON or PDF. */
+/** Import from File — JSON or PDF. Returns { patient, extractedText }. */
 export async function importPatientFile(file) {
   const name = (file.name || "").toLowerCase();
   if (name.endsWith(".json")) {
-    return parsePatientJson(await file.text());
+    const text = await file.text();
+    return { patient: parsePatientJson(text), extractedText: text };
   }
   if (name.endsWith(".pdf")) {
-    // Prefer server-side parsing (more robust than browser pdfjs).
     try {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/parse-pdf", { method: "POST", body: fd });
       const data = await res.json();
       if (data.success && data.patient) {
-        return normalizeImportedPatient(data.patient);
+        return { patient: normalizeImportedPatient(data.patient), extractedText: data.extracted_text || "" };
       }
     } catch (err) {
       console.warn("Server-side PDF parse failed, falling back to browser:", err);
     }
     const text = await extractPdfText(file);
-    return parseClinicalReportPdf(text);
+    return { patient: parseClinicalReportPdf(text), extractedText: text };
   }
   throw new Error("Supported formats: .json (NeuroLab export) or .pdf (Clinical Report)");
 }
