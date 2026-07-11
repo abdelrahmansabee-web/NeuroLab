@@ -119,57 +119,91 @@ function findKviqIndex(label) {
   return -1;
 }
 
+/** Extract label:value pairs from plain text using colons or wide spaces. */
+function extractKeyValuePairs(text) {
+  const pairs = {};
+  for (const line of text.split(/\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed.includes(":")) {
+      const [key, ...rest] = trimmed.split(":");
+      pairs[key.trim().toLowerCase()] = rest.join(":").trim();
+      continue;
+    }
+    const parts = trimmed.split(/\s{2,}/);
+    if (parts.length >= 2) {
+      const key = parts[0].trim().toLowerCase();
+      const val = parts[1].trim();
+      if (key && val) pairs[key] = val;
+    }
+  }
+  return pairs;
+}
+
+const LABEL_MAP = {
+  name: ["name", "patient name", "full name", "pt name", "participant name"],
+  participantId: ["id", "participant id", "patient id", "record no", "code", "id no", "record number", "patient code"],
+  age: ["age", "patient age", "years", "yrs"],
+  sex: ["sex", "gender"],
+  strokeType: ["stroke type", "diagnosis", "stroke subtype", "pathology"],
+  side: ["affected side", "paretic side", "paretic arm", "involved side", "affected arm", "hemiplegic side", "side", "lesion side"],
+  mas: ["mas", "modified ashworth", "ashworth scale"],
+  mrc: ["mrc", "medical research council"],
+  height: ["height", "ht"],
+  weight: ["weight", "wt"],
+  timeSinceStroke: ["time since stroke", "onset", "duration", "time post stroke", "months since stroke"],
+};
+
+function mapValue(key, val) {
+  val = val.trim();
+  if (key === "sex") {
+    if (/\bmale\b/i.test(val)) return "1";
+    if (/\bfemale\b/i.test(val)) return "2";
+    if (val.toLowerCase() === "m") return "1";
+    if (val.toLowerCase() === "f") return "2";
+    return null;
+  }
+  if (key === "strokeType") {
+    if (/\bischemic\b|\binfarct\b/i.test(val)) return "1";
+    if (/\bhemorrhagic\b|\bhemorrhage\b|\bbleed\b/i.test(val)) return "2";
+    return null;
+  }
+  if (key === "side") {
+    if (/\bleft\b/i.test(val)) return "1";
+    if (/\bright\b/i.test(val)) return "2";
+    return null;
+  }
+  if (key === "mas" || key === "mrc") {
+    const m = val.match(/([0-5]\+?)/);
+    return m ? m[1] : null;
+  }
+  if (key === "age" || key === "participantId") {
+    const m = val.match(/(\d+)/);
+    return m ? m[1] : null;
+  }
+  if (key === "name") {
+    return val.split(/\s+/)[0] || val;
+  }
+  return val;
+}
+
 /** Try to fill missing demographic fields using generic clinical-report patterns. */
 function enhanceWithGenericExtraction(text, patient) {
   const d = patient.demographics || (patient.demographics = {});
+  const kvs = extractKeyValuePairs(text);
 
-  if (!d.name) {
-    const m = text.match(/Patient\s*Name[:\s]+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})/i) ||
-              text.match(/Full\s*Name[:\s]+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})/i) ||
-              text.match(/Name[:\s]+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'-]{1,40})/i);
-    if (m) d.name = m[1].trim().split(/\s+/)[0];
-  }
-  if (!d.participantId) {
-    const m = text.match(/(?:Participant\s*ID|Patient\s*ID|Record\s*No|Code|ID\s*No)[:\s]+(\d+)/i) ||
-              text.match(/\bID[:\s]+(\d+)\b/i);
-    if (m) d.participantId = m[1];
-  }
-  if (!d.age) {
-    const m = text.match(/Age[:\s]+(\d+)/i) || text.match(/\b(\d{1,2})\s*(?:years?|yrs?)\b/i);
-    if (m) d.age = m[1];
-  }
-  if (!d.sex) {
-    if (/\bFemale\b/i.test(text)) d.sex = "2";
-    else if (/\bMale\b/i.test(text)) d.sex = "1";
-  }
-  if (!d.strokeType) {
-    if (/\bIschemic\b|\bInfarct\b/i.test(text)) d.strokeType = "1";
-    else if (/\bHemorrhagic\b|\bHemorrhage\b/i.test(text)) d.strokeType = "2";
-  }
-  if (!d.side) {
-    const m = text.match(/(?:Affected|Paralyzed|Paralytic|Paretic|Lesion|Hemiplegic|Involved)\s+(?:Side|Arm|Limb)[:\s\S]{0,30}?\b(Left|Right)\b/i) ||
-              text.match(/\bSide[:\s]+(Left|Right)\b/i);
-    if (m) d.side = m[1].toLowerCase() === "left" ? "1" : "2";
-  }
-  if (!d.mas) {
-    const m = text.match(/(?:Modified\s+Ashworth|Ashworth|MAS)[:\s]*([0-4]\+?)/i);
-    if (m) d.mas = m[1];
-  }
-  if (!d.mrc) {
-    const m = text.match(/\bMRC[:\s]*([0-5])\b/i);
-    if (m) d.mrc = m[1];
-  }
-  if (!d.height) {
-    const m = text.match(/(?:Height|Ht)[:\s]*([\d.]+)\s*(?:cm|m)/i);
-    if (m) d.height = m[1];
-  }
-  if (!d.weight) {
-    const m = text.match(/(?:Weight|Wt)[:\s]*([\d.]+)\s*(?:kg)/i);
-    if (m) d.weight = m[1];
-  }
-  if (!d.timeSinceStroke) {
-    const m = text.match(/(?:Time\s*since\s*stroke|Onset|Duration)[:\s]*([\d.]+\s*(?:months?|years?|weeks?|days?))/i);
-    if (m) d.timeSinceStroke = m[1];
+  for (const [target, labels] of Object.entries(LABEL_MAP)) {
+    if (d[target]) continue;
+    for (const label of labels) {
+      const val = kvs[label];
+      if (val) {
+        const mapped = mapValue(target, val);
+        if (mapped) {
+          d[target] = mapped;
+        }
+        break;
+      }
+    }
   }
 }
 
