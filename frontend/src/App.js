@@ -6079,9 +6079,10 @@ export default function App() {
 
       {!isDesktop && sidebar && (
         <div
-          className="fixed top-0 right-0 bottom-0 left-[60%] z-20 bg-black/60"
+          className="fixed inset-0 z-40"
           onClick={() => setSidebar(false)}
           aria-hidden="true"
+          style={{ background: "transparent" }}
         />
       )}
 
@@ -6089,7 +6090,7 @@ export default function App() {
         initial={false}
         animate={{ x: sidebar ? 0 : (isDesktop ? SIDEBAR_X_HIDDEN : "-100%") }}
         transition={SIDEBAR_SPRING}
-        className={`fixed left-0 top-0 h-full z-30 flex flex-col px-3 pb-3 ${isDesktop ? "" : "w-[60%]"}`}
+        className={`fixed left-0 top-0 h-full z-50 flex flex-col px-3 pb-3 ${isDesktop ? "" : "w-[60%]"}`}
         style={isDesktop ? { width: sidebarPush, paddingTop: SAFE_TOP } : { width: "60%", paddingTop: SAFE_TOP }}
       >
             <div className={`sidebar-shell flex-1 flex flex-col min-h-0 rounded-2xl overflow-hidden ${SIDEBAR_CLS}`} style={{ boxShadow: FLOAT_M }}>
@@ -6169,8 +6170,11 @@ export default function App() {
           </motion.aside>
 
       <main
-        className="flex-1 relative z-10 transition-[margin] duration-300"
-        style={{ marginLeft: isDesktop && sidebar ? sidebarPush : 0 }}
+        className="flex-1 relative z-30 transition-[margin-left,transform] duration-300 ease-out"
+        style={{
+          marginLeft: isDesktop && sidebar ? sidebarPush : 0,
+          transform: !isDesktop && sidebar ? "translateX(60%)" : "translateX(0)",
+        }}
       >
           <div
             ref={topBarWrapperRef}
