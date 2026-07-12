@@ -25,12 +25,21 @@ from fastapi.staticfiles import StaticFiles
 
 print("STARTUP: fastapi imports ok", flush=True)
 
+try:
+    from auth import router as auth_router, get_current_user, PATIENTS_DIR
+    print("STARTUP: auth module loaded", flush=True)
+except Exception as _auth_exc:
+    print("STARTUP: auth module failed to load:", _auth_exc, flush=True)
+    auth_router = None
+    get_current_user = None
+    PATIENTS_DIR = None
+
 _BASE = Path(__file__).resolve().parent
 _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_robust.py").exists() else _BASE
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 
-DEPLOY_VERSION = "27.24"
+DEPLOY_VERSION = "27.80"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -222,6 +231,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if auth_router is not None:
+    app.include_router(auth_router)
+    print("STARTUP: auth router included", flush=True)
 
 
 @app.on_event("startup")
@@ -1155,21 +1168,30 @@ async def serve_csv(filename: str):
 
 
 @app.get("/patients")
-async def get_patients():
-    if not PATIENTS_FILE.exists():
+async def get_patients(user: dict = Depends(get_current_user) if get_current_user else None):
+    if get_current_user and user:
+        file = PATIENTS_DIR / f"{user['id']}.json"
+    else:
+        file = PATIENTS_FILE
+    if not file.exists():
         return []
     try:
-        data = json.loads(PATIENTS_FILE.read_text(encoding="utf-8"))
+        data = json.loads(file.read_text(encoding="utf-8"))
         return data if isinstance(data, list) else []
     except Exception:
         return []
 
 
 @app.post("/api/patients")
-async def save_patients(body: dict):
+async def save_patients(body: dict, user: dict = Depends(get_current_user) if get_current_user else None):
     try:
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        PATIENTS_FILE.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+        if get_current_user and user:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            file = PATIENTS_DIR / f"{user['id']}.json"
+            file.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+        else:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            PATIENTS_FILE.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
         return {"success": True}
     except Exception as e:
         traceback.print_exc()
