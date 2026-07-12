@@ -18,7 +18,7 @@ from datetime import datetime
 
 print("STARTUP: stdlib imports ok", flush=True)
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
