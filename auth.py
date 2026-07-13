@@ -185,12 +185,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.get("/google")
-async def google_login(request: Request):
-    authorization_url, state = _flow(request).authorization_url(
-        access_type="offline",
-        include_granted_scopes="true",
-        prompt="select_account consent",
-    )
+async def google_login(request: Request, email: str = None):
+    kwargs = {
+        "access_type": "offline",
+        "include_granted_scopes": "true",
+        "prompt": "select_account consent",
+    }
+    if email:
+        kwargs["login_hint"] = email
+    authorization_url, state = _flow(request).authorization_url(**kwargs)
     response = RedirectResponse(authorization_url)
     response.set_cookie("neurolab_oauth_state", state, httponly=True, max_age=600)
     return response
