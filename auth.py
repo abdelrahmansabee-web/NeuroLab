@@ -167,9 +167,7 @@ async def register(body: dict):
         raise HTTPException(status_code=400, detail="Email and password required")
     user_id = _create_user(email, password, name)
     token = _create_token(user_id)
-    response = JSONResponse({"ok": True, "user": {"id": user_id, "email": email, "name": name}})
-    response.set_cookie("neurolab_token", token, httponly=True, max_age=60 * 60 * 24 * ACCESS_TOKEN_EXPIRE_DAYS)
-    return response
+    return {"ok": True, "token": token, "user": {"id": user_id, "email": email, "name": name}}
 
 
 @router.post("/login")
@@ -180,9 +178,7 @@ async def login(body: dict):
     if not user or not _verify_password(password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = _create_token(user["id"])
-    response = JSONResponse({"ok": True, "user": {"id": user["id"], "email": user["email"], "name": user["name"]}})
-    response.set_cookie("neurolab_token", token, httponly=True, max_age=60 * 60 * 24 * ACCESS_TOKEN_EXPIRE_DAYS)
-    return response
+    return {"ok": True, "token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"]}}
 
 
 @router.get("/me")
@@ -192,9 +188,7 @@ async def auth_me(user: dict = Depends(get_current_user)):
 
 @router.post("/logout")
 async def auth_logout():
-    response = JSONResponse({"ok": True})
-    response.set_cookie("neurolab_token", "", max_age=0)
-    return response
+    return {"ok": True}
 
 
 @router.post("/backup")
