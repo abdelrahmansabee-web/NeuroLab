@@ -39,7 +39,7 @@ _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_r
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 
-DEPLOY_VERSION = "27.84"
+DEPLOY_VERSION = "27.85"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
