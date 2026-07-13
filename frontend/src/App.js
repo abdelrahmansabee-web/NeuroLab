@@ -10,7 +10,7 @@ import {
   Menu, X, ChevronRight, Play, Square, RotateCcw, Copy, Check,
   Info, Save, BarChart3, Stethoscope, Brain, Image as ImageIcon,
   RefreshCw, FileSpreadsheet, Upload, FileUp,
-  Database, Search, Edit3, Trash2, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles, Users, LogOut,
+  Database, Search, Edit3, Trash2, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles, Users, LogOut, MoreHorizontal,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.05";
+const APP_VERSION = "28.06";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -5736,9 +5736,11 @@ export default function App() {
   const [importPreview, setImportPreview] = useState(null);
   const [user, setUser] = useState(null);
   const [topBarHeight, setTopBarHeight] = useState(0);
+  const [mobileTopMenuOpen, setMobileTopMenuOpen] = useState(false);
   const bgRef = useRef(null);
   const importRef = useRef(null);
   const topBarWrapperRef = useRef(null);
+  const mobileMenuRef = useRef(null);
 
   const reducedMotion = useReducedMotion();
   const sidebarTransition = reducedMotion ? { duration: 0 } : SIDEBAR_SPRING;
@@ -5824,6 +5826,21 @@ export default function App() {
       window.removeEventListener("touchend", onTouchEnd);
     };
   }, [isDesktop, sidebar]);
+
+  useEffect(() => {
+    if (!mobileTopMenuOpen) return;
+    const onDocClick = (e) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target)) {
+        setMobileTopMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("touchstart", onDocClick, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("touchstart", onDocClick);
+    };
+  }, [mobileTopMenuOpen]);
 
   useEffect(() => {
     const KEY = "nl_app_v";
@@ -6046,6 +6063,42 @@ export default function App() {
     setImportPreview(null);
   };
 
+  const closeMobileTopMenu = () => setMobileTopMenuOpen(false);
+
+  function TopBarActions({ inMenu }) {
+    const btnBase = inMenu
+      ? "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+      : "w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 transition-all flex-shrink-0";
+
+    const Action = ({ onClick, icon, label, colorClass = "hover:text-white" }) => (
+      <motion.button
+        whileHover={inMenu ? undefined : { scale: 1.08 }}
+        whileTap={{ scale: 0.92 }}
+        onClick={() => { onClick(); if (inMenu) closeMobileTopMenu(); }}
+        className={`${btnBase} ${inMenu ? "" : colorClass}`}
+        style={inMenu ? undefined : GLASS_FIELD}
+        title={label}
+        aria-label={label}
+      >
+        {React.cloneElement(icon, { className: "w-4 h-4 flex-shrink-0" })}
+        {inMenu && <span>{label}</span>}
+      </motion.button>
+    );
+
+    return (
+      <>
+        <Action onClick={() => { newSession(); }} icon={<PlusCircle />} label="New Session" colorClass="hover:text-violet-300" />
+        <Action onClick={() => { saveSession(); if (!isDesktop) setSidebar(false); }} icon={<Save />} label="Save Session" colorClass="hover:text-emerald-300" />
+        <Action onClick={() => { setActive("analysis"); if (!isDesktop) setSidebar(false); }} icon={<BarChart3 />} label="Analysis Dashboard" colorClass="hover:text-amber-300" />
+        {user?.is_admin && <Action onClick={() => { setActive("users"); if (!isDesktop) setSidebar(false); }} icon={<Users />} label="Users" colorClass="hover:text-violet-300" />}
+        <Action onClick={() => importRef.current?.click()} icon={<FileUp />} label="Import patient" colorClass="hover:text-emerald-300" />
+        <Action onClick={() => bgRef.current?.click()} icon={<ImageIcon />} label="Background" />
+        <Action onClick={() => { setActive("database"); if (!isDesktop) setSidebar(false); }} icon={<Database />} label="Database" />
+        <Action onClick={logout} icon={<LogOut />} label="Sign out" colorClass="hover:text-rose-300" />
+      </>
+    );
+  }
+
   const nav = NAV_ITEMS.find((n) => n.id === active);
 
   const topBar = (
@@ -6099,99 +6152,21 @@ export default function App() {
           }}
         />
 
-        <motion.button
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
-          onClick={() => { newSession(); }}
-          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-violet-300 transition-all flex-shrink-0"
-          style={GLASS_FIELD}
-          title="New Session"
-          aria-label="New Session"
-        >
-          <PlusCircle className="w-4 h-4" />
-        </motion.button>
-
-        <motion.button
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
-          onClick={() => { saveSession(); if (!isDesktop) setSidebar(false); }}
-          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-emerald-300 transition-all flex-shrink-0"
-          style={GLASS_FIELD}
-          title="Save Session"
-          aria-label="Save Session"
-        >
-          <Save className="w-4 h-4" />
-        </motion.button>
-
-        <motion.button
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
-          onClick={() => { setActive("analysis"); if (!isDesktop) setSidebar(false); }}
-          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-amber-300 transition-all flex-shrink-0"
-          style={GLASS_FIELD}
-          title="Analysis Dashboard"
-          aria-label="Analysis Dashboard"
-        >
-          <BarChart3 className="w-4 h-4" />
-        </motion.button>
-
-        {user?.is_admin && (
+        {isDesktop ? (
+          <TopBarActions inMenu={false} />
+        ) : (
           <motion.button
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
-            onClick={() => { setActive("users"); if (!isDesktop) setSidebar(false); }}
-            className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-violet-300 transition-all flex-shrink-0"
+            onClick={() => setMobileTopMenuOpen((p) => !p)}
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
             style={GLASS_FIELD}
-            title="Users"
-            aria-label="Users"
+            title="Menu"
+            aria-label="Menu"
           >
-            <Users className="w-4 h-4" />
+            <MoreHorizontal className="w-4 h-4" />
           </motion.button>
         )}
-
-        <motion.button
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
-          onClick={() => importRef.current?.click()}
-          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-emerald-300 transition-all flex-shrink-0"
-          style={GLASS_FIELD}
-          title="Import patient (JSON or Clinical Report PDF)"
-          aria-label="Import patient file"
-        >
-          <FileUp className="w-4 h-4" />
-        </motion.button>
-
-        <motion.button
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
-          onClick={() => bgRef.current?.click()}
-          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
-          style={GLASS_FIELD}
-        >
-          <ImageIcon className="w-4 h-4" />
-        </motion.button>
-
-        <motion.button
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
-          onClick={() => { setActive("database"); if (!isDesktop) setSidebar(false); }}
-          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
-          style={GLASS_FIELD}
-        >
-          <Database className="w-4 h-4" />
-        </motion.button>
-
-        <motion.button
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
-          onClick={logout}
-          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-rose-300 transition-all flex-shrink-0"
-          style={GLASS_FIELD}
-          title="Sign out"
-          aria-label="Sign out"
-        >
-          <LogOut className="w-4 h-4" />
-        </motion.button>
       </div>
     </div>
   );
@@ -6431,6 +6406,15 @@ export default function App() {
         }}
       >
         {topBar}
+        {!isDesktop && mobileTopMenuOpen && (
+          <div
+            ref={mobileMenuRef}
+            className={`absolute right-0 top-full mt-2 z-[70] min-w-[220px] p-2 app-topbar-glass glass-float rounded-xl ${GLASS_CLS}`}
+            style={{ boxShadow: FLOAT_M }}
+          >
+            <TopBarActions inMenu={true} />
+          </div>
+        )}
       </motion.div>
 
       <motion.main
@@ -6440,7 +6424,7 @@ export default function App() {
         className="flex-1 relative z-30 will-change-transform"
       >
         <div aria-hidden="true" style={{ height: topBarHeight || 96 }} />
-        <div className="app-main-inner px-3 sm:px-4 pt-4 pb-4 sm:pt-6 sm:pb-6 max-w-5xl w-full mx-auto">
+        <div className="app-main-inner px-3 sm:px-4 pt-6 pb-4 sm:pt-6 sm:pb-6 max-w-5xl w-full mx-auto">
           <div className="content-shell rounded-2xl">
             <div className="content-shell-inner p-4 sm:p-6">
               <div className="section-transition-host min-h-[420px]">
