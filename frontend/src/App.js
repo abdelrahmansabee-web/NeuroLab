@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.07";
+const APP_VERSION = "28.08";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -6063,7 +6063,7 @@ export default function App() {
 
   function TopBarActions({ inMenu }) {
     const btnBase = inMenu
-      ? "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+      ? "w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 transition-colors"
       : "w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 transition-all flex-shrink-0";
 
     const Action = ({ onClick, icon, label, colorClass = "hover:text-white" }) => (
@@ -6402,7 +6402,7 @@ export default function App() {
         {!isDesktop && mobileTopMenuOpen && (
           <div
             ref={mobileMenuRef}
-            className="absolute right-0 top-full mt-2 z-[70] min-w-[220px] p-2 rounded-xl glass-float bg-white/15 backdrop-blur-3xl border border-white/30 shadow-2xl"
+            className="absolute right-0 top-full mt-2 z-[70] min-w-[220px] max-h-[70vh] overflow-y-auto p-2 rounded-xl glass-float bg-white/15 backdrop-blur-3xl border border-white/30 shadow-2xl"
             style={{ boxShadow: FLOAT_M }}
           >
             <TopBarActions inMenu={true} />
@@ -6418,7 +6418,7 @@ export default function App() {
         }}
       >
         <div aria-hidden="true" style={{ height: topBarHeight || 96 }} />
-        <div className="app-main-inner px-3 sm:px-4 pt-8 pb-4 sm:pt-6 sm:pb-6 max-w-5xl w-full mx-auto">
+        <div className="app-main-inner px-3 sm:px-4 pt-12 pb-4 sm:pt-6 sm:pb-6 max-w-5xl w-full mx-auto">
           <div className="content-shell rounded-2xl">
             <div className="content-shell-inner p-4 sm:p-6">
               <div className="section-transition-host min-h-[420px]">
