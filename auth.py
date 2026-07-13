@@ -22,6 +22,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
 GOOGLE_DRIVE_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+legacy_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def _data_dir():
@@ -80,7 +81,20 @@ def _hash_password(password: str) -> str:
 
 
 def _verify_password(password: str, hash_value: str) -> bool:
-    return pwd_context.verify(password, hash_value)
+    if not hash_value:
+        return False
+    try:
+        if pwd_context.verify(password, hash_value):
+            return True
+    except Exception:
+        pass
+    # Fallback for any accounts created earlier with bcrypt.
+    try:
+        if legacy_context.verify(password, hash_value):
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def _create_token(user_id: int) -> str:
@@ -189,9 +203,15 @@ async def register(body: dict):
 async def login(body: dict):
     email = body.get("email", "").strip().lower()
     password = body.get("password", "")
+    print(f"[login] email={email} password_len={len(password)} hash_present=??", flush=True)
     user = _get_user_by_email(email)
-    if not user or not _verify_password(password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not user:
+        print(f"[login] user not found for {email}", flush=True)
+        raise HTTPException(status_code=401, detail="Invalid email")
+    verified = _verify_password(password, user["password_hash"])
+    print(f"[login] user={user['id']} verified={verified} hash_prefix={user['password_hash'][:20]}", flush=True)
+    if not verified:
+        raise HTTPException(status_code=401, detail="Invalid password")
     token = _create_token(user["id"])
     return {"ok": True, "token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"]}}
 
