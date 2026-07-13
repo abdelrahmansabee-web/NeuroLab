@@ -56,8 +56,15 @@ def _init_db():
             columns = {row[1] for row in cur.fetchall()}
             if columns and "password_hash" not in columns:
                 conn.execute("DROP TABLE users")
-        except Exception:
-            pass
+                columns = set()
+            if columns:
+                if "is_admin" not in columns:
+                    conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+                if "is_approved" not in columns:
+                    conn.execute("ALTER TABLE users ADD COLUMN is_approved INTEGER NOT NULL DEFAULT 0")
+                conn.commit()
+        except Exception as exc:
+            print("Migration warning:", exc, flush=True)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -65,6 +72,8 @@ def _init_db():
                 email TEXT UNIQUE NOT NULL,
                 name TEXT,
                 password_hash TEXT NOT NULL,
+                is_admin INTEGER NOT NULL DEFAULT 0,
+                is_approved INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT,
                 updated_at TEXT
             )
@@ -121,13 +130,25 @@ def _get_user_by_email(email: str):
         return dict(row) if row else None
 
 
+def _is_first_user() -> bool:
+    try:
+        with sqlite3.connect(USERS_DB) as conn:
+            count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            return count == 0
+    except Exception:
+        return True
+
+
 def _create_user(email: str, password: str, name: str) -> int:
     now = datetime.utcnow().isoformat()
+    first = _is_first_user()
+    is_admin = 1 if first else 0
+    is_approved = 1 if first else 0
     with sqlite3.connect(USERS_DB) as conn:
         try:
             conn.execute(
-                "INSERT INTO users (email, name, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                (email, name, _hash_password(password), now, now),
+                "INSERT INTO users (email, name, password_hash, is_admin, is_approved, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (email, name, _hash_password(password), is_admin, is_approved, now, now),
             )
             conn.commit()
             user_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -228,6 +249,23 @@ _restore_users_db()
 _init_db()
 
 
+def _ensure_admin():
+    try:
+        with sqlite3.connect(USERS_DB) as conn:
+            admin_count = conn.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1").fetchone()[0]
+            if admin_count == 0:
+                first = conn.execute("SELECT id FROM users ORDER BY id ASC LIMIT 1").fetchone()
+                if first:
+                    conn.execute("UPDATE users SET is_admin = 1, is_approved = 1 WHERE id = ?", (first[0],))
+                    conn.commit()
+                    print("Promoted first user to admin", flush=True)
+    except Exception as exc:
+        print("Ensure admin failed:", exc, flush=True)
+
+
+_ensure_admin()
+
+
 def get_current_user(request: Request):
     token = request.cookies.get("neurolab_token")
     if not token:
@@ -255,26 +293,33 @@ async def register(body: dict):
     name = body.get("name", "").strip()
     if not email or not password:
         raise HTTPException(status_code=400, detail="Email and password required")
+    is_first = _is_first_user()
     user_id = _create_user(email, password, name)
     token = _create_token(user_id)
-    return {"ok": True, "token": token, "user": {"id": user_id, "email": email, "name": name}}
+    if is_first:
+        return {"ok": True, "token": token, "user": {"id": user_id, "email": email, "name": name, "is_admin": True, "is_approved": True}}
+    return {"ok": True, "pending_approval": True, "message": "Account created. Waiting for admin approval.", "user": {"id": user_id, "email": email, "name": name, "is_admin": False, "is_approved": False}}
 
 
 @router.post("/login")
 async def login(body: dict):
     email = body.get("email", "").strip().lower()
     password = body.get("password", "")
-    print(f"[login] email={email} password_len={len(password)} hash_present=??", flush=True)
+    print(f"[login] email={email} password_len={len(password)}", flush=True)
     user = _get_user_by_email(email)
     if not user:
         print(f"[login] user not found for {email}", flush=True)
         raise HTTPException(status_code=401, detail="Invalid email")
+    if not user.get("is_approved"):
+        print(f"[login] user={user['id']} not approved", flush=True)
+        raise HTTPException(status_code=403, detail="Account pending approval")
     verified = _verify_password(password, user["password_hash"])
     print(f"[login] user={user['id']} verified={verified} hash_prefix={user['password_hash'][:20]}", flush=True)
     if not verified:
         raise HTTPException(status_code=401, detail="Invalid password")
     token = _create_token(user["id"])
-    return {"ok": True, "token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"]}}
+    return {"ok": True, "token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": bool(user.get("is_admin")), "is_approved": bool(user.get("is_approved"))}}
+
 
 
 @router.post("/reset-password")
@@ -288,9 +333,69 @@ async def reset_password(body: dict):
     return {"ok": True, "message": "Password updated. Sign in with your new password."}
 
 
+def _require_admin(user: dict):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+
+@router.get("/pending")
+async def pending_users(user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    with sqlite3.connect(USERS_DB) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT id, email, name, is_admin, is_approved, created_at FROM users WHERE is_approved = 0 ORDER BY created_at DESC"
+        ).fetchall()
+        return {"users": [dict(r) for r in rows]}
+
+
+@router.get("/users")
+async def list_users(user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    with sqlite3.connect(USERS_DB) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT id, email, name, is_admin, is_approved, created_at FROM users ORDER BY created_at DESC"
+        ).fetchall()
+        return {"users": [dict(r) for r in rows]}
+
+
+@router.post("/approve/{user_id}")
+async def approve_user(user_id: int, admin: dict = Depends(get_current_user)):
+    _require_admin(admin)
+    now = datetime.utcnow().isoformat()
+    with sqlite3.connect(USERS_DB) as conn:
+        cur = conn.execute("UPDATE users SET is_approved = 1, updated_at = ? WHERE id = ?", (now, user_id))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+    try:
+        _backup_users_db()
+    except Exception:
+        pass
+    return {"ok": True}
+
+
+@router.post("/delete/{user_id}")
+async def delete_user(user_id: int, admin: dict = Depends(get_current_user)):
+    _require_admin(admin)
+    if admin["id"] == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    with sqlite3.connect(USERS_DB) as conn:
+        cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+    try:
+        _backup_users_db()
+    except Exception:
+        pass
+    return {"ok": True}
+
+
 @router.get("/me")
 async def auth_me(user: dict = Depends(get_current_user)):
-    return {"id": user["id"], "email": user["email"], "name": user["name"]}
+    return {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": bool(user.get("is_admin")), "is_approved": bool(user.get("is_approved"))}
 
 
 @router.get("/health")
