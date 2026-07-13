@@ -2,7 +2,7 @@
 // Stroke Rehabilitation Platform — Frontend v6.5
 // ============================================================
 
-import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import ReactDOM from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders } from "./AuthGate";
 
-const APP_VERSION = "27.91";
+const APP_VERSION = "27.92";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -5751,15 +5751,23 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = topBarWrapperRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
+    if (!el) return;
+    const measure = () => {
+      const h = el.getBoundingClientRect().height;
+      if (h > 0) setTopBarHeight(h);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
     const ro = new ResizeObserver((entries) => {
       const h = entries[0]?.borderBoxSize?.[0]?.blockSize ?? entries[0]?.contentRect?.height;
       if (typeof h === "number") setTopBarHeight(h);
     });
     ro.observe(el);
-    setTopBarHeight(el.getBoundingClientRect().height);
     return () => ro.disconnect();
   }, []);
 
@@ -6267,7 +6275,7 @@ export default function App() {
           transform: !isDesktop && sidebar ? "translateX(60%)" : "translateX(0)",
         }}
       >
-          <div aria-hidden="true" style={{ height: topBarHeight }} />
+          <div aria-hidden="true" style={{ height: topBarHeight || 64 }} />
         <div className="app-main-inner px-3 sm:px-4 py-4 sm:py-6 max-w-5xl w-full mx-auto">
           <div className="content-shell rounded-2xl">
             <div className="content-shell-inner p-4 sm:p-6">
