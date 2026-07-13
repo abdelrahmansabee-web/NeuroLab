@@ -189,7 +189,7 @@ async def google_login(request: Request):
     authorization_url, state = _flow(request).authorization_url(
         access_type="offline",
         include_granted_scopes="true",
-        prompt="consent",
+        prompt="select_account consent",
     )
     response = RedirectResponse(authorization_url)
     response.set_cookie("neurolab_oauth_state", state, httponly=True, max_age=600)
