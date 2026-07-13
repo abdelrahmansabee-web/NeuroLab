@@ -14,7 +14,11 @@ from google.oauth2 import service_account as google_service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
-JWT_SECRET = os.environ.get("JWT_SECRET") or "dev-secret-change-in-production"
+from security import password_policy, RateLimiter, get_client_ip, log_audit, encrypt_json_to_str, decrypt_json_from_str
+
+JWT_SECRET = os.environ.get("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET environment variable is required. Set it in Hugging Face Space Secrets.")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 30
 
@@ -23,6 +27,10 @@ GOOGLE_DRIVE_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 legacy_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+login_rate_limiter = RateLimiter(limit=5, window=60 * 15)
+register_rate_limiter = RateLimiter(limit=5, window=60 * 60)
+password_reset_rate_limiter = RateLimiter(limit=3, window=60 * 15)
 
 
 def _data_dir():
@@ -45,6 +53,7 @@ def _data_dir():
 
 DATA_DIR = _data_dir()
 USERS_DB = DATA_DIR / "users.db"
+AUDIT_DB = DATA_DIR / "audit.db"
 PATIENTS_DIR = DATA_DIR / "patients"
 PATIENTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -287,49 +296,81 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register")
-async def register(body: dict):
+async def register(request: Request, body: dict):
     email = body.get("email", "").strip().lower()
     password = body.get("password", "")
     name = body.get("name", "").strip()
+    ip = get_client_ip(request)
     if not email or not password:
+        log_audit(AUDIT_DB, "register", email=email, ip=ip, details="Missing email or password", success=False)
         raise HTTPException(status_code=400, detail="Email and password required")
+    if not register_rate_limiter.is_allowed(f"{ip}:{email}"):
+        log_audit(AUDIT_DB, "register", email=email, ip=ip, details="Rate limited", success=False)
+        raise HTTPException(status_code=429, detail="Too many registration attempts. Try again later.")
+    ok, msg = password_policy(password)
+    if not ok:
+        log_audit(AUDIT_DB, "register", email=email, ip=ip, details=f"Weak password: {msg}", success=False)
+        raise HTTPException(status_code=400, detail=msg)
     is_first = _is_first_user()
     user_id = _create_user(email, password, name)
     token = _create_token(user_id)
+    log_audit(AUDIT_DB, "register", user_id=user_id, email=email, ip=ip, details="Registration successful", success=True)
     if is_first:
         return {"ok": True, "token": token, "user": {"id": user_id, "email": email, "name": name, "is_admin": True, "is_approved": True}}
     return {"ok": True, "pending_approval": True, "message": "Account created. Waiting for admin approval.", "user": {"id": user_id, "email": email, "name": name, "is_admin": False, "is_approved": False}}
 
 
 @router.post("/login")
-async def login(body: dict):
+async def login(request: Request, body: dict):
     email = body.get("email", "").strip().lower()
     password = body.get("password", "")
+    ip = get_client_ip(request)
     print(f"[login] email={email} password_len={len(password)}", flush=True)
+    if not email or not password:
+        log_audit(AUDIT_DB, "login", email=email, ip=ip, details="Missing email or password", success=False)
+        raise HTTPException(status_code=400, detail="Email and password required")
+    if not login_rate_limiter.is_allowed(f"{ip}:{email}"):
+        log_audit(AUDIT_DB, "login", email=email, ip=ip, details="Rate limited", success=False)
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
     user = _get_user_by_email(email)
     if not user:
         print(f"[login] user not found for {email}", flush=True)
+        log_audit(AUDIT_DB, "login", email=email, ip=ip, details="User not found", success=False)
         raise HTTPException(status_code=401, detail="Invalid email")
     if not user.get("is_approved"):
         print(f"[login] user={user['id']} not approved", flush=True)
+        log_audit(AUDIT_DB, "login", user_id=user["id"], email=email, ip=ip, details="Account not approved", success=False)
         raise HTTPException(status_code=403, detail="Account pending approval")
     verified = _verify_password(password, user["password_hash"])
     print(f"[login] user={user['id']} verified={verified} hash_prefix={user['password_hash'][:20]}", flush=True)
     if not verified:
+        log_audit(AUDIT_DB, "login", user_id=user["id"], email=email, ip=ip, details="Invalid password", success=False)
         raise HTTPException(status_code=401, detail="Invalid password")
     token = _create_token(user["id"])
+    log_audit(AUDIT_DB, "login", user_id=user["id"], email=email, ip=ip, details="Login successful", success=True)
     return {"ok": True, "token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": bool(user.get("is_admin")), "is_approved": bool(user.get("is_approved"))}}
 
 
 
 @router.post("/reset-password")
-async def reset_password(body: dict):
+async def reset_password(request: Request, body: dict):
     email = body.get("email", "").strip().lower()
     password = body.get("password", "")
+    ip = get_client_ip(request)
     if not email or not password or len(password) < 6:
+        log_audit(AUDIT_DB, "reset_password", email=email, ip=ip, details="Invalid input", success=False)
         raise HTTPException(status_code=400, detail="Email and password (min 6 chars) required")
+    if not password_reset_rate_limiter.is_allowed(f"{ip}:{email}"):
+        log_audit(AUDIT_DB, "reset_password", email=email, ip=ip, details="Rate limited", success=False)
+        raise HTTPException(status_code=429, detail="Too many reset attempts. Try again later.")
+    ok, msg = password_policy(password)
+    if not ok:
+        log_audit(AUDIT_DB, "reset_password", email=email, ip=ip, details=f"Weak password: {msg}", success=False)
+        raise HTTPException(status_code=400, detail=msg)
     if not _update_password(email, password):
+        log_audit(AUDIT_DB, "reset_password", email=email, ip=ip, details="Email not found", success=False)
         raise HTTPException(status_code=404, detail="Email not found")
+    log_audit(AUDIT_DB, "reset_password", email=email, ip=ip, details="Password updated", success=True)
     return {"ok": True, "message": "Password updated. Sign in with your new password."}
 
 
@@ -360,36 +401,54 @@ async def list_users(user: dict = Depends(get_current_user)):
         return {"users": [dict(r) for r in rows]}
 
 
+@router.get("/audit-logs")
+async def audit_logs(user: dict = Depends(get_current_user), limit: int = 100):
+    _require_admin(user)
+    with sqlite3.connect(AUDIT_DB) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return {"logs": [dict(r) for r in rows]}
+
+
 @router.post("/approve/{user_id}")
-async def approve_user(user_id: int, admin: dict = Depends(get_current_user)):
+async def approve_user(user_id: int, request: Request, admin: dict = Depends(get_current_user)):
     _require_admin(admin)
+    ip = get_client_ip(request)
     now = datetime.utcnow().isoformat()
     with sqlite3.connect(USERS_DB) as conn:
         cur = conn.execute("UPDATE users SET is_approved = 1, updated_at = ? WHERE id = ?", (now, user_id))
         conn.commit()
         if cur.rowcount == 0:
+            log_audit(AUDIT_DB, "approve_user", user_id=admin["id"], email=admin.get("email"), ip=ip, details=f"User {user_id} not found", success=False)
             raise HTTPException(status_code=404, detail="User not found")
     try:
         _backup_users_db()
     except Exception:
         pass
+    log_audit(AUDIT_DB, "approve_user", user_id=admin["id"], email=admin.get("email"), ip=ip, details=f"Approved user {user_id}", success=True)
     return {"ok": True}
 
 
 @router.post("/delete/{user_id}")
-async def delete_user(user_id: int, admin: dict = Depends(get_current_user)):
+async def delete_user(user_id: int, request: Request, admin: dict = Depends(get_current_user)):
     _require_admin(admin)
+    ip = get_client_ip(request)
     if admin["id"] == user_id:
+        log_audit(AUDIT_DB, "delete_user", user_id=admin["id"], email=admin.get("email"), ip=ip, details="Attempted self-delete", success=False)
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     with sqlite3.connect(USERS_DB) as conn:
         cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
         if cur.rowcount == 0:
+            log_audit(AUDIT_DB, "delete_user", user_id=admin["id"], email=admin.get("email"), ip=ip, details=f"User {user_id} not found", success=False)
             raise HTTPException(status_code=404, detail="User not found")
     try:
         _backup_users_db()
     except Exception:
         pass
+    log_audit(AUDIT_DB, "delete_user", user_id=admin["id"], email=admin.get("email"), ip=ip, details=f"Deleted user {user_id}", success=True)
     return {"ok": True}
 
 

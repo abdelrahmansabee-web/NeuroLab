@@ -19,20 +19,23 @@ from datetime import datetime
 print("STARTUP: stdlib imports ok", flush=True)
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body, BackgroundTasks, Depends
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 print("STARTUP: fastapi imports ok", flush=True)
 
 try:
-    from auth import router as auth_router, get_current_user, PATIENTS_DIR
+    from auth import router as auth_router, get_current_user, PATIENTS_DIR, JWT_SECRET
+    from security import encrypt_json_to_str, decrypt_json_from_str
     print("STARTUP: auth module loaded", flush=True)
 except Exception as _auth_exc:
     print("STARTUP: auth module failed to load:", _auth_exc, flush=True)
     auth_router = None
     get_current_user = None
     PATIENTS_DIR = None
+    JWT_SECRET = None
+    encrypt_json_to_str = None
+    decrypt_json_from_str = None
 
 _BASE = Path(__file__).resolve().parent
 _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_robust.py").exists() else _BASE
@@ -224,13 +227,19 @@ app = FastAPI(
     version=DEPLOY_VERSION,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+    return response
 
 if auth_router is not None:
     app.include_router(auth_router)
@@ -1176,7 +1185,11 @@ async def get_patients(user: dict = Depends(get_current_user) if get_current_use
     if not file.exists():
         return []
     try:
-        data = json.loads(file.read_text(encoding="utf-8"))
+        raw = file.read_text(encoding="utf-8")
+        if raw.startswith("enc:") and JWT_SECRET and decrypt_json_from_str:
+            data = decrypt_json_from_str(raw, JWT_SECRET)
+        else:
+            data = json.loads(raw)
         return data if isinstance(data, list) else []
     except Exception:
         return []
@@ -1188,10 +1201,16 @@ async def save_patients(body: dict, user: dict = Depends(get_current_user) if ge
         if get_current_user and user:
             DATA_DIR.mkdir(parents=True, exist_ok=True)
             file = PATIENTS_DIR / f"{user['id']}.json"
-            file.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+            if JWT_SECRET and encrypt_json_to_str:
+                file.write_text(encrypt_json_to_str(body, JWT_SECRET), encoding="utf-8")
+            else:
+                file.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
         else:
             DATA_DIR.mkdir(parents=True, exist_ok=True)
-            PATIENTS_FILE.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+            if JWT_SECRET and encrypt_json_to_str:
+                PATIENTS_FILE.write_text(encrypt_json_to_str(body, JWT_SECRET), encoding="utf-8")
+            else:
+                PATIENTS_FILE.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
         return {"success": True}
     except Exception as e:
         traceback.print_exc()
