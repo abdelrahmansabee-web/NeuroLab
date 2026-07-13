@@ -2,7 +2,7 @@
 // Stroke Rehabilitation Platform — Frontend v6.5
 // ============================================================
 
-import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders } from "./AuthGate";
 
-const APP_VERSION = "27.97";
+const APP_VERSION = "27.98";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -5734,11 +5734,9 @@ export default function App() {
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
   const [bgUrl, setBgUrl] = useState(BG);
   const [importPreview, setImportPreview] = useState(null);
-  const [topBarHeight, setTopBarHeight] = useState(0);
   const [user, setUser] = useState(null);
   const bgRef = useRef(null);
   const importRef = useRef(null);
-  const topBarWrapperRef = useRef(null);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const syncLayout = () => {
@@ -5752,26 +5750,6 @@ export default function App() {
       mq.removeEventListener("change", syncLayout);
       window.removeEventListener("resize", syncLayout);
     };
-  }, []);
-
-  useLayoutEffect(() => {
-    const el = topBarWrapperRef.current;
-    if (!el) return;
-    const measure = () => {
-      const h = el.getBoundingClientRect().height;
-      if (h > 0) setTopBarHeight(h);
-    };
-    measure();
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", measure);
-      return () => window.removeEventListener("resize", measure);
-    }
-    const ro = new ResizeObserver((entries) => {
-      const h = entries[0]?.borderBoxSize?.[0]?.blockSize ?? entries[0]?.contentRect?.height;
-      if (typeof h === "number") setTopBarHeight(h);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
@@ -6273,20 +6251,7 @@ export default function App() {
         />
       )}
 
-      <div
-        ref={topBarWrapperRef}
-        className="fixed top-0 z-[60] px-3 sm:px-4 pb-0"
-        style={{
-          left: isDesktop && sidebar ? sidebarPush : 0,
-          right: 0,
-          paddingTop: SAFE_TOP,
-          display: !isDesktop && sidebar ? "none" : "block",
-        }}
-      >
-        {topBar}
-      </div>
-
-          <motion.aside
+      <motion.aside
         initial={false}
         animate={{ x: sidebar ? 0 : (isDesktop ? SIDEBAR_X_HIDDEN : "-100%") }}
         transition={SIDEBAR_SPRING}
@@ -6386,8 +6351,16 @@ export default function App() {
           transform: !isDesktop && sidebar ? `translateX(${MOBILE_SIDEBAR_W})` : "translateX(0)",
         }}
       >
-          <div aria-hidden="true" style={{ height: topBarHeight || 72 }} />
-        <div className="app-main-inner px-3 sm:px-4 pt-6 pb-4 sm:pt-8 sm:pb-6 max-w-5xl w-full mx-auto">
+        <div
+          className="sticky top-0 z-[60] px-3 sm:px-4 pb-0"
+          style={{
+            paddingTop: SAFE_TOP,
+            display: !isDesktop && sidebar ? "none" : "block",
+          }}
+        >
+          {topBar}
+        </div>
+        <div className="app-main-inner px-3 sm:px-4 pt-2 pb-4 sm:pt-3 sm:pb-6 max-w-5xl w-full mx-auto">
           <div className="content-shell rounded-2xl">
             <div className="content-shell-inner p-4 sm:p-6">
               <div className="section-transition-host min-h-[420px]">
