@@ -10,7 +10,7 @@ import {
   Menu, X, ChevronRight, Play, Square, RotateCcw, Copy, Check,
   Info, Save, BarChart3, Stethoscope, Brain, Image as ImageIcon,
   RefreshCw, FileSpreadsheet, Upload, FileUp,
-  Database, Search, Edit3, Trash2, Plus, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles, Users, LogOut,
+  Database, Search, Edit3, Trash2, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles, Users, LogOut,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.03";
+const APP_VERSION = "28.04";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -6097,6 +6097,30 @@ export default function App() {
         <motion.button
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
+          onClick={() => { newSession(); }}
+          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-violet-300 transition-all flex-shrink-0"
+          style={GLASS_FIELD}
+          title="New Session"
+          aria-label="New Session"
+        >
+          <PlusCircle className="w-4 h-4" />
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          onClick={() => { saveSession(); if (!isDesktop) setSidebar(false); }}
+          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-emerald-300 transition-all flex-shrink-0"
+          style={GLASS_FIELD}
+          title="Save Session"
+          aria-label="Save Session"
+        >
+          <Save className="w-4 h-4" />
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
           onClick={() => { setActive("analysis"); if (!isDesktop) setSidebar(false); }}
           className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-amber-300 transition-all flex-shrink-0"
           style={GLASS_FIELD}
@@ -6386,27 +6410,6 @@ export default function App() {
                   );
                 })}
               </nav>
-
-              <div className="p-3 flex-shrink-0 space-y-2" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-                <motion.button
-                  whileTap={{ scale: 0.96 }}
-                  onClick={() => { newSession(); }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-violet-500/15 border border-violet-400/25 text-violet-200 hover:bg-violet-500/25 hover:border-violet-400/40 transition-all"
-                >
-                  <PlusCircle className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-sm font-bold">New Session</span>
-                  <RotateCcw className="w-3.5 h-3.5 ml-auto opacity-60 flex-shrink-0" />
-                </motion.button>
-                <motion.button
-                  whileTap={{ scale: 0.96 }}
-                  onClick={() => { saveSession(); if (!isDesktop) setSidebar(false); }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-400/25 text-emerald-200 hover:bg-emerald-500/25 hover:border-emerald-400/40 transition-all"
-                >
-                  <Save className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-sm font-bold">Save Session</span>
-                  <Plus className="w-3.5 h-3.5 ml-auto opacity-60 flex-shrink-0" />
-                </motion.button>
-              </div>
             </div>
           </motion.aside>
 
