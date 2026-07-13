@@ -29,8 +29,10 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders } from "./AuthGate";
 
-const APP_VERSION = "27.98";
+const APP_VERSION = "27.99";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
+const TOPBAR_CONTENT_H = "3.5rem"; // 56px
+const TOPBAR_OFFSET = `calc(env(safe-area-inset-top, 0px) + 8px + ${TOPBAR_CONTENT_H})`;
 
 const BG = "/bg.jpg";
 
@@ -6016,7 +6018,7 @@ export default function App() {
   const nav = NAV_ITEMS.find((n) => n.id === active);
 
   const topBar = (
-    <div className={`app-topbar-glass glass-float flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl ${GLASS_CLS}`} style={{ boxShadow: FLOAT_M }}>
+    <div className={`app-topbar-glass glass-float flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 h-14 rounded-xl ${GLASS_CLS}`} style={{ boxShadow: FLOAT_M }}>
       <motion.button
         whileTap={{ scale: 0.9 }}
         onClick={() => setSidebar((p) => !p)}
@@ -6349,13 +6351,15 @@ export default function App() {
         style={{
           marginLeft: isDesktop && sidebar ? sidebarPush : 0,
           transform: !isDesktop && sidebar ? `translateX(${MOBILE_SIDEBAR_W})` : "translateX(0)",
+          paddingTop: TOPBAR_OFFSET,
         }}
       >
         <div
-          className="sticky top-0 z-[60] px-3 sm:px-4 pb-0"
+          className="fixed top-0 z-[60] px-3 sm:px-4 pb-0"
           style={{
+            left: isDesktop && sidebar ? sidebarPush : 0,
+            right: 0,
             paddingTop: SAFE_TOP,
-            display: !isDesktop && sidebar ? "none" : "block",
           }}
         >
           {topBar}
