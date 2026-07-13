@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders } from "./AuthGate";
 
-const APP_VERSION = "27.93";
+const APP_VERSION = "27.94";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -62,6 +62,7 @@ function isStandalonePWA() {
 
 const SIDEBAR_W = 255;
 const SIDEBAR_X_HIDDEN = -280;
+const MOBILE_SIDEBAR_W = "75%";
 const SIDEBAR_SPRING = { type: "spring", stiffness: 180, damping: 26, mass: 1.1 };
 
 function sidebarPushWidth() {
@@ -6279,6 +6280,7 @@ export default function App() {
           left: isDesktop && sidebar ? sidebarPush : 0,
           right: 0,
           paddingTop: SAFE_TOP,
+          display: !isDesktop && sidebar ? "none" : "block",
         }}
       >
         {topBar}
@@ -6288,8 +6290,8 @@ export default function App() {
         initial={false}
         animate={{ x: sidebar ? 0 : (isDesktop ? SIDEBAR_X_HIDDEN : "-100%") }}
         transition={SIDEBAR_SPRING}
-        className={`fixed left-0 top-0 h-full ${isDesktop ? "z-50" : "z-[70]"} flex flex-col px-3 pb-3 ${isDesktop ? "" : "w-[60%]"}`}
-        style={isDesktop ? { width: sidebarPush, paddingTop: SAFE_TOP } : { width: "60%", paddingTop: SAFE_TOP }}
+        className={`fixed left-0 top-0 h-full ${isDesktop ? "z-50" : "z-[70]"} flex flex-col px-3 pb-3 ${isDesktop ? "" : ""}`}
+        style={isDesktop ? { width: sidebarPush, paddingTop: SAFE_TOP } : { width: MOBILE_SIDEBAR_W, paddingTop: SAFE_TOP }}
       >
             <div className={`sidebar-shell flex-1 flex flex-col min-h-0 rounded-2xl overflow-hidden ${SIDEBAR_CLS}`} style={{ boxShadow: FLOAT_M }}>
               <div className="p-5 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
@@ -6381,11 +6383,11 @@ export default function App() {
         className="flex-1 relative z-30 transition-[margin-left,transform] duration-500 ease-in-out"
         style={{
           marginLeft: isDesktop && sidebar ? sidebarPush : 0,
-          transform: !isDesktop && sidebar ? "translateX(60%)" : "translateX(0)",
+          transform: !isDesktop && sidebar ? `translateX(${MOBILE_SIDEBAR_W})` : "translateX(0)",
         }}
       >
-          <div aria-hidden="true" style={{ height: topBarHeight || 64 }} />
-        <div className="app-main-inner px-3 sm:px-4 py-4 sm:py-6 max-w-5xl w-full mx-auto">
+          <div aria-hidden="true" style={{ height: topBarHeight || 72 }} />
+        <div className="app-main-inner px-3 sm:px-4 pt-6 pb-4 sm:pt-8 sm:pb-6 max-w-5xl w-full mx-auto">
           <div className="content-shell rounded-2xl">
             <div className="content-shell-inner p-4 sm:p-6">
               <div className="section-transition-host min-h-[420px]">
