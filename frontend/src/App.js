@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders } from "./AuthGate";
 
-const APP_VERSION = "28.01";
+const APP_VERSION = "28.02";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -6386,7 +6386,7 @@ export default function App() {
         }}
       >
         <div aria-hidden="true" style={{ height: topBarHeight || 96 }} />
-        <div className="app-main-inner px-3 sm:px-4 pt-2 pb-4 sm:pt-3 sm:pb-6 max-w-5xl w-full mx-auto">
+        <div className="app-main-inner px-3 sm:px-4 pt-4 pb-4 sm:pt-6 sm:pb-6 max-w-5xl w-full mx-auto">
           <div className="content-shell rounded-2xl">
             <div className="content-shell-inner p-4 sm:p-6">
               <div className="section-transition-host min-h-[420px]">
