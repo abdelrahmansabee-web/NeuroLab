@@ -50,7 +50,6 @@ PATIENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _init_db():
-    _restore_users_db()
     with sqlite3.connect(USERS_DB) as conn:
         try:
             cur = conn.execute("PRAGMA table_info(users)")
@@ -72,9 +71,6 @@ def _init_db():
             """
         )
         conn.commit()
-
-
-_init_db()
 
 
 def _hash_password(password: str) -> str:
@@ -225,6 +221,11 @@ def _restore_users_db():
         print("Users DB restored from Drive", flush=True)
     except Exception as exc:
         print("Users DB restore failed:", exc, flush=True)
+
+
+# Initialize database after all helpers are defined.
+_restore_users_db()
+_init_db()
 
 
 def get_current_user(request: Request):
