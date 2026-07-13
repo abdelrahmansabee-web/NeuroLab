@@ -124,6 +124,21 @@ def _create_user(email: str, password: str, name: str) -> int:
             raise HTTPException(status_code=400, detail="Email already registered")
 
 
+def _update_password(email: str, password: str) -> bool:
+    now = datetime.utcnow().isoformat()
+    with sqlite3.connect(USERS_DB) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        if not row:
+            return False
+        conn.execute(
+            "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+            (_hash_password(password), now, row["id"]),
+        )
+        conn.commit()
+        return True
+
+
 def _drive_service():
     if not GOOGLE_SERVICE_ACCOUNT_JSON or not GOOGLE_DRIVE_FOLDER_ID:
         return None
@@ -179,6 +194,17 @@ async def login(body: dict):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = _create_token(user["id"])
     return {"ok": True, "token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"]}}
+
+
+@router.post("/reset-password")
+async def reset_password(body: dict):
+    email = body.get("email", "").strip().lower()
+    password = body.get("password", "")
+    if not email or not password or len(password) < 6:
+        raise HTTPException(status_code=400, detail="Email and password (min 6 chars) required")
+    if not _update_password(email, password):
+        raise HTTPException(status_code=404, detail="Email not found")
+    return {"ok": True, "message": "Password updated. Sign in with your new password."}
 
 
 @router.get("/me")
