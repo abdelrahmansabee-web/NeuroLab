@@ -50,6 +50,7 @@ PATIENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _init_db():
+    _restore_users_db()
     with sqlite3.connect(USERS_DB) as conn:
         try:
             cur = conn.execute("PRAGMA table_info(users)")
@@ -133,9 +134,14 @@ def _create_user(email: str, password: str, name: str) -> int:
                 (email, name, _hash_password(password), now, now),
             )
             conn.commit()
-            return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            user_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         except sqlite3.IntegrityError:
             raise HTTPException(status_code=400, detail="Email already registered")
+    try:
+        _backup_users_db()
+    except Exception:
+        pass
+    return user_id
 
 
 def _update_password(email: str, password: str) -> bool:
@@ -150,7 +156,11 @@ def _update_password(email: str, password: str) -> bool:
             (_hash_password(password), now, row["id"]),
         )
         conn.commit()
-        return True
+    try:
+        _backup_users_db()
+    except Exception:
+        pass
+    return True
 
 
 def _drive_service():
@@ -165,6 +175,56 @@ def _drive_service():
     except Exception as exc:
         print("Drive service init failed:", exc, flush=True)
         return None
+
+
+def _backup_users_db():
+    service = _drive_service()
+    if not service:
+        return
+    try:
+        q = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and name='users.db' and trashed=false"
+        res = service.files().list(q=q, spaces="drive", fields="files(id, name)").execute()
+        files = res.get("files", [])
+        media = MediaIoBaseUpload(BytesIO(USERS_DB.read_bytes()), mimetype="application/x-sqlite3", resumable=True)
+        if files:
+            service.files().update(fileId=files[0]["id"], media_body=media).execute()
+        else:
+            service.files().create(
+                body={"name": "users.db", "parents": [GOOGLE_DRIVE_FOLDER_ID]},
+                media_body=media,
+                fields="id",
+            ).execute()
+        print("Users DB backed up to Drive", flush=True)
+    except Exception as exc:
+        print("Users DB backup failed:", exc, flush=True)
+
+
+def _restore_users_db():
+    service = _drive_service()
+    if not service:
+        return
+    try:
+        q = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and name='users.db' and trashed=false"
+        res = service.files().list(q=q, spaces="drive", fields="files(id, name)").execute()
+        files = res.get("files", [])
+        if not files:
+            return
+        # Keep local DB if it already has users to avoid overwriting newer data.
+        if USERS_DB.exists():
+            try:
+                with sqlite3.connect(USERS_DB) as conn:
+                    count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+                    if count > 0:
+                        print("Local users DB has records; skip Drive restore", flush=True)
+                        return
+            except Exception:
+                pass
+        content = service.files().get_media(fileId=files[0]["id"]).execute()
+        USERS_DB.parent.mkdir(parents=True, exist_ok=True)
+        USERS_DB.write_bytes(content)
+        print("Users DB restored from Drive", flush=True)
+    except Exception as exc:
+        print("Users DB restore failed:", exc, flush=True)
 
 
 def get_current_user(request: Request):
@@ -230,6 +290,17 @@ async def reset_password(body: dict):
 @router.get("/me")
 async def auth_me(user: dict = Depends(get_current_user)):
     return {"id": user["id"], "email": user["email"], "name": user["name"]}
+
+
+@router.get("/health")
+async def auth_health():
+    user_count = 0
+    try:
+        with sqlite3.connect(USERS_DB) as conn:
+            user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    except Exception:
+        pass
+    return {"ok": True, "data_dir": str(DATA_DIR), "users_db": str(USERS_DB), "user_count": user_count}
 
 
 @router.post("/logout")
