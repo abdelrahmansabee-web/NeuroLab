@@ -56,6 +56,9 @@ USERS_DB = DATA_DIR / "users.db"
 AUDIT_DB = DATA_DIR / "audit.db"
 PATIENTS_DIR = DATA_DIR / "patients"
 PATIENTS_DIR.mkdir(parents=True, exist_ok=True)
+print(f"STARTUP: DATA_DIR={DATA_DIR}", flush=True)
+print(f"STARTUP: USERS_DB={USERS_DB}", flush=True)
+print(f"STARTUP: PATIENTS_DIR={PATIENTS_DIR}", flush=True)
 
 
 def _init_db():
@@ -273,6 +276,40 @@ def _ensure_admin():
 
 
 _ensure_admin()
+
+
+def _seed_admin():
+    admin_email = os.environ.get("NEUROLAB_ADMIN_EMAIL")
+    admin_password = os.environ.get("NEUROLAB_ADMIN_PASSWORD")
+    if not admin_email or not admin_password:
+        print("STARTUP: no NEUROLAB_ADMIN_EMAIL/PASSWORD set; skipping seed admin", flush=True)
+        return
+    try:
+        with sqlite3.connect(USERS_DB) as conn:
+            count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            if count > 0:
+                print(f"STARTUP: users exist; seed admin skipped", flush=True)
+                return
+            now = datetime.utcnow().isoformat()
+            conn.execute(
+                "INSERT INTO users (email, name, password_hash, is_admin, is_approved, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (admin_email.strip().lower(), "Admin", _hash_password(admin_password), 1, 1, now, now),
+            )
+            conn.commit()
+            print(f"STARTUP: seeded admin user {admin_email}", flush=True)
+    except Exception as exc:
+        print("Seed admin failed:", exc, flush=True)
+
+
+_seed_admin()
+
+
+try:
+    with sqlite3.connect(USERS_DB) as conn:
+        user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        print(f"STARTUP: user_count={user_count}", flush=True)
+except Exception as exc:
+    print(f"STARTUP: user_count unknown: {exc}", flush=True)
 
 
 def get_current_user(request: Request):
