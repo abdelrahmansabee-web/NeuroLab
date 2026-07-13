@@ -75,8 +75,16 @@ export default function AuthGate({ children }) {
         body: JSON.stringify(body),
       });
       const data = await r.json().catch(() => ({}));
+      if (r.status === 403 && data.detail === "Account pending approval") {
+        setSuccess("Account created and is pending admin approval.");
+        return;
+      }
       if (!r.ok) {
         setError(data.detail || "Request failed");
+        return;
+      }
+      if (mode === "register" && data.pending_approval) {
+        setSuccess(data.message || "Account created and is pending admin approval.");
         return;
       }
       if (data.token) {

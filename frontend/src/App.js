@@ -10,7 +10,7 @@ import {
   Menu, X, ChevronRight, Play, Square, RotateCcw, Copy, Check,
   Info, Save, BarChart3, Stethoscope, Brain, Image as ImageIcon,
   RefreshCw, FileSpreadsheet, Upload, FileUp,
-  Database, Search, Edit3, Trash2, Plus, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles,
+  Database, Search, Edit3, Trash2, Plus, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles, Users,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders } from "./AuthGate";
 
-const APP_VERSION = "27.92";
+const APP_VERSION = "27.93";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -197,6 +197,7 @@ const NAV_ITEMS = [
   { id:"kinematics", icon:Cpu, en:"Kinematics AI Lab", tr:"Kinematik AI Laboratuvarı" },
   { id:"report", icon:FileText, en:"Export Report", tr:"Rapor Dışa Aktarma" },
   { id:"analysis", icon:BarChart3, en:"Analysis Dashboard", tr:"Analiz Paneli" },
+  { id:"users", icon:Users, en:"Users", tr:"Kullanıcılar", adminOnly:true },
 ];
 
 const LS_KEY = "stroke_rehab_patients_v6";
@@ -5733,6 +5734,7 @@ export default function App() {
   const [bgUrl, setBgUrl] = useState(BG);
   const [importPreview, setImportPreview] = useState(null);
   const [topBarHeight, setTopBarHeight] = useState(0);
+  const [user, setUser] = useState(null);
   const bgRef = useRef(null);
   const importRef = useRef(null);
   const topBarWrapperRef = useRef(null);
@@ -5769,6 +5771,13 @@ export default function App() {
     });
     ro.observe(el);
     return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    fetch("/auth/me", { credentials: "same-origin", headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) setUser(data); })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -6113,6 +6122,105 @@ export default function App() {
     </div>
   );
 
+  function UsersSection() {
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [usersError, setUsersError] = useState("");
+    const [actionLoading, setActionLoading] = useState(null);
+
+    const loadUsers = async () => {
+      setLoading(true);
+      setUsersError("");
+      try {
+        const r = await fetch("/auth/users", { credentials: "same-origin", headers: authHeaders() });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          setUsersError(data.detail || "Failed to load users");
+          setUsers([]);
+        } else {
+          setUsers(data.users || []);
+        }
+      } catch (e) {
+        setUsersError(e?.message || "Network error");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    useEffect(() => { loadUsers(); }, []);
+
+    const approveUser = async (id) => {
+      setActionLoading(id);
+      try {
+        const r = await fetch(`/auth/approve/${id}`, { method: "POST", credentials: "same-origin", headers: authHeaders() });
+        if (r.ok) loadUsers();
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setActionLoading(null);
+      }
+    };
+
+    const deleteUser = async (id) => {
+      if (!window.confirm("Delete this user?")) return;
+      setActionLoading(id);
+      try {
+        const r = await fetch(`/auth/delete/${id}`, { method: "POST", credentials: "same-origin", headers: authHeaders() });
+        if (r.ok) loadUsers();
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setActionLoading(null);
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">Users</h2>
+          <button onClick={loadUsers} className="text-xs text-white/60 hover:text-white">Refresh</button>
+        </div>
+        {usersError && <p className="text-red-300 text-sm">{usersError}</p>}
+        {loading ? (
+          <p className="text-white/50 text-sm">Loading...</p>
+        ) : (
+          <div className="space-y-2">
+            {users.length === 0 && <p className="text-white/50 text-sm">No users found.</p>}
+            {users.map((u) => (
+              <div key={u.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.05] border border-white/10">
+                <div>
+                  <p className="text-sm font-medium text-white">{u.name || u.email}</p>
+                  <p className="text-xs text-white/50">{u.email}</p>
+                  <p className="text-xs text-white/40">{u.is_approved ? "Approved" : "Pending approval"} {u.is_admin ? "· Admin" : ""}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!u.is_approved && (
+                    <button
+                      onClick={() => approveUser(u.id)}
+                      disabled={actionLoading === u.id}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-50"
+                    >
+                      Approve
+                    </button>
+                  )}
+                  {!u.is_admin && (
+                    <button
+                      onClick={() => deleteUser(u.id)}
+                      disabled={actionLoading === u.id}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const sections = {
     demographics: <DemoSection data={fd.demographics} onChange={(d) => upd("demographics", d)} onBulkUpdate={(sec, d) => upd(sec, d)} />,
     ipaq: <IPAQSection data={fd.ipaq} onChange={(d) => upd("ipaq", d)} />,
@@ -6134,6 +6242,7 @@ export default function App() {
     database: <DatabaseSection fd={fd} setFd={setFd} onLoadSession={handleLoadSession} showToast={showToast} isActive={active === "database"} />,
     report: <ReportSection fd={fd} onChange={(d) => upd("demographics", d)} showToast={showToast} />,
     analysis: <AnalysisDashboard />,
+    users: <UsersSection />,
   };
 
   return (
@@ -6210,7 +6319,7 @@ export default function App() {
             </div>
 
               <nav className="flex-1 min-h-0 p-3 space-y-0.5 overflow-y-auto">
-                {NAV_ITEMS.map((item) => {
+                {NAV_ITEMS.filter((item) => !item.adminOnly || user?.is_admin).map((item) => {
                   const on = active === item.id;
                   const Icon = item.icon;
 
