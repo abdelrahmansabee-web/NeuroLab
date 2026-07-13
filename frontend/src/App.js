@@ -10,7 +10,7 @@ import {
   Menu, X, ChevronRight, Play, Square, RotateCcw, Copy, Check,
   Info, Save, BarChart3, Stethoscope, Brain, Image as ImageIcon,
   RefreshCw, FileSpreadsheet, Upload, FileUp,
-  Database, Search, Edit3, Trash2, Plus, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles, Users,
+  Database, Search, Edit3, Trash2, Plus, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles, Users, LogOut,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -27,9 +27,9 @@ import {
 } from "./thesisDocs";
 import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
-import AuthGate, { authHeaders } from "./AuthGate";
+import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.02";
+const APP_VERSION = "28.03";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -197,8 +197,8 @@ const NAV_ITEMS = [
   { id:"wmft", icon:Timer, en:"Wolf Motor Function", tr:"Motor Fonksiyon (WMFT)" },
   { id:"kinematics", icon:Cpu, en:"Kinematics AI Lab", tr:"Kinematik AI Laboratuvarı" },
   { id:"report", icon:FileText, en:"Export Report", tr:"Rapor Dışa Aktarma" },
-  { id:"analysis", icon:BarChart3, en:"Analysis Dashboard", tr:"Analiz Paneli" },
-  { id:"users", icon:Users, en:"Users", tr:"Kullanıcılar", adminOnly:true },
+  { id:"analysis", icon:BarChart3, en:"Analysis Dashboard", tr:"Analiz Paneli", topBarOnly:true },
+  { id:"users", icon:Users, en:"Users", tr:"Kullanıcılar", adminOnly:true, topBarOnly:true },
 ];
 
 const LS_KEY = "stroke_rehab_patients_v6";
@@ -5887,6 +5887,12 @@ export default function App() {
     setTimeout(() => setToast({ visible: false, msg: "", variant: "success" }), 2800);
   }, []);
 
+  const logout = useCallback(() => {
+    clearAuthToken();
+    fetch("/auth/logout", { method: "POST", credentials: "same-origin" })
+      .then(() => window.location.reload());
+  }, []);
+
   const saveSession = useCallback(() => {
     const patients = loadPatients();
     const d = fd.demographics || {};
@@ -6091,6 +6097,32 @@ export default function App() {
         <motion.button
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
+          onClick={() => { setActive("analysis"); if (!isDesktop) setSidebar(false); }}
+          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-amber-300 transition-all flex-shrink-0"
+          style={GLASS_FIELD}
+          title="Analysis Dashboard"
+          aria-label="Analysis Dashboard"
+        >
+          <BarChart3 className="w-4 h-4" />
+        </motion.button>
+
+        {user?.is_admin && (
+          <motion.button
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => { setActive("users"); if (!isDesktop) setSidebar(false); }}
+            className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-violet-300 transition-all flex-shrink-0"
+            style={GLASS_FIELD}
+            title="Users"
+            aria-label="Users"
+          >
+            <Users className="w-4 h-4" />
+          </motion.button>
+        )}
+
+        <motion.button
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
           onClick={() => importRef.current?.click()}
           className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-emerald-300 transition-all flex-shrink-0"
           style={GLASS_FIELD}
@@ -6118,6 +6150,18 @@ export default function App() {
           style={GLASS_FIELD}
         >
           <Database className="w-4 h-4" />
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          onClick={logout}
+          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-rose-300 transition-all flex-shrink-0"
+          style={GLASS_FIELD}
+          title="Sign out"
+          aria-label="Sign out"
+        >
+          <LogOut className="w-4 h-4" />
         </motion.button>
       </div>
     </div>
@@ -6308,7 +6352,7 @@ export default function App() {
             </div>
 
               <nav className="flex-1 min-h-0 p-3 space-y-0.5 overflow-y-auto">
-                {NAV_ITEMS.filter((item) => !item.adminOnly || user?.is_admin).map((item) => {
+                {NAV_ITEMS.filter((item) => !item.topBarOnly && (!item.adminOnly || user?.is_admin)).map((item) => {
                   const on = active === item.id;
                   const Icon = item.icon;
 

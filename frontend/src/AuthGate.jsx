@@ -24,7 +24,6 @@ export function authHeaders() {
 
 export default function AuthGate({ children }) {
   const [state, setState] = useState("loading");
-  const [user, setUser] = useState(null);
   const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -40,7 +39,6 @@ export default function AuthGate({ children }) {
         throw new Error("not authenticated");
       })
       .then((data) => {
-        setUser(data);
         setState("unlocked");
       })
       .catch(() => setState("locked"));
@@ -102,12 +100,6 @@ export default function AuthGate({ children }) {
     }
   };
 
-  const logout = () => {
-    clearAuthToken();
-    fetch("/auth/logout", { method: "POST", credentials: "same-origin" })
-      .then(() => window.location.reload());
-  };
-
   if (state === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#121820] text-white">
@@ -117,22 +109,7 @@ export default function AuthGate({ children }) {
   }
 
   if (state === "unlocked") {
-    return (
-      <>
-        {children}
-        <button
-          type="button"
-          onClick={logout}
-          className={`fixed bottom-4 right-4 z-[70] pl-3 pr-4 py-2 rounded-full text-xs font-medium text-white/90 ${GLASS} hover:bg-white/10 transition flex items-center gap-2`}
-          title={`Signed in as ${user?.email || ""}`}
-        >
-          <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
-            {(user?.name || user?.email || "?").charAt(0).toUpperCase()}
-          </span>
-          Sign out
-        </button>
-      </>
-    );
+    return children;
   }
 
   const title = mode === "login" ? "Sign in" : mode === "register" ? "Create account" : "Reset password";
