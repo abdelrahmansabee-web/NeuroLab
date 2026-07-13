@@ -27,8 +27,9 @@ import {
 } from "./thesisDocs";
 import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
+import AuthGate, { authHeaders } from "./AuthGate";
 
-const APP_VERSION = "7.2.1-kinematics-60hz";
+const APP_VERSION = "27.88";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -234,9 +235,24 @@ function patientsForServerSync(list) {
 async function postPatientsSync(patients) {
   return fetch("/api/patients", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    headers: authHeaders(),
     body: JSON.stringify({ patients: patientsForServerSync(patients) }),
   });
+}
+
+async function backupToDrive(patients) {
+  try {
+    return await fetch("/auth/backup", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: authHeaders(),
+      body: JSON.stringify({ patients: patientsForServerSync(patients) }),
+    });
+  } catch (e) {
+    console.warn("Drive backup failed:", e);
+    return { ok: false };
+  }
 }
 
 const PATIENTS_SYNC_EVENT = "neurolab-patients-synced";
@@ -246,7 +262,12 @@ async function fetchWithTimeout(url, options = {}, ms = SYNC_FETCH_MS) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
   try {
-    return await fetch(url, { ...options, signal: ctrl.signal });
+    return await fetch(url, {
+      credentials: "same-origin",
+      headers: authHeaders(),
+      ...options,
+      signal: ctrl.signal,
+    });
   } finally {
     clearTimeout(timer);
   }
@@ -289,6 +310,14 @@ async function syncPatientsWithServer({ showToast, silent = false } = {}) {
     const merged = mergePatientLists(serverPts, localPts);
     savePatients(merged);
     window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: merged.length } }));
+
+    backupToDrive(merged).then((backupR) => {
+      if (backupR?.ok) {
+        console.log("Drive backup OK");
+      } else {
+        console.warn("Drive backup skipped or failed");
+      }
+    });
 
     if (!silent) {
       if (merged.length === 0) {
@@ -5702,11 +5731,11 @@ export default function App() {
   const [sidebarPush, setSidebarPush] = useState(() => sidebarPushWidth());
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
   const [bgUrl, setBgUrl] = useState(BG);
-  const [topBarHeight, setTopBarHeight] = useState(0);
   const [importPreview, setImportPreview] = useState(null);
-  const topBarWrapperRef = useRef(null);
+  const [topBarHeight, setTopBarHeight] = useState(0);
   const bgRef = useRef(null);
   const importRef = useRef(null);
+  const topBarWrapperRef = useRef(null);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const syncLayout = () => {
@@ -5733,6 +5762,45 @@ export default function App() {
     setTopBarHeight(el.getBoundingClientRect().height);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    // Swipe from left edge to open sidebar; swipe left to close it (mobile only)
+    if (isDesktop) return;
+    let startX = null;
+    let startY = null;
+
+    const onTouchStart = (e) => {
+      if (!e.touches?.length) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    };
+
+    const onTouchEnd = (e) => {
+      if (startX == null || startY == null || !e.changedTouches?.length) return;
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+      const dx = endX - startX;
+      const dy = endY - startY;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+      if (absDx > absDy && absDx > 50) {
+        if (startX < 28 && dx > 0 && !sidebar) {
+          setSidebar(true);
+        } else if (dx < 0 && sidebar) {
+          setSidebar(false);
+        }
+      }
+      startX = null;
+      startY = null;
+    };
+
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [isDesktop, sidebar]);
 
   useEffect(() => {
     const KEY = "nl_app_v";
@@ -6061,6 +6129,7 @@ export default function App() {
   };
 
   return (
+    <AuthGate>
     <div className="min-h-screen flex relative overflow-x-hidden" style={{ fontFamily: "'Inter',system-ui,sans-serif" }}>
       <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
         <div
@@ -6086,11 +6155,23 @@ export default function App() {
         />
       )}
 
+      <div
+        ref={topBarWrapperRef}
+        className="fixed top-0 z-[60] px-3 sm:px-4 pb-0"
+        style={{
+          left: isDesktop && sidebar ? sidebarPush : 0,
+          right: 0,
+          paddingTop: SAFE_TOP,
+        }}
+      >
+        {topBar}
+      </div>
+
           <motion.aside
         initial={false}
         animate={{ x: sidebar ? 0 : (isDesktop ? SIDEBAR_X_HIDDEN : "-100%") }}
         transition={SIDEBAR_SPRING}
-        className={`fixed left-0 top-0 h-full z-50 flex flex-col px-3 pb-3 ${isDesktop ? "" : "w-[60%]"}`}
+        className={`fixed left-0 top-0 h-full ${isDesktop ? "z-50" : "z-[70]"} flex flex-col px-3 pb-3 ${isDesktop ? "" : "w-[60%]"}`}
         style={isDesktop ? { width: sidebarPush, paddingTop: SAFE_TOP } : { width: "60%", paddingTop: SAFE_TOP }}
       >
             <div className={`sidebar-shell flex-1 flex flex-col min-h-0 rounded-2xl overflow-hidden ${SIDEBAR_CLS}`} style={{ boxShadow: FLOAT_M }}>
@@ -6103,6 +6184,16 @@ export default function App() {
                       <p className="text-sm font-extrabold text-white truncate">Stroke Rehab Platform</p>
                     <p className="text-[10px] text-white/30 font-light">{APP_VERSION}</p>
                     </div>
+                    {!isDesktop && (
+                      <button
+                        type="button"
+                        onClick={() => setSidebar(false)}
+                        className="ml-auto p-1 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition"
+                        aria-label="Close menu"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    )}
                   </div>
                 <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl" style={GLASS_FIELD}>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
@@ -6176,18 +6267,6 @@ export default function App() {
           transform: !isDesktop && sidebar ? "translateX(60%)" : "translateX(0)",
         }}
       >
-          <div
-            ref={topBarWrapperRef}
-            className="fixed top-0 z-[60] px-3 sm:px-4 pb-0"
-            style={{
-              left: isDesktop && sidebar ? sidebarPush : 0,
-              right: 0,
-              paddingTop: SAFE_TOP,
-            }}
-          >
-            {topBar}
-          </div
-          >
           <div aria-hidden="true" style={{ height: topBarHeight }} />
         <div className="app-main-inner px-3 sm:px-4 py-4 sm:py-6 max-w-5xl w-full mx-auto">
           <div className="content-shell rounded-2xl">
@@ -6373,5 +6452,6 @@ export default function App() {
 
       <Toast msg={toast.msg} visible={toast.visible} variant={toast.variant} />
     </div>
+    </AuthGate>
   );
 }
