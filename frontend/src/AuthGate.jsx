@@ -179,7 +179,7 @@ export default function AuthGate({ children }) {
           className={`${INPUT} mt-3`}
           placeholder={mode === "reset" ? "New password" : "Password"}
           required
-          minLength={6}
+          minLength={12}
         />
 
         {mode === "reset" && (
@@ -190,8 +190,14 @@ export default function AuthGate({ children }) {
             className={`${INPUT} mt-3`}
             placeholder="Confirm new password"
             required
-            minLength={6}
+            minLength={12}
           />
+        )}
+
+        {(mode === "register" || mode === "reset") && (
+          <p className="text-xs text-white/40 mt-2 text-center">
+            Password must be at least 12 characters with uppercase, lowercase, digit, and special character.
+          </p>
         )}
 
         <button type="submit" className={`${BUTTON} mt-4`}>
