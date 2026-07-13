@@ -7,28 +7,21 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
-from google_auth_oauthlib.flow import Flow
-from google.auth.transport.requests import Request as GoogleRequest
-from google.oauth2.credentials import Credentials
-from google.oauth2 import id_token as google_id_token
-from google.auth.transport import requests as google_requests
+from passlib.context import CryptContext
+from google.oauth2 import service_account as google_service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 JWT_SECRET = os.environ.get("JWT_SECRET") or "dev-secret-change-in-production"
 JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_DAYS = 7
+ACCESS_TOKEN_EXPIRE_DAYS = 30
 
-SCOPES = [
-    "openid",
-    "https://www.googleapis.com/auth/userinfo.email",
-    "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/drive.file",
-]
+GOOGLE_SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+GOOGLE_DRIVE_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def _data_dir():
@@ -57,14 +50,20 @@ PATIENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 def _init_db():
     with sqlite3.connect(USERS_DB) as conn:
+        try:
+            cur = conn.execute("PRAGMA table_info(users)")
+            columns = {row[1] for row in cur.fetchall()}
+            if columns and "password_hash" not in columns:
+                conn.execute("DROP TABLE users")
+        except Exception:
+            pass
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 email TEXT UNIQUE NOT NULL,
                 name TEXT,
-                picture TEXT,
-                google_refresh_token TEXT,
+                password_hash TEXT NOT NULL,
                 created_at TEXT,
                 updated_at TEXT
             )
@@ -76,24 +75,12 @@ def _init_db():
 _init_db()
 
 
-def _flow(request: Request):
-    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-        raise HTTPException(status_code=500, detail="Google OAuth not configured")
-    redirect_uri = str(request.url_for("google_callback"))
-    redirect_uri = redirect_uri.replace("http://", "https://")
-    return Flow.from_client_config(
-        {
-            "web": {
-                "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [redirect_uri],
-            }
-        },
-        scopes=SCOPES,
-        redirect_uri=redirect_uri,
-    )
+def _hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def _verify_password(password: str, hash_value: str) -> bool:
+    return pwd_context.verify(password, hash_value)
 
 
 def _create_token(user_id: int) -> str:
@@ -123,45 +110,32 @@ def _get_user_by_email(email: str):
         return dict(row) if row else None
 
 
-def _upsert_user(email: str, name: str, picture: str, refresh_token: Optional[str]):
+def _create_user(email: str, password: str, name: str) -> int:
     now = datetime.utcnow().isoformat()
-    existing = _get_user_by_email(email)
     with sqlite3.connect(USERS_DB) as conn:
-        if existing:
-            if refresh_token:
-                conn.execute(
-                    "UPDATE users SET name = ?, picture = ?, google_refresh_token = ?, updated_at = ? WHERE id = ?",
-                    (name, picture, refresh_token, now, existing["id"]),
-                )
-            else:
-                conn.execute(
-                    "UPDATE users SET name = ?, picture = ?, updated_at = ? WHERE id = ?",
-                    (name, picture, now, existing["id"]),
-                )
+        try:
+            conn.execute(
+                "INSERT INTO users (email, name, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                (email, name, _hash_password(password), now, now),
+            )
             conn.commit()
-            return existing["id"]
-        conn.execute(
-            "INSERT INTO users (email, name, picture, google_refresh_token, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (email, name, picture, refresh_token, now, now),
-        )
-        conn.commit()
-        return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=400, detail="Email already registered")
 
 
-def _drive_service(user: dict):
-    refresh_token = user.get("google_refresh_token")
-    if not refresh_token or not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+def _drive_service():
+    if not GOOGLE_SERVICE_ACCOUNT_JSON or not GOOGLE_DRIVE_FOLDER_ID:
         return None
-    creds = Credentials(
-        None,
-        refresh_token=refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=GOOGLE_CLIENT_ID,
-        client_secret=GOOGLE_CLIENT_SECRET,
-        scopes=SCOPES,
-    )
-    creds.refresh(GoogleRequest())
-    return build("drive", "v3", credentials=creds, cache_discovery=False)
+    try:
+        info = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
+        creds = google_service_account.Credentials.from_service_account_info(
+            info, scopes=["https://www.googleapis.com/auth/drive.file"]
+        )
+        return build("drive", "v3", credentials=creds, cache_discovery=False)
+    except Exception as exc:
+        print("Drive service init failed:", exc, flush=True)
+        return None
 
 
 def get_current_user(request: Request):
@@ -184,57 +158,36 @@ def get_current_user(request: Request):
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.get("/google")
-async def google_login(request: Request, email: str = None):
-    kwargs = {
-        "access_type": "offline",
-        "include_granted_scopes": "true",
-        "prompt": "select_account consent",
-    }
-    if email:
-        kwargs["login_hint"] = email
-    authorization_url, state = _flow(request).authorization_url(**kwargs)
-    response = RedirectResponse(authorization_url)
-    response.set_cookie("neurolab_oauth_state", state, httponly=True, max_age=600)
+@router.post("/register")
+async def register(body: dict):
+    email = body.get("email", "").strip().lower()
+    password = body.get("password", "")
+    name = body.get("name", "").strip()
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Email and password required")
+    user_id = _create_user(email, password, name)
+    token = _create_token(user_id)
+    response = JSONResponse({"ok": True, "user": {"id": user_id, "email": email, "name": name}})
+    response.set_cookie("neurolab_token", token, httponly=True, max_age=60 * 60 * 24 * ACCESS_TOKEN_EXPIRE_DAYS)
     return response
 
 
-@router.get("/google/callback", name="google_callback")
-async def google_callback(request: Request, code: str, state: str = None):
-    saved_state = request.cookies.get("neurolab_oauth_state")
-    if state and saved_state and state != saved_state:
-        raise HTTPException(status_code=400, detail="Invalid state")
-    flow = _flow(request)
-    flow.fetch_token(code=code)
-    credentials = flow.credentials
-    try:
-        idinfo = google_id_token.verify_oauth2_token(
-            credentials.id_token, google_requests.Request(), GOOGLE_CLIENT_ID
-        )
-        email = idinfo.get("email")
-        name = idinfo.get("name", "")
-        picture = idinfo.get("picture", "")
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Failed to verify Google token: {exc}")
-    if not email:
-        raise HTTPException(status_code=400, detail="Email not provided")
-    refresh_token = credentials.refresh_token
-    user_id = _upsert_user(email, name, picture, refresh_token)
-    token = _create_token(user_id)
-    response = RedirectResponse("/")
-    response.set_cookie("neurolab_oauth_state", "", max_age=0)
-    response.set_cookie("neurolab_token", token, httponly=True, max_age=60 * 60 * 24 * 7)
+@router.post("/login")
+async def login(body: dict):
+    email = body.get("email", "").strip().lower()
+    password = body.get("password", "")
+    user = _get_user_by_email(email)
+    if not user or not _verify_password(password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = _create_token(user["id"])
+    response = JSONResponse({"ok": True, "user": {"id": user["id"], "email": user["email"], "name": user["name"]}})
+    response.set_cookie("neurolab_token", token, httponly=True, max_age=60 * 60 * 24 * ACCESS_TOKEN_EXPIRE_DAYS)
     return response
 
 
 @router.get("/me")
 async def auth_me(user: dict = Depends(get_current_user)):
-    return {
-        "id": user["id"],
-        "email": user["email"],
-        "name": user["name"],
-        "picture": user["picture"],
-    }
+    return {"id": user["id"], "email": user["email"], "name": user["name"]}
 
 
 @router.post("/logout")
@@ -248,22 +201,9 @@ async def auth_logout():
 async def backup_drive(request: Request, user: dict = Depends(get_current_user)):
     body = await request.json()
     patients = body.get("patients", [])
-    service = _drive_service(user)
+    service = _drive_service()
     if not service:
-        raise HTTPException(status_code=400, detail="Google Drive not connected")
-
-    folder_name = "NeuroLab_Backups"
-    q = f"mimeType='application/vnd.google-apps.folder' and name='{folder_name}' and trashed=false"
-    res = service.files().list(q=q, spaces="drive", fields="files(id, name)").execute()
-    if res.get("files"):
-        folder_id = res["files"][0]["id"]
-    else:
-        folder = service.files().create(
-            body={"name": folder_name, "mimeType": "application/vnd.google-apps.folder"},
-            fields="id",
-        ).execute()
-        folder_id = folder["id"]
-
+        raise HTTPException(status_code=500, detail="Google Drive not configured")
     file_name = f"neurolab_backup_{datetime.utcnow().strftime('%Y-%m-%d_%H-%M-%S')}.json"
     media = MediaIoBaseUpload(
         BytesIO(json.dumps(patients, ensure_ascii=False).encode("utf-8")),
@@ -271,27 +211,19 @@ async def backup_drive(request: Request, user: dict = Depends(get_current_user))
         resumable=True,
     )
     service.files().create(
-        body={"name": file_name, "parents": [folder_id]},
+        body={"name": file_name, "parents": [GOOGLE_DRIVE_FOLDER_ID]},
         media_body=media,
         fields="id",
     ).execute()
     return {"ok": True, "fileName": file_name}
 
 
-@router.post("/restore")
+@router.get("/restore")
 async def restore_drive(user: dict = Depends(get_current_user)):
-    service = _drive_service(user)
+    service = _drive_service()
     if not service:
-        raise HTTPException(status_code=400, detail="Google Drive not connected")
-
-    folder_name = "NeuroLab_Backups"
-    q = f"mimeType='application/vnd.google-apps.folder' and name='{folder_name}' and trashed=false"
-    res = service.files().list(q=q, spaces="drive", fields="files(id, name)").execute()
-    folders = res.get("files", [])
-    if not folders:
-        return {"patients": []}
-    folder_id = folders[0]["id"]
-    q = f"'{folder_id}' in parents and mimeType='application/json' and trashed=false"
+        raise HTTPException(status_code=500, detail="Google Drive not configured")
+    q = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and mimeType='application/json' and trashed=false"
     res = service.files().list(
         q=q, spaces="drive", orderBy="createdTime desc", fields="files(id, name, createdTime)"
     ).execute()
