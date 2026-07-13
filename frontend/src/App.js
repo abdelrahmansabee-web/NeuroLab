@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders } from "./AuthGate";
 
-const APP_VERSION = "27.99";
+const APP_VERSION = "28.00";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 const TOPBAR_CONTENT_H = "3.5rem"; // 56px
 const TOPBAR_OFFSET = `calc(env(safe-area-inset-top, 0px) + 8px + ${TOPBAR_CONTENT_H})`;
@@ -6346,6 +6346,17 @@ export default function App() {
             </div>
           </motion.aside>
 
+      <div
+        className="fixed top-0 z-[60] px-3 sm:px-4 pb-0"
+        style={{
+          left: isDesktop && sidebar ? sidebarPush : 0,
+          right: 0,
+          paddingTop: SAFE_TOP,
+        }}
+      >
+        {topBar}
+      </div>
+
       <main
         className="flex-1 relative z-30 transition-[margin-left,transform] duration-500 ease-in-out"
         style={{
@@ -6354,16 +6365,6 @@ export default function App() {
           paddingTop: TOPBAR_OFFSET,
         }}
       >
-        <div
-          className="fixed top-0 z-[60] px-3 sm:px-4 pb-0"
-          style={{
-            left: isDesktop && sidebar ? sidebarPush : 0,
-            right: 0,
-            paddingTop: SAFE_TOP,
-          }}
-        >
-          {topBar}
-        </div>
         <div className="app-main-inner px-3 sm:px-4 pt-2 pb-4 sm:pt-3 sm:pb-6 max-w-5xl w-full mx-auto">
           <div className="content-shell rounded-2xl">
             <div className="content-shell-inner p-4 sm:p-6">
