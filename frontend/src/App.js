@@ -4,7 +4,7 @@
 
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import ReactDOM from "react-dom";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   User, Activity, Sliders, TrendingUp, Heart, Timer, Cpu, FileText,
   Menu, X, ChevronRight, Play, Square, RotateCcw, Copy, Check,
@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.06";
+const APP_VERSION = "28.07";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -63,7 +63,7 @@ function isStandalonePWA() {
 const SIDEBAR_W = 255;
 const SIDEBAR_X_HIDDEN = -280;
 const MOBILE_SIDEBAR_W = "75%";
-const SIDEBAR_SPRING = { type: "spring", stiffness: 140, damping: 24, mass: 0.9 };
+const SIDEBAR_SPRING = { type: "spring", stiffness: 180, damping: 26, mass: 1.1 };
 
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
@@ -5742,10 +5742,6 @@ export default function App() {
   const topBarWrapperRef = useRef(null);
   const mobileMenuRef = useRef(null);
 
-  const reducedMotion = useReducedMotion();
-  const sidebarTransition = reducedMotion ? { duration: 0 } : SIDEBAR_SPRING;
-  const sectionTransition = reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 220, damping: 28 };
-
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const syncLayout = () => {
@@ -6324,8 +6320,8 @@ export default function App() {
       <motion.aside
         initial={false}
         animate={{ x: sidebar ? 0 : (isDesktop ? SIDEBAR_X_HIDDEN : "-100%") }}
-        transition={sidebarTransition}
-        className={`fixed left-0 top-0 h-full ${isDesktop ? "z-50" : "z-[70]"} flex flex-col px-3 pb-3 will-change-transform ${isDesktop ? "" : ""}`}
+        transition={SIDEBAR_SPRING}
+        className={`fixed left-0 top-0 h-full ${isDesktop ? "z-50" : "z-[70]"} flex flex-col px-3 pb-3 ${isDesktop ? "" : ""}`}
         style={isDesktop ? { width: sidebarPush, paddingTop: SAFE_TOP } : { width: MOBILE_SIDEBAR_W, paddingTop: SAFE_TOP }}
       >
             <div className={`sidebar-shell flex-1 flex flex-col min-h-0 rounded-2xl overflow-hidden ${SIDEBAR_CLS}`} style={{ boxShadow: FLOAT_M }}>
@@ -6393,14 +6389,11 @@ export default function App() {
             </div>
           </motion.aside>
 
-      <motion.div
+      <div
         ref={topBarWrapperRef}
-        initial={false}
-        animate={{ x: isDesktop && sidebar ? `${sidebarPush}px` : "0px" }}
-        transition={sidebarTransition}
-        className="fixed top-0 z-[60] px-3 sm:px-4 pb-0 will-change-transform"
+        className="fixed top-0 z-[60] px-3 sm:px-4 pb-0"
         style={{
-          left: 0,
+          left: isDesktop && sidebar ? sidebarPush : 0,
           right: 0,
           paddingTop: SAFE_TOP,
         }}
@@ -6409,33 +6402,34 @@ export default function App() {
         {!isDesktop && mobileTopMenuOpen && (
           <div
             ref={mobileMenuRef}
-            className={`absolute right-0 top-full mt-2 z-[70] min-w-[220px] p-2 app-topbar-glass glass-float rounded-xl ${GLASS_CLS}`}
+            className="absolute right-0 top-full mt-2 z-[70] min-w-[220px] p-2 rounded-xl glass-float bg-white/15 backdrop-blur-3xl border border-white/30 shadow-2xl"
             style={{ boxShadow: FLOAT_M }}
           >
             <TopBarActions inMenu={true} />
           </div>
         )}
-      </motion.div>
+      </div>
 
-      <motion.main
-        initial={false}
-        animate={{ x: isDesktop ? (sidebar ? `${sidebarPush}px` : "0px") : (sidebar ? MOBILE_SIDEBAR_W : "0px") }}
-        transition={sidebarTransition}
-        className="flex-1 relative z-30 will-change-transform"
+      <main
+        className="flex-1 relative z-30 transition-[margin-left,transform] duration-500 ease-in-out"
+        style={{
+          marginLeft: isDesktop && sidebar ? sidebarPush : 0,
+          transform: !isDesktop && sidebar ? `translateX(${MOBILE_SIDEBAR_W})` : "translateX(0)",
+        }}
       >
         <div aria-hidden="true" style={{ height: topBarHeight || 96 }} />
-        <div className="app-main-inner px-3 sm:px-4 pt-6 pb-4 sm:pt-6 sm:pb-6 max-w-5xl w-full mx-auto">
+        <div className="app-main-inner px-3 sm:px-4 pt-8 pb-4 sm:pt-6 sm:pb-6 max-w-5xl w-full mx-auto">
           <div className="content-shell rounded-2xl">
             <div className="content-shell-inner p-4 sm:p-6">
               <div className="section-transition-host min-h-[420px]">
-                <AnimatePresence mode="wait" initial={false}>
+                <AnimatePresence mode="sync" initial={false}>
             <motion.div
               key={active}
-                    className="section-pane w-full will-change-transform"
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={sectionTransition}
+                    className="section-pane w-full"
+              initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
+              transition={{ duration: 0.3 }}
             >
               {sections[active]}
             </motion.div>
@@ -6444,29 +6438,11 @@ export default function App() {
             </div>
           </div>
         </div>
-        </motion.main>
+      </main>
 
       {/* Global Styles */}
       <style>{`
         * { box-sizing: border-box; }
-
-        /* Promote animated layers for smoother GPU compositing */
-        .will-change-transform {
-          will-change: transform, opacity;
-          backface-visibility: hidden;
-          -webkit-backface-visibility: hidden;
-        }
-
-        /* Respect system reduced-motion preference */
-        @media (prefers-reduced-motion: reduce) {
-          *, *::before, *::after {
-            animation-duration: 0.01ms !important;
-            animation-iteration-count: 1 !important;
-            transition-duration: 0.01ms !important;
-            scroll-behavior: auto !important;
-          }
-        }
-
         h1, h2, h3, p, span, label, button {
           text-shadow: 0 1px 3px rgba(0,0,0,0.25);
         }
