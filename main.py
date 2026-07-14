@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 print("STARTUP: fastapi imports ok", flush=True)
 
 try:
+    import auth
     from auth import router as auth_router, get_current_user, PATIENTS_DIR, JWT_SECRET
     from security import encrypt_json_to_str, decrypt_json_from_str
     print("STARTUP: auth module loaded", flush=True)
@@ -42,7 +43,7 @@ _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_r
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 
-DEPLOY_VERSION = "28.13"
+DEPLOY_VERSION = "28.14"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -250,7 +251,7 @@ async def _startup_ensure_models():
     ensure_pose_model()
     if auth_router is not None:
         try:
-            await asyncio.wait_for(asyncio.to_thread(auth.init_auth), timeout=20.0)
+            await asyncio.wait_for(asyncio.to_thread(auth.init_auth), timeout=60.0)
             print("STARTUP: auth init done", flush=True)
         except asyncio.TimeoutError:
             print("STARTUP: auth init timed out (Drive/network may be slow); continuing", flush=True)
