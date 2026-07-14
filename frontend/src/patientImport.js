@@ -3,6 +3,7 @@
  */
 
 import * as pdfjsLib from "pdfjs-dist/build/pdf";
+import { createWorker } from "tesseract.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ""}/pdf.worker.min.js`;
 
@@ -97,7 +98,7 @@ export function parsePatientJson(text) {
   return normalizeImportedPatient(raw);
 }
 
-/** Extract all page text from a PDF file. */
+/** Extract all page text from a PDF file. Falls back to OCR for scanned/image PDFs. */
 export async function extractPdfText(file) {
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
@@ -107,7 +108,38 @@ export async function extractPdfText(file) {
     const content = await page.getTextContent();
     parts.push(content.items.map((it) => it.str).join(" "));
   }
-  return parts.join("\n");
+  const text = parts.join("\n");
+  // If the PDF has very little embedded text, it may be scanned; try OCR on the first pages.
+  if (text.trim().length < 50 && pdf.numPages > 0) {
+    try {
+      const ocrText = await ocrPdfPages(pdf);
+      return (text + "\n" + ocrText).trim();
+    } catch (ocrErr) {
+      console.warn("OCR failed:", ocrErr);
+    }
+  }
+  return text;
+}
+
+async function ocrPdfPages(pdf) {
+  const worker = await createWorker("eng", 1, {
+    logger: (m) => console.log("[tesseract]", m.status, m.progress),
+  });
+  const texts = [];
+  for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
+    const page = await pdf.getPage(i);
+    const scale = 2;
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+    const ctx = canvas.getContext("2d");
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const { data } = await worker.recognize(canvas);
+    texts.push(data.text || "");
+  }
+  await worker.terminate();
+  return texts.join("\n");
 }
 
 function findKviqIndex(label) {
