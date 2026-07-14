@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.09";
+const APP_VERSION = "28.10";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -6318,12 +6318,15 @@ export default function App() {
       )}
 
       <aside
-        className={`fixed left-0 top-0 h-full ${isDesktop ? "z-50" : "z-[100]"} flex flex-col px-3 pb-3 ${isDesktop ? "" : ""}`}
+        className={`fixed left-0 top-0 h-full ${isDesktop ? "z-50" : "z-[100]"} flex flex-col px-3 pb-3`}
         style={{
           width: isDesktop ? sidebarPush : MOBILE_SIDEBAR_W,
           paddingTop: SAFE_TOP,
-          transform: sidebar ? "translateX(0)" : (isDesktop ? `translateX(-${sidebarPush}px)` : "translateX(-100%)"),
-          transition: "transform 0.3s ease-in-out",
+          transform: sidebar ? "translate3d(0,0,0)" : (isDesktop ? `translate3d(-${sidebarPush}px,0,0)` : "translate3d(-100%,0,0)"),
+          transition: "transform 0.3s ease-out",
+          willChange: "transform",
+          backfaceVisibility: "hidden",
+          WebkitBackfaceVisibility: "hidden",
         }}
       >
             <div className={`sidebar-shell flex-1 flex flex-col min-h-0 rounded-2xl overflow-hidden ${SIDEBAR_CLS}`} style={{ boxShadow: FLOAT_M }}>
@@ -6404,8 +6407,13 @@ export default function App() {
         {!isDesktop && mobileTopMenuOpen && (
           <div
             ref={mobileMenuRef}
-            className="absolute right-0 top-full mt-2 z-[70] min-w-[220px] max-h-[60vh] overflow-y-auto p-2 pb-4 mr-2 rounded-xl glass-float bg-white/15 backdrop-blur-3xl border border-white/30 shadow-2xl"
-            style={{ boxShadow: FLOAT_M }}
+            className="fixed z-[70] min-w-[220px] max-w-[calc(100vw-24px)] overflow-y-auto p-2 pb-4 rounded-xl glass-float bg-white/15 backdrop-blur-3xl border border-white/30 shadow-2xl"
+            style={{
+              top: (topBarHeight || 96) + 8,
+              right: 12,
+              maxHeight: `calc(100vh - ${(topBarHeight || 96) + 24}px)`,
+              boxShadow: FLOAT_M,
+            }}
           >
             <TopBarActions inMenu={true} />
           </div>
@@ -6413,10 +6421,9 @@ export default function App() {
       </div>
 
       <main
-        className="flex-1 relative z-30 transition-[margin-left,transform] duration-500 ease-in-out"
+        className="flex-1 relative z-30 transition-[margin-left] duration-300 ease-in-out"
         style={{
           marginLeft: isDesktop && sidebar ? sidebarPush : 0,
-          transform: !isDesktop && sidebar ? `translateX(${MOBILE_SIDEBAR_W})` : "translateX(0)",
         }}
       >
         <div aria-hidden="true" style={{ height: topBarHeight || 96 }} />
