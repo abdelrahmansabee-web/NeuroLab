@@ -43,7 +43,7 @@ _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_r
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 
-DEPLOY_VERSION = "28.23"
+DEPLOY_VERSION = "28.24"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -1270,6 +1270,34 @@ async def parse_pdf(file: UploadFile = File(...)):
             "patient": patient,
             "extracted_text": text,
         }
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e), "traceback": traceback.format_exc()},
+        )
+
+
+@app.post("/api/ocr-pdf")
+async def ocr_pdf(file: UploadFile = File(...)):
+    """Server-side OCR fallback for scanned/image PDFs.
+
+    Uses Tesseract + pdf2image to extract text from the first pages.
+    Supports English, Turkish, and Arabic text.
+    """
+    try:
+        from pdf2image import convert_from_bytes
+        import pytesseract
+
+        contents = await file.read()
+        images = convert_from_bytes(contents, first_page=1, last_page=10, dpi=300)
+        texts = []
+        for img in images:
+            text = pytesseract.image_to_string(img, lang="eng+tur+ara")
+            if text:
+                texts.append(text)
+        full_text = "\n".join(texts)
+        return {"success": True, "text": full_text}
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(
