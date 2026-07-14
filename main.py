@@ -43,7 +43,7 @@ _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_r
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 
-DEPLOY_VERSION = "28.17"
+DEPLOY_VERSION = "28.18"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -248,16 +248,37 @@ if auth_router is not None:
 @app.on_event("startup")
 async def _startup_ensure_models():
     print("STARTUP: running startup event", flush=True)
-    ensure_pose_model()
+    # Fast DB init inline so login/register work immediately.
     if auth_router is not None:
         try:
-            await asyncio.wait_for(asyncio.to_thread(auth.init_auth), timeout=60.0)
-            print("STARTUP: auth init done", flush=True)
-        except asyncio.TimeoutError:
-            print("STARTUP: auth init timed out (Drive/network may be slow); continuing", flush=True)
+            await asyncio.to_thread(auth._init_db)
+            print("STARTUP: auth DB initialized", flush=True)
         except Exception as e:
-            print("STARTUP: auth init failed:", e, flush=True)
-    print("STARTUP: startup event done", flush=True)
+            print("STARTUP: auth DB init failed:", e, flush=True)
+
+    # Heavy/optional work in background so the app responds to HF health checks instantly.
+    async def _background_init():
+        try:
+            await asyncio.wait_for(asyncio.to_thread(ensure_pose_model), timeout=30.0)
+            print("STARTUP: pose model ready", flush=True)
+        except asyncio.TimeoutError:
+            print("STARTUP: pose model init timed out; continuing", flush=True)
+        except Exception as e:
+            print("STARTUP: pose model init failed:", e, flush=True)
+
+        if auth_router is not None:
+            try:
+                await asyncio.wait_for(asyncio.to_thread(auth.init_auth), timeout=60.0)
+                print("STARTUP: auth init done", flush=True)
+            except asyncio.TimeoutError:
+                print("STARTUP: auth init timed out; continuing", flush=True)
+            except Exception as e:
+                print("STARTUP: auth init failed:", e, flush=True)
+
+        print("STARTUP: background init done", flush=True)
+
+    asyncio.create_task(_background_init())
+    print("STARTUP: startup event done (app ready for health checks)", flush=True)
 
 
 # — Endpoints —
