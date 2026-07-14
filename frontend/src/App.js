@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.14";
+const APP_VERSION = "28.15";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -6447,7 +6447,7 @@ export default function App() {
       </div>
 
       <main
-        className="flex-1 relative z-30"
+        className="flex-none relative z-30"
         style={{
           width: isDesktop ? (sidebar ? `calc(100% - ${sidebarPush}px)` : "100%") : "100%",
           minWidth: 0,
