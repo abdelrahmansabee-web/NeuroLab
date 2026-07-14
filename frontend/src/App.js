@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.11";
+const APP_VERSION = "28.12";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -6419,9 +6419,14 @@ export default function App() {
         ref={topBarWrapperRef}
         className={`fixed top-0 z-[60] px-3 sm:px-4 pb-0 ${!isDesktop && sidebar ? "hidden" : ""}`}
         style={{
-          left: isDesktop && sidebar ? sidebarPush : 0,
-          right: 0,
+          left: 0,
+          width: isDesktop ? (sidebar ? `calc(100% - ${sidebarPush}px)` : "100%") : "100%",
           paddingTop: SAFE_TOP,
+          transform: isDesktop && sidebar ? `translate3d(${sidebarPush}px,0,0)` : "translate3d(0,0,0)",
+          transition: "transform 0.3s ease-out",
+          willChange: "transform",
+          backfaceVisibility: "hidden",
+          WebkitBackfaceVisibility: "hidden",
         }}
       >
         {topBar}
@@ -6442,9 +6447,15 @@ export default function App() {
       </div>
 
       <main
-        className="flex-1 relative z-30 transition-[margin-left] duration-300 ease-in-out"
+        className="flex-1 relative z-30"
         style={{
-          marginLeft: isDesktop && sidebar ? sidebarPush : 0,
+          width: isDesktop ? (sidebar ? `calc(100% - ${sidebarPush}px)` : "100%") : "100%",
+          minWidth: 0,
+          transform: isDesktop && sidebar ? `translate3d(${sidebarPush}px,0,0)` : "translate3d(0,0,0)",
+          transition: "transform 0.3s ease-out",
+          willChange: "transform",
+          backfaceVisibility: "hidden",
+          WebkitBackfaceVisibility: "hidden",
         }}
       >
         <div aria-hidden="true" style={{ height: topBarHeight || 96 }} />
