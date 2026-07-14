@@ -125,19 +125,29 @@ async function ocrPdfPages(pdf) {
   const worker = await createWorker("eng", 1, {
     logger: (m) => console.log("[tesseract]", m.status, m.progress),
     workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/worker.min.js",
-    langPath: "https://tessdata.projectnaptha.com/4.0.0",
+    langPath: "https://tessdata.projectnaptha.com/4.0.0_best",
     corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@7/tesseract-core.wasm.js",
   });
   const texts = [];
-  for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
+  const maxPages = Math.min(pdf.numPages, 10);
+  for (let i = 1; i <= maxPages; i++) {
     const page = await pdf.getPage(i);
-    const scale = 2;
+    const scale = 3;
     const viewport = page.getViewport({ scale });
     const canvas = document.createElement("canvas");
     canvas.width = Math.floor(viewport.width);
     canvas.height = Math.floor(viewport.height);
     const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport }).promise;
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = imageData.data;
+    for (let j = 0; j < d.length; j += 4) {
+      const gray = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
+      d[j] = d[j + 1] = d[j + 2] = gray;
+    }
+    ctx.putImageData(imageData, 0, 0);
     const { data } = await worker.recognize(canvas);
     texts.push(data.text || "");
   }
