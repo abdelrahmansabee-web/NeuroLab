@@ -2,7 +2,7 @@
 // Stroke Rehabilitation Platform — Frontend v6.5
 // ============================================================
 
-import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from "react";
 import ReactDOM from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -29,14 +29,14 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.10";
+const APP_VERSION = "28.11";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
 
 /* ── Glassmorphism (all Glass containers) ── */
 const GLASS_CLS = "bg-white/[0.07] backdrop-blur-3xl backdrop-saturate-150 border border-white/[0.32]";
-const SIDEBAR_CLS = "bg-white/[0.07] backdrop-blur-3xl backdrop-saturate-150 border border-white/[0.32]";
+const SIDEBAR_CLS = "bg-white/[0.07] backdrop-blur-2xl backdrop-saturate-150 border border-white/[0.32]";
 const INPUT_CLS = "bg-white/[0.09] border border-white/[0.26]";
 
 const GSELECT_MENU_BOX = {
@@ -5722,6 +5722,25 @@ const AnalysisDashboard = () => {
 
 const getTodayDate = () => new Date().toISOString().split("T")[0];
 
+const SectionTransition = React.memo(function SectionTransition({ active, activeSection }) {
+  return (
+    <div className="section-transition-host min-h-[420px]">
+      <AnimatePresence mode="sync" initial={false}>
+        <motion.div
+          key={active}
+          className="section-pane w-full"
+          initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
+          transition={{ duration: 0.3 }}
+        >
+          {activeSection}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+});
+
 export default function App() {
   const [active, setActive] = useState("demographics");
   const [sidebar, setSidebar] = useState(() =>
@@ -6266,7 +6285,7 @@ export default function App() {
     );
   }
 
-  const sections = {
+  const sections = useMemo(() => ({
     demographics: <DemoSection data={fd.demographics} onChange={(d) => upd("demographics", d)} onBulkUpdate={(sec, d) => upd(sec, d)} />,
     ipaq: <IPAQSection data={fd.ipaq} onChange={(d) => upd("ipaq", d)} />,
     vas: <VASSection data={fd.vas} onChange={(d) => upd("vas", d)} />,
@@ -6288,7 +6307,9 @@ export default function App() {
     report: <ReportSection fd={fd} onChange={(d) => upd("demographics", d)} showToast={showToast} />,
     analysis: <AnalysisDashboard />,
     users: <UsersSection />,
-  };
+  }), [fd, setFd, showToast, handleLoadSession, active, upd]);
+
+  const activeSection = useMemo(() => sections[active], [active, sections]);
 
   return (
     <AuthGate>
@@ -6430,20 +6451,7 @@ export default function App() {
         <div className="app-main-inner px-3 sm:px-4 pt-16 pb-4 sm:pt-6 sm:pb-6 max-w-5xl w-full mx-auto">
           <div className="content-shell rounded-2xl">
             <div className="content-shell-inner p-4 sm:p-6">
-              <div className="section-transition-host min-h-[420px]">
-                <AnimatePresence mode="sync" initial={false}>
-            <motion.div
-              key={active}
-                    className="section-pane w-full"
-              initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
-              transition={{ duration: 0.3 }}
-            >
-              {sections[active]}
-            </motion.div>
-          </AnimatePresence>
-        </div>
+              <SectionTransition active={active} activeSection={activeSection} />
             </div>
           </div>
         </div>
