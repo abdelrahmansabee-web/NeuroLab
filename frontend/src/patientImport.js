@@ -387,6 +387,13 @@ function hasServerUsableResult(data) {
   );
 }
 
+function hasAnyField(patient) {
+  const d = patient.demographics || {};
+  return ["participantId", "name", "age", "sex", "strokeType", "side", "mas", "mrc"].some(
+    (k) => d[k] != null && d[k] !== ""
+  );
+}
+
 /** Import from File — JSON or PDF. Returns { patient, extractedText }. */
 export async function importPatientFile(file) {
   const name = (file.name || "").toLowerCase();
@@ -408,22 +415,27 @@ export async function importPatientFile(file) {
       console.warn("Server-side PDF parse failed, falling back to browser:", err);
     }
     const text = await extractPdfText(file);
-    if (text.trim().length >= 50) {
-      return { patient: parseClinicalReportPdf(text), extractedText: text };
+    console.log("[import] browser OCR text length:", text.length);
+    console.log("[import] browser OCR text preview:", text.slice(0, 800));
+    const patient = parseClinicalReportPdf(text);
+    if (text.trim().length >= 50 && hasAnyField(patient)) {
+      return { patient, extractedText: text };
     }
-    console.warn("Browser OCR returned no usable text; using server OCR fallback.");
+    console.warn("Browser OCR returned text but no recognizable fields; using server OCR fallback.");
     try {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/ocr-pdf", { method: "POST", body: fd });
       const data = await res.json();
       if (data.success && data.text) {
+        console.log("[import] server OCR text length:", data.text.length);
+        console.log("[import] server OCR text preview:", data.text.slice(0, 800));
         return { patient: parseClinicalReportPdf(data.text), extractedText: data.text };
       }
     } catch (err) {
       console.warn("Server OCR fallback failed:", err);
     }
-    return { patient: parseClinicalReportPdf(text), extractedText: text };
+    return { patient, extractedText: text };
   }
   throw new Error("Supported formats: .json (NeuroLab export) or .pdf (Clinical Report)");
 }
