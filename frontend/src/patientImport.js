@@ -124,6 +124,9 @@ export async function extractPdfText(file) {
 async function ocrPdfPages(pdf) {
   const worker = await createWorker("eng", 1, {
     logger: (m) => console.log("[tesseract]", m.status, m.progress),
+    workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/worker.min.js",
+    langPath: "https://tessdata.projectnaptha.com/4.0.0",
+    corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@7/tesseract-core.wasm.js",
   });
   const texts = [];
   for (let i = 1; i <= Math.min(pdf.numPages, 3); i++) {
@@ -364,6 +367,16 @@ export function parseClinicalReportPdf(text) {
   return normalizeImportedPatient(patient);
 }
 
+function hasServerUsableResult(data) {
+  if (!data || !data.success || !data.patient) return false;
+  const text = (data.extracted_text || "").trim();
+  if (text.length >= 50) return true;
+  const d = data.patient.demographics || {};
+  return ["participantId", "name", "age", "sex", "strokeType", "side", "mas", "mrc"].some(
+    (k) => d[k] != null && d[k] !== ""
+  );
+}
+
 /** Import from File — JSON or PDF. Returns { patient, extractedText }. */
 export async function importPatientFile(file) {
   const name = (file.name || "").toLowerCase();
@@ -377,9 +390,10 @@ export async function importPatientFile(file) {
       fd.append("file", file);
       const res = await fetch("/api/parse-pdf", { method: "POST", body: fd });
       const data = await res.json();
-      if (data.success && data.patient) {
+      if (hasServerUsableResult(data)) {
         return { patient: normalizeImportedPatient(data.patient), extractedText: data.extracted_text || "" };
       }
+      console.warn("Server PDF parse returned no usable text/fields; using browser OCR fallback.");
     } catch (err) {
       console.warn("Server-side PDF parse failed, falling back to browser:", err);
     }
