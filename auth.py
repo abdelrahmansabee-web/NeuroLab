@@ -32,6 +32,8 @@ login_rate_limiter = RateLimiter(limit=5, window=60 * 15)
 register_rate_limiter = RateLimiter(limit=5, window=60 * 60)
 password_reset_rate_limiter = RateLimiter(limit=3, window=60 * 15)
 
+_drive_service_instance = None
+
 
 def _data_dir():
     env = os.environ.get("NEUROLAB_DATA_DIR")
@@ -193,6 +195,9 @@ def _update_password(email: str, password: str) -> bool:
 
 
 def _drive_service():
+    global _drive_service_instance
+    if _drive_service_instance is not None:
+        return _drive_service_instance
     if not GOOGLE_SERVICE_ACCOUNT_JSON or not GOOGLE_DRIVE_FOLDER_ID:
         return None
     try:
@@ -200,7 +205,8 @@ def _drive_service():
         creds = google_service_account.Credentials.from_service_account_info(
             info, scopes=["https://www.googleapis.com/auth/drive.file"]
         )
-        return build("drive", "v3", credentials=creds, cache_discovery=False)
+        _drive_service_instance = build("drive", "v3", credentials=creds, cache_discovery=False)
+        return _drive_service_instance
     except Exception as exc:
         print("Drive service init failed:", exc, flush=True)
         return None
@@ -256,11 +262,6 @@ def _restore_users_db():
         print("Users DB restore failed:", exc, flush=True)
 
 
-# Initialize database after all helpers are defined.
-_restore_users_db()
-_init_db()
-
-
 def _ensure_admin():
     try:
         with sqlite3.connect(USERS_DB) as conn:
@@ -273,9 +274,6 @@ def _ensure_admin():
                     print("Promoted first user to admin", flush=True)
     except Exception as exc:
         print("Ensure admin failed:", exc, flush=True)
-
-
-_ensure_admin()
 
 
 def _seed_admin():
@@ -301,15 +299,21 @@ def _seed_admin():
         print("Seed admin failed:", exc, flush=True)
 
 
-_seed_admin()
+# Initialize database after all helpers are defined.
+def init_auth():
+    _restore_users_db()
+    _init_db()
+    _ensure_admin()
+    _seed_admin()
+    try:
+        with sqlite3.connect(USERS_DB) as conn:
+            user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            print(f"STARTUP: user_count={user_count}", flush=True)
+    except Exception as exc:
+        print(f"STARTUP: user_count unknown: {exc}", flush=True)
 
 
-try:
-    with sqlite3.connect(USERS_DB) as conn:
-        user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        print(f"STARTUP: user_count={user_count}", flush=True)
-except Exception as exc:
-    print(f"STARTUP: user_count unknown: {exc}", flush=True)
+# Lazy initialization: main.py calls init_auth() in startup with a timeout.
 
 
 def get_current_user(request: Request):

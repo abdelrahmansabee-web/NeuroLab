@@ -42,7 +42,7 @@ _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_r
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 
-DEPLOY_VERSION = "27.87"
+DEPLOY_VERSION = "28.13"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -248,6 +248,14 @@ if auth_router is not None:
 async def _startup_ensure_models():
     print("STARTUP: running startup event", flush=True)
     ensure_pose_model()
+    if auth_router is not None:
+        try:
+            await asyncio.wait_for(asyncio.to_thread(auth.init_auth), timeout=20.0)
+            print("STARTUP: auth init done", flush=True)
+        except asyncio.TimeoutError:
+            print("STARTUP: auth init timed out (Drive/network may be slow); continuing", flush=True)
+        except Exception as e:
+            print("STARTUP: auth init failed:", e, flush=True)
     print("STARTUP: startup event done", flush=True)
 
 
