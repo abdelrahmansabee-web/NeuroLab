@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.61";
+const APP_VERSION = "28.62";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -362,7 +362,7 @@ const BL = ({ en, tr, className = "" }) => (
 );
 
 const SH = ({ icon: Icon, en, tr, badge }) => (
-  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 mb-5 sm:mb-6">
+  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 mb-5 sm:mb-6 rounded-2xl p-4 glass-float section-header">
     <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
       <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={GLASS_FIELD}>
       <Icon className="w-5 h-5 text-white/80" />
@@ -6639,6 +6639,12 @@ export default function App() {
 
         .glass-float .glass-float {
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
+        }
+
+        /* Section headers — stronger frosted glass */
+        .section-header {
+          backdrop-filter: blur(24px) saturate(2.25) !important;
+          -webkit-backdrop-filter: blur(24px) saturate(2.25) !important;
         }
 
         /* Inputs — neutral dark glass, less blue */
