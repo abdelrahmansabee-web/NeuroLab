@@ -19,7 +19,7 @@ from datetime import datetime
 print("STARTUP: stdlib imports ok", flush=True)
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body, BackgroundTasks, Depends
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 print("STARTUP: fastapi imports ok", flush=True)
@@ -43,7 +43,7 @@ _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_r
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 
-DEPLOY_VERSION = "28.66"
+DEPLOY_VERSION = "28.67"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -1192,6 +1192,22 @@ async def serve_video(filename: str):
                 headers={
                     "Accept-Ranges": "bytes",
                 },
+            )
+    raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+
+
+@app.head("/video/{filename}")
+async def head_video(filename: str):
+    """HEAD support for video streaming (needed by some proxies/CDNs)."""
+    for folder in [OUTPUT_DIR, UPLOAD_DIR]:
+        fp = folder / filename
+        if fp.exists():
+            return Response(
+                headers={
+                    "Content-Type": "video/mp4",
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": str(fp.stat().st_size),
+                }
             )
     raise HTTPException(status_code=404, detail=f"File not found: {filename}")
 
