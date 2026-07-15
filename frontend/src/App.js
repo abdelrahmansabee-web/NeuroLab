@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.56";
+const APP_VERSION = "28.57";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -362,7 +362,7 @@ const BL = ({ en, tr, className = "" }) => (
 );
 
 const SH = ({ icon: Icon, en, tr, badge }) => (
-  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 mb-5 sm:mb-6">
+  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 mb-5 sm:mb-6 rounded-2xl p-4 glass-float section-header">
     <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
       <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={GLASS_FIELD}>
       <Icon className="w-5 h-5 text-white/80" />
@@ -6649,6 +6649,12 @@ export default function App() {
 
         /* Top bar — same clear glass as sidebar, not tinted like cards */
         .app-topbar-glass {
+          background-color: rgba(255,255,255,0.008) !important;
+          border-color: rgba(255,255,255,0.03) !important;
+        }
+
+        /* Section headers — same clear glass as sidebar/top bar */
+        .section-header {
           background-color: rgba(255,255,255,0.008) !important;
           border-color: rgba(255,255,255,0.03) !important;
         }
