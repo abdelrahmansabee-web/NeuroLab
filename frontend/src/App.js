@@ -29,12 +29,12 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.46";
+const APP_VERSION = "28.54";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
 
-/* ── Uniform liquid glass — all panels (except sidebar) match the same near-clear token ── */
+/* ── Uniform liquid glass — sidebar and all panels share the same near-clear token ── */
 const GLASS_CLS = "bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
 const SIDEBAR_CLS = "bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
 const INPUT_CLS = "bg-[rgba(220,235,255,0.04)] border border-white/[0.03]";
@@ -6630,31 +6630,22 @@ export default function App() {
 
         .content-shell {
           border-color: rgba(255,255,255,0.08) !important;
-          background: radial-gradient(circle at 0% 50%, rgba(0,0,0,0.16) 0%, transparent 55%);
+          background: transparent;
         }
 
         .app-main-inner {
-          background: radial-gradient(circle at 20% 0%, rgba(0,0,0,0.12) 0%, transparent 60%);
+          background: transparent;
         }
 
         .glass-float .glass-float {
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
         }
 
-        /* Panels outside the sidebar: use the exact same liquid-glass token as the sidebar shell */
-        .glass-float {
-          background-color: rgba(255,255,255,0.008) !important;
-          border-color: rgba(255,255,255,0.03) !important;
-          backdrop-filter: blur(12px) saturate(2.25) !important;
-          -webkit-backdrop-filter: blur(12px) saturate(2.25) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
-        }
-
-        /* Inputs — same uniform tint as panels */
+        /* Inputs — neutral dark glass, less blue */
         .glass-field,
         input, select, textarea {
-          background-color: rgba(220,235,255,0.04) !important;
-          border-color: rgba(255,255,255,0.03) !important;
+          background-color: rgba(255,255,255,0.06) !important;
+          border-color: rgba(255,255,255,0.04) !important;
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.02) !important;
         }
         .glass-float input,
@@ -6702,7 +6693,7 @@ export default function App() {
         }
 
         .gselect-trigger {
-          background-color: rgba(55,65,80,0.88) !important;
+          background-color: rgba(55,55,55,0.88) !important;
           background-image: linear-gradient(180deg, rgba(255,255,255,0.015) 0%, rgba(255,255,255,0.00) 50%, rgba(0,0,0,0.05) 100%) !important;
           border-color: rgba(255,255,255,0.08) !important;
           backdrop-filter: blur(24px) saturate(1.1) !important;
@@ -6711,7 +6702,7 @@ export default function App() {
         }
 
         .gselect-menu {
-          background-color: rgba(55,65,80,0.95) !important;
+          background-color: rgba(55,55,55,0.95) !important;
           background-image: linear-gradient(180deg, rgba(255,255,255,0.015) 0%, rgba(255,255,255,0.00) 45%, rgba(0,0,0,0.06) 100%) !important;
           border-color: rgba(255,255,255,0.08) !important;
           backdrop-filter: blur(30px) saturate(1.1) !important;
