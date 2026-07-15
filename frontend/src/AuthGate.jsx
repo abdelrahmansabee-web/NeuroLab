@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-const GLASS = "bg-white/[0.07] backdrop-blur-3xl backdrop-saturate-150 border border-white/[0.32]";
-const INPUT = "w-full bg-white/[0.09] border border-white/[0.26] rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/30";
+const GLASS = "bg-[rgba(220,235,255,0.04)] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
+const INPUT = "w-full bg-[rgba(220,235,255,0.04)] border border-white/[0.03] rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/30";
 const BUTTON = "w-full rounded-lg px-4 py-3 text-sm font-medium text-white bg-white/15 hover:bg-white/25 active:bg-white/20 transition border border-white/30";
 const LINK = "text-xs text-white/50 hover:text-white/80 transition";
 

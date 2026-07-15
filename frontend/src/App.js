@@ -29,20 +29,17 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.25";
+const APP_VERSION = "28.46";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
 
-/* ── Glassmorphism (all Glass containers) ── */
-const GLASS_CLS = "bg-white/[0.07] backdrop-blur-3xl backdrop-saturate-150 border border-white/[0.32]";
-const SIDEBAR_CLS = "bg-white/[0.07] backdrop-blur-2xl backdrop-saturate-150 border border-white/[0.32]";
-const INPUT_CLS = "bg-white/[0.09] border border-white/[0.26]";
+/* ── Uniform liquid glass — all panels (except sidebar) match the same near-clear token ── */
+const GLASS_CLS = "bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
+const SIDEBAR_CLS = "bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
+const INPUT_CLS = "bg-[rgba(220,235,255,0.04)] border border-white/[0.03]";
 
 const GSELECT_MENU_BOX = {
-  backgroundColor: "#0e1120",
-  border: "1px solid rgba(255, 255, 255, 0.25)",
-  boxShadow: "0 10px 40px rgba(0, 0, 0, 0.7)",
   borderRadius: "12px",
 };
 
@@ -79,9 +76,11 @@ const FLOAT_L = "0 36px 90px -40px rgba(0,0,0,0.20)";
 const FLOAT_M = "0 24px 60px -30px rgba(0,0,0,0.18)";
 
 const GLASS_FIELD = {
-  backgroundColor: "rgba(255,255,255,0.09)",
-  border: "1px solid rgba(255,255,255,0.26)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18)",
+  backgroundColor: "rgba(220,235,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.03)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.02)",
+  backdropFilter: "blur(12px) saturate(2.25)",
+  WebkitBackdropFilter: "blur(12px) saturate(2.25)",
 };
 
 const SLIDER_GRAD = {
@@ -415,6 +414,17 @@ const GSelect = ({ en, tr, value, onChange, options, className = "" }) => {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const closeOnMove = () => setOpen(false);
+    window.addEventListener("scroll", closeOnMove, true);
+    window.addEventListener("resize", closeOnMove);
+    return () => {
+      window.removeEventListener("scroll", closeOnMove, true);
+      window.removeEventListener("resize", closeOnMove);
+    };
+  }, [open]);
+
   const sel = options.find((o) => o.value === value);
 
   return (
@@ -425,7 +435,7 @@ const GSelect = ({ en, tr, value, onChange, options, className = "" }) => {
           ref={btnRef}
           type="button"
           onClick={() => setOpen((p) => !p)}
-          className={`w-full px-3 py-2.5 rounded-xl text-white text-sm font-light text-left flex items-center justify-between gap-2 ${INPUT_CLS}`}
+          className={`w-full px-3 py-2.5 rounded-xl text-white text-sm font-light text-left flex items-center justify-between gap-2 gselect-trigger ${INPUT_CLS}`}
           style={GLASS_FIELD}
         >
           <span className={`truncate ${sel ? "text-white" : "text-white/30"}`}>
@@ -439,44 +449,47 @@ const GSelect = ({ en, tr, value, onChange, options, className = "" }) => {
         </button>
 
         {open && btnRef.current && ReactDOM.createPortal(
-          <div data-gselect-portal="true"
+          <div
+            data-gselect-portal="true"
+            className="gselect-menu-anim"
             style={{
               position: "fixed",
               top: btnRef.current.getBoundingClientRect().bottom + 4,
               left: btnRef.current.getBoundingClientRect().left,
               width: btnRef.current.getBoundingClientRect().width,
               zIndex: 999999,
+              transformOrigin: "top center",
             }}
           >
-            <div className="overflow-hidden py-1" style={GSELECT_MENU_BOX}>
+            <div className="gselect-menu overflow-hidden py-1" style={GSELECT_MENU_BOX}>
               {options.map((o) => {
                 const selected = value === o.value;
                 const optStyle = {
-                  backgroundColor: selected ? "rgba(255,255,255,0.10)" : "transparent",
+                  backgroundColor: selected ? "rgba(255,255,255,0.08)" : "transparent",
                   color: selected ? "#ffffff" : "rgba(255,255,255,0.75)",
                   fontWeight: selected ? 700 : 400,
-                  transition: "background-color 0.15s",
+                  transition: "background-color 0.15s, color 0.15s",
                 };
                 return (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() => { onChange({ target: { value: o.value } }); setOpen(false); }}
-                  className="w-full text-left px-3 py-2.5 text-sm block"
-                  style={optStyle}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.10)";
-                    e.currentTarget.style.color = "#ffffff";
-                    e.currentTarget.style.fontWeight = "700";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = selected ? "rgba(255,255,255,0.10)" : "transparent";
-                    e.currentTarget.style.color = selected ? "#ffffff" : "rgba(255,255,255,0.75)";
-                    e.currentTarget.style.fontWeight = selected ? "700" : "400";
-                  }}
-                >
-                  {o.label}
-                </button>
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => { onChange({ target: { value: o.value } }); setOpen(false); }}
+                      className="w-full text-left px-3 py-2.5 text-sm block gselect-option"
+                      style={optStyle}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.10)";
+                        e.currentTarget.style.color = "#ffffff";
+                        e.currentTarget.style.fontWeight = "700";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = selected ? "rgba(255,255,255,0.08)" : "transparent";
+                        e.currentTarget.style.color = selected ? "#ffffff" : "rgba(255,255,255,0.75)";
+                        e.currentTarget.style.fontWeight = selected ? "700" : "400";
+                      }}
+                    >
+                    {o.label}
+                  </button>
                 );
               })}
             </div>
@@ -6080,6 +6093,55 @@ export default function App() {
 
   const closeMobileTopMenu = () => setMobileTopMenuOpen(false);
 
+  function TopBarOverflowMenu() {
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+
+    useEffect(() => {
+      const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+      document.addEventListener("mousedown", h);
+      return () => document.removeEventListener("mousedown", h);
+    }, []);
+
+    const items = [
+      { icon: <Save />, label: "Save Session", onClick: () => { saveSession(); } },
+      { icon: <Database />, label: "Database", onClick: () => setActive("database") },
+      { icon: <Users />, label: "Users", onClick: () => setActive("users"), admin: true },
+      { icon: <LogOut />, label: "Sign out", onClick: logout },
+    ];
+
+    return (
+      <div className="relative" ref={ref}>
+        <motion.button
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          onClick={() => setOpen((p) => !p)}
+          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
+          style={GLASS_FIELD}
+          title="More"
+          aria-label="More"
+        >
+          <User className="w-4 h-4" />
+        </motion.button>
+        {open && (
+          <div className="gselect-menu absolute right-0 top-full mt-2 z-[99999] overflow-hidden rounded-xl py-1 min-w-[180px]">
+            {items.filter((i) => !i.admin || user?.is_admin).map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => { item.onClick(); setOpen(false); }}
+                className="w-full text-left px-3 py-2 flex items-center gap-3 text-sm text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                {React.cloneElement(item.icon, { className: "w-4 h-4 flex-shrink-0" })}
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function TopBarActions({ inMenu }) {
     const btnBase = inMenu
       ? "w-full flex items-center gap-3 px-3 py-1.5 rounded-xl text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 transition-colors"
@@ -6100,17 +6162,41 @@ export default function App() {
       </motion.button>
     );
 
+    if (inMenu) {
+      return (
+        <>
+          <Action onClick={() => { newSession(); }} icon={<PlusCircle />} label="New Session" colorClass="hover:text-violet-300" />
+          <Action onClick={() => { saveSession(); if (!isDesktop) setSidebar(false); }} icon={<Save />} label="Save Session" colorClass="hover:text-emerald-300" />
+          <Action onClick={() => { setActive("analysis"); if (!isDesktop) setSidebar(false); }} icon={<BarChart3 />} label="Analysis Dashboard" colorClass="hover:text-amber-300" />
+          {user?.is_admin && <Action onClick={() => { setActive("users"); if (!isDesktop) setSidebar(false); }} icon={<Users />} label="Users" colorClass="hover:text-violet-300" />}
+          <Action onClick={() => importRef.current?.click()} icon={<FileUp />} label="Import patient" colorClass="hover:text-emerald-300" />
+          <Action onClick={() => bgRef.current?.click()} icon={<ImageIcon />} label="Background" />
+          <Action onClick={() => { setActive("database"); if (!isDesktop) setSidebar(false); }} icon={<Database />} label="Database" />
+          <Action onClick={logout} icon={<LogOut />} label="Sign out" colorClass="hover:text-rose-300" />
+        </>
+      );
+    }
+
+    // Desktop toolbar: primary + secondary + overflow menu
     return (
-      <>
-        <Action onClick={() => { newSession(); }} icon={<PlusCircle />} label="New Session" colorClass="hover:text-violet-300" />
-        <Action onClick={() => { saveSession(); if (!isDesktop) setSidebar(false); }} icon={<Save />} label="Save Session" colorClass="hover:text-emerald-300" />
-        <Action onClick={() => { setActive("analysis"); if (!isDesktop) setSidebar(false); }} icon={<BarChart3 />} label="Analysis Dashboard" colorClass="hover:text-amber-300" />
-        {user?.is_admin && <Action onClick={() => { setActive("users"); if (!isDesktop) setSidebar(false); }} icon={<Users />} label="Users" colorClass="hover:text-violet-300" />}
+      <div className="flex items-center gap-2">
+        <motion.button
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => newSession()}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-emerald-500/25 border border-emerald-400/40 hover:bg-emerald-500/35 transition-all"
+          title="New Session"
+          aria-label="New Session"
+        >
+          <PlusCircle className="w-4 h-4" />
+          <span className="hidden sm:inline">New</span>
+        </motion.button>
+
+        <Action onClick={() => setActive("analysis")} icon={<BarChart3 />} label="Analysis Dashboard" colorClass="hover:text-amber-300" />
         <Action onClick={() => importRef.current?.click()} icon={<FileUp />} label="Import patient" colorClass="hover:text-emerald-300" />
         <Action onClick={() => bgRef.current?.click()} icon={<ImageIcon />} label="Background" />
-        <Action onClick={() => { setActive("database"); if (!isDesktop) setSidebar(false); }} icon={<Database />} label="Database" />
-        <Action onClick={logout} icon={<LogOut />} label="Sign out" colorClass="hover:text-rose-300" />
-      </>
+        <TopBarOverflowMenu />
+      </div>
     );
   }
 
@@ -6135,6 +6221,9 @@ export default function App() {
             <Icon className="w-4 h-4 text-white/60 flex-shrink-0" />
             <span className="text-sm font-extrabold text-white truncate">{nav.en}</span>
             <span className="text-xs font-light text-white/30 hidden md:inline truncate">/{nav.tr}</span>
+            <span className="hidden lg:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-light text-white/40 bg-white/[0.04] border border-white/[0.04]">
+              {new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" })}
+            </span>
           </div>
         );
       })()}
@@ -6144,10 +6233,6 @@ export default function App() {
       )}
 
       <div className={`ml-auto flex items-center gap-2 flex-shrink-0 ${sidebar && !isDesktop ? "hidden" : ""}`}>
-        <span className="text-xs font-light text-white/30 hidden lg:block whitespace-nowrap">
-          {new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" })}
-        </span>
-
         <input
           ref={importRef}
           type="file"
@@ -6472,29 +6557,34 @@ export default function App() {
       <style>{`
         * { box-sizing: border-box; }
         h1, h2, h3, p, span, label, button {
-          text-shadow: 0 1px 3px rgba(0,0,0,0.25);
+          text-shadow: 0 1px 2px rgba(0,0,0,0.12);
         }
 
-        /* Design tokens — iOS 26 glass: translucent, strong blur, bright border */
+        /* Design tokens — very muted liquid glass: minimal light/shine */
         [class*="border-white"] {
-          border-color: rgba(255,255,255,0.30) !important;
+          border-color: rgba(255,255,255,0.03) !important;
         }
         .border-b[class*="border-white"],
         .border-t[class*="border-white"] {
-          border-color: rgba(255,255,255,0.20) !important;
+          border-color: rgba(255,255,255,0.02) !important;
           box-shadow: none !important;
         }
 
         .sidebar-shell,
         .glass-float {
           position: relative;
-          border-color: rgba(255,255,255,0.30) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), 0 24px 60px -30px rgba(0,0,0,0.18) !important;
+          border-color: rgba(255,255,255,0.03) !important;
+          backdrop-filter: blur(12px) saturate(2.25) !important;
+          -webkit-backdrop-filter: blur(12px) saturate(2.25) !important;
+          background-color: rgba(255,255,255,0.008) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
           background-image:
-            radial-gradient(circle at 15% 10%, rgba(255,255,255,0.18) 0%, transparent 35%),
-            radial-gradient(circle at 85% 90%, rgba(200,230,255,0.08) 0%, transparent 30%),
-            radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 0%, transparent 60%);
-          background-blend-mode: overlay, overlay, normal;
+            radial-gradient(ellipse 150% 60% at 50% 0%, rgba(255,255,255,0.015) 0%, transparent 65%),
+            radial-gradient(ellipse 150% 70% at 50% 100%, rgba(200,230,255,0.015) 0%, transparent 60%),
+            radial-gradient(circle at 0% 25%, rgba(255,255,255,0.008) 0%, transparent 40%),
+            radial-gradient(circle at 100% 75%, rgba(255,255,255,0.008) 0%, transparent 40%),
+            linear-gradient(175deg, rgba(255,255,255,0.005) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.00) 65%, rgba(255,255,255,0.004) 100%);
+          background-blend-mode: overlay, overlay, overlay, overlay, normal;
         }
 
         .sidebar-shell::before,
@@ -6506,13 +6596,15 @@ export default function App() {
           padding: 2px;
           background: conic-gradient(
             from 180deg at 50% 50%,
-            rgba(255,255,255,0.85) 0deg,
-            rgba(220,240,255,0.35) 60deg,
-            rgba(255,255,255,0.15) 120deg,
-            rgba(200,230,255,0.35) 180deg,
-            rgba(255,255,255,0.15) 240deg,
-            rgba(220,240,255,0.35) 300deg,
-            rgba(255,255,255,0.85) 360deg
+            rgba(255,255,255,0.25) 0deg,
+            rgba(160,225,255,0.12) 45deg,
+            rgba(210,190,255,0.08) 90deg,
+            rgba(255,255,255,0.03) 135deg,
+            rgba(160,225,255,0.12) 180deg,
+            rgba(255,255,255,0.03) 225deg,
+            rgba(210,190,255,0.08) 270deg,
+            rgba(160,225,255,0.12) 315deg,
+            rgba(255,255,255,0.25) 360deg
           );
           -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
           -webkit-mask-composite: xor;
@@ -6520,38 +6612,65 @@ export default function App() {
           mask-composite: exclude;
           pointer-events: none;
           z-index: 0;
-          opacity: 0.85;
+          opacity: 0.05;
+        }
+
+        .sidebar-shell::after,
+        .glass-float::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          pointer-events: none;
+          z-index: 0;
+          background:
+            linear-gradient(180deg, rgba(255,255,255,0.008) 0%, rgba(255,255,255,0.00) 40%, rgba(255,255,255,0.00) 70%, rgba(255,255,255,0.005) 100%);
+          mix-blend-mode: overlay;
         }
 
         .content-shell {
-          border-color: rgba(255,255,255,0.22) !important;
+          border-color: rgba(255,255,255,0.08) !important;
+          background: radial-gradient(circle at 0% 50%, rgba(0,0,0,0.16) 0%, transparent 55%);
+        }
+
+        .app-main-inner {
+          background: radial-gradient(circle at 20% 0%, rgba(0,0,0,0.12) 0%, transparent 60%);
         }
 
         .glass-float .glass-float {
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), 0 24px 60px -30px rgba(0,0,0,0.18) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
         }
 
-        /* Inputs — translucent with top highlight */
+        /* Panels outside the sidebar: use the exact same liquid-glass token as the sidebar shell */
+        .glass-float {
+          background-color: rgba(255,255,255,0.008) !important;
+          border-color: rgba(255,255,255,0.03) !important;
+          backdrop-filter: blur(12px) saturate(2.25) !important;
+          -webkit-backdrop-filter: blur(12px) saturate(2.25) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
+        }
+
+        /* Inputs — same uniform tint as panels */
         .glass-field,
         input, select, textarea {
-          background-color: rgba(255,255,255,0.09) !important;
-          border-color: rgba(255,255,255,0.26) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.14) !important;
+          background-color: rgba(220,235,255,0.04) !important;
+          border-color: rgba(255,255,255,0.03) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02) !important;
         }
         .glass-float input,
         .glass-float select,
         .glass-float textarea,
         .glass-float .glass-field {
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.14) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
         }
 
         .shadow-lg, .shadow-xl, .shadow-2xl {
-          box-shadow: 0 16px 40px -22px rgba(0,0,0,0.07) !important;
+          box-shadow: 0 16px 40px -22px rgba(0,0,0,0.05) !important;
         }
 
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 99px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 99px; }
         input[type=number]::-webkit-inner-spin-button { opacity: 0; }
         select option { background-color: #0e1120; color: white; }
         input, select, textarea, button { -webkit-tap-highlight-color: transparent; }
@@ -6572,6 +6691,41 @@ export default function App() {
         .grid > * { min-width: 0; overflow-wrap: break-word; word-break: break-word; }
         input, select { min-height: 44px !important; }
         button { min-height: 44px !important; }
+
+        @keyframes gselect-open {
+          0% { opacity: 0; transform: translateY(-12px) scale(0.96); }
+          70% { opacity: 1; transform: translateY(2px) scale(1.01); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .gselect-menu-anim {
+          animation: gselect-open 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+
+        .gselect-trigger {
+          background-color: rgba(55,65,80,0.88) !important;
+          background-image: linear-gradient(180deg, rgba(255,255,255,0.015) 0%, rgba(255,255,255,0.00) 50%, rgba(0,0,0,0.05) 100%) !important;
+          border-color: rgba(255,255,255,0.08) !important;
+          backdrop-filter: blur(24px) saturate(1.1) !important;
+          -webkit-backdrop-filter: blur(24px) saturate(1.1) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 4px 14px rgba(0,0,0,0.15) !important;
+        }
+
+        .gselect-menu {
+          background-color: rgba(55,65,80,0.95) !important;
+          background-image: linear-gradient(180deg, rgba(255,255,255,0.015) 0%, rgba(255,255,255,0.00) 45%, rgba(0,0,0,0.06) 100%) !important;
+          border-color: rgba(255,255,255,0.08) !important;
+          backdrop-filter: blur(30px) saturate(1.1) !important;
+          -webkit-backdrop-filter: blur(30px) saturate(1.1) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 18px 45px -22px rgba(0,0,0,0.35) !important;
+        }
+
+        .gselect-menu .gselect-option {
+          transition: background-color 0.12s, color 0.12s;
+        }
+        .gselect-menu .gselect-option:hover {
+          background-color: rgba(255,255,255,0.04) !important;
+        }
+
         @media (max-width: 768px) {
           input, select, textarea { font-size: 16px !important; }
           .app-main-inner { padding-left: 12px !important; padding-right: 12px !important; }
