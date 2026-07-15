@@ -43,7 +43,7 @@ _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_r
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 
-DEPLOY_VERSION = "28.67"
+DEPLOY_VERSION = "28.68"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -74,10 +74,10 @@ def _resolve_data_dir() -> Path:
     return fallback
 
 
-UPLOAD_DIR = BASE_DIR / "uploads"
-OUTPUT_DIR = BASE_DIR / "outputs"
-MODEL_DIR  = BASE_DIR / "models"
 DATA_DIR   = _resolve_data_dir()
+UPLOAD_DIR = DATA_DIR / "uploads"
+OUTPUT_DIR = DATA_DIR / "outputs"
+MODEL_DIR  = BASE_DIR / "models"
 PATIENTS_FILE = DATA_DIR / "patients.json"
 POSE_MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
