@@ -27,11 +27,9 @@ RUN curl -fsSL -o models/pose_landmarker_heavy.task \
       "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task" \
     && test -s models/pose_landmarker_heavy.task
 
-# Background image for glass UI
-RUN if [ ! -f frontend/build/bg.jpg ]; then \
-      curl -fsSL -o frontend/build/bg.jpg \
-        "https://images.unsplash.com/photo-1505118380757-91dbb9278118?auto=format&fit=crop&w=1920&q=80" \
-      || true; \
+# Background image for glass UI (decode from embedded base64 to avoid broken external URLs).
+RUN if [ ! -f frontend/build/bg.jpg ] && [ -f frontend/build/bg.b64.txt ]; then \
+      base64 -d frontend/build/bg.b64.txt > frontend/build/bg.jpg; \
     fi
 
 EXPOSE 7860
