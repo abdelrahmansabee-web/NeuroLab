@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.58";
+const APP_VERSION = "28.59";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -6639,24 +6639,6 @@ export default function App() {
 
         .glass-float .glass-float {
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
-        }
-
-        /* Cards/panels: neutral gray glass, slightly less transparent, no blue tint */
-        .glass-float {
-          background-color: rgba(45,45,45,0.22) !important;
-          border-color: rgba(255,255,255,0.05) !important;
-        }
-
-        /* Top bar — same clear glass as sidebar, not tinted like cards */
-        .app-topbar-glass {
-          background-color: rgba(255,255,255,0.008) !important;
-          border-color: rgba(255,255,255,0.03) !important;
-        }
-
-        /* Section headers — same clear glass as sidebar/top bar */
-        .section-header {
-          background-color: rgba(255,255,255,0.008) !important;
-          border-color: rgba(255,255,255,0.03) !important;
         }
 
         /* Inputs — neutral dark glass, less blue */
