@@ -43,7 +43,7 @@ _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_r
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 
-DEPLOY_VERSION = "28.62"
+DEPLOY_VERSION = "28.63"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -1100,10 +1100,14 @@ async def get_overlay_data(csv_filename: str):
         if analysis:
             target_fs = float(analysis.get("analysis_fs_hz", analysis.get("fs_hz", 60.0)))
 
-        data = build_overlay_data(
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(
+            None,
+            build_overlay_data,
             str(csv_path),
-            analysis=analysis,
-            target_fs=target_fs,
+            analysis,
+            "auto",
+            target_fs,
         )
         if data.get("error"):
             return JSONResponse(status_code=500, content={"error": data["error"]})
