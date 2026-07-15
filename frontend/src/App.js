@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.59";
+const APP_VERSION = "28.60";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -43,7 +43,7 @@ const GSELECT_MENU_BOX = {
   borderRadius: "12px",
 };
 
-const BG_FILTER = "blur(24px) brightness(0.55) saturate(0.80)";
+const BG_FILTER = "blur(24px) brightness(0.55) saturate(0.15)";
 const BG_SCALE = "scale(1.08)";
 const BG_OVERLAY = "rgba(8, 8, 8, 0.18)";
 
