@@ -43,7 +43,7 @@ _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_r
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 
-DEPLOY_VERSION = "28.68"
+DEPLOY_VERSION = "28.69"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -389,6 +389,37 @@ def _auto_rotate_video_with_ffmpeg(video_path: Path) -> Optional[Path]:
     return rotated_path
 
 
+def _ensure_playable_mp4(video_path: Path) -> Path:
+    """
+    Convert any uploaded video to an H.264 MP4 so the browser can play it inline.
+    Already-MP4 files are left as-is to avoid unnecessary re-encoding.
+    """
+    if video_path.suffix.lower() == ".mp4":
+        return video_path
+    try:
+        from unified_validation_renderer import _find_ffmpeg
+        ffmpeg = _find_ffmpeg()
+        if not ffmpeg:
+            print("ffmpeg not found; leaving video in original format")
+            return video_path
+        mp4_path = video_path.with_suffix(".mp4")
+        cmd = [
+            ffmpeg, "-y", "-i", str(video_path),
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+            "-an",
+            str(mp4_path),
+        ]
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=300)
+        if result.returncode != 0 or not mp4_path.exists() or mp4_path.stat().st_size < 1000:
+            print(f"MP4 conversion failed: {result.stderr[:500]}")
+            return video_path
+        return mp4_path
+    except Exception as exc:
+        print(f"MP4 conversion exception: {exc}")
+        return video_path
+
+
 def _run_analysis_job(
     job_id: str,
     video_path: Path,
@@ -522,6 +553,13 @@ async def analyze_video(
 
         with video_path.open("wb") as f:
             shutil.copyfileobj(video.file, f)
+
+        # Convert to H.264 MP4 so browsers can play the original video inline
+        # for the validation overlay. MP4 inputs are left unchanged.
+        try:
+            video_path = _ensure_playable_mp4(video_path)
+        except Exception as exc:
+            print(f"MP4 conversion skipped: {exc}")
 
         # Auto-rotate phone/tablet footage so the person is upright before
         # pose extraction.  This guarantees the analysis CSV and any validation
