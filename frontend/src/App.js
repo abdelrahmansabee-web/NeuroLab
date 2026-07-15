@@ -29,7 +29,7 @@ import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
 
-const APP_VERSION = "28.57";
+const APP_VERSION = "28.58";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
@@ -45,7 +45,7 @@ const GSELECT_MENU_BOX = {
 
 const BG_FILTER = "blur(24px) brightness(0.55) saturate(0.80)";
 const BG_SCALE = "scale(1.08)";
-const BG_OVERLAY = "rgba(4, 6, 18, 0.18)";
+const BG_OVERLAY = "rgba(8, 8, 8, 0.18)";
 
 function isIOSDevice() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -6641,9 +6641,9 @@ export default function App() {
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
         }
 
-        /* Cards/panels: slightly less transparent than sidebar while keeping same glass tint */
+        /* Cards/panels: neutral gray glass, slightly less transparent, no blue tint */
         .glass-float {
-          background-color: rgba(45,52,65,0.20) !important;
+          background-color: rgba(45,45,45,0.22) !important;
           border-color: rgba(255,255,255,0.05) !important;
         }
 
