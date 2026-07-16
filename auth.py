@@ -1,5 +1,4 @@
 import os
-import sqlite3
 import json
 import base64
 from datetime import datetime, timedelta
@@ -7,6 +6,9 @@ from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
+import encrypted_sqlite as sqlite3
+import pyotp
+import qrcode
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
@@ -14,8 +16,6 @@ from passlib.context import CryptContext
 from google.oauth2 import service_account as google_service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
-import pyotp
-import qrcode
 
 from security import password_policy, RateLimiter, get_client_ip, log_audit, encrypt_json_to_str, decrypt_json_from_str
 
@@ -69,6 +69,22 @@ PATIENTS_DIR.mkdir(parents=True, exist_ok=True)
 print(f"STARTUP: DATA_DIR={DATA_DIR}", flush=True)
 print(f"STARTUP: USERS_DB={USERS_DB}", flush=True)
 print(f"STARTUP: PATIENTS_DIR={PATIENTS_DIR}", flush=True)
+
+
+def _ensure_encrypted_dbs():
+    """Encrypt plain SQLite databases in place on first startup."""
+    try:
+        sqlite3.ensure_encrypted(USERS_DB)
+    except Exception as exc:
+        print(f"STARTUP: users.db encryption check failed: {exc}", flush=True)
+    try:
+        sqlite3.ensure_encrypted(AUDIT_DB)
+    except Exception as exc:
+        print(f"STARTUP: audit.db encryption check failed: {exc}", flush=True)
+
+
+# Call encryption check at import time so it runs before any DB access.
+_ensure_encrypted_dbs()
 
 
 def _init_db():

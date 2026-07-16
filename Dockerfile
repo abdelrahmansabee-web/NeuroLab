@@ -6,6 +6,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
     libosmesa6-dev \
     tesseract-ocr tesseract-ocr-eng tesseract-ocr-tur tesseract-ocr-ara poppler-utils \
+    sqlcipher libsqlcipher-dev libsqlcipher0 \
+    build-essential python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1

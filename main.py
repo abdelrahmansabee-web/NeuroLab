@@ -27,7 +27,7 @@ print("STARTUP: fastapi imports ok", flush=True)
 try:
     import auth
     from auth import router as auth_router, get_current_user, PATIENTS_DIR, JWT_SECRET
-    from security import encrypt_json_to_str, decrypt_json_from_str
+    from security import encrypt_json_to_str, decrypt_json_from_str, WAFMiddleware
     print("STARTUP: auth module loaded", flush=True)
 except Exception as _auth_exc:
     print("STARTUP: auth module failed to load:", _auth_exc, flush=True)
@@ -37,13 +37,14 @@ except Exception as _auth_exc:
     JWT_SECRET = None
     encrypt_json_to_str = None
     decrypt_json_from_str = None
+    WAFMiddleware = None
 
 _BASE = Path(__file__).resolve().parent
 _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_robust.py").exists() else _BASE
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 
-DEPLOY_VERSION = "28.81"
+DEPLOY_VERSION = "28.82"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -243,6 +244,19 @@ async def security_headers(request, call_next):
 if auth_router is not None:
     app.include_router(auth_router)
     print("STARTUP: auth router included", flush=True)
+
+# Add lightweight WAF / reverse-proxy guard.  For Cloudflare, ensure CF-Connecting-IP
+# is forwarded by the proxy so get_client_ip() uses the real visitor IP.
+if WAFMiddleware is not None and auth is not None:
+    try:
+        app.add_middleware(
+            WAFMiddleware,
+            max_content_length_bytes=50 * 1024 * 1024,
+            audit_db_path=auth.AUDIT_DB,
+        )
+        print("STARTUP: WAF middleware enabled", flush=True)
+    except Exception as _waf_exc:
+        print("STARTUP: WAF middleware failed to enable:", _waf_exc, flush=True)
 
 
 @app.on_event("startup")
