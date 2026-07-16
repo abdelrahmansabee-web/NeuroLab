@@ -468,7 +468,8 @@ async def login(request: Request, body: dict):
         log_audit(AUDIT_DB, "login", user_id=user["id"], email=email, ip=ip, details="Account not approved", success=False)
         raise HTTPException(status_code=403, detail="Account pending approval")
     verified = _verify_password(password, user["password_hash"])
-    print(f"[login] user={user['id']} verified={verified} hash_prefix={user['password_hash'][:20]}", flush=True)
+    hash_prefix = (user.get("password_hash") or "")[:20]
+    print(f"[login] user={user['id']} verified={verified} hash_prefix={hash_prefix}", flush=True)
     if not verified:
         log_audit(AUDIT_DB, "login", user_id=user["id"], email=email, ip=ip, details="Invalid password", success=False)
         raise HTTPException(status_code=401, detail="Invalid password")
