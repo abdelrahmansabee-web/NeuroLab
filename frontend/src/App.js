@@ -1,6 +1,7 @@
 // ============================================================
 // Stroke Rehabilitation Platform — Frontend v6.5
 // ============================================================
+/* eslint-disable no-undef */
 
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from "react";
 import ReactDOM from "react-dom";
@@ -4725,8 +4726,9 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     toCsv("aomi_full.csv", aomi.map((r) => pick(r, ["ID", ...demoKeys.slice(1), ...assessKeys])));
     toCsv("control_full.csv", ctrl.map((r) => pick(r, ["ID", ...demoKeys.slice(1), ...assessKeys])));
 
+    // eslint-disable-next-line no-undef
     setTimeout(() => downloadBlob(
-      new Blob(["\uFEFF" + generateStudySPSSSyntax("master_study_data.csv")], { type: "text/plain;charset=utf-8" }),
+      new Blob(["\uFEFF" + generateStudySPSSyntax("master_study_data.csv", masterRows[0])], { type: "text/plain;charset=utf-8" }),
       "neuro_study_analysis.sps"
     ), count * 400);
 
@@ -4744,7 +4746,8 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
   // ── SPSS Syntax (.sps) export — full study analysis workflow ──
   const exportSPSSyntax = () => {
-    const syn = generateStudySPSSSyntax("master_study_data.csv");
+    // eslint-disable-next-line no-undef
+    const syn = generateStudySPSSyntax("master_study_data.csv", rows[0]);
     const blob = new Blob(["\uFEFF" + syn], { type: "text/plain;charset=utf-8" });
     downloadBlob(blob, "neuro_study_analysis.sps");
     showToast("✓ SPSS syntax downloaded (neuro_study_analysis.sps)");
@@ -5415,8 +5418,9 @@ const AnalysisDashboard = () => {
   };
 
   const downloadSpssSyntax = () => {
+    // eslint-disable-next-line no-undef
     downloadBlob(
-      new Blob(["\uFEFF" + generateStudySPSSSyntax("master_study_data.csv")], { type: "text/plain;charset=utf-8" }),
+      new Blob(["\uFEFF" + generateStudySPSSyntax("master_study_data.csv", rows[0])], { type: "text/plain;charset=utf-8" }),
       "neuro_study_analysis.sps"
     );
   };

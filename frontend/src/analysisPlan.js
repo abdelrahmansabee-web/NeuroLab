@@ -253,14 +253,14 @@ function kinCell(m, key) {
 }
 
 function appendManuscriptAliases(row, suffix, m) {
-  // Legacy CSV columns (optional backward compatibility)
+  // Legacy CSV columns (kept for backward compatibility; always present, empty if unavailable).
   const legacy = {
     total_trunk_palm_ratio: kinCell(m, "trunk_ratio"),
     total_duration_s: kinCell(m, "movement_time_sec"),
     total_peak_velocity: kinCell(m, "peak_velocity_cm_s"),
   };
   Object.entries(legacy).forEach(([k, v]) => {
-    if (v !== "") row[`${k}_${suffix}`] = v;
+    row[`${k}_${suffix}`] = v;
   });
 }
 
@@ -416,7 +416,13 @@ function spssClinicalGlm(l, pre, post, label) {
   l("");
 }
 
-export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv") {
+function spssFormatForColumn(name) {
+  if (name === "ID") return "A30";
+  if (["Group", "Sex", "StrokeType", "AffectedSide"].includes(name)) return "F2.0";
+  return "F12.6";
+}
+
+export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv", sampleRow = null) {
   const lines = [];
   const l = (s = "") => lines.push(s);
 
@@ -425,10 +431,14 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv") {
   const kinExploratory = KINEMATIC_VARS.filter((k) => k.tier === "exploratory");
   const kinAll = [...kinPrimary, ...kinSecondary, ...kinExploratory];
 
+  const primary = kinPrimary[0] || kinAll[0];
+  const primaryKey = primary?.key || "nvp";
+  const primaryLabel = primary?.label || primaryKey;
+
   l("* =================================================================");
-  l("* PETTLEP AOMI RCT — SPSS Analysis Syntax (NeuroLab v6 auto-generated)");
+  l("* PETTLEP AOMI RCT — SPSS Analysis Syntax (NeuroLab auto-generated)");
   l("* Design: 2 (Group: AOMI vs Control) × 2 (Time: Pre, Post) mixed ANOVA");
-  l("* Primary outcome: SPARC (α=.05 uncorrected); secondary kinematics Holm k=5");
+  l(`* Primary outcome: ${primaryLabel} (α=.05 uncorrected); secondary kinematics Holm k=${kinSecondary.length}`);
   l("* References: Field (2018); Cohen (1988); Schulz et al. CONSORT 2010");
   l("* =================================================================");
   l("");
@@ -443,8 +453,20 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv") {
   l("  /FIRSTCASE=2");
   l("  /IMPORTCASE=ALL");
   l("  /VARIABLES=");
-  l("  ID A10 Group F2.0 Age F8.2 Sex F2.0 TimeSinceStroke F8.2 StrokeType F2.0");
-  l("  AffectedSide F2.0 MAS F8.2 MRC F8.2.");
+  const importCols = sampleRow && typeof sampleRow === "object" ? Object.keys(sampleRow) : [
+    "ID", "Group", "Age", "Sex", "TimeSinceStroke", "StrokeType", "AffectedSide", "MAS", "MRC",
+    ...kinAll.flatMap(({ key }) => [`${key}_Pre`, `${key}_Post`]),
+    ...kinAll.flatMap(({ key }) => [`${key}_Healthy`]),
+    "WMFT_Time_Pre", "WMFT_Time_Post", "WMFT_Rating_Pre", "WMFT_Rating_Post",
+    "VAMS_Happy_Pre", "VAMS_Happy_Post", "VAMS_Sad_Pre", "VAMS_Sad_Post",
+    "VAMS_Calm_Pre", "VAMS_Calm_Post", "VAMS_Tense_Pre", "VAMS_Tense_Post",
+    "KVIQ_Vis_Pre", "KVIQ_Vis_Post", "KVIQ_Kin_Pre", "KVIQ_Kin_Post",
+    "IPAQ_MET", "VAS_Pre", "VAS_Post", "MDRS_Control_Pre", "MDRS_Difference_Post",
+  ];
+  importCols.forEach((col) => {
+    l(`  ${col} ${spssFormatForColumn(col)}`);
+  });
+  l(".");
   l("CACHE.");
   l("EXECUTE.");
   l("");
@@ -476,21 +498,21 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv") {
 
   l("* --- 4. HEALTHY SIDE EQUIVALENCE ---");
   l("T-TEST GROUPS=Group(1 2)");
-  l("  /VARIABLES=Age TimeSinceStroke MAS MRC sparc_Pre trunk_ratio_Pre shoulder_vert_norm_Pre.");
+  l(`  /VARIABLES=Age TimeSinceStroke MAS MRC ${primaryKey}_Pre trunk_ratio_Pre shoulder_vert_norm_Pre.`);
   l("CROSSTABS Sex StrokeType AffectedSide BY Group /STATISTICS=CHISQ.");
   l("NPAR TESTS /MANN-WHITNEY MAS MRC BY Group(1 2).");
   l("");
 
   l("* --- 5. NORMALITY (Shapiro–Wilk via EXAMINE) ---");
   l("* Run for each DV if needed; example for primary:");
-  l("EXAMINE VARIABLES=sparc_Pre sparc_Post delta_sparc BY Group(1 2)");
+  l(`EXAMINE VARIABLES=${primaryKey}_Pre ${primaryKey}_Post delta_${primaryKey} BY Group(1 2)`);
   l("  /PLOT BOXPLOT HISTOGRAM NPPLOT");
   l("  /STATISTICS DESCRIPTIVES");
   l("  /CINEMETRIC ALPHA(0.05).");
   l("* Decision: p≥.05 → parametric GLM; p<.05 → Wilcoxon (within) + Mann-Whitney (Δ between).");
   l("");
 
-  l("* --- 6. PRIMARY OUTCOME (SPARC, α=.05 uncorrected) ---");
+  l(`* --- 6. PRIMARY OUTCOME (${primaryLabel}, α=.05 uncorrected) ---`);
   kinPrimary.forEach(({ key, label }) => {
     spssMixedGlm(l, key, label, { primary: true });
   });
@@ -537,23 +559,23 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv") {
   l("* --- 11. MODERATORS & EXPLORATORY CORRELATIONS ---");
   l("SPLIT FILE LAYERED BY Group.");
   l("CORRELATIONS /VARIABLES=KVIQ_Vis_Pre KVIQ_Kin_Pre");
-  l("  delta_sparc delta_trunk_ratio delta_shoulder_vert_norm delta_hand_displacement_norm delta_movement_time_sec delta_peak_velocity_px_s");
+  l(`  delta_${primaryKey} delta_trunk_ratio delta_shoulder_vert_norm delta_movement_time_sec delta_peak_velocity_cm_s`);
   l("  /PRINT=TWOTAIL NOSIG /MISSING=PAIRWISE.");
   l("SPLIT FILE OFF.");
-  l("CORRELATIONS /VARIABLES=delta_VAMS_Happy delta_VAMS_Calm delta_sparc delta_trunk_ratio /PRINT=TWOTAIL NOSIG.");
+  l(`CORRELATIONS /VARIABLES=delta_VAMS_Happy delta_VAMS_Calm delta_${primaryKey} delta_trunk_ratio /PRINT=TWOTAIL NOSIG.`);
   l("FREQUENCIES IPAQ_MET /STATISTICS=MEAN STDDEV MEDIAN.");
   l("");
 
   l("* --- 12. NON-PARAMETRIC BACKUP (if Shapiro p < .05) ---");
-  l("* Within AOMI: NPAR TESTS /WILCOXON sparc_Pre WITH sparc_Post (PAIRED).");
+  l(`* Within AOMI: NPAR TESTS /WILCOXON ${primaryKey}_Pre WITH ${primaryKey}_Post (PAIRED).`);
   l("* Within Control: repeat Wilcoxon per group.");
-  l("* Between groups on Δ: NPAR TESTS /MANN-WHITNEY delta_sparc BY Group(1 2).");
+  l(`* Between groups on Δ: NPAR TESTS /MANN-WHITNEY delta_${primaryKey} BY Group(1 2).`);
   l("");
 
   l("* --- 13. SENSITIVITY: LOCF + MIXED MODELS (ITT) ---");
   l("* LOCF: replace missing Post with Pre (document n imputed per variable).");
   l("* Example mixed model for primary:");
-  l("* MIXED sparc BY Group time /FIXED=Group time Group*time /REPEATED=time | SUBJECT(ID) COVTYPE(AR1).");
+  l(`* MIXED ${primaryKey} BY Group time /FIXED=Group time Group*time /REPEATED=time | SUBJECT(ID) COVTYPE(AR1).`);
   l("");
 
   l("* --- 14. SAVE ---");
@@ -601,7 +623,7 @@ export function analyzeOutcome(rows, spec) {
   stats.betweenDelta = dA.length >= 2 && dC.length >= 2 ? welchTest(dA, dC) : null;
   stats.baseline = aPre.length >= 2 && cPre.length >= 2 ? welchTest(aPre, cPre) : null;
   stats.dir = dir;
-  stats.isPrimary = pre.includes("sparc");
+  stats.isPrimary = pre.includes(KINEMATIC_VARS.find((k) => k.tier === "primary")?.key || "nvp");
 
   return stats;
 }
