@@ -127,6 +127,74 @@ def _calibrate_from_video(video_path: Path) -> Optional[Tuple[float, float]]:
     return best
 
 
+def detect_table_surface_y(
+    video_path: Path,
+    start_idx: int = 0,
+    end_idx: Optional[int] = None,
+) -> Optional[float]:
+    """
+    Detect table surface as the lowest strong horizontal line in the video.
+    Returns normalized y in [0, 1] (0 = top, 1 = bottom), or None if not found.
+    Does not rely on color or table shape — only on the horizontal edge.
+    """
+    if cv2 is None:
+        return None
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        return None
+    n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    last_idx = max(n - 1, 0)
+    if end_idx is None or end_idx > last_idx:
+        end_idx = last_idx
+    if start_idx > end_idx:
+        start_idx = 0
+    indices = sorted({start_idx, (start_idx + end_idx) // 2, end_idx})
+
+    best_y: Optional[float] = None
+    best_score = -1.0
+
+    for i in indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+        ret, frame = cap.read()
+        if not ret or frame is None:
+            continue
+        h, w = frame.shape[:2]
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, (5, 5), 0)
+        edges = cv2.Canny(gray, 50, 150)
+        lines = cv2.HoughLinesP(
+            edges,
+            rho=1,
+            theta=np.pi / 180,
+            threshold=max(50, int(w * 0.08)),
+            minLineLength=int(w * 0.25),
+            maxLineGap=int(w * 0.05),
+        )
+        if lines is None:
+            continue
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+            dx = abs(x2 - x1)
+            dy = abs(y2 - y1)
+            if dx < w * 0.25:
+                continue
+            # Nearly horizontal
+            if dy > dx * 0.12:
+                continue
+            y = (y1 + y2) / 2.0
+            # Ignore lines in the upper half (likely shoulders/wall)
+            if y < h * 0.45:
+                continue
+            # Score: longer lines lower in the frame are preferred
+            score = dx * (1.0 + 0.5 * (y / h))
+            if score > best_score:
+                best_score = score
+                best_y = y / h
+
+    cap.release()
+    return best_y
+
+
 def estimate_table_width_px_from_wipe(
     palm_x: np.ndarray,
     palm_y: np.ndarray,

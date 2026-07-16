@@ -1721,7 +1721,7 @@ def analyze_trial(
     )
 
     from motion_invariants import compute_forward_reach_cm, compute_hand_reach_displacement
-    from table_calibrator import TABLE_WIDTH_CM, calibrate_table_scale, px_to_cm
+    from table_calibrator import TABLE_WIDTH_CM, calibrate_table_scale, detect_table_surface_y, find_video_for_csv, px_to_cm
 
     scale_info = calibrate_table_scale(
         csv_path, palm_x, palm_y, shoulder_width_px=sw, video_path=video_path,
@@ -1842,6 +1842,30 @@ def analyze_trial(
     results["shoulder_elevation_norm"] = shoulder_elev_norm
     results["shoulder_elevation_abs_px"] = shoulder_elev_abs
     results["shoulder_elevation_method"] = "rest_to_peak_y_reach_window"
+
+    # Table-referenced shoulder elevation ratio: shoulder rise relative to the
+    # gap between the resting shoulder and the detected table surface line.
+    table_surface_y_norm: Optional[float] = None
+    if video_path:
+        table_surface_y_norm = detect_table_surface_y(Path(video_path))
+    if table_surface_y_norm is None:
+        vid = find_video_for_csv(csv_path, video_path)
+        if vid:
+            table_surface_y_norm = detect_table_surface_y(vid)
+    if table_surface_y_norm is not None and np.isfinite(table_surface_y_norm):
+        table_surface_y_px = table_surface_y_norm * frame_height
+        rest_frames = max(1, min(10, (kin_end - kin_start + 1) // 10))
+        shoulder_y_rest_px = float(np.mean(shoulder_y[kin_start : kin_start + rest_frames]))
+        shoulder_y_peak_px = float(np.min(shoulder_y[kin_start : kin_end + 1]))
+        denom = table_surface_y_px - shoulder_y_rest_px
+        if np.isfinite(denom) and abs(denom) > 1e-6:
+            results["shoulder_elevation_table_ratio"] = float((shoulder_y_rest_px - shoulder_y_peak_px) / denom)
+        else:
+            results["shoulder_elevation_table_ratio"] = float("nan")
+        results["table_surface_y"] = round(float(table_surface_y_norm), 4)
+    else:
+        results["shoulder_elevation_table_ratio"] = float("nan")
+        results["table_surface_y"] = None
 
     # Movement time / peak velocity: use the same literature-backed reach window
     # as SPARC and trunk metrics (Balasubramanian 5% peak-velocity window).

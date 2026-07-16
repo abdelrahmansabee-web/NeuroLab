@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+from table_calibrator import detect_table_surface_y, find_video_for_csv
+
 
 
 def _norm_series(df: pd.DataFrame, name: str, coord: str) -> pd.Series:
@@ -323,6 +325,27 @@ def build_overlay_data(
             shoulder_elevation_norm = shoulder_elevation_px / frame_h
             trunk_displacement_norm = trunk_displacement_px / frame_h
 
+        # Detect table surface relative to the seated shoulder-rest baseline so the
+        # overlay can draw a reference line and compute shoulder elevation ratio.
+        table_surface_y = None
+        try:
+            vid = find_video_for_csv(str(csv_path), None)
+            if vid:
+                tsy = detect_table_surface_y(vid)
+                if tsy is not None and np.isfinite(tsy):
+                    table_surface_y = float(tsy)
+        except Exception:
+            pass
+
+        # Compute per-frame table-referenced shoulder elevation ratio (negative = below surface).
+        shoulder_elevation_table_ratio = np.full(len(new_t), np.nan)
+        if table_surface_y is not None:
+            rest_idx = int(onset_idx)
+            shoulder_rest_y = float(shoulder_y_px[rest_idx]) if rest_idx < len(shoulder_y_px) and np.isfinite(shoulder_y_px[rest_idx]) else float(np.nanmedian(shoulder_y_px))
+            denom = (table_surface_y * frame_h) - shoulder_rest_y
+            if np.isfinite(denom) and abs(denom) > 1e-6:
+                shoulder_elevation_table_ratio = (shoulder_rest_y - shoulder_y_px) / denom
+
         # Clip speed so the chart/gauge ignore pre/post movement noise.
         for i in range(len(speed)):
             if i < onset_idx or i > offset_idx:
@@ -335,6 +358,7 @@ def build_overlay_data(
                 "speed": round(float(speed[i]) if np.isfinite(speed[i]) else 0.0, 2),
                 "elbow_angle": round(float(elbow_angle[i]) if elbow_angle is not None and np.isfinite(elbow_angle[i]) else 0.0, 2),
                 "shoulder_elevation_norm": round(float(shoulder_elevation_norm[i]) if i < len(shoulder_elevation_norm) and np.isfinite(shoulder_elevation_norm[i]) else 0.0, 3),
+                "shoulder_elevation_table_ratio": round(float(shoulder_elevation_table_ratio[i]) if i < len(shoulder_elevation_table_ratio) and np.isfinite(shoulder_elevation_table_ratio[i]) else 0.0, 3),
                 "trunk_displacement_norm": round(float(trunk_displacement_norm[i]) if i < len(trunk_displacement_norm) and np.isfinite(trunk_displacement_norm[i]) else 0.0, 3),
                 "palm": palm_pairs[i],
                 "wrist": wrist_pairs[i],
@@ -367,6 +391,7 @@ def build_overlay_data(
                 "hand_displacement_px", "hand_displacement_cm", "hand_displacement_norm",
                 "shoulder_elevation_cm", "shoulder_elevation_abs_px",
                 "shoulder_width_px", "shoulder_width_cm", "cm_per_px",
+                "shoulder_elevation_table_ratio",
             ]:
                 if k in analysis and analysis[k] is not None:
                     try:
@@ -427,6 +452,7 @@ def build_overlay_data(
             "velocity_profile": velocity_profile,
             "elbow_angle_profile": elbow_angle_profile,
             "trunk_x_profile": trunk_x_profile,
+            "table_surface_y": round(table_surface_y, 4) if table_surface_y is not None else None,
             "peak_frames": nvp_peaks,
             "start_palm": start_palm,
             "end_palm": end_palm,
