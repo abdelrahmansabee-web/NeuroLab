@@ -128,15 +128,35 @@ The dict returned by `/analyze-result` contains keys such as:
 
 ## 4. Snapshot file list
 
-| Copied file | Original location | Why it matters |
-|-------------|-------------------|----------------|
+This snapshot now contains **all** backend Python files and **all** frontend `src`/`public` files from v28.81, not just the highlights. Below are the most important ones.
+
+| Key file | Original location | Why it matters |
+|----------|-------------------|----------------|
 | `hf_repo/main.py` | `hf_repo/main.py` | FastAPI app, `/analyze`, `/overlay-data`, `/video`, `/unified-validation`, static file serving, CSP |
 | `hf_repo/overlay_data.py` | `hf_repo/overlay_data.py` | Builds per-frame overlay JSON used by the validation video |
 | `hf_repo/unified_validation_renderer.py` | `hf_repo/unified_validation_renderer.py` | Server-side fallback validation renderer |
 | `hf_repo/kinematics_analyzer.py` | `hf_repo/kinematics_analyzer.py` | Core kinematic metric calculations |
 | `hf_repo/neurolab_kinematics.py` | `hf_repo/neurolab_kinematics.py` | Additional metric derivations |
+| `hf_repo/neuro_kinematics.py` | `hf_repo/neuro_kinematics.py` | More metric derivations |
 | `hf_repo/unified_kinematics.py` | `hf_repo/unified_kinematics.py` | Canonical landmarks, speed, movement window, NVP |
 | `hf_repo/stroke_kinematic_pipeline.py` | `hf_repo/stroke_kinematic_pipeline.py` | High-level analysis pipeline |
+| `hf_repo/robust_reach_analysis.py` | `hf_repo/robust_reach_analysis.py` | Reach analysis robustness |
+| `hf_repo/landmark_tracker_enhance.py` | `hf_repo/landmark_tracker_enhance.py` | Landmark tracking enhancements |
+| `hf_repo/extract_pose_csv_robust.py` | `hf_repo/extract_pose_csv_robust.py` | CSV extraction |
+| `hf_repo/mediapipe_csv_extractor.py` | `hf_repo/mediapipe_csv_extractor.py` | MediaPipe CSV extraction |
+| `hf_repo/compare_trials.py` | `hf_repo/compare_trials.py` | Trial comparison |
+| `hf_repo/compare_trials_graph.py` | `hf_repo/compare_trials_graph.py` | Trial comparison graphs |
+| `hf_repo/analyze_video.py` | `hf_repo/analyze_video.py` | Legacy analysis entry |
+| `hf_repo/auth.py` | `hf_repo/auth.py` | Authentication & MFA (v28.81) |
+| `hf_repo/security.py` | `hf_repo/security.py` | Encryption, rate limiting, audit logging |
+| `hf_repo/requirements.txt` | `hf_repo/requirements.txt` | Python dependencies |
+| `hf_repo/Dockerfile` | `hf_repo/Dockerfile` | HF Space build image |
+| `frontend/src/ValidationOverlayPlayer.js` | `frontend/src/ValidationOverlayPlayer.js` | Validation overlay canvas player |
+| `frontend/src/App.js` | `frontend/src/App.js` | Main app including validation video section and charts |
+| `frontend/src/AuthGate.jsx` | `frontend/src/AuthGate.jsx` | Login/MFA gate (v28.81) |
+| `frontend/src/analysisPlan.js` | `frontend/src/analysisPlan.js` | Analysis plan logic |
+| `frontend/src/patientImport.js` | `frontend/src/patientImport.js` | Patient import logic |
+| `frontend/public/index.html` | `frontend/public/index.html` | HTML shell with version meta tag |
 | `hf_repo/robust_reach_analysis.py` | `hf_repo/robust_reach_analysis.py` | Reach analysis robustness |
 | `hf_repo/landmark_tracker_enhance.py` | `hf_repo/landmark_tracker_enhance.py` | Landmark tracking enhancements |
 | `hf_repo/extract_pose_csv_robust.py` | `hf_repo/extract_pose_csv_robust.py` | CSV extraction |
