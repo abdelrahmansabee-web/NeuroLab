@@ -290,10 +290,12 @@ def build_overlay_data(
         start_palm = palm_pairs[onset_idx] if onset_idx < len(palm_pairs) else None
         end_palm = palm_pairs[offset_idx] if offset_idx < len(palm_pairs) else None
 
-        # Compute per-frame shoulder elevation and trunk displacement for live labels.
+        # Compute per-frame shoulder elevation as affected shoulder height above shoulder midpoint.
         shoulder_y_px = pd.to_numeric(canon.get("shoulder_y", pd.Series(np.nan)), errors="coerce").values
-        baseline_shoulder_y_px = float(np.nanmin(shoulder_y_px)) if np.any(np.isfinite(shoulder_y_px)) else 0.0
-        shoulder_elevation_px = shoulder_y_px - baseline_shoulder_y_px
+        ls_y_px = np.asarray(ls_y) * frame_h
+        rs_y_px = np.asarray(rs_y) * frame_h
+        shoulder_mid_y_px = (ls_y_px + rs_y_px) / 2.0
+        shoulder_elevation_px = shoulder_mid_y_px - shoulder_y_px
 
         trunk_x_px = pd.to_numeric(canon.get("trunk_x", pd.Series(np.nan)), errors="coerce").values
         trunk_baseline_x = float(trunk_x_px[int(onset_idx)]) if int(onset_idx) < len(trunk_x_px) and np.isfinite(trunk_x_px[int(onset_idx)]) else float(np.nanmedian(trunk_x_px))
@@ -318,8 +320,8 @@ def build_overlay_data(
             shoulder_elevation_norm = shoulder_elevation_px / shoulder_width_px
             trunk_displacement_norm = trunk_displacement_px / shoulder_width_px
         else:
-            shoulder_elevation_norm = shoulder_elevation_px
-            trunk_displacement_norm = trunk_displacement_px
+            shoulder_elevation_norm = shoulder_elevation_px / frame_h
+            trunk_displacement_norm = trunk_displacement_px / frame_h
 
         # Clip speed so the chart/gauge ignore pre/post movement noise.
         for i in range(len(speed)):
