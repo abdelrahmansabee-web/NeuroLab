@@ -19,7 +19,7 @@ export function generateLiteratureReviewMarkdown() {
 
 Stroke is the second leading cause of death and a major source of adult disability worldwide (Feigin et al., 2022). Approximately 70–80% of survivors present with upper-limb hemiparesis acutely, and more than two-thirds retain long-term functional limitations (Facciorusso et al., 2024; Schwarz et al., 2022). Impairment reflects not only weakness but **disordered movement quality**: fragmented velocity profiles, compensatory trunk lean, and shoulder girdle elevation (Rohrer et al., 2002; Cirstea & Levin, 2000; Massie et al., 2012).
 
-**Relevance:** The Reach & Wipe task and kinematic outcomes (pause %, SPARC, trunk compensation) directly quantify these signatures.
+**Relevance:** The Reach & Wipe task and kinematic outcomes (number of velocity peaks, straightness, pause time, stops, trunk compensation, shoulder elevation) directly quantify these signatures.
 
 ---
 
@@ -63,7 +63,9 @@ Holmes & Collins (2001) defined seven dimensions — Physical, Environment, Task
 
 Ordinal scales (e.g., FMA) cannot capture subtle trajectory quality (Massie et al., 2012). **Markerless pipelines** (MediaPipe + monocular depth scaling in NeuroLab) enable clinic-feasible, objective metrics: SPARC smoothness, trunk-to-palm ratio, shoulder elevation, elbow angle, movement time, and peak velocity (Schwarz et al., 2022).
 
-**Primary outcome:** \`sparc\` — spectral arc length of palm velocity (Balasubramanian et al., 2012/2015). More negative values indicate smoother movement.
+**Primary outcomes:** number of velocity peaks (NVP), path straightness, pause time (s), and number of stops — all derived from the hand velocity profile. Lower NVP, pause time, and stops + higher straightness reflect a more ballistic, healthy reach.
+
+**Secondary outcomes:** trunk-to-palm ratio, shoulder elevation (norm), elbow angle (mean), movement time (s), and peak hand velocity (cm/s). SPARC and hand displacement are retained as exploratory/legacy metrics.
 
 ---
 
@@ -153,16 +155,19 @@ export function generateConsortSapMarkdown() {
 ### Primary (α = .05, no correction)
 | Variable | SPSS columns | Direction | Test |
 |----------|--------------|-----------|------|
-| SPARC | \`sparc_Pre\`, \`sparc_Post\` | More negative = smoother | 2×2 Mixed ANOVA |
+| Number of velocity peaks | \`nvp_Pre\`, \`nvp_Post\` | Lower = better | 2×2 Mixed ANOVA |
+| Path straightness | \`straightness_Pre\`, \`straightness_Post\` | Higher = better | 2×2 Mixed ANOVA |
+| Pause time | \`pause_time_sec_Pre\`, \`pause_time_sec_Post\` | Lower = better | 2×2 Mixed ANOVA |
+| Number of stops | \`number_of_stops_Pre\`, \`number_of_stops_Post\` | Lower = better | 2×2 Mixed ANOVA |
 
 ### Secondary kinematic (5 tests — **Holm–Bonferroni**, k=5)
 | # | Variable | Columns | Better |
 |---|----------|---------|--------|
 | 1 | Trunk ratio | trunk_ratio_Pre/Post | ↓ |
-| 2 | Shoulder elevation (norm) | shoulder_vert_norm_Pre/Post | ↓ |
-| 3 | Elbow angle (mean) | elbow_angle_mean_Pre/Post | ↑ |
+| 2 | Shoulder elevation (norm) | shoulder_elevation_norm_Pre/Post | ↓ |
+| 3 | Elbow angle (mean) | elbow_angle_mean_deg_Pre/Post | — |
 | 4 | Movement time | movement_time_sec_Pre/Post | ↓ |
-| 5 | Peak velocity | peak_velocity_px_s_Pre/Post | ↑ |
+| 5 | Peak velocity | peak_velocity_cm_s_Pre/Post | ↑ |
 
 ### Clinical secondary
 WMFT-4 rating & time; VAMS-4 (Happy, Calm, Sad, Tense); VAS pain; KVIQ-10 visual & kinesthetic.
@@ -184,12 +189,12 @@ MDRS motor control change; IPAQ MET-min/wk.
 
 ---
 
-## E. Holm–Bonferroni procedure (secondary kinematic, k=8)
+## E. Holm–Bonferroni procedure (secondary kinematic, k=5)
 
-1. Run 8 separate GLMs (see \`neuro_study_analysis.sps\` section 7).  
+1. Run 5 separate GLMs (see \`neuro_study_analysis.sps\` section 7).  
 2. Extract Group×Time interaction **p** for each.  
-3. Sort: p₁ ≤ p₂ ≤ … ≤ p₈.  
-4. Find largest k where pₖ ≤ 0.05 / (8 − k + 1).  
+3. Sort: p₁ ≤ p₂ ≤ … ≤ p₅.  
+4. Find largest k where pₖ ≤ 0.05 / (5 − k + 1).  
 5. Report uncorrected and Holm-adjusted results in Table 3.
 
 ---

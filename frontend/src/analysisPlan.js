@@ -22,10 +22,16 @@ export const KINEMATIC_VARS = [
   { key: "number_of_stops", label: "Number of stops", unit: "count", dir: "lower", tier: "primary" },
   // Secondary outcomes
   { key: "trunk_ratio", label: "Trunk ratio", unit: "ratio", dir: "lower", tier: "secondary" },
-  { key: "shoulder_vert_norm", label: "Shoulder elevation (norm)", unit: "ratio", dir: "lower", tier: "secondary", fallback: "shoulder_elevation_norm" },
-  { key: "elbow_angle_mean_deg", label: "Elbow angle (mean)", unit: "deg", dir: "none", tier: "secondary", fallback: "elbow_angle_range_deg" },
+  { key: "shoulder_elevation_norm", label: "Shoulder elevation (norm)", unit: "ratio", dir: "lower", tier: "secondary", fallback: "shoulder_vert_norm" },
+  { key: "elbow_angle_mean_deg", label: "Elbow angle (mean)", unit: "deg", dir: "none", tier: "secondary" },
   { key: "movement_time_sec", label: "Movement time", unit: "s", dir: "lower", tier: "secondary" },
-  { key: "peak_velocity_cm_s", label: "Peak velocity", unit: "deg/s", dir: "higher", tier: "secondary", fallback: "peak_velocity_px_s" },
+  { key: "peak_velocity_cm_s", label: "Peak velocity", unit: "cm/s", dir: "higher", tier: "secondary" },
+  // Exploratory / legacy outcomes
+  { key: "time_to_peak_velocity_sec", label: "Time to peak velocity", unit: "s", dir: "none", tier: "exploratory" },
+  { key: "relative_time_to_peak_pct", label: "Relative time to peak velocity", unit: "%", dir: "none", tier: "exploratory" },
+  { key: "sparc", label: "SPARC", unit: "unitless", dir: "higher", tier: "exploratory" },
+  { key: "hand_displacement_cm", label: "Hand displacement", unit: "cm", dir: "higher", tier: "exploratory", fallback: "hand_displacement_norm" },
+  { key: "peak_velocity_px_s", label: "Peak velocity (pixels)", unit: "px/s", dir: "higher", tier: "exploratory" },
 ];
 
 export const KINEMATIC_DISPLAY_ORDER = [
@@ -34,10 +40,15 @@ export const KINEMATIC_DISPLAY_ORDER = [
   "pause_time_sec",
   "number_of_stops",
   "trunk_ratio",
-  "shoulder_vert_norm",
+  "shoulder_elevation_norm",
   "elbow_angle_mean_deg",
   "movement_time_sec",
   "peak_velocity_cm_s",
+  "time_to_peak_velocity_sec",
+  "relative_time_to_peak_pct",
+  "sparc",
+  "hand_displacement_cm",
+  "peak_velocity_px_s",
 ];
 
 /** Manuscript / ethics-form reference pattern (Pre → Post → Healthy) */
@@ -46,11 +57,16 @@ export const MANUSCRIPT_KINEMATIC_TARGETS = {
   straightness: { pre: 0.82, post: 0.88, healthy: 0.94 },
   pause_time_sec: { pre: 0.45, post: 0.25, healthy: 0.10 },
   number_of_stops: { pre: 2.5, post: 1.5, healthy: 0.5 },
-  trunk_ratio: { pre: 32.0, post: 18.0, healthy: 3.0 },
-  shoulder_vert_norm: { pre: 18.0, post: 12.0, healthy: 6.5 },
+  trunk_ratio: { pre: 0.32, post: 0.18, healthy: 0.03 },
+  shoulder_elevation_norm: { pre: 0.18, post: 0.12, healthy: 0.065 },
   elbow_angle_mean_deg: { pre: 125, post: 130, healthy: 135 },
   movement_time_sec: { pre: 2.2, post: 1.7, healthy: 1.2 },
   peak_velocity_cm_s: { pre: 45.0, post: 55.0, healthy: 65.0 },
+  time_to_peak_velocity_sec: { pre: 0.55, post: 0.45, healthy: 0.35 },
+  relative_time_to_peak_pct: { pre: 28.0, post: 26.0, healthy: 24.0 },
+  sparc: { pre: -3.5, post: -2.5, healthy: -1.5 },
+  hand_displacement_cm: { pre: 35.0, post: 45.0, healthy: 55.0 },
+  peak_velocity_px_s: { pre: 600.0, post: 750.0, healthy: 900.0 },
 };
 
 export function orderedKinematicVars() {
@@ -72,13 +88,17 @@ export const CLINICAL_VARS = [
   { pre: null, post: "IPAQ_MET", label: "IPAQ total MET-min/wk", dir: "none", test: "descriptive", tier: "moderator" },
 ];
 
+const primaryKinematicKeys = KINEMATIC_VARS.filter((k) => k.tier === "primary").map((k) => k.key).join(" ");
+const secondaryKinematicKeys = KINEMATIC_VARS.filter((k) => k.tier === "secondary").map((k) => k.key).join(", ");
+const nKinematic = KINEMATIC_VARS.length;
+
 export const SPSS_WORKFLOW = [
   { step: 1, title: "Data import", spss: "GET DATA → master_study_data.csv → SAVE master_study.sav" },
-  { step: 2, title: "Variable labels & deltas", spss: "COMPUTE delta_* = *_Post − *_Pre for 9 kinematic + clinical vars" },
+  { step: 2, title: "Variable labels & deltas", spss: `COMPUTE delta_* = *_Post − *_Pre for ${nKinematic} kinematic + clinical vars` },
   { step: 3, title: "Healthy side equivalence", spss: "T-TEST / Mann-Whitney / Chi-square on Pre scores & demographics" },
   { step: 4, title: "Normality (Shapiro–Wilk)", spss: "EXAMINE … BY Group on Pre, Post, and Δ for each DV" },
-  { step: 5, title: "Primary analysis", spss: "GLM nvp straightness pause_time_sec number_of_stops Pre Post BY Group /WSFACTOR=time 2 — Holm–Bonferroni k=4" },
-  { step: 6, title: "Secondary kinematic (5 GLMs)", spss: "trunk_ratio, shoulder_vert_norm, elbow_angle_mean_deg, movement_time_sec, peak_velocity_cm_s; Holm–Bonferroni k=5" },
+  { step: 5, title: "Primary analysis", spss: `GLM ${primaryKinematicKeys} Pre Post BY Group /WSFACTOR=time 2 — Holm–Bonferroni k=4` },
+  { step: 6, title: "Secondary kinematic", spss: `${secondaryKinematicKeys}; Holm–Bonferroni k=${KINEMATIC_VARS.filter((k) => k.tier === "secondary").length}` },
   { step: 8, title: "Clinical scales", spss: "GLM WMFT-4, VAMS-4, VAS, KVIQ; MWU/Wilcoxon if non-normal" },
   { step: 9, title: "MDRS post-only", spss: "Mann-Whitney MDRS_Difference_Post BY Group" },
   { step: 10, title: "Moderators", spss: "CORRELATIONS KVIQ-10 Pre with Δ kinematic; split by Group" },
@@ -92,13 +112,15 @@ const LEGACY_KIN_MAP = {
   pause_time_sec: ["pause_time_sec", "pause_time"],
   number_of_stops: ["number_of_stops", "n_stops", "stops"],
   trunk_ratio: ["trunk_ratio", "total_trunk_palm_ratio"],
-  shoulder_vert_norm: ["shoulder_vert_norm", "shoulder_elevation_norm"],
-  elbow_angle_mean_deg: ["elbow_angle_mean_deg", "elbow_angle_mean", "elbow_angle_range_deg"],
+  shoulder_elevation_norm: ["shoulder_elevation_norm", "shoulder_vert_norm"],
+  elbow_angle_mean_deg: ["elbow_angle_mean_deg", "elbow_angle_mean"],
   movement_time_sec: ["movement_time_sec", "total_duration_s", "duration"],
-  peak_velocity_cm_s: ["peak_velocity_cm_s", "peak_velocity_px_s", "peak_velocity_m_s", "total_peak_velocity"],
-  // Keep old SPARC / hand displacement keys for backward compatibility
+  peak_velocity_cm_s: ["peak_velocity_cm_s"],
+  time_to_peak_velocity_sec: ["time_to_peak_velocity_sec"],
+  relative_time_to_peak_pct: ["relative_time_to_peak_pct"],
   sparc: ["sparc"],
-  hand_displacement_norm: ["hand_displacement_norm", "hand_disp_sw", "reach_amplitude_sw", "lat_range_sw"],
+  hand_displacement_cm: ["hand_displacement_cm", "hand_displacement_norm", "hand_disp_sw", "reach_amplitude_sw"],
+  peak_velocity_px_s: ["peak_velocity_px_s", "total_peak_velocity"],
 };
 
 export function pickKinField(result, canonicalKey, fallbackKey = null) {
@@ -166,13 +188,15 @@ export function formatKinValue(key, value) {
   if (key === "pause_time_sec") return val.toFixed(2);
   if (key === "number_of_stops") return val.toFixed(0);
   if (key === "trunk_ratio") return `${(val * 100).toFixed(1)}%`;
-  if (key === "shoulder_vert_norm") return val.toFixed(3);
+  if (key === "shoulder_elevation_norm" || key === "shoulder_vert_norm") return val.toFixed(3);
   if (key === "elbow_angle_mean_deg") return val.toFixed(1);
   if (key === "movement_time_sec") return val.toFixed(2);
-  if (key === "peak_velocity_px_s") return val.toFixed(1);
-  if (key === "peak_velocity_cm_s") return `${val.toFixed(1)} °/s`;
+  if (key === "peak_velocity_px_s") return `${val.toFixed(1)} px/s`;
+  if (key === "peak_velocity_cm_s") return `${val.toFixed(1)} cm/s`;
+  if (key === "time_to_peak_velocity_sec") return `${val.toFixed(2)} s`;
+  if (key === "relative_time_to_peak_pct") return `${val.toFixed(1)}%`;
   if (key === "sparc") return val.toFixed(3);
-  if (key === "hand_displacement_norm") return `${val.toFixed(1)} cm`;
+  if (key === "hand_displacement_cm" || key === "hand_displacement_norm") return `${val.toFixed(1)} cm`;
   if (key.includes("ratio") || key.includes("trunk") || key.includes("_sw") || key.includes("path_eff")) return val.toFixed(3);
   return val.toFixed(2);
 }
@@ -229,7 +253,7 @@ export const RECOVERY_SUMMARY_KEYS = [
   "pause_time_sec",
   "number_of_stops",
   "trunk_ratio",
-  "shoulder_vert_norm",
+  "shoulder_elevation_norm",
   "elbow_angle_mean_deg",
   "peak_velocity_cm_s",
 ];
@@ -257,7 +281,7 @@ function appendManuscriptAliases(row, suffix, m) {
   const legacy = {
     total_trunk_palm_ratio: kinCell(m, "trunk_ratio"),
     total_duration_s: kinCell(m, "movement_time_sec"),
-    total_peak_velocity: kinCell(m, "peak_velocity_cm_s"),
+    total_peak_velocity: kinCell(m, "peak_velocity_cm_s") || kinCell(m, "peak_velocity_px_s"),
   };
   Object.entries(legacy).forEach(([k, v]) => {
     row[`${k}_${suffix}`] = v;
@@ -498,7 +522,7 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv", s
 
   l("* --- 4. HEALTHY SIDE EQUIVALENCE ---");
   l("T-TEST GROUPS=Group(1 2)");
-  l(`  /VARIABLES=Age TimeSinceStroke MAS MRC ${primaryKey}_Pre trunk_ratio_Pre shoulder_vert_norm_Pre.`);
+  l(`  /VARIABLES=Age TimeSinceStroke MAS MRC ${primaryKey}_Pre trunk_ratio_Pre shoulder_elevation_norm_Pre.`);
   l("CROSSTABS Sex StrokeType AffectedSide BY Group /STATISTICS=CHISQ.");
   l("NPAR TESTS /MANN-WHITNEY MAS MRC BY Group(1 2).");
   l("");
@@ -556,10 +580,12 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv", s
   l("T-TEST GROUPS=Group(1 2) /VARIABLES=MDRS_Difference_Post MDRS_Control_Pre.");
   l("");
 
+  const secondaryDeltaKeys = kinSecondary.map(({ key }) => `delta_${key}`).join(" ");
+
   l("* --- 11. MODERATORS & EXPLORATORY CORRELATIONS ---");
   l("SPLIT FILE LAYERED BY Group.");
   l("CORRELATIONS /VARIABLES=KVIQ_Vis_Pre KVIQ_Kin_Pre");
-  l(`  delta_${primaryKey} delta_trunk_ratio delta_shoulder_vert_norm delta_movement_time_sec delta_peak_velocity_cm_s`);
+  l(`  delta_${primaryKey} ${secondaryDeltaKeys}`);
   l("  /PRINT=TWOTAIL NOSIG /MISSING=PAIRWISE.");
   l("SPLIT FILE OFF.");
   l(`CORRELATIONS /VARIABLES=delta_VAMS_Happy delta_VAMS_Calm delta_${primaryKey} delta_trunk_ratio /PRINT=TWOTAIL NOSIG.`);

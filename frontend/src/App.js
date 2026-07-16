@@ -2316,15 +2316,19 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       pauseTimeSec: "pause_time_sec",
       numberOfStops: "number_of_stops",
       trunkRatio: "trunk_ratio",
-      shoulderVertNorm: "shoulder_vert_norm",
+      shoulderElevationNorm: "shoulder_elevation_norm",
+      shoulderVertNorm: "shoulder_elevation_norm",
       elbowAngleMeanDeg: "elbow_angle_mean_deg",
       movementTimeSec: "movement_time_sec",
-      peakVelocityPxS: "peak_velocity_px_s",
       peakVelocityCmS: "peak_velocity_cm_s",
+      timeToPeakVelocitySec: "time_to_peak_velocity_sec",
+      relativeTimeToPeakPct: "relative_time_to_peak_pct",
       duration: "movement_time_sec",
       // Legacy keys kept for backward compatibility
       sparc: "sparc",
-      handDisplacementNorm: "hand_displacement_norm",
+      handDisplacementCm: "hand_displacement_cm",
+      handDisplacementNorm: "hand_displacement_cm",
+      peakVelocityPxS: "peak_velocity_px_s",
     };
     const converted = {};
     const phaseMap = { pre: "pre", post: "post", healthy: "baseline" };
@@ -2878,13 +2882,15 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     pause_time_sec: "Total time the hand is paused (speed below 5% of peak) during the reach.",
     number_of_stops: "Number of distinct pauses during the reach.",
     trunk_ratio: "Trunk displacement / palm displacement. Lower = less trunk compensation.",
-    shoulder_vert_norm: "Shoulder elevation normalized to shoulder width. Lower = less compensatory elevation.",
+    shoulder_elevation_norm: "Shoulder elevation normalized to shoulder width. Lower = less compensatory elevation.",
     elbow_angle_mean_deg: "Mean elbow flexion angle during the movement window.",
     movement_time_sec: "Active movement duration (onset to offset).",
-    peak_velocity_px_s: "Peak tangential hand velocity during reach (px/s).",
     peak_velocity_cm_s: "Peak tangential hand velocity during reach (cm/s).",
+    time_to_peak_velocity_sec: "Time from movement onset to peak hand velocity.",
+    relative_time_to_peak_pct: "Time to peak velocity as a percentage of movement time.",
     sparc: "SPARC — less negative (closer to 0) = smoother movement. Kept for backward compatibility.",
-    hand_displacement_norm: "Peak hand reach relative to trunk (legacy).",
+    hand_displacement_cm: "Peak hand displacement during the reach (cm).",
+    peak_velocity_px_s: "Peak tangential hand velocity during reach (px/s) — when cm calibration is unavailable.",
   };
 
   const CARD_PREVIEW_KEYS = ["nvp", "straightness", "pause_time_sec", "number_of_stops"];
@@ -5649,7 +5655,7 @@ const AnalysisDashboard = () => {
         </Glass>
           {backendReport?.holm_secondary_kinematic && (
         <Glass className="p-5">
-              <p className="text-xs font-extrabold text-amber-300 uppercase tracking-widest mb-4">Holm–Bonferroni (secondary kinematic, k=8)</p>
+              <p className="text-xs font-extrabold text-amber-300 uppercase tracking-widest mb-4">Holm–Bonferroni (secondary kinematic, k={KINEMATIC_VARS.filter((k) => k.tier === "secondary").length})</p>
               <div className="overflow-x-auto rounded-xl border border-amber-500/20">
             <table className="w-full text-xs">
               <thead>
