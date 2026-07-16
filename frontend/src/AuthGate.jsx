@@ -31,6 +31,8 @@ export default function AuthGate({ children }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [totpCode, setTotpCode] = useState("");
 
   useEffect(() => {
     fetch("/auth/me", { credentials: "same-origin", headers: authHeaders() })
@@ -57,6 +59,9 @@ export default function AuthGate({ children }) {
     setSuccess("");
     const endpoint = mode === "login" ? "/auth/login" : mode === "register" ? "/auth/register" : "/auth/reset-password";
     const body = { email: email.trim().toLowerCase(), password };
+    if (mode === "login" && mfaRequired) {
+      body.totp_code = totpCode.trim();
+    }
     if (mode === "register") body.name = name.trim();
     if (mode === "reset") {
       if (password !== confirmPassword) {
@@ -79,6 +84,12 @@ export default function AuthGate({ children }) {
       }
       if (!r.ok) {
         setError(data.detail || "Request failed");
+        return;
+      }
+      if (mode === "login" && data.mfa_required) {
+        setMfaRequired(true);
+        setSuccess(data.message || "Enter the 6-digit code from your authenticator app.");
+        setTotpCode("");
         return;
       }
       if (mode === "register" && data.pending_approval) {
@@ -112,7 +123,7 @@ export default function AuthGate({ children }) {
     return children;
   }
 
-  const title = mode === "login" ? "Sign in" : mode === "register" ? "Create account" : "Reset password";
+  const title = mfaRequired ? "Two-factor authentication" : mode === "login" ? "Sign in" : mode === "register" ? "Create account" : "Reset password";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#121820] relative overflow-hidden px-4">
@@ -129,78 +140,108 @@ export default function AuthGate({ children }) {
           <p className="text-green-300 text-sm mb-3 text-center">{success}</p>
         )}
 
-        {mode === "register" && (
+        {!mfaRequired && (
+          <>
+            {mode === "register" && (
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={INPUT}
+                placeholder="Your name"
+                required
+              />
+            )}
+
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={`${INPUT} mt-3`}
+              placeholder="Email"
+              required
+            />
+
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={`${INPUT} mt-3`}
+              placeholder={mode === "reset" ? "New password" : "Password"}
+              required
+              minLength={12}
+            />
+
+            {mode === "reset" && (
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={`${INPUT} mt-3`}
+                placeholder="Confirm new password"
+                required
+                minLength={12}
+              />
+            )}
+
+            {(mode === "register" || mode === "reset") && (
+              <p className="text-xs text-white/40 mt-2 text-center">
+                Password must be at least 12 characters with uppercase, lowercase, digit, and special character.
+              </p>
+            )}
+          </>
+        )}
+
+        {mfaRequired && (
           <input
             type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className={INPUT}
-            placeholder="Your name"
-            required
-          />
-        )}
-
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className={`${INPUT} mt-3`}
-          placeholder="Email"
-          required
-        />
-
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className={`${INPUT} mt-3`}
-          placeholder={mode === "reset" ? "New password" : "Password"}
-          required
-          minLength={12}
-        />
-
-        {mode === "reset" && (
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={totpCode}
+            onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
             className={`${INPUT} mt-3`}
-            placeholder="Confirm new password"
+            placeholder="6-digit code"
             required
-            minLength={12}
+            maxLength={6}
           />
-        )}
-
-        {(mode === "register" || mode === "reset") && (
-          <p className="text-xs text-white/40 mt-2 text-center">
-            Password must be at least 12 characters with uppercase, lowercase, digit, and special character.
-          </p>
         )}
 
         <button type="submit" className={`${BUTTON} mt-4`}>
-          {mode === "reset" ? "Update password" : title}
+          {mfaRequired ? "Verify" : mode === "reset" ? "Update password" : title}
         </button>
 
-        <div className="mt-4 text-center flex flex-col gap-1">
-          {mode === "login" ? (
-            <>
-              <button type="button" onClick={() => { setMode("register"); resetForm(); }} className={LINK}>
-                Don’t have an account? Create one
+        {mfaRequired && (
+          <button
+            type="button"
+            onClick={() => { setMfaRequired(false); setTotpCode(""); setError(""); setSuccess(""); }}
+            className={`${LINK} mt-3`}
+          >
+            Back to sign in
+          </button>
+        )}
+
+        {!mfaRequired && (
+          <div className="mt-4 text-center flex flex-col gap-1">
+            {mode === "login" ? (
+              <>
+                <button type="button" onClick={() => { setMode("register"); resetForm(); }} className={LINK}>
+                  Don’t have an account? Create one
+                </button>
+                <button type="button" onClick={() => { setMode("reset"); resetForm(); }} className={LINK}>
+                  Forgot password?
+                </button>
+              </>
+            ) : mode === "register" ? (
+              <button type="button" onClick={() => { setMode("login"); resetForm(); }} className={LINK}>
+                Already have an account? Sign in
               </button>
-              <button type="button" onClick={() => { setMode("reset"); resetForm(); }} className={LINK}>
-                Forgot password?
+            ) : (
+              <button type="button" onClick={() => { setMode("login"); resetForm(); }} className={LINK}>
+                Back to sign in
               </button>
-            </>
-          ) : mode === "register" ? (
-            <button type="button" onClick={() => { setMode("login"); resetForm(); }} className={LINK}>
-              Already have an account? Sign in
-            </button>
-          ) : (
-            <button type="button" onClick={() => { setMode("login"); resetForm(); }} className={LINK}>
-              Back to sign in
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         <p className="text-xs text-white/40 mt-4 text-center">
           Patient data is linked to your account and backed up to your Google Drive automatically.

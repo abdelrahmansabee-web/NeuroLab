@@ -1830,7 +1830,9 @@ function smoothVelPath(pts, xFn, yFn) {
 function buildCombinedVelChart(profiles, isPdf, compact) {
   const colors = { pre:"#38bdf8", during:"#a78bfa", post:"#34d399", baseline:"#fbbf24" };
   const labels = { pre:"Pre", during:"During", post:"Post", baseline:"Healthy side" };
-  const entries = Object.entries(profiles).filter(([_, p]) => p?.t?.length >= 2);
+  const entries = Object.entries(profiles)
+    .map(([key, p]) => [key, { t: p?.t ?? p?.time, v: p?.v ?? p?.speed }])
+    .filter(([_, p]) => p.t?.length >= 2);
   if (!entries.length) return "";
   const normalized = entries.map(([key, p]) => {
     const t0 = p.t[0];
@@ -2460,7 +2462,9 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   const loadOriginalVideoBlob = useCallback(async (phase, filename) => {
     if (!filename || originalVideoBlobsRef.current[phase]) return;
     try {
-      const url = `${API_BASE}/download/${encodeURIComponent(filename)}`;
+      // Use the /video streaming endpoint so the browser receives the correct
+      // video/mp4 MIME type and can play the blob inline.
+      const url = `${API_BASE}/video/${encodeURIComponent(filename)}`;
       const res = await fetch(url);
       if (res.status === 404) {
         showToast("Original video expired on server — please re-upload", "error");
@@ -2556,11 +2560,16 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       showToast(`✓ Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials → mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
       setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
       // Fetch lightweight overlay data so the browser can render the validation overlay live.
+      // Load the original video blob first so the player never falls back to the
+      // attachment-style /download endpoint, which browsers cannot play inline.
       if (!isCsv) {
-        setTimeout(() => fetchOverlayData(phase, result.csv_filename), 200);
-        if (!originalVideoBlobs[phase]) {
-          setTimeout(() => loadOriginalVideoBlob(phase, result.video_filename || file.name), 100);
-        }
+        const loadAndFetchOverlay = async () => {
+          if (!originalVideoBlobs[phase]) {
+            await loadOriginalVideoBlob(phase, result.video_filename || file.name);
+          }
+          await fetchOverlayData(phase, result.csv_filename);
+        };
+        loadAndFetchOverlay();
       }
       // Always generate the unified validation video in the background if it wasn't
       // returned inline. Free HF Spaces can time out, so we queue a background job and
@@ -2689,7 +2698,8 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     videoLoadingRef.current[phase] = true;
     setVideoLoading((prev) => ({ ...prev, [phase]: true }));
     try {
-      const url = `${API_BASE}/download/${encodeURIComponent(filename)}`;
+      // Use /video so the browser gets the right video MIME type.
+      const url = `${API_BASE}/video/${encodeURIComponent(filename)}`;
       const res = await fetch(url);
       if (res.status === 404) {
         if (!silent) showToast("Validation video expired on server — please re-analyze", "error");
@@ -2724,9 +2734,8 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   const [uvErrors, setUvErrors] = useState({});
 
   // Auto-load validation video blobs as soon as they are referenced.
-  // The /video/ streaming endpoint is unreliable behind HF Spaces' proxy because
-  // the browser sends HEAD requests that return 405, so we always fetch the full
-  // file once as a blob object URL and play from that.
+  // We fetch the full file once as a blob object URL and play from that because
+  // the Space proxy does not stream range requests reliably for our binary files.
   useEffect(() => {
     phases.forEach((ph) => {
       const uv = kinematicsResults[ph.k]?.unified_validation_video;
@@ -2807,24 +2816,31 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     }
   };
 
-  // Hide the kinematic results table until every analyzed phase has either
-  // a ready unified validation video, a ready client-side overlay, or a
-  // permanent generation error. This guarantees the user watches/verifies
-  // the visual validation before reading the numbers.
+  // Show the kinematic results table only when every analyzed phase has a ready
+  // client-side overlay. This guarantees the table numbers are always derived from
+  // the actual video frames used by the validation overlay, not from server-side
+  // analysis that may differ from the video.
   useEffect(() => {
     const analyzedPhases = phases.filter((ph) => kinematicsResults[ph.k]);
     if (analyzedPhases.length === 0) {
       setShowResultsTable(false);
       return;
     }
-    const anyPending = analyzedPhases.some(
-      (ph) =>
-        !kinematicsResults[ph.k]?.unified_validation_video &&
-        !overlayData[ph.k] &&
-        !uvErrors[ph.k]
-    );
+    const anyPending = analyzedPhases.some((ph) => !overlayData[ph.k] && !uvErrors[ph.k]);
     setShowResultsTable(!anyPending);
   }, [kinematicsResults, uvErrors, overlayData]);
+
+  // Re-fetch overlay data for persisted sessions (page reload, saved report, etc.)
+  // where the in-memory overlay state was lost but the backend CSV still exists.
+  useEffect(() => {
+    phases.forEach((ph) => {
+      const result = kinematicsResults[ph.k];
+      if (!result || overlayData[ph.k] || uvErrors[ph.k]) return;
+      if (result.csv_filename) {
+        fetchOverlayData(ph.k, result.csv_filename);
+      }
+    });
+  }, [kinematicsResults, fetchOverlayData, overlayData, uvErrors]);
 
   const toggleResult = (phase) => {
     setExpandedResults((prev) => ({ ...prev, [phase]: !prev[phase] }));
@@ -2833,8 +2849,9 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   const getMetricValue = (phase, key) => {
     const result = kinematicsResults[phase];
     if (!result) return "—";
-    // Always prefer the values computed from the actual video frames used by the
-    // validation overlay so the table and the video show the exact same numbers.
+    // The table reads exclusively from the video overlay data. Every displayed
+    // number comes from the same frames used by the validation overlay, so the
+    // table and the video can never disagree.
     const overlay = overlayData?.[phase];
     if (overlay?.frames?.length) {
       const computed = computeOverlayMetrics(overlay);
@@ -2843,17 +2860,9 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
         if (num !== null) return num;
       }
     }
-    if (result.validation_summary && typeof result.validation_summary === "object") {
-      const vsNum = pickKinField(result.validation_summary, key);
-      if (vsNum !== null) return vsNum;
-    }
-    const num = pickKinField(result, key);
-    if (num !== null) return num;
     if (key === "side_analyzed" || key === "side") {
       return result.side_analyzed ?? result.side ?? "—";
     }
-    const direct = result[key];
-    if (direct != null && typeof direct !== "object") return direct;
     return "—";
   };
 
@@ -3168,7 +3177,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {phases.filter((ph) => kinematicsResults[ph.k]).map((ph) => (
-              <div key={ph.k} className={`rounded-xl border p-3 ${phaseValueCls(ph.c)}`}>
+              <div key={ph.k} className="rounded-xl border border-white/10 bg-black/20 p-3 overflow-hidden">
                 <div className="flex items-center justify-between mb-2">
                   <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>{ph.l} — Validation</p>
                   {kinematicsResults[ph.k]?.unified_validation_video && (
@@ -3185,13 +3194,21 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                   )}
                 </div>
                 {overlayData[ph.k] ? (
-                  <ValidationOverlayPlayer
-                    videoUrl={originalVideoBlobs[ph.k] || `${API_BASE}/download/${encodeURIComponent(kinematicsResults[ph.k]?.video_filename || "")}`}
-                    overlayData={overlayData[ph.k]}
-                    phaseLabel={ph.l}
-                    autoPlay
-                    onError={() => showToast(`${ph.l} overlay player error`, "error")}
-                  />
+                  originalVideoBlobs[ph.k] ? (
+                    <ValidationOverlayPlayer
+                      videoUrl={originalVideoBlobs[ph.k]}
+                      overlayData={overlayData[ph.k]}
+                      phaseLabel={ph.l}
+                      autoPlay
+                      autoRender
+                      onError={() => showToast(`${ph.l} overlay player error`, "error")}
+                    />
+                  ) : (
+                    <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3">
+                      <p className="text-[11px] text-white/50 mb-2">Loading original video…</p>
+                      <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+                    </div>
+                  )
                 ) : kinematicsResults[ph.k]?.unified_validation_video ? (
                   videoBlobs[ph.k] ? (
                     <InlineValidationVideo
@@ -6276,6 +6293,12 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [usersError, setUsersError] = useState("");
     const [actionLoading, setActionLoading] = useState(null);
+    const [mfaStatus, setMfaStatus] = useState(null);
+    const [mfaSetup, setMfaSetup] = useState(null);
+    const [mfaCode, setMfaCode] = useState("");
+    const [mfaError, setMfaError] = useState("");
+    const [mfaLoading, setMfaLoading] = useState(false);
+    const MFA_INPUT = "w-full bg-[rgba(220,235,255,0.04)] border border-white/[0.03] rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/30";
 
     const loadUsers = async () => {
       setLoading(true);
@@ -6323,11 +6346,141 @@ export default function App() {
       }
     };
 
+    const loadMfaStatus = async () => {
+      try {
+        const r = await fetch("/auth/mfa/status", { credentials: "same-origin", headers: authHeaders() });
+        const data = await r.json().catch(() => ({}));
+        setMfaStatus(r.ok ? data.mfa_enabled : false);
+      } catch (e) {
+        setMfaStatus(false);
+      }
+    };
+    useEffect(() => { loadMfaStatus(); }, []);
+
+    const setupMfa = async () => {
+      setMfaLoading(true);
+      setMfaError("");
+      try {
+        const r = await fetch("/auth/mfa/setup", { method: "POST", credentials: "same-origin", headers: authHeaders() });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok) {
+          setMfaSetup(data);
+        } else {
+          setMfaError(data.detail || "Setup failed");
+        }
+      } catch (e) {
+        setMfaError(e?.message || "Network error");
+      } finally {
+        setMfaLoading(false);
+      }
+    };
+
+    const verifyMfa = async () => {
+      setMfaLoading(true);
+      setMfaError("");
+      try {
+        const r = await fetch("/auth/mfa/verify", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: authHeaders(),
+          body: JSON.stringify({ code: mfaCode }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok) {
+          setMfaStatus(true);
+          setMfaSetup(null);
+          setMfaCode("");
+        } else {
+          setMfaError(data.detail || "Invalid code");
+        }
+      } catch (e) {
+        setMfaError(e?.message || "Network error");
+      } finally {
+        setMfaLoading(false);
+      }
+    };
+
+    const disableMfa = async () => {
+      if (!window.confirm("Disable MFA? This reduces account security.")) return;
+      setMfaLoading(true);
+      setMfaError("");
+      try {
+        const r = await fetch("/auth/mfa/disable", { method: "POST", credentials: "same-origin", headers: authHeaders() });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok) {
+          setMfaStatus(false);
+          setMfaSetup(null);
+          setMfaCode("");
+        } else {
+          setMfaError(data.detail || "Disable failed");
+        }
+      } catch (e) {
+        setMfaError(e?.message || "Network error");
+      } finally {
+        setMfaLoading(false);
+      }
+    };
+
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">Users</h2>
           <button onClick={loadUsers} className="text-xs text-white/60 hover:text-white">Refresh</button>
+        </div>
+        <div className="p-4 rounded-xl bg-white/[0.05] border border-white/10">
+          <h3 className="text-sm font-medium text-white">Two-factor authentication (Admin)</h3>
+          <p className="text-xs text-white/50 mt-1">
+            Status: {mfaStatus === null ? "Loading..." : mfaStatus ? "Enabled" : "Not enabled"}
+          </p>
+          {mfaStatus === false && (
+            <button
+              onClick={setupMfa}
+              disabled={mfaLoading}
+              className="mt-3 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-50"
+            >
+              Enable MFA
+            </button>
+          )}
+          {mfaStatus === true && (
+            <button
+              onClick={disableMfa}
+              disabled={mfaLoading}
+              className="mt-3 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
+            >
+              Disable MFA
+            </button>
+          )}
+          {mfaError && <p className="text-red-300 text-xs mt-2">{mfaError}</p>}
+          {mfaSetup && (
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-white/70">
+                Scan the QR code with your authenticator app, then enter the 6-digit code.
+              </p>
+              <img
+                src={mfaSetup.qr_data_url}
+                alt="MFA QR code"
+                className="bg-white p-2 rounded-lg w-44 h-44 object-contain"
+              />
+              <p className="text-xs text-white/40 break-all">Secret: {mfaSetup.secret}</p>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                className={MFA_INPUT}
+                placeholder="6-digit code"
+                maxLength={6}
+              />
+              <button
+                onClick={verifyMfa}
+                disabled={mfaLoading || mfaCode.length !== 6}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-50"
+              >
+                Verify & Enable
+              </button>
+            </div>
+          )}
         </div>
         {usersError && <p className="text-red-300 text-sm">{usersError}</p>}
         {loading ? (
@@ -6571,7 +6724,8 @@ export default function App() {
         }
 
         .sidebar-shell,
-        .glass-float {
+        .glass-float,
+        .content-shell {
           position: relative;
           border-color: rgba(255,255,255,0.03) !important;
           backdrop-filter: blur(12px) saturate(2.25) !important;
@@ -6583,12 +6737,13 @@ export default function App() {
             radial-gradient(ellipse 150% 70% at 50% 100%, rgba(200,230,255,0.015) 0%, transparent 60%),
             radial-gradient(circle at 0% 25%, rgba(255,255,255,0.008) 0%, transparent 40%),
             radial-gradient(circle at 100% 75%, rgba(255,255,255,0.008) 0%, transparent 40%),
-            linear-gradient(175deg, rgba(255,255,255,0.005) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.00) 65%, rgba(255,255,255,0.004) 100%);
+            linear-gradient(175deg, rgba(255,255,255,0.005) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.00) 65%, rgba(255,255,255,0.004) 100%) !important;
           background-blend-mode: overlay, overlay, overlay, overlay, normal;
         }
 
         .sidebar-shell::before,
-        .glass-float::before {
+        .glass-float::before,
+        .content-shell::before {
           content: "";
           position: absolute;
           inset: 0;
@@ -6616,7 +6771,8 @@ export default function App() {
         }
 
         .sidebar-shell::after,
-        .glass-float::after {
+        .glass-float::after,
+        .content-shell::after {
           content: "";
           position: absolute;
           inset: 0;
@@ -6629,7 +6785,6 @@ export default function App() {
         }
 
         .content-shell {
-          border-color: rgba(255,255,255,0.08) !important;
           background: transparent;
         }
 

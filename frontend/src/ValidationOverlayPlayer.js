@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import { Play, Pause, Maximize, ChevronLeft, ChevronRight, Download } from "lucide-react";
 
 export function computeOverlayMetrics(overlayData) {
   if (!overlayData?.frames?.length) return null;
@@ -65,23 +66,12 @@ export function computeOverlayMetrics(overlayData) {
     if (palmDisp > 0) trunkRatio = Math.min(1, trunkDisp / palmDisp);
   }
 
-  // Shoulder elevation = ratio of shoulder elevation relative to hip (trunk).
+  // Shoulder elevation = ratio of affected shoulder height above shoulder midpoint.
   let shoulderElevation = 0;
-  const shStart = frames[startIdx]?.shoulder;
-  const trStart = frames[startIdx]?.trunk;
-  let shMinRel = null;
   for (let i = startIdx; i <= endIdx; i++) {
-    const sh = frames[i]?.shoulder;
-    const tr = frames[i]?.trunk;
-    if (!sh || !tr) continue;
-    const rel = sh[1] - tr[1]; // positive = shoulder below hip
-    if (shMinRel === null || rel < shMinRel) shMinRel = rel;
-  }
-  if (shStart && trStart && shMinRel !== null) {
-    const startRel = shStart[1] - trStart[1];
-    const denom = Math.abs(startRel);
-    if (denom > 0) {
-      shoulderElevation = Math.abs(startRel - shMinRel) / denom;
+    const v = frames[i]?.shoulder_elevation_norm;
+    if (v != null && !Number.isNaN(v)) {
+      shoulderElevation = Math.max(shoulderElevation, v);
     }
   }
 
@@ -123,7 +113,7 @@ export function computeOverlayMetrics(overlayData) {
   return out;
 }
 
-export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, autoPlay = false, onEnded, onDownloadReady, onError }) {
+export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, autoPlay = false, autoRender = false, onEnded, onDownloadReady, onError }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
@@ -132,10 +122,13 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
   const [progress, setProgress] = useState(0);
   const [recording, setRecording] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState(null);
+  const [renderProgress, setRenderProgress] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const [videoAspect, setVideoAspect] = useState(null);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const rafRef = useRef(null);
+  const autoRenderStartedRef = useRef(false);
 
   const phaseColor = useMemo(() => {
     const p = (phaseLabel || "").toLowerCase();
@@ -437,9 +430,9 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
 
     const currentNVP = peakFrames.filter((pi) => pi <= idx).length;
 
-    let currentPeakVelocity = 0;
-    for (let i = 0; i <= idx && i < frames.length; i++) {
-      currentPeakVelocity = Math.max(currentPeakVelocity, frames[i].speed || 0);
+    let currentPeakElbowAngVel = 0;
+    for (let i = 1; i <= idx && i < frames.length; i++) {
+      currentPeakElbowAngVel = Math.max(currentPeakElbowAngVel, getElbowAngVel(i));
     }
 
     let currentMovementTime = 0;
@@ -497,28 +490,8 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     }
 
     let currentShoulderElevation = 0;
-    if (inMovement) {
-      let shStart = null;
-      let trStart = null;
-      let shMinRel = null;
-      for (let i = win.start_idx; i <= idx && i < frames.length; i++) {
-        const sh = frames[i].shoulder;
-        const tr = frames[i].trunk;
-        if (!sh || !tr) continue;
-        const rel = sh[1] - tr[1];
-        if (shStart === null) {
-          shStart = sh[1];
-          trStart = tr[1];
-        }
-        if (shMinRel === null || rel < shMinRel) shMinRel = rel;
-      }
-      if (shStart !== null && trStart !== null && shMinRel !== null) {
-        const startRel = shStart - trStart;
-        const denom = Math.abs(startRel);
-        if (denom > 0) {
-          currentShoulderElevation = Math.abs(startRel - shMinRel) / denom;
-        }
-      }
+    if (f && typeof f.shoulder_elevation_norm === "number" && !Number.isNaN(f.shoulder_elevation_norm)) {
+      currentShoulderElevation = f.shoulder_elevation_norm;
     }
 
     const currentElbowAngle = f.elbow_angle || 0;
@@ -670,12 +643,21 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       ctx.restore();
     }
 
-    const pad = 8 * window.devicePixelRatio;
-    const panelW = Math.min(200 * window.devicePixelRatio, cw * 0.45);
-    const chartH = 30 * window.devicePixelRatio;
-    const rowH = 14 * window.devicePixelRatio;
-    const headerH = 26 * window.devicePixelRatio;
-    const panelH = headerH + rowH * 8 + chartH * 3 + pad * 2 + 20;
+    const unscaledPad = 8 * dpr;
+    const unscaledPanelW = Math.min(200 * dpr, cw * 0.45);
+    const unscaledChartH = 30 * dpr;
+    const unscaledRowH = 14 * dpr;
+    const unscaledHeaderH = 26 * dpr;
+    const unscaledPanelH = unscaledHeaderH + unscaledRowH * 8 + unscaledChartH * 3 + unscaledPad * 2 + 20;
+    const maxPanelH = ch - unscaledPad * 2;
+    const panelScale = unscaledPanelH > maxPanelH ? Math.max(0.65, maxPanelH / unscaledPanelH) : 1;
+
+    const pad = unscaledPad * panelScale;
+    const panelW = unscaledPanelW * panelScale;
+    const chartH = unscaledChartH * panelScale;
+    const rowH = unscaledRowH * panelScale;
+    const headerH = unscaledHeaderH * panelScale;
+    const panelH = unscaledPanelH * panelScale;
 
     const panelOnRight = true;
     const panelX = cw - panelW - pad;
@@ -687,7 +669,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     ctx.fillStyle = "rgba(14,17,32,0.68)";
     ctx.strokeStyle = "rgba(255,255,255,0.14)";
     ctx.lineWidth = 1;
-    const r = 10 * window.devicePixelRatio;
+    const r = 10 * dpr * panelScale;
     const px = panelX, py = panelY, pw = panelW, ph = panelH;
     ctx.beginPath();
     ctx.moveTo(px + r, py);
@@ -717,9 +699,9 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
 
     const left = px + pad;
     const right = px + pw - pad;
-    let cy = py + headerH + 14;
-    const fsMain = `${Math.round(10 * window.devicePixelRatio)}px`;
-    const fsSmall = `${Math.round(8 * window.devicePixelRatio)}px`;
+    let cy = py + headerH + 14 * panelScale;
+    const fsMain = `${Math.round(10 * dpr * panelScale)}px`;
+    const fsSmall = `${Math.round(8 * dpr * panelScale)}px`;
 
     function row(labelText, valueText, accent = false) {
       ctx.font = `600 ${fsSmall} sans-serif`;
@@ -733,7 +715,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       cy += rowH;
     }
 
-    ctx.font = `bold ${Math.round(11 * window.devicePixelRatio)}px sans-serif`;
+    ctx.font = `bold ${Math.round(11 * dpr * panelScale)}px sans-serif`;
     ctx.fillStyle = "#fff";
     ctx.textAlign = "left";
     ctx.fillText(`${phaseLabel || "Trial"}`, left, py + headerH / 2 + 4);
@@ -757,7 +739,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       ctx.fillText(String(wiping.warning).slice(0, 40), left, cy);
       cy += rowH;
     }
-    row("Peak velocity", currentPeakVelocity > 0 ? `${formatValue(currentPeakVelocity, 0)} °/s` : "—", true);
+    row("Peak velocity", currentPeakElbowAngVel > 0 ? `${formatValue(currentPeakElbowAngVel, 0)} °/s` : "—", true);
     row("Movement time", currentMovementTime > 0 ? `${formatValue(currentMovementTime, 2)} s` : "—");
     row("Pause / stops", currentPauseTime > 0 || currentStops > 0 ? `${formatValue(currentPauseTime, 2)} s / ${currentStops}` : "—");
     row("Trunk ratio", currentTrunkRatio > 0 ? formatValue(currentTrunkRatio, 2) : "—");
@@ -765,7 +747,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
 
     function miniChart(label, profile, colorStr) {
       if (!profile?.t?.length) return;
-      const chartPad = 4 * window.devicePixelRatio;
+      const chartPad = 4 * dpr * panelScale;
       const cx = px + pad;
       const cyy = cy + chartPad;
       const cw2 = pw - pad * 2;
@@ -802,7 +784,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     }
 
     if (velocityProfile?.t?.length >= 2) {
-      const chartPad = 5 * window.devicePixelRatio;
+      const chartPad = 5 * dpr * panelScale;
       const cx = px + pad;
       const cyy = cy + chartPad;
       const cw2 = pw - pad * 2;
@@ -892,6 +874,55 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     ctx.drawImage(visCanvas, 0, 0, recCanvas.width, recCanvas.height);
   }, []);
 
+  const getSupportedMimeType = () => {
+    const types = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+    return types.find((t) => MediaRecorder.isTypeSupported(t)) || "video/webm";
+  };
+
+  const startRecording = useCallback(async () => {
+    const video = videoRef.current;
+    const recCanvas = recCanvasRef.current;
+    if (!video || !recCanvas) return;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") return;
+    const stream = recCanvas.captureStream(30);
+    const mimeType = getSupportedMimeType();
+    const recorder = new MediaRecorder(stream, { mimeType });
+    mediaRecorderRef.current = recorder;
+    recordedChunksRef.current = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
+      const url = URL.createObjectURL(blob);
+      setDownloadUrl(url);
+      onDownloadReady?.(url);
+      setRecording(false);
+    };
+    recorder.start(100);
+    setRecording(true);
+    video.playbackRate = 1;
+    video.currentTime = 0;
+    await video.play();
+  }, [onDownloadReady]);
+
+  const tryAutoRender = useCallback(() => {
+    const video = videoRef.current;
+    if (
+      !autoRender ||
+      autoRenderStartedRef.current ||
+      mediaRecorderRef.current?.state === "recording" ||
+      downloadUrl ||
+      !video ||
+      video.readyState < 1 ||
+      !frames.length
+    ) {
+      return;
+    }
+    autoRenderStartedRef.current = true;
+    startRecording();
+  }, [autoRender, downloadUrl, frames.length, startRecording]);
+
   useEffect(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -902,9 +933,12 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       const vh = video.videoHeight || 1;
       setVideoAspect(vw / vh);
       drawOverlay();
+      tryAutoRender();
     };
     const onTimeUpdate = () => {
-      setProgress(video.duration ? (video.currentTime / video.duration) * 100 : 0);
+      const pct = video.duration ? (video.currentTime / video.duration) * 100 : 0;
+      setProgress(pct);
+      if (recording) setRenderProgress(pct);
       drawOverlay();
     };
     const onPlay = () => setIsPlaying(true);
@@ -941,7 +975,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       window.removeEventListener("resize", onResize);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [videoUrl, drawOverlay, drawRecordingFrame, recording, onEnded]);
+  }, [videoUrl, drawOverlay, drawRecordingFrame, recording, onEnded, tryAutoRender]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -972,43 +1006,42 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen();
   };
 
-  const getSupportedMimeType = () => {
-    const types = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
-    return types.find((t) => MediaRecorder.isTypeSupported(t)) || "video/webm";
+  const toggleSpeed = () => {
+    const speeds = [0.5, 1, 1.5, 2];
+    const idx = speeds.indexOf(playbackRate);
+    const next = speeds[(idx + 1) % speeds.length];
+    setPlaybackRate(next);
   };
 
-  const startRecording = async () => {
+  const stepFrame = (dir) => {
     const video = videoRef.current;
-    const recCanvas = recCanvasRef.current;
-    if (!video || !recCanvas || recording) return;
-    const stream = recCanvas.captureStream(30);
-    const mimeType = getSupportedMimeType();
-    const recorder = new MediaRecorder(stream, { mimeType });
-    mediaRecorderRef.current = recorder;
-    recordedChunksRef.current = [];
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) recordedChunksRef.current.push(e.data);
-    };
-    recorder.onstop = () => {
-      const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
-      const url = URL.createObjectURL(blob);
-      setDownloadUrl(url);
-      onDownloadReady?.(url);
-    };
-    recorder.start(100);
-    setRecording(true);
-    video.currentTime = 0;
-    await video.play();
+    if (!video || !video.duration) return;
+    video.pause();
+    const step = dir / fps;
+    video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + step));
   };
 
-  const stopRecording = () => {
-    const video = videoRef.current;
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.stop();
-    }
-    video?.pause();
-    setRecording(false);
+  const formatTime = (s) => {
+    if (!s || isNaN(s)) return "0:00";
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, "0")}`;
   };
+
+  useEffect(() => {
+    autoRenderStartedRef.current = false;
+    setDownloadUrl(null);
+    setRenderProgress(0);
+  }, [videoUrl]);
+
+  useEffect(() => {
+    tryAutoRender();
+  }, [tryAutoRender]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) video.playbackRate = playbackRate;
+  }, [playbackRate]);
 
   return (
     <div ref={containerRef} className="relative w-full rounded-lg bg-black overflow-hidden group flex justify-center items-center">
@@ -1028,57 +1061,87 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
         />
       </div>
       <canvas ref={recCanvasRef} className="hidden" />
-      <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-        <div className="flex items-center gap-2 pointer-events-auto flex-wrap">
-          <button
-            type="button"
-            onClick={togglePlay}
-            className="text-white/90 hover:text-white text-xs font-bold px-2 py-1 rounded bg-white/10 hover:bg-white/20"
-          >
-            {isPlaying ? "⏸ Pause" : "▶ Play"}
-          </button>
-          <button
-            type="button"
-            onClick={requestFullscreen}
-            className="text-white/90 hover:text-white text-xs font-bold px-2 py-1 rounded bg-white/10 hover:bg-white/20"
-          >
-            ⛶ Full
-          </button>
-          {!recording ? (
+      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <div className="glass-float rounded-xl p-2 flex flex-col gap-1.5 pointer-events-auto backdrop-blur-md bg-white/[0.06] border border-white/10">
+          <div className="flex items-center gap-1 flex-wrap">
             <button
               type="button"
-              onClick={startRecording}
-              className="text-white/90 hover:text-white text-xs font-bold px-2 py-1 rounded bg-emerald-600/80 hover:bg-emerald-500/80"
+              onClick={togglePlay}
+              className="p-1 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition"
+              title={isPlaying ? "Pause" : "Play"}
             >
-              ⏺ Render video
+              {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
             </button>
-          ) : (
             <button
               type="button"
-              onClick={stopRecording}
-              className="text-white/90 hover:text-white text-xs font-bold px-2 py-1 rounded bg-rose-600/80 hover:bg-rose-500/80"
+              onClick={() => stepFrame(-1)}
+              className="p-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition"
+              title="Previous frame"
             >
-              ⏹ Stop render
+              <ChevronLeft className="w-3.5 h-3.5" />
             </button>
-          )}
-          {downloadUrl && (
-            <a
-              href={downloadUrl}
-              download={`${phaseLabel || "validation"}_overlay.webm`}
-              className="text-white/90 hover:text-white text-xs font-bold px-2 py-1 rounded bg-sky-600/80 hover:bg-sky-500/80"
+            <button
+              type="button"
+              onClick={() => stepFrame(1)}
+              className="p-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition"
+              title="Next frame"
             >
-              ↓ Download
-            </a>
-          )}
-        </div>
-        <div
-          className="mt-1 h-1 bg-white/20 rounded cursor-pointer pointer-events-auto"
-          onClick={handleSeek}
-        >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+
+            <span className="text-[10px] text-white/70 font-mono tabular-nums whitespace-nowrap mx-1">
+              {formatTime(videoRef.current?.currentTime)} / {formatTime(videoRef.current?.duration)}
+            </span>
+
+            <div className="flex-1 min-w-0" />
+
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button
+                type="button"
+                onClick={toggleSpeed}
+                className="text-[10px] font-semibold text-white/80 px-1.5 py-1 rounded-md bg-white/10 hover:bg-white/20 transition min-w-[2rem]"
+                title="Playback speed"
+              >
+                {playbackRate}x
+              </button>
+              <button
+                type="button"
+                onClick={requestFullscreen}
+                className="p-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition"
+                title="Fullscreen"
+              >
+                <Maximize className="w-3.5 h-3.5" />
+              </button>
+
+              {recording ? (
+                <div className="flex items-center justify-center gap-1 px-2 py-1 rounded-md bg-white/10 text-[10px] text-white/70 font-mono tabular-nums min-w-[4rem] whitespace-nowrap">
+                  <div className="w-3 h-3 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
+                  <span>{Math.round(renderProgress)}%</span>
+                </div>
+              ) : downloadUrl ? (
+                <a
+                  href={downloadUrl}
+                  download={`${phaseLabel || "validation"}_overlay.webm`}
+                  className="flex items-center justify-center gap-1 px-2 py-1 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold min-w-[4rem] whitespace-nowrap hover:bg-emerald-500/30 hover:text-emerald-200 transition"
+                  title="Download rendered video"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download</span>
+                </a>
+              ) : null}
+            </div>
+          </div>
+
           <div
-            className="h-full bg-sky-400 rounded"
-            style={{ width: `${progress}%` }}
-          />
+            className="h-2 bg-white/20 rounded-full cursor-pointer pointer-events-auto relative"
+            onClick={handleSeek}
+            title="Seek"
+          >
+            <div
+              className="absolute top-0 left-0 h-full bg-sky-400 rounded-full"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
       </div>
     </div>
