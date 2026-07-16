@@ -72,15 +72,57 @@ print(f"STARTUP: PATIENTS_DIR={PATIENTS_DIR}", flush=True)
 
 
 def _ensure_encrypted_dbs():
-    """Encrypt plain SQLite databases in place on first startup."""
-    try:
-        sqlite3.ensure_encrypted(USERS_DB)
-    except Exception as exc:
-        print(f"STARTUP: users.db encryption check failed: {exc}", flush=True)
-    try:
-        sqlite3.ensure_encrypted(AUDIT_DB)
-    except Exception as exc:
-        print(f"STARTUP: audit.db encryption check failed: {exc}", flush=True)
+    """Encrypt plain SQLite databases and rotate key if DB_ENCRYPTION_KEY changed."""
+    if not sqlite3.SQLCIPHER_AVAILABLE:
+        print("STARTUP: SQLCipher not available; DB encryption skipped", flush=True)
+        return
+
+    key = sqlite3.get_db_key()
+    jwt_key = os.environ.get("JWT_SECRET")
+    fallback_keys = [k for k in {jwt_key} if k and k != key]
+
+    for db_path in (USERS_DB, AUDIT_DB):
+        if not db_path.exists():
+            # Create a fresh encrypted database.
+            try:
+                sqlite3.connect(db_path, key).close()
+                print(f"STARTUP: created encrypted {db_path}", flush=True)
+            except Exception as exc:
+                print(f"STARTUP: failed to create {db_path}: {exc}", flush=True)
+            continue
+
+        # Already encrypted with the current key?
+        try:
+            with sqlite3.connect(db_path, key) as conn:
+                conn.execute("SELECT 1")
+            print(f"STARTUP: {db_path} already encrypted with current key", flush=True)
+            continue
+        except Exception:
+            pass
+
+        # Try to rotate from an old key.
+        rotated = False
+        for old_key in fallback_keys:
+            try:
+                sqlite3.rotate_key(db_path, old_key, key)
+                print(f"STARTUP: rotated encryption key for {db_path}", flush=True)
+                rotated = True
+                break
+            except Exception as exc:
+                print(f"STARTUP: key rotation failed for {db_path} with fallback key: {exc}", flush=True)
+        if rotated:
+            continue
+
+        # Plain database? Encrypt it now.
+        try:
+            if sqlite3.is_plain_sqlite(db_path):
+                sqlite3.encrypt_db_inplace(db_path, key)
+                print(f"STARTUP: encrypted plain {db_path}", flush=True)
+                continue
+        except Exception as exc:
+            print(f"STARTUP: failed to encrypt plain {db_path}: {exc}", flush=True)
+
+        print(f"STARTUP: {db_path} could not be opened with current key; manual recovery may be needed", flush=True)
 
 
 # Call encryption check at import time so it runs before any DB access.

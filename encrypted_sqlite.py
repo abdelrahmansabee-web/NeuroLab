@@ -132,6 +132,44 @@ def ensure_encrypted(db_path: Path) -> None:
         encrypt_db_inplace(db_path)
 
 
+def rotate_key(db_path: Path, old_key: str, new_key: str) -> None:
+    """Re-encrypt a SQLCipher database from old_key to new_key in place.
+
+    This is useful when a deployment originally used JWT_SECRET as the DB key
+    and then switches to a dedicated DB_ENCRYPTION_KEY.
+    """
+    db_path = Path(db_path)
+    if not SQLCIPHER_AVAILABLE:
+        raise RuntimeError("SQLCipher is not installed; cannot rotate key.")
+    if not db_path.exists():
+        # Create a fresh encrypted database with the new key.
+        with connect(db_path, new_key) as conn:
+            conn.execute("SELECT 1")
+        return
+
+    temp_path = db_path.with_suffix(db_path.suffix + ".tmp_rot")
+    backup_path = db_path.with_suffix(db_path.suffix + ".oldkey_backup")
+    try:
+        # Open with the old key, attach a new encrypted database with the new key,
+        # then export the contents.
+        with connect(db_path, old_key) as conn:
+            conn.execute(
+                f"ATTACH DATABASE '{temp_path}' AS rotated KEY '{_sanitize_key_for_pragma(new_key)}'"
+            )
+            conn.execute("SELECT sqlcipher_export('rotated')")
+            conn.execute("DETACH DATABASE rotated")
+        # Replace original with the re-encrypted copy.
+        db_path.rename(backup_path)
+        temp_path.rename(db_path)
+        backup_path.unlink(missing_ok=True)
+    except Exception:
+        if temp_path.exists():
+            temp_path.unlink()
+        if backup_path.exists() and db_path.exists():
+            backup_path.unlink()
+        raise
+
+
 # Keep the same module-level exceptions as the stdlib sqlite3 module for
 # compatibility.
 Error = _stdlib_sqlite3.Error
