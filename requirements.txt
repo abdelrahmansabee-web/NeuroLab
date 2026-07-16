@@ -30,3 +30,5 @@ httplib2
 passlib
 bcrypt
 cryptography
+pyotp
+qrcode

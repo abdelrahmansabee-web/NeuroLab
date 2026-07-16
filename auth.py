@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import json
+import base64
 from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
@@ -13,6 +14,8 @@ from passlib.context import CryptContext
 from google.oauth2 import service_account as google_service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
+import pyotp
+import qrcode
 
 from security import password_policy, RateLimiter, get_client_ip, log_audit, encrypt_json_to_str, decrypt_json_from_str
 
@@ -21,6 +24,10 @@ if not JWT_SECRET:
     raise RuntimeError("JWT_SECRET environment variable is required. Set it in Hugging Face Space Secrets.")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 30
+
+MFA_ENCRYPTION_KEY = os.environ.get("MFA_ENCRYPTION_KEY") or JWT_SECRET
+if not MFA_ENCRYPTION_KEY:
+    raise RuntimeError("MFA_ENCRYPTION_KEY or JWT_SECRET is required for MFA encryption.")
 
 GOOGLE_SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
 GOOGLE_DRIVE_FOLDER_ID = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
@@ -31,6 +38,7 @@ legacy_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 login_rate_limiter = RateLimiter(limit=5, window=60 * 15)
 register_rate_limiter = RateLimiter(limit=5, window=60 * 60)
 password_reset_rate_limiter = RateLimiter(limit=3, window=60 * 15)
+mfa_rate_limiter = RateLimiter(limit=10, window=60)
 
 _drive_service_instance = None
 
@@ -76,6 +84,10 @@ def _init_db():
                     conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
                 if "is_approved" not in columns:
                     conn.execute("ALTER TABLE users ADD COLUMN is_approved INTEGER NOT NULL DEFAULT 0")
+                if "mfa_secret" not in columns:
+                    conn.execute("ALTER TABLE users ADD COLUMN mfa_secret TEXT")
+                if "mfa_enabled" not in columns:
+                    conn.execute("ALTER TABLE users ADD COLUMN mfa_enabled INTEGER NOT NULL DEFAULT 0")
                 conn.commit()
         except Exception as exc:
             print("Migration warning:", exc, flush=True)
@@ -88,6 +100,8 @@ def _init_db():
                 password_hash TEXT NOT NULL,
                 is_admin INTEGER NOT NULL DEFAULT 0,
                 is_approved INTEGER NOT NULL DEFAULT 0,
+                mfa_secret TEXT,
+                mfa_enabled INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT,
                 updated_at TEXT
             )
@@ -115,6 +129,19 @@ def _verify_password(password: str, hash_value: str) -> bool:
     except Exception:
         pass
     return False
+
+
+def _encrypt_mfa_secret(secret: str) -> str:
+    return encrypt_json_to_str(secret, MFA_ENCRYPTION_KEY)
+
+
+def _decrypt_mfa_secret(ciphertext: Optional[str]) -> Optional[str]:
+    if not ciphertext:
+        return None
+    try:
+        return decrypt_json_from_str(ciphertext, MFA_ENCRYPTION_KEY)
+    except Exception:
+        return None
 
 
 def _create_token(user_id: int) -> str:
@@ -357,8 +384,8 @@ async def register(request: Request, body: dict):
     token = _create_token(user_id)
     log_audit(AUDIT_DB, "register", user_id=user_id, email=email, ip=ip, details="Registration successful", success=True)
     if is_first:
-        return {"ok": True, "token": token, "user": {"id": user_id, "email": email, "name": name, "is_admin": True, "is_approved": True}}
-    return {"ok": True, "pending_approval": True, "message": "Account created. Waiting for admin approval.", "user": {"id": user_id, "email": email, "name": name, "is_admin": False, "is_approved": False}}
+        return {"ok": True, "token": token, "user": {"id": user_id, "email": email, "name": name, "is_admin": True, "is_approved": True, "mfa_enabled": False}}
+    return {"ok": True, "pending_approval": True, "message": "Account created. Waiting for admin approval.", "user": {"id": user_id, "email": email, "name": name, "is_admin": False, "is_approved": False, "mfa_enabled": False}}
 
 
 @router.post("/login")
@@ -387,9 +414,22 @@ async def login(request: Request, body: dict):
     if not verified:
         log_audit(AUDIT_DB, "login", user_id=user["id"], email=email, ip=ip, details="Invalid password", success=False)
         raise HTTPException(status_code=401, detail="Invalid password")
+    if user.get("is_admin") and user.get("mfa_enabled"):
+        totp_code = body.get("totp_code", "").strip()
+        if not totp_code:
+            log_audit(AUDIT_DB, "login", user_id=user["id"], email=email, ip=ip, details="MFA code required", success=False)
+            return {"ok": True, "mfa_required": True, "message": "Enter the 6-digit code from your authenticator app."}
+        if not mfa_rate_limiter.is_allowed(f"{ip}:{email}:mfa"):
+            log_audit(AUDIT_DB, "login", user_id=user["id"], email=email, ip=ip, details="MFA rate limited", success=False)
+            raise HTTPException(status_code=429, detail="Too many MFA attempts. Try again later.")
+        secret = _decrypt_mfa_secret(user.get("mfa_secret"))
+        if not secret or not pyotp.TOTP(secret).verify(totp_code, valid_window=1):
+            log_audit(AUDIT_DB, "login", user_id=user["id"], email=email, ip=ip, details="Invalid MFA code", success=False)
+            raise HTTPException(status_code=401, detail="Invalid MFA code")
+        log_audit(AUDIT_DB, "login", user_id=user["id"], email=email, ip=ip, details="MFA verified", success=True)
     token = _create_token(user["id"])
     log_audit(AUDIT_DB, "login", user_id=user["id"], email=email, ip=ip, details="Login successful", success=True)
-    return {"ok": True, "token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": bool(user.get("is_admin")), "is_approved": bool(user.get("is_approved"))}}
+    return {"ok": True, "token": token, "user": {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": bool(user.get("is_admin")), "is_approved": bool(user.get("is_approved")), "mfa_enabled": bool(user.get("mfa_enabled"))}}
 
 
 
@@ -495,7 +535,88 @@ async def delete_user(user_id: int, request: Request, admin: dict = Depends(get_
 
 @router.get("/me")
 async def auth_me(user: dict = Depends(get_current_user)):
-    return {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": bool(user.get("is_admin")), "is_approved": bool(user.get("is_approved"))}
+    return {"id": user["id"], "email": user["email"], "name": user["name"], "is_admin": bool(user.get("is_admin")), "is_approved": bool(user.get("is_approved")), "mfa_enabled": bool(user.get("mfa_enabled"))}
+
+
+@router.get("/mfa/status")
+async def mfa_status(user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    return {"ok": True, "mfa_enabled": bool(user.get("mfa_enabled"))}
+
+
+@router.post("/mfa/setup")
+async def mfa_setup(request: Request, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    secret = pyotp.random_base32()
+    encrypted = _encrypt_mfa_secret(secret)
+    now = datetime.utcnow().isoformat()
+    with sqlite3.connect(USERS_DB) as conn:
+        conn.execute(
+            "UPDATE users SET mfa_secret = ?, mfa_enabled = 0, updated_at = ? WHERE id = ?",
+            (encrypted, now, user["id"]),
+        )
+        conn.commit()
+    try:
+        _backup_users_db()
+    except Exception:
+        pass
+    uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user["email"], issuer_name="NeuroLab")
+    qr = qrcode.make(uri)
+    buffer = BytesIO()
+    qr.save(buffer, format="PNG")
+    qr_data_url = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
+    ip = get_client_ip(request)
+    log_audit(AUDIT_DB, "mfa_setup", user_id=user["id"], email=user.get("email"), ip=ip, details="MFA setup initiated", success=True)
+    return {"ok": True, "secret": secret, "uri": uri, "qr_data_url": qr_data_url, "mfa_enabled": False}
+
+
+@router.post("/mfa/verify")
+async def mfa_verify(request: Request, body: dict, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    code = body.get("code", "").strip()
+    ip = get_client_ip(request)
+    if not code:
+        log_audit(AUDIT_DB, "mfa_verify", user_id=user["id"], email=user.get("email"), ip=ip, details="Missing code", success=False)
+        raise HTTPException(status_code=400, detail="Code required")
+    secret = _decrypt_mfa_secret(user.get("mfa_secret"))
+    if not secret:
+        log_audit(AUDIT_DB, "mfa_verify", user_id=user["id"], email=user.get("email"), ip=ip, details="MFA not set up", success=False)
+        raise HTTPException(status_code=400, detail="MFA not set up")
+    if not pyotp.TOTP(secret).verify(code, valid_window=1):
+        log_audit(AUDIT_DB, "mfa_verify", user_id=user["id"], email=user.get("email"), ip=ip, details="Invalid MFA code", success=False)
+        raise HTTPException(status_code=401, detail="Invalid MFA code")
+    now = datetime.utcnow().isoformat()
+    with sqlite3.connect(USERS_DB) as conn:
+        conn.execute(
+            "UPDATE users SET mfa_enabled = 1, updated_at = ? WHERE id = ?",
+            (now, user["id"]),
+        )
+        conn.commit()
+    try:
+        _backup_users_db()
+    except Exception:
+        pass
+    log_audit(AUDIT_DB, "mfa_verify", user_id=user["id"], email=user.get("email"), ip=ip, details="MFA enabled", success=True)
+    return {"ok": True, "mfa_enabled": True}
+
+
+@router.post("/mfa/disable")
+async def mfa_disable(request: Request, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    now = datetime.utcnow().isoformat()
+    with sqlite3.connect(USERS_DB) as conn:
+        conn.execute(
+            "UPDATE users SET mfa_secret = NULL, mfa_enabled = 0, updated_at = ? WHERE id = ?",
+            (now, user["id"]),
+        )
+        conn.commit()
+    try:
+        _backup_users_db()
+    except Exception:
+        pass
+    ip = get_client_ip(request)
+    log_audit(AUDIT_DB, "mfa_disable", user_id=user["id"], email=user.get("email"), ip=ip, details="MFA disabled", success=True)
+    return {"ok": True, "mfa_enabled": False}
 
 
 @router.get("/health")
