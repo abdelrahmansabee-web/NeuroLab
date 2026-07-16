@@ -360,7 +360,8 @@ def build_overlay_data(
         if analysis:
             for k in [
                 "nvp", "straightness", "pause_time_sec", "number_of_stops",
-                "movement_time_sec", "peak_velocity_px_s", "time_to_peak_velocity_sec",
+                "movement_time_sec", "peak_velocity_px_s", "peak_velocity_cm_s",
+                "time_to_peak_velocity_sec", "relative_time_to_peak_pct",
                 "elbow_angle_mean_deg", "elbow_angle_range_deg",
                 "shoulder_elevation_norm", "trunk_ratio", "sparc",
                 "hand_displacement_px", "hand_displacement_cm", "hand_displacement_norm",
