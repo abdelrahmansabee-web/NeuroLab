@@ -9,25 +9,33 @@ export function computeOverlayMetrics(overlayData) {
   const startIdx = Math.max(0, Math.min(frames.length - 1, win.start_idx || 0));
   const endIdx = Math.max(startIdx, Math.min(frames.length - 1, win.end_idx || frames.length - 1));
   const peakFrames = overlayData.peak_frames || [];
-  const cmPerPx = overlayData.metrics?.cm_per_px || 0;
 
   const t0 = frames[startIdx]?.time != null ? frames[startIdx].time : startIdx / fps;
   const t1 = frames[endIdx]?.time != null ? frames[endIdx].time : endIdx / fps;
   const movementTime = Math.max(0, t1 - t0);
 
-  // Peak velocity = maximum hand tangential speed within the movement window (px/s).
-  const handSpeeds = frames.map((f) => f.speed || 0);
-  const handPeakV = handSpeeds.length ? Math.max(...handSpeeds) : 0;
-  let peakVelocityIdx = startIdx;
-  for (let i = startIdx; i <= endIdx; i++) {
-    if (handSpeeds[i] === handPeakV) {
-      peakVelocityIdx = i;
-      break;
+  // Peak elbow angular velocity (deg/sec) within the movement window.
+  let peakElbowAngVel = 0;
+  let peakElbowIdx = startIdx;
+  for (let i = startIdx + 1; i <= endIdx; i++) {
+    const a1 = frames[i - 1]?.elbow_angle;
+    const a2 = frames[i]?.elbow_angle;
+    if (a1 == null || a2 == null) continue;
+    const dt = (frames[i]?.time != null && frames[i - 1]?.time != null)
+      ? Math.max(1e-6, frames[i].time - frames[i - 1].time)
+      : 1 / fps;
+    const angVel = Math.abs((a2 - a1) / dt);
+    if (angVel > peakElbowAngVel) {
+      peakElbowAngVel = angVel;
+      peakElbowIdx = i;
     }
   }
-  const tPeak = frames[peakVelocityIdx]?.time != null ? frames[peakVelocityIdx].time : peakVelocityIdx / fps;
-  const timeToPeakVelocity = Math.max(0, tPeak - t0);
+  const tPeak = frames[peakElbowIdx]?.time != null ? frames[peakElbowIdx].time : peakElbowIdx / fps;
+  const timeToPeak = Math.max(0, tPeak - t0);
 
+  // Pause/stop detection based on hand speed (kept for movement segmentation).
+  const handSpeeds = frames.map((f) => f.speed || 0);
+  const handPeakV = handSpeeds.length ? Math.max(...handSpeeds) : 0;
   const speedThreshold = handPeakV > 0 ? 0.05 * handPeakV : 1.0;
   let pauseTime = 0;
   let stops = 0;
@@ -73,20 +81,15 @@ export function computeOverlayMetrics(overlayData) {
   }
 
   let elbowAngleMean = 0;
-  let elbowAngleMin = Infinity;
-  let elbowAngleMax = -Infinity;
   let elbowAngleCount = 0;
   for (let i = startIdx; i <= endIdx; i++) {
     const a = frames[i]?.elbow_angle;
     if (a != null && !Number.isNaN(a)) {
       elbowAngleMean += a;
       elbowAngleCount++;
-      if (a < elbowAngleMin) elbowAngleMin = a;
-      if (a > elbowAngleMax) elbowAngleMax = a;
     }
   }
   if (elbowAngleCount > 0) elbowAngleMean /= elbowAngleCount;
-  const elbowAngleRange = (Number.isFinite(elbowAngleMin) && Number.isFinite(elbowAngleMax)) ? elbowAngleMax - elbowAngleMin : 0;
 
   const out = {
     nvp: peakFrames.length,
@@ -98,29 +101,12 @@ export function computeOverlayMetrics(overlayData) {
     shoulder_vert_norm: shoulderElevation,
     elbow_angle_mean_deg: elbowAngleMean,
     movement_time_sec: movementTime,
-    peak_velocity_px_s: handPeakV,
-    time_to_peak_velocity_sec: timeToPeakVelocity,
+    peak_elbow_ang_vel_deg_s: peakElbowAngVel,
+    time_to_peak_velocity_sec: timeToPeak,
   };
 
-  if (cmPerPx > 0) {
-    out.peak_velocity_cm_s = handPeakV * cmPerPx;
-  }
   if (movementTime > 0) {
-    out.relative_time_to_peak_pct = (timeToPeakVelocity / movementTime) * 100;
-  }
-  if (overlayData.metrics?.sparc != null) {
-    out.sparc = overlayData.metrics.sparc;
-  }
-  if (overlayData.metrics?.hand_displacement_cm != null) {
-    out.hand_displacement_cm = overlayData.metrics.hand_displacement_cm;
-  } else if (overlayData.metrics?.hand_displacement_norm != null) {
-    out.hand_displacement_cm = overlayData.metrics.hand_displacement_norm;
-  }
-  if (overlayData.metrics?.hand_displacement_px != null) {
-    out.hand_displacement_px = overlayData.metrics.hand_displacement_px;
-  }
-  if (elbowAngleRange > 0) {
-    out.elbow_angle_range_deg = elbowAngleRange;
+    out.relative_time_to_peak_pct = (timeToPeak / movementTime) * 100;
   }
 
   return out;
@@ -158,12 +144,30 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
   const endPalm = overlayData?.end_palm;
   const velocityProfile = overlayData?.velocity_profile;
   const peakFrames = overlayData?.peak_frames || [];
-  const cmPerPx = metrics?.cm_per_px || 0;
-  const speedUnit = cmPerPx > 0 ? "cm/s" : "px/s";
 
+  const getElbowAngVel = useCallback((idx) => {
+    if (idx <= 0 || idx >= frames.length) return 0;
+    const a1 = frames[idx - 1]?.elbow_angle;
+    const a2 = frames[idx]?.elbow_angle;
+    if (a1 == null || a2 == null) return 0;
+    const dt = (frames[idx]?.time != null && frames[idx - 1]?.time != null)
+      ? Math.max(1e-6, frames[idx].time - frames[idx - 1].time)
+      : 1 / fps;
+    return Math.abs((a2 - a1) / dt);
+  }, [frames, fps]);
+
+  const peakElbowAngVel = useMemo(() => {
+    let maxV = 0;
+    for (let i = 1; i < frames.length; i++) {
+      const v = getElbowAngVel(i);
+      if (v > maxV) maxV = v;
+    }
+    return maxV;
+  }, [frames, getElbowAngVel]);
+  const peakV = peakElbowAngVel || 1;
   const handPeakV = useMemo(() => {
     const speeds = frames.map((f) => f.speed || 0);
-    return speeds.length ? Math.max(...speeds) : 0;
+    return speeds.length ? Math.max(...speeds) : 1;
   }, [frames]);
 
   const getFrameIndex = useCallback((time) => {
@@ -340,8 +344,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       ctx.fillText(text, x + padding, y + h - padding - 2);
     }
 
-    const currentHandSpeedPx = (frames[idx]?.speed || 0);
-    const currentHandSpeed = cmPerPx > 0 ? currentHandSpeedPx * cmPerPx : currentHandSpeedPx;
+    const speed = getElbowAngVel(idx);
 
     const nose = pt("nose");
     const ls = pt("lshoulder");
@@ -426,11 +429,10 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
 
     const currentNVP = peakFrames.filter((pi) => pi <= idx).length;
 
-    let currentPeakHandSpeedPx = 0;
-    for (let i = 0; i <= idx && i < frames.length; i++) {
-      currentPeakHandSpeedPx = Math.max(currentPeakHandSpeedPx, frames[i]?.speed || 0);
+    let currentPeakElbowAngVel = 0;
+    for (let i = 1; i <= idx && i < frames.length; i++) {
+      currentPeakElbowAngVel = Math.max(currentPeakElbowAngVel, getElbowAngVel(i));
     }
-    const currentPeakHandSpeed = cmPerPx > 0 ? currentPeakHandSpeedPx * cmPerPx : currentPeakHandSpeedPx;
 
     let currentMovementTime = 0;
     if (inMovement && idx < frames.length) {
@@ -546,7 +548,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       drawSimpleLabel(`El ${currentElbowAngle.toFixed(0)}°`, elbow, elbow[0] > cx ? -80 : 14, -22, { color: color.text, border: color.glow });
     }
     if (palm) {
-      drawSimpleLabel(`Ha ${Math.round(currentHandSpeed)} ${speedUnit}`, palm, palm[0] > cx ? -100 : 18, -24, { color: "#fde047", border: "rgba(250,204,21,0.6)" });
+      drawSimpleLabel(`Ha ${Math.round(speed)} °/s`, palm, palm[0] > cx ? -100 : 18, -24, { color: "#fde047", border: "rgba(250,204,21,0.6)" });
       drawSimpleLabel(`NVP ${currentNVP}`, palm, 0, 28, { color: color.text, border: color.glow, align: "center" });
       if (wipingVerdict) {
         drawSimpleLabel(
@@ -735,7 +737,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       ctx.fillText(String(wiping.warning).slice(0, 40), left, cy);
       cy += rowH;
     }
-    row("Peak velocity", currentPeakHandSpeed > 0 ? `${formatValue(currentPeakHandSpeed, 1)} ${speedUnit}` : "—", true);
+    row("Peak velocity", currentPeakElbowAngVel > 0 ? `${formatValue(currentPeakElbowAngVel, 0)} °/s` : "—", true);
     row("Movement time", currentMovementTime > 0 ? `${formatValue(currentMovementTime, 2)} s` : "—");
     row("Pause / stops", currentPauseTime > 0 || currentStops > 0 ? `${formatValue(currentPauseTime, 2)} s / ${currentStops}` : "—");
     row("Trunk ratio", currentTrunkRatio > 0 ? formatValue(currentTrunkRatio, 2) : "—");
@@ -818,7 +820,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     const gh = 8 * window.devicePixelRatio;
     const gx = panelOnRight ? pad : cw - gw - pad;
     const gy = ch - 34 * window.devicePixelRatio;
-    const speedPct = handPeakV > 0 ? Math.min(1, currentHandSpeedPx / handPeakV) : 0;
+    const speedPct = peakV > 0 ? Math.min(1, speed / peakV) : 0;
 
     ctx.save();
     ctx.shadowColor = "rgba(0,0,0,0.35)";
@@ -852,9 +854,9 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     ctx.fillRect(gx, gy, gw * speedPct, gh);
     ctx.fillStyle = "#fff";
     ctx.font = `bold ${fsSmall} sans-serif`;
-    ctx.fillText(`Speed ${Math.round(currentHandSpeed)} ${speedUnit}`, gx, gy - 4);
+    ctx.fillText(`Speed ${Math.round(speed)} °/s`, gx, gy - 4);
 
-  }, [frames, fps, win, handPeakV, cmPerPx, speedUnit, startPalm, endPalm, velocityProfile, phaseColor, phaseLabel, getFrameIndex, peakFrames, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.wiping]);
+  }, [frames, fps, win, peakV, handPeakV, startPalm, endPalm, velocityProfile, phaseColor, phaseLabel, getFrameIndex, peakFrames, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.wiping]);
 
   const drawRecordingFrame = useCallback(() => {
     const video = videoRef.current;

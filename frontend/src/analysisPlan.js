@@ -25,13 +25,7 @@ export const KINEMATIC_VARS = [
   { key: "shoulder_elevation_norm", label: "Shoulder elevation (norm)", unit: "ratio", dir: "lower", tier: "secondary", fallback: "shoulder_vert_norm" },
   { key: "elbow_angle_mean_deg", label: "Elbow angle (mean)", unit: "deg", dir: "none", tier: "secondary" },
   { key: "movement_time_sec", label: "Movement time", unit: "s", dir: "lower", tier: "secondary" },
-  { key: "peak_velocity_cm_s", label: "Peak velocity", unit: "cm/s", dir: "higher", tier: "secondary" },
-  // Exploratory / legacy outcomes
-  { key: "time_to_peak_velocity_sec", label: "Time to peak velocity", unit: "s", dir: "none", tier: "exploratory" },
-  { key: "relative_time_to_peak_pct", label: "Relative time to peak velocity", unit: "%", dir: "none", tier: "exploratory" },
-  { key: "sparc", label: "SPARC", unit: "unitless", dir: "higher", tier: "exploratory" },
-  { key: "hand_displacement_cm", label: "Hand displacement", unit: "cm", dir: "higher", tier: "exploratory", fallback: "hand_displacement_norm" },
-  { key: "peak_velocity_px_s", label: "Peak velocity (pixels)", unit: "px/s", dir: "higher", tier: "exploratory" },
+  { key: "peak_elbow_ang_vel_deg_s", label: "Peak elbow angular velocity", unit: "deg/s", dir: "higher", tier: "secondary" },
 ];
 
 export const KINEMATIC_DISPLAY_ORDER = [
@@ -43,12 +37,7 @@ export const KINEMATIC_DISPLAY_ORDER = [
   "shoulder_elevation_norm",
   "elbow_angle_mean_deg",
   "movement_time_sec",
-  "peak_velocity_cm_s",
-  "time_to_peak_velocity_sec",
-  "relative_time_to_peak_pct",
-  "sparc",
-  "hand_displacement_cm",
-  "peak_velocity_px_s",
+  "peak_elbow_ang_vel_deg_s",
 ];
 
 /** Manuscript / ethics-form reference pattern (Pre → Post → Healthy) */
@@ -61,12 +50,7 @@ export const MANUSCRIPT_KINEMATIC_TARGETS = {
   shoulder_elevation_norm: { pre: 0.18, post: 0.12, healthy: 0.065 },
   elbow_angle_mean_deg: { pre: 125, post: 130, healthy: 135 },
   movement_time_sec: { pre: 2.2, post: 1.7, healthy: 1.2 },
-  peak_velocity_cm_s: { pre: 45.0, post: 55.0, healthy: 65.0 },
-  time_to_peak_velocity_sec: { pre: 0.55, post: 0.45, healthy: 0.35 },
-  relative_time_to_peak_pct: { pre: 28.0, post: 26.0, healthy: 24.0 },
-  sparc: { pre: -3.5, post: -2.5, healthy: -1.5 },
-  hand_displacement_cm: { pre: 35.0, post: 45.0, healthy: 55.0 },
-  peak_velocity_px_s: { pre: 600.0, post: 750.0, healthy: 900.0 },
+  peak_elbow_ang_vel_deg_s: { pre: 160.0, post: 200.0, healthy: 240.0 },
 };
 
 export function orderedKinematicVars() {
@@ -115,12 +99,7 @@ const LEGACY_KIN_MAP = {
   shoulder_elevation_norm: ["shoulder_elevation_norm", "shoulder_vert_norm"],
   elbow_angle_mean_deg: ["elbow_angle_mean_deg", "elbow_angle_mean"],
   movement_time_sec: ["movement_time_sec", "total_duration_s", "duration"],
-  peak_velocity_cm_s: ["peak_velocity_cm_s"],
-  time_to_peak_velocity_sec: ["time_to_peak_velocity_sec"],
-  relative_time_to_peak_pct: ["relative_time_to_peak_pct"],
-  sparc: ["sparc"],
-  hand_displacement_cm: ["hand_displacement_cm", "hand_displacement_norm", "hand_disp_sw", "reach_amplitude_sw"],
-  peak_velocity_px_s: ["peak_velocity_px_s", "total_peak_velocity"],
+  peak_elbow_ang_vel_deg_s: ["peak_elbow_ang_vel_deg_s", "peak_velocity_deg_s", "peak_velocity_px_s", "peak_velocity_cm_s", "total_peak_velocity"],
 };
 
 export function pickKinField(result, canonicalKey, fallbackKey = null) {
@@ -191,12 +170,7 @@ export function formatKinValue(key, value) {
   if (key === "shoulder_elevation_norm" || key === "shoulder_vert_norm") return val.toFixed(3);
   if (key === "elbow_angle_mean_deg") return val.toFixed(1);
   if (key === "movement_time_sec") return val.toFixed(2);
-  if (key === "peak_velocity_px_s") return `${val.toFixed(1)} px/s`;
-  if (key === "peak_velocity_cm_s") return `${val.toFixed(1)} cm/s`;
-  if (key === "time_to_peak_velocity_sec") return `${val.toFixed(2)} s`;
-  if (key === "relative_time_to_peak_pct") return `${val.toFixed(1)}%`;
-  if (key === "sparc") return val.toFixed(3);
-  if (key === "hand_displacement_cm" || key === "hand_displacement_norm") return `${val.toFixed(1)} cm`;
+  if (key === "peak_elbow_ang_vel_deg_s") return `${val.toFixed(1)} °/s`;
   if (key.includes("ratio") || key.includes("trunk") || key.includes("_sw") || key.includes("path_eff")) return val.toFixed(3);
   return val.toFixed(2);
 }
@@ -255,7 +229,7 @@ export const RECOVERY_SUMMARY_KEYS = [
   "trunk_ratio",
   "shoulder_elevation_norm",
   "elbow_angle_mean_deg",
-  "peak_velocity_cm_s",
+  "peak_elbow_ang_vel_deg_s",
 ];
 
 /** Read pre/post/healthy side kinematics from patient record. */
@@ -281,7 +255,7 @@ function appendManuscriptAliases(row, suffix, m) {
   const legacy = {
     total_trunk_palm_ratio: kinCell(m, "trunk_ratio"),
     total_duration_s: kinCell(m, "movement_time_sec"),
-    total_peak_velocity: kinCell(m, "peak_velocity_cm_s") || kinCell(m, "peak_velocity_px_s"),
+    total_peak_velocity: kinCell(m, "peak_elbow_ang_vel_deg_s"),
   };
   Object.entries(legacy).forEach(([k, v]) => {
     row[`${k}_${suffix}`] = v;

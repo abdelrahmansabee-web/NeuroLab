@@ -167,7 +167,7 @@ export function generateConsortSapMarkdown() {
 | 2 | Shoulder elevation (norm) | shoulder_elevation_norm_Pre/Post | ↓ |
 | 3 | Elbow angle (mean) | elbow_angle_mean_deg_Pre/Post | — |
 | 4 | Movement time | movement_time_sec_Pre/Post | ↓ |
-| 5 | Peak velocity | peak_velocity_cm_s_Pre/Post | ↑ |
+| 5 | Peak elbow angular velocity | peak_elbow_ang_vel_deg_s_Pre/Post | ↑ |
 
 ### Clinical secondary
 WMFT-4 rating & time; VAMS-4 (Happy, Calm, Sad, Tense); VAS pain; KVIQ-10 visual & kinesthetic.

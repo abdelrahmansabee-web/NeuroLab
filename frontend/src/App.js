@@ -2320,15 +2320,8 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       shoulderVertNorm: "shoulder_elevation_norm",
       elbowAngleMeanDeg: "elbow_angle_mean_deg",
       movementTimeSec: "movement_time_sec",
-      peakVelocityCmS: "peak_velocity_cm_s",
-      timeToPeakVelocitySec: "time_to_peak_velocity_sec",
-      relativeTimeToPeakPct: "relative_time_to_peak_pct",
+      peakElbowAngVelDegS: "peak_elbow_ang_vel_deg_s",
       duration: "movement_time_sec",
-      // Legacy keys kept for backward compatibility
-      sparc: "sparc",
-      handDisplacementCm: "hand_displacement_cm",
-      handDisplacementNorm: "hand_displacement_cm",
-      peakVelocityPxS: "peak_velocity_px_s",
     };
     const converted = {};
     const phaseMap = { pre: "pre", post: "post", healthy: "baseline" };
@@ -2885,12 +2878,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     shoulder_elevation_norm: "Shoulder elevation normalized to shoulder width. Lower = less compensatory elevation.",
     elbow_angle_mean_deg: "Mean elbow flexion angle during the movement window.",
     movement_time_sec: "Active movement duration (onset to offset).",
-    peak_velocity_cm_s: "Peak tangential hand velocity during reach (cm/s).",
-    time_to_peak_velocity_sec: "Time from movement onset to peak hand velocity.",
-    relative_time_to_peak_pct: "Time to peak velocity as a percentage of movement time.",
-    sparc: "SPARC — less negative (closer to 0) = smoother movement. Kept for backward compatibility.",
-    hand_displacement_cm: "Peak hand displacement during the reach (cm).",
-    peak_velocity_px_s: "Peak tangential hand velocity during reach (px/s) — when cm calibration is unavailable.",
+    peak_elbow_ang_vel_deg_s: "Peak elbow angular velocity during the reach (deg/s).",
   };
 
   const CARD_PREVIEW_KEYS = ["nvp", "straightness", "pause_time_sec", "number_of_stops"];

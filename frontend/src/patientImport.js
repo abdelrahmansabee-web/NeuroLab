@@ -29,9 +29,7 @@ const KIN_PDF_VARS = [
   { re: /Shoulder Vert|Shoulder elevation/i, key: "shoulder_elevation_norm" },
   { re: /Elbow angle/i, key: "elbow_angle_mean_deg" },
   { re: /Movement time|Duration/i, key: "movement_time_sec" },
-  { re: /Peak Velocity/i, key: "peak_velocity_cm_s" },
-  { re: /Time to Peak/i, key: "time_to_peak_velocity_sec" },
-  { re: /Hand displacement|Reach amplitude/i, key: "hand_displacement_cm" },
+  { re: /Peak Velocity|Peak elbow angular velocity/i, key: "peak_elbow_ang_vel_deg_s" },
 ];
 
 const WMFT_PDF = [
