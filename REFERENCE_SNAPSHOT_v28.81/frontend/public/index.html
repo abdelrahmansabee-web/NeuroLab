@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta name="nl-version" content="28.81" />
+    <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#121820" />
+    <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
+    <meta name="description" content="NeuroLab — Stroke Rehabilitation Research Platform" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="NeuroLab" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <title>NeuroLab</title>
+    <script>
+      (function () {
+        var v = document.querySelector('meta[name="nl-version"]');
+        v = v && v.content;
+        if (!v) return;
+        var k = "nl_app_v";
+        try {
+          var prev = localStorage.getItem(k);
+          localStorage.setItem(k, v);
+          if (prev && prev !== v && location.search.indexOf("_v=") === -1) {
+            location.replace(location.pathname + "?_v=" + encodeURIComponent(v) + location.hash);
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
+  </body>
+</html>
