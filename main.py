@@ -44,7 +44,7 @@ _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_r
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 
-DEPLOY_VERSION = "28.91"
+DEPLOY_VERSION = "28.92"
 DEPLOY_SHA_FILE = _BASE / "DEPLOY_SHA.txt"
 
 
@@ -222,22 +222,6 @@ def _check_clinical_plausibility(
     }
 
 
-def _ensure_skeleton_assets():
-    """Generate skeleton overlay assets if missing (PNG files are gitignored)."""
-    assets_dir = BASE_DIR / "assets" / "skeleton_v4"
-    required = ["humerus.png", "forearm.png", "hand.png", "clavicle.png", "torso.png", "skull.png", "joint.png"]
-    if all((assets_dir / f).exists() for f in required):
-        print("STARTUP: skeleton assets already present", flush=True)
-        return
-    try:
-        print("STARTUP: generating skeleton assets", flush=True)
-        import generate_skeleton_assets_v4
-        generate_skeleton_assets_v4.main()
-        print("STARTUP: skeleton assets generated", flush=True)
-    except Exception as e:
-        print("STARTUP: skeleton asset generation failed:", e, flush=True)
-
-
 # — App Init —
 app = FastAPI(
     title="Stroke Rehab Backend",
@@ -288,10 +272,6 @@ async def _startup_ensure_models():
                 print("STARTUP: auth DB initialized", flush=True)
             except Exception as e:
                 print("STARTUP: auth DB init failed:", e, flush=True)
-            try:
-                await asyncio.wait_for(asyncio.to_thread(_ensure_skeleton_assets), timeout=60.0)
-            except Exception as e:
-                print("STARTUP: skeleton asset init failed:", e, flush=True)
             try:
                 await asyncio.wait_for(asyncio.to_thread(ensure_pose_model), timeout=30.0)
                 print("STARTUP: pose model ready", flush=True)
