@@ -9,3 +9,13 @@ sessions/
 data/
 *.log
 .env
+
+frontend/node_modules/
+frontend/dist/
+backend/
+
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
