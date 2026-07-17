@@ -23,6 +23,7 @@ export const KINEMATIC_VARS = [
   // Secondary outcomes
   { key: "trunk_ratio", label: "Trunk ratio", unit: "ratio", dir: "lower", tier: "secondary" },
   { key: "shoulder_elevation_norm", label: "Shoulder elevation (norm)", unit: "ratio", dir: "lower", tier: "secondary", fallback: "shoulder_vert_norm" },
+  { key: "shoulder_elevation_table_ratio", label: "Shoulder elevation / table", unit: "ratio", dir: "lower", tier: "secondary" },
   { key: "elbow_angle_mean_deg", label: "Elbow angle (mean)", unit: "deg", dir: "none", tier: "secondary" },
   { key: "movement_time_sec", label: "Movement time", unit: "s", dir: "lower", tier: "secondary" },
   { key: "peak_elbow_ang_vel_deg_s", label: "Peak elbow angular velocity", unit: "deg/s", dir: "higher", tier: "secondary" },
@@ -35,6 +36,7 @@ export const KINEMATIC_DISPLAY_ORDER = [
   "number_of_stops",
   "trunk_ratio",
   "shoulder_elevation_norm",
+  "shoulder_elevation_table_ratio",
   "elbow_angle_mean_deg",
   "movement_time_sec",
   "peak_elbow_ang_vel_deg_s",
@@ -48,6 +50,7 @@ export const MANUSCRIPT_KINEMATIC_TARGETS = {
   number_of_stops: { pre: 2.5, post: 1.5, healthy: 0.5 },
   trunk_ratio: { pre: 0.32, post: 0.18, healthy: 0.03 },
   shoulder_elevation_norm: { pre: 0.18, post: 0.12, healthy: 0.065 },
+  shoulder_elevation_table_ratio: { pre: 0.25, post: 0.16, healthy: 0.09 },
   elbow_angle_mean_deg: { pre: 125, post: 130, healthy: 135 },
   movement_time_sec: { pre: 2.2, post: 1.7, healthy: 1.2 },
   peak_elbow_ang_vel_deg_s: { pre: 160.0, post: 200.0, healthy: 240.0 },
@@ -97,6 +100,7 @@ const LEGACY_KIN_MAP = {
   number_of_stops: ["number_of_stops", "n_stops", "stops"],
   trunk_ratio: ["trunk_ratio", "total_trunk_palm_ratio"],
   shoulder_elevation_norm: ["shoulder_elevation_norm", "shoulder_vert_norm"],
+  shoulder_elevation_table_ratio: ["shoulder_elevation_table_ratio"],
   elbow_angle_mean_deg: ["elbow_angle_mean_deg", "elbow_angle_mean"],
   movement_time_sec: ["movement_time_sec", "total_duration_s", "duration"],
   peak_elbow_ang_vel_deg_s: ["peak_elbow_ang_vel_deg_s", "peak_velocity_deg_s", "peak_velocity_px_s", "peak_velocity_cm_s", "total_peak_velocity"],
@@ -168,6 +172,7 @@ export function formatKinValue(key, value) {
   if (key === "number_of_stops") return val.toFixed(0);
   if (key === "trunk_ratio") return `${(val * 100).toFixed(1)}%`;
   if (key === "shoulder_elevation_norm" || key === "shoulder_vert_norm") return val.toFixed(3);
+  if (key === "shoulder_elevation_table_ratio") return val.toFixed(3);
   if (key === "elbow_angle_mean_deg") return val.toFixed(1);
   if (key === "movement_time_sec") return val.toFixed(2);
   if (key === "peak_elbow_ang_vel_deg_s") return `${val.toFixed(1)} °/s`;
@@ -228,6 +233,7 @@ export const RECOVERY_SUMMARY_KEYS = [
   "number_of_stops",
   "trunk_ratio",
   "shoulder_elevation_norm",
+  "shoulder_elevation_table_ratio",
   "elbow_angle_mean_deg",
   "peak_elbow_ang_vel_deg_s",
 ];

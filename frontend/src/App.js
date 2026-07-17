@@ -2876,6 +2876,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     number_of_stops: "Number of distinct pauses during the reach.",
     trunk_ratio: "Trunk displacement / palm displacement. Lower = less trunk compensation.",
     shoulder_elevation_norm: "Shoulder elevation normalized to shoulder width. Lower = less compensatory elevation.",
+    shoulder_elevation_table_ratio: "Shoulder elevation relative to the detected table-surface line. Lower = less compensatory elevation.",
     elbow_angle_mean_deg: "Mean elbow flexion angle during the movement window.",
     movement_time_sec: "Active movement duration (onset to offset).",
     peak_elbow_ang_vel_deg_s: "Peak elbow angular velocity during the reach (deg/s).",
