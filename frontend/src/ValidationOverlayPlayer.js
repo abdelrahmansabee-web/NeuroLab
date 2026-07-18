@@ -153,6 +153,8 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const rafRef = useRef(null);
+  const vfcIdRef = useRef(null);
+  const videoTimeRef = useRef(0);
   const autoRenderStartedRef = useRef(false);
 
   const phaseColor = useMemo(() => {
@@ -198,7 +200,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
 
   const getFrameIndex = useCallback((time) => {
     if (!frames.length) return 0;
-    const idx = Math.floor(time * fps);
+    const idx = Math.round(time * fps);
     return Math.max(0, Math.min(frames.length - 1, idx));
   }, [frames.length, fps]);
 
@@ -223,7 +225,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     ctx.clearRect(0, 0, cw, ch);
 
     if (!frames.length) return;
-    const idx = getFrameIndex(video.currentTime || 0);
+    const idx = getFrameIndex(videoTimeRef.current ?? video.currentTime ?? 0);
     const f = frames[idx];
     if (!f) return;
 
@@ -998,6 +1000,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       const vw = video.videoWidth || 1;
       const vh = video.videoHeight || 1;
       setVideoAspect(vw / vh);
+      videoTimeRef.current = video.currentTime ?? 0;
       drawOverlay();
       tryAutoRender();
     };
@@ -1005,7 +1008,14 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       const pct = video.duration ? (video.currentTime / video.duration) * 100 : 0;
       setProgress(pct);
       if (recording) setRenderProgress(pct);
+      videoTimeRef.current = video.currentTime ?? 0;
       drawOverlay();
+    };
+    const onVideoFrame = (now, metadata) => {
+      videoTimeRef.current = metadata?.mediaTime ?? video.currentTime ?? 0;
+      if (video.requestVideoFrameCallback) {
+        vfcIdRef.current = video.requestVideoFrameCallback(onVideoFrame);
+      }
     };
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
@@ -1025,6 +1035,10 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     video.addEventListener("ended", onEnded);
     window.addEventListener("resize", onResize);
 
+    if (video.requestVideoFrameCallback) {
+      vfcIdRef.current = video.requestVideoFrameCallback(onVideoFrame);
+    }
+
     const loop = () => {
       drawOverlay();
       if (recording) drawRecordingFrame();
@@ -1039,6 +1053,9 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       video.removeEventListener("pause", onPause);
       video.removeEventListener("ended", onEnded);
       window.removeEventListener("resize", onResize);
+      if (vfcIdRef.current && video.cancelVideoFrameCallback) {
+        video.cancelVideoFrameCallback(vfcIdRef.current);
+      }
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, [videoUrl, drawOverlay, drawRecordingFrame, recording, onEnded, tryAutoRender]);
