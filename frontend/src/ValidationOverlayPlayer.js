@@ -442,12 +442,12 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     };
     drawActiveBone(shoulder, elbow);
     drawActiveBone(elbow, wrist);
-    drawActiveBone(wrist, palm, { width: 8 });
+    // No wrist-to-palm active bone here; palm is tracked by the white path marker below.
 
-    [shoulder, elbow, wrist].forEach((p) => {
+    [shoulder, elbow].forEach((p) => {
       if (p) dot(p, { fill: color.main, stroke: "#fff", r: 10 });
     });
-    // palm is tracked by the white path marker during movement; no extra yellow dot here.
+    // palm is tracked by the white path marker during movement; no extra colored dot here.
 
     const speedThreshold = handPeakV > 0 ? 0.05 * handPeakV : 1.0;
     const inMovement = idx >= win.start_idx && idx <= win.end_idx;
