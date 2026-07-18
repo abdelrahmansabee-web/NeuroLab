@@ -447,7 +447,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     [shoulder, elbow, wrist].forEach((p) => {
       if (p) dot(p, { fill: color.main, stroke: "#fff", r: 10 });
     });
-    if (palm) dot(palm, { fill: "#facc15", stroke: "#fff", r: 11 });
+    // palm is tracked by the white path marker during movement; no extra yellow dot here.
 
     const speedThreshold = handPeakV > 0 ? 0.05 * handPeakV : 1.0;
     const inMovement = idx >= win.start_idx && idx <= win.end_idx;
