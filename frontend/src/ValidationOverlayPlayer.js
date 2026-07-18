@@ -388,7 +388,6 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     const trunk = pt("trunk");
     const palm = pt("palm");
     const elbow = pt("elbow");
-    const wrist = pt("wrist");
     const shoulder = pt("shoulder");
 
     const boneColor = "#f3f0d7";
@@ -428,26 +427,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       if (p) dot(p, { fill: jointFill, stroke: jointOutline, r: 9 });
     });
 
-    const drawActiveBone = (a, b, opts = {}) => {
-      if (!a || !b) return;
-      ctx.save();
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.shadowColor = opts.glow || color.glow;
-      ctx.shadowBlur = opts.blur || 18;
-      const width = opts.width || 9;
-      line(a, b, { color: "rgba(14,17,32,0.7)", width: width + 2.5 });
-      line(a, b, { color: opts.color || color.main, width });
-      ctx.restore();
-    };
-    drawActiveBone(shoulder, elbow);
-    drawActiveBone(elbow, wrist);
-    // No wrist-to-palm active bone here; palm is tracked by the white path marker below.
-
-    [shoulder, elbow].forEach((p) => {
-      if (p) dot(p, { fill: color.main, stroke: "#fff", r: 10 });
-    });
-    // palm is tracked by the white path marker during movement; no extra colored dot here.
+    // Skeleton is drawn in the default bone color; active-arm orange overlay removed.
 
     const speedThreshold = handPeakV > 0 ? 0.05 * handPeakV : 1.0;
     const inMovement = idx >= win.start_idx && idx <= win.end_idx;
