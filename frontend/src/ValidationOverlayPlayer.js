@@ -92,16 +92,16 @@ export function computeOverlayMetrics(overlayData) {
     shoulderElevationTable = Number(overlayData.metrics.shoulder_elevation_table_ratio);
   }
 
-  // Shoulder elevation relative to copied elbow anchor (fixed at rest).
-  let shoulderElevationElbowAnchor = 0;
+  // Shoulder elevation relative to vertical projection on the palm/table level (fixed at rest).
+  let shoulderElevationPalm = 0;
   for (let i = startIdx; i <= endIdx; i++) {
-    const v = frames[i]?.shoulder_elevation_elbow_anchor_ratio;
+    const v = frames[i]?.shoulder_elevation_palm_ratio;
     if (v != null && !Number.isNaN(v)) {
-      shoulderElevationElbowAnchor = Math.max(shoulderElevationElbowAnchor, v);
+      shoulderElevationPalm = Math.max(shoulderElevationPalm, v);
     }
   }
-  if (!shoulderElevationElbowAnchor && overlayData?.metrics?.shoulder_elevation_elbow_anchor_ratio != null) {
-    shoulderElevationElbowAnchor = Number(overlayData.metrics.shoulder_elevation_elbow_anchor_ratio);
+  if (!shoulderElevationPalm && overlayData?.metrics?.shoulder_elevation_palm_ratio != null) {
+    shoulderElevationPalm = Number(overlayData.metrics.shoulder_elevation_palm_ratio);
   }
 
   let elbowAngleMean = 0;
@@ -124,7 +124,7 @@ export function computeOverlayMetrics(overlayData) {
     shoulder_elevation_norm: shoulderElevation,
     shoulder_vert_norm: shoulderElevation,
     shoulder_elevation_table_ratio: shoulderElevationTable,
-    shoulder_elevation_elbow_anchor_ratio: shoulderElevationElbowAnchor,
+    shoulder_elevation_palm_ratio: shoulderElevationPalm,
     elbow_angle_mean_deg: elbowAngleMean,
     movement_time_sec: movementTime,
     peak_elbow_ang_vel_deg_s: peakElbowAngVel,
@@ -504,14 +504,12 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     if (f && typeof f.shoulder_elevation_table_ratio === "number" && !Number.isNaN(f.shoulder_elevation_table_ratio)) {
       currentShoulderElevationTable = f.shoulder_elevation_table_ratio;
     }
-    let currentShoulderElevationElbowAnchor = 0;
-    if (f && typeof f.shoulder_elevation_elbow_anchor_ratio === "number" && !Number.isNaN(f.shoulder_elevation_elbow_anchor_ratio)) {
-      currentShoulderElevationElbowAnchor = f.shoulder_elevation_elbow_anchor_ratio;
+    let currentShoulderElevationPalm = 0;
+    if (f && typeof f.shoulder_elevation_palm_ratio === "number" && !Number.isNaN(f.shoulder_elevation_palm_ratio)) {
+      currentShoulderElevationPalm = f.shoulder_elevation_palm_ratio;
     }
 
     const currentElbowAngle = f.elbow_angle || 0;
-    const wipingVerdict = f.wiping_verdict;
-    const wiping = overlayData?.wiping || {};
 
     const dpr = window.devicePixelRatio;
     const labelSize = `${Math.round(10 * dpr)}px`;
@@ -538,11 +536,23 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       ctx.fillText("Table surface", 8, Math.max(ty - 6, 14));
     }
 
-    // Elbow anchor point (copied from rest position, stays fixed regardless of actual elbow movement).
-    const elbowAnchor = overlayData?.elbow_anchor;
-    if (elbowAnchor && elbowAnchor[0] != null && elbowAnchor[1] != null) {
-      const ax = elbowAnchor[0] * cw;
-      const ay = elbowAnchor[1] * ch;
+    // Reference line from the shoulder to the palm/table point (fixed at rest).
+    const shoulderPalmAnchor = overlayData?.shoulder_palm_anchor;
+    if (shoulderPalmAnchor && shoulderPalmAnchor[0] != null && shoulderPalmAnchor[1] != null && shoulder) {
+      const anchorX = shoulderPalmAnchor[0] * cw;
+      const anchorY = shoulderPalmAnchor[1] * ch;
+      const sx = shoulder[0];
+      const sy = shoulder[1];
+      ctx.save();
+      ctx.strokeStyle = "rgba(236, 72, 153, 0.85)";
+      ctx.lineWidth = Math.max(2, 0.003 * Math.min(cw, ch));
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(anchorX, anchorY);
+      ctx.stroke();
+      ctx.restore();
+
       const radius = Math.max(4, 0.012 * Math.min(cw, ch));
       ctx.save();
       ctx.fillStyle = "rgba(236, 72, 153, 0.95)";
@@ -551,13 +561,10 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       ctx.shadowColor = "rgba(236, 72, 153, 0.6)";
       ctx.shadowBlur = 12;
       ctx.beginPath();
-      ctx.arc(ax, ay, radius, 0, 2 * Math.PI);
+      ctx.arc(anchorX, anchorY, radius, 0, 2 * Math.PI);
       ctx.fill();
       ctx.stroke();
       ctx.restore();
-      ctx.fillStyle = "rgba(236, 72, 153, 0.95)";
-      ctx.font = `600 ${labelSize} sans-serif`;
-      ctx.fillText("Elbow anchor", ax + radius + 6, ay + 4);
     }
 
     function drawSimpleLabel(text, anchor, offsetX, offsetY, opts = {}) {
@@ -613,15 +620,6 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     if (palm) {
       drawSimpleLabel(`Ha ${Math.round(speed)} °/s`, palm, palm[0] > cx ? -100 : 18, -24, { color: "#fde047", border: "rgba(250,204,21,0.6)" });
       drawSimpleLabel(`NVP ${currentNVP}`, palm, 0, 28, { color: color.text, border: color.glow, align: "center" });
-      if (wipingVerdict) {
-        drawSimpleLabel(
-          `${wipingVerdict.toUpperCase()}`,
-          palm,
-          0,
-          48,
-          { color: "#fde047", border: "rgba(250,204,21,0.6)", align: "center" }
-        );
-      }
     }
     if (trunk) {
       drawSimpleLabel(`Tr ${(currentTrunkRatio * 100).toFixed(0)}%`, trunk, trunk[0] > cx ? -80 : -80, -52, { color: "#fde047", border: "rgba(250,204,21,0.6)" });
@@ -787,26 +785,15 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     ctx.textAlign = "left";
 
     row("Straightness", currentStraightness > 0 ? formatValue(currentStraightness, 2) : "—");
-    row(
-      "Wiping",
-      wipingVerdict
-        ? `${wipingVerdict.toUpperCase()}${wiping.confidence ? ` (${wiping.confidence})` : ""}`.trim()
-        : "—",
-      true
-    );
-    if (wiping.warning) {
-      ctx.font = `600 ${fsSmall} sans-serif`;
-      ctx.fillStyle = "rgba(250,204,21,0.85)";
-      ctx.fillText(String(wiping.warning).slice(0, 40), left, cy);
-      cy += rowH;
-    }
     row("Peak velocity", currentPeakElbowAngVel > 0 ? `${formatValue(currentPeakElbowAngVel, 0)} °/s` : "—", true);
     row("Movement time", currentMovementTime > 0 ? `${formatValue(currentMovementTime, 2)} s` : "—");
     row("Pause / stops", currentPauseTime > 0 || currentStops > 0 ? `${formatValue(currentPauseTime, 2)} s / ${currentStops}` : "—");
     row("Trunk ratio", currentTrunkRatio > 0 ? formatValue(currentTrunkRatio, 2) : "—");
     row(
       "Shoulder elevation",
-      currentShoulderElevationTable > 0
+      currentShoulderElevationPalm > 0
+        ? formatValue(currentShoulderElevationPalm, 3)
+        : currentShoulderElevationTable > 0
         ? formatValue(currentShoulderElevationTable, 3)
         : currentShoulderElevation > 0
         ? formatValue(currentShoulderElevation, 3)
@@ -926,7 +913,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     ctx.font = `bold ${fsSmall} sans-serif`;
     ctx.fillText(`Speed ${Math.round(speed)} °/s`, gx, gy - 4);
 
-  }, [frames, fps, win, peakV, handPeakV, startPalm, endPalm, velocityProfile, phaseColor, phaseLabel, getFrameIndex, peakFrames, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.wiping, overlayData?.table_surface_y, overlayData?.elbow_anchor]);
+  }, [frames, fps, win, peakV, handPeakV, startPalm, endPalm, velocityProfile, phaseColor, phaseLabel, getFrameIndex, peakFrames, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor]);
 
   const drawRecordingFrame = useCallback(() => {
     const video = videoRef.current;
