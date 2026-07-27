@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
-import { Play, Pause, Maximize, Minimize2, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Play, Pause, Maximize, Minimize2, ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 
 export function computeOverlayMetrics(overlayData) {
   if (!overlayData?.frames?.length) return null;
@@ -151,12 +152,15 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
   const [playbackRate, setPlaybackRate] = useState(1);
   const [videoAspect, setVideoAspect] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isTouchUi, setIsTouchUi] = useState(false);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const rafRef = useRef(null);
   const vfcIdRef = useRef(null);
   const videoTimeRef = useRef(0);
   const autoRenderStartedRef = useRef(false);
+  const savedTimeRef = useRef(0);
+  const wasPlayingRef = useRef(false);
 
   const phaseColor = useMemo(() => {
     const p = (phaseLabel || "").toLowerCase();
@@ -1071,30 +1075,50 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     video.currentTime = pct * video.duration;
   };
 
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse)");
+    const syncTouch = () => {
+      setIsTouchUi(mq.matches || navigator.maxTouchPoints > 0);
+    };
+    syncTouch();
+    mq.addEventListener?.("change", syncTouch);
+    return () => mq.removeEventListener?.("change", syncTouch);
+  }, []);
+
+  const exitExpanded = useCallback(() => {
+    setIsExpanded(false);
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+    } catch (_) { /* ignore */ }
+  }, []);
+
   const requestFullscreen = async () => {
     if (isExpanded) {
-      setIsExpanded(false);
-      try {
-        if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
-        else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
-      } catch (_) { /* ignore */ }
+      exitExpanded();
       return;
+    }
+
+    const video = videoRef.current;
+    if (video) {
+      savedTimeRef.current = video.currentTime;
+      wasPlayingRef.current = !video.paused;
     }
 
     const container = containerRef.current;
     if (!container) return;
 
-    const isTouchDevice = typeof window !== "undefined" && (window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0);
-
-    // iPhone/iPad: native fullscreen on div is unreliable — use CSS expand (keeps canvas overlay).
-    if (!isTouchDevice) {
+    // Always use CSS expand on touch — native fullscreen breaks inside glass/backdrop-filter parents.
+    if (!isTouchUi) {
       try {
         if (container.requestFullscreen) {
           await container.requestFullscreen();
+          setIsExpanded(true);
           return;
         }
         if (container.webkitRequestFullscreen) {
           container.webkitRequestFullscreen();
+          setIsExpanded(true);
           return;
         }
       } catch (_) { /* fall through */ }
@@ -1107,7 +1131,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     const syncFullscreen = () => {
       const el = document.fullscreenElement || document.webkitFullscreenElement;
       if (el === containerRef.current) setIsExpanded(true);
-      else if (!el) setIsExpanded(false);
+      else if (!el && !isTouchUi) setIsExpanded(false);
     };
     document.addEventListener("fullscreenchange", syncFullscreen);
     document.addEventListener("webkitfullscreenchange", syncFullscreen);
@@ -1115,21 +1139,21 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       document.removeEventListener("fullscreenchange", syncFullscreen);
       document.removeEventListener("webkitfullscreenchange", syncFullscreen);
     };
-  }, []);
+  }, [isTouchUi]);
 
   useEffect(() => {
     if (!isExpanded) return undefined;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (e) => {
-      if (e.key === "Escape") setIsExpanded(false);
+      if (e.key === "Escape") exitExpanded();
     };
     window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("keydown", onKey);
     };
-  }, [isExpanded]);
+  }, [isExpanded, exitExpanded]);
 
   const toggleSpeed = () => {
     const speeds = [0.5, 1, 1.5, 2];
@@ -1164,6 +1188,18 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
   }, [tryAutoRender]);
 
   useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return undefined;
+    const apply = () => {
+      if (savedTimeRef.current > 0) video.currentTime = savedTimeRef.current;
+      if (wasPlayingRef.current) video.play().catch(() => {});
+    };
+    if (video.readyState >= 1) apply();
+    else video.addEventListener("loadeddata", apply, { once: true });
+    return undefined;
+  }, [isExpanded, videoUrl]);
+
+  useEffect(() => {
     if (!isExpanded) return undefined;
     const id = requestAnimationFrame(() => {
       drawOverlay();
@@ -1177,34 +1213,60 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     if (video) video.playbackRate = playbackRate;
   }, [playbackRate]);
 
-  return (
+  const controlsVisible = isExpanded || isTouchUi;
+
+  const playerNode = (
     <div
       ref={containerRef}
-      className={`relative w-full bg-black overflow-hidden group flex justify-center items-center ${
+      className={
         isExpanded
-          ? "fixed inset-0 z-[9999] h-[100dvh] w-screen max-w-none rounded-none"
-          : "rounded-lg"
-      }`}
+          ? "fixed inset-0 z-[99999] flex flex-col bg-black"
+          : "relative w-full rounded-lg bg-black overflow-hidden group flex justify-center items-center"
+      }
+      style={isExpanded ? { width: "100vw", height: "100dvh", maxWidth: "100vw", maxHeight: "100dvh" } : undefined}
     >
-      <div className={`relative ${isExpanded ? "w-full h-full flex items-center justify-center" : "inline-block max-w-full"}`}>
-        <video
-          ref={videoRef}
-          src={videoUrl}
-          playsInline
-          muted
-          className={`bg-black block object-contain ${
-            isExpanded ? "max-w-full max-h-[100dvh] w-full h-full" : "max-w-full max-h-[80vh] h-auto"
-          }`}
-          onError={(e) => onError?.(e?.target?.error || new Error("Video failed to load"))}
-          onClick={togglePlay}
-        />
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 w-full h-full pointer-events-none"
-        />
+      {isExpanded && (
+        <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 border-b border-white/10 bg-black/80">
+          <p className="text-sm font-bold text-white/90 truncate">{phaseLabel || "Validation"} — Validation</p>
+          <button
+            type="button"
+            onClick={exitExpanded}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/10 text-white text-xs font-semibold hover:bg-white/20 transition"
+            aria-label="Close fullscreen"
+          >
+            <X className="w-4 h-4" />
+            Close
+          </button>
+        </div>
+      )}
+
+      <div className={`flex-1 flex items-center justify-center min-h-0 w-full ${isExpanded ? "p-2 pb-0" : ""}`}>
+        <div className="relative inline-block max-w-full max-h-full">
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            playsInline
+            muted
+            className={`bg-black block object-contain ${
+              isExpanded ? "max-w-[100vw] max-h-[calc(100dvh-8rem)] w-auto h-auto" : "max-w-full max-h-[80vh] h-auto"
+            }`}
+            onError={(e) => onError?.(e?.target?.error || new Error("Video failed to load"))}
+            onClick={togglePlay}
+          />
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+          />
+        </div>
       </div>
+
       <canvas ref={recCanvasRef} className="hidden" />
-      <div className={`absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent transition-opacity pointer-events-none ${isExpanded ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+
+      <div
+        className={`${isExpanded ? "relative flex-shrink-0" : "absolute inset-x-0 bottom-0"} p-3 bg-gradient-to-t from-black/80 to-transparent transition-opacity pointer-events-none ${
+          controlsVisible ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
+      >
         <div className="glass-float rounded-xl p-2 flex flex-col gap-1.5 pointer-events-auto backdrop-blur-md bg-white/[0.06] border border-white/10">
           <div className="flex items-center gap-1 flex-wrap">
             <button
@@ -1289,6 +1351,19 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       </div>
     </div>
   );
+
+  if (isExpanded && typeof document !== "undefined") {
+    return (
+      <>
+        <div className="w-full min-h-[120px] rounded-lg bg-black/30 border border-white/10 flex items-center justify-center text-[11px] text-white/45">
+          Fullscreen — tap Close to return
+        </div>
+        {createPortal(playerNode, document.body)}
+      </>
+    );
+  }
+
+  return playerNode;
 }
 
 export default ValidationOverlayPlayer;
