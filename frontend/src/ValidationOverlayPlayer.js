@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
-import { Play, Pause, Maximize, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { Play, Pause, Maximize, Minimize2, ChevronLeft, ChevronRight, Download } from "lucide-react";
 
 export function computeOverlayMetrics(overlayData) {
   if (!overlayData?.frames?.length) return null;
@@ -150,6 +150,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
   const [renderProgress, setRenderProgress] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [videoAspect, setVideoAspect] = useState(null);
+  const [isExpanded, setIsExpanded] = useState(false);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const rafRef = useRef(null);
@@ -533,13 +534,14 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       ctx.restore();
       ctx.fillStyle = "rgba(245,158,11,0.95)";
       ctx.font = `600 ${labelSize} sans-serif`;
-      ctx.fillText("Table surface", 8, Math.max(ty - 6, 14));
+      const debugText = `Table surface ${overlayData.table_surface_y.toFixed(4)}`;
+      ctx.fillText(debugText, 8, Math.max(ty - 6, 14));
     }
 
-    // Reference line from the shoulder to the palm/table point (fixed at rest).
+    // Reference line from the current shoulder down to the detected table surface
+    // under the elbow (vertical line on the affected side).
     const shoulderPalmAnchor = overlayData?.shoulder_palm_anchor;
-    if (shoulderPalmAnchor && shoulderPalmAnchor[0] != null && shoulderPalmAnchor[1] != null && shoulder) {
-      const anchorX = shoulderPalmAnchor[0] * cw;
+    if (shoulderPalmAnchor && shoulderPalmAnchor[1] != null && shoulder) {
       const anchorY = shoulderPalmAnchor[1] * ch;
       const sx = shoulder[0];
       const sy = shoulder[1];
@@ -549,7 +551,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       ctx.setLineDash([6, 4]);
       ctx.beginPath();
       ctx.moveTo(sx, sy);
-      ctx.lineTo(anchorX, anchorY);
+      ctx.lineTo(sx, anchorY);
       ctx.stroke();
       ctx.restore();
 
@@ -561,7 +563,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
       ctx.shadowColor = "rgba(236, 72, 153, 0.6)";
       ctx.shadowBlur = 12;
       ctx.beginPath();
-      ctx.arc(anchorX, anchorY, radius, 0, 2 * Math.PI);
+      ctx.arc(sx, anchorY, radius, 0, 2 * Math.PI);
       ctx.fill();
       ctx.stroke();
       ctx.restore();
@@ -1069,12 +1071,65 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     video.currentTime = pct * video.duration;
   };
 
-  const requestFullscreen = () => {
+  const requestFullscreen = async () => {
+    if (isExpanded) {
+      setIsExpanded(false);
+      try {
+        if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+        else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+      } catch (_) { /* ignore */ }
+      return;
+    }
+
     const container = containerRef.current;
     if (!container) return;
-    if (container.requestFullscreen) container.requestFullscreen();
-    else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen();
+
+    const isTouchDevice = typeof window !== "undefined" && (window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0);
+
+    // iPhone/iPad: native fullscreen on div is unreliable — use CSS expand (keeps canvas overlay).
+    if (!isTouchDevice) {
+      try {
+        if (container.requestFullscreen) {
+          await container.requestFullscreen();
+          return;
+        }
+        if (container.webkitRequestFullscreen) {
+          container.webkitRequestFullscreen();
+          return;
+        }
+      } catch (_) { /* fall through */ }
+    }
+
+    setIsExpanded(true);
   };
+
+  useEffect(() => {
+    const syncFullscreen = () => {
+      const el = document.fullscreenElement || document.webkitFullscreenElement;
+      if (el === containerRef.current) setIsExpanded(true);
+      else if (!el) setIsExpanded(false);
+    };
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    document.addEventListener("webkitfullscreenchange", syncFullscreen);
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreen);
+      document.removeEventListener("webkitfullscreenchange", syncFullscreen);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isExpanded) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => {
+      if (e.key === "Escape") setIsExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [isExpanded]);
 
   const toggleSpeed = () => {
     const speeds = [0.5, 1, 1.5, 2];
@@ -1109,19 +1164,37 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
   }, [tryAutoRender]);
 
   useEffect(() => {
+    if (!isExpanded) return undefined;
+    const id = requestAnimationFrame(() => {
+      drawOverlay();
+      window.dispatchEvent(new Event("resize"));
+    });
+    return () => cancelAnimationFrame(id);
+  }, [isExpanded, drawOverlay]);
+
+  useEffect(() => {
     const video = videoRef.current;
     if (video) video.playbackRate = playbackRate;
   }, [playbackRate]);
 
   return (
-    <div ref={containerRef} className="relative w-full rounded-lg bg-black overflow-hidden group flex justify-center items-center">
-      <div className="relative inline-block max-w-full">
+    <div
+      ref={containerRef}
+      className={`relative w-full bg-black overflow-hidden group flex justify-center items-center ${
+        isExpanded
+          ? "fixed inset-0 z-[9999] h-[100dvh] w-screen max-w-none rounded-none"
+          : "rounded-lg"
+      }`}
+    >
+      <div className={`relative ${isExpanded ? "w-full h-full flex items-center justify-center" : "inline-block max-w-full"}`}>
         <video
           ref={videoRef}
           src={videoUrl}
           playsInline
           muted
-          className="max-w-full max-h-[80vh] h-auto object-contain bg-black block"
+          className={`bg-black block object-contain ${
+            isExpanded ? "max-w-full max-h-[100dvh] w-full h-full" : "max-w-full max-h-[80vh] h-auto"
+          }`}
           onError={(e) => onError?.(e?.target?.error || new Error("Video failed to load"))}
           onClick={togglePlay}
         />
@@ -1131,7 +1204,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
         />
       </div>
       <canvas ref={recCanvasRef} className="hidden" />
-      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+      <div className={`absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent transition-opacity pointer-events-none ${isExpanded ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
         <div className="glass-float rounded-xl p-2 flex flex-col gap-1.5 pointer-events-auto backdrop-blur-md bg-white/[0.06] border border-white/10">
           <div className="flex items-center gap-1 flex-wrap">
             <button
@@ -1178,9 +1251,9 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
                 type="button"
                 onClick={requestFullscreen}
                 className="p-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition"
-                title="Fullscreen"
+                title={isExpanded ? "Exit fullscreen" : "Fullscreen"}
               >
-                <Maximize className="w-3.5 h-3.5" />
+                {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
               </button>
 
               {recording ? (
