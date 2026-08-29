@@ -7,11 +7,6 @@ services:
       - .env
     environment:
       NEUROLAB_DATA_DIR: /data/neurolab
-      NEUROLAB_FAST_ANALYZE: "1"
-      NEUROLAB_POSE_MODEL: full
-      NEUROLAB_POSE_TARGET_FPS: "30"
-      NEUROLAB_HAND_STRIDE: "2"
-      NEUROLAB_SKIP_SKELETON: "1"
     volumes:
       - /var/lib/neurolab/data:/data/neurolab
     shm_size: "2gb"

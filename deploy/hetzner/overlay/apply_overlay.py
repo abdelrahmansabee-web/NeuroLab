@@ -24,7 +24,7 @@ def main() -> int:
         print(f"error: {root}/main.py missing", file=sys.stderr)
         return 1
 
-    for name in ("validation_cache.py", "sync_ipad_cache.html", "local_drive_fallback.py", "thin_overlay.py"):
+    for name in ("validation_cache.py", "sync_ipad_cache.html", "local_drive_fallback.py"):
         src = overlay / name
         if not src.exists():
             print(f"error: overlay file missing: {src}", file=sys.stderr)
@@ -45,11 +45,7 @@ def main() -> int:
 
     sys.path.insert(0, str(overlay))
     from patch_auth_drive import main as patch_drive
-    from patch_fast_analyze import main as patch_fast
-    drive_rc = patch_drive()
-    if drive_rc != 0:
-        return drive_rc
-    return patch_fast()
+    return patch_drive()
 
 
 if __name__ == "__main__":
