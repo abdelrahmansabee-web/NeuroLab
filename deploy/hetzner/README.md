@@ -6,8 +6,10 @@
 
 ## 1) اعمل السيرفر (حوالي 5 دقايق)
 
-1. افتح: https://console.hetzner.cloud
-2. سجّل بحساب جديد (إيميل + كارت).
+1. افتح صفحة التسجيل: https://accounts.hetzner.com/login ثم **Register now**.
+   بعد التسجيل ادخل الكونسول من: https://console.hetzner.com
+   (الرابط القديم `console.hetzner.cloud` مش شغال.)
+2. سجّل بحساب جديد (إيميل + كارت). لا تستخدم VPN وقت التسجيل.
 3. اعمل Project اسمه `NeuroLab`.
 4. من القائمة: **Servers** → **Add Server**.
 5. اختار كده بالظبط:
