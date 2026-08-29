@@ -24,7 +24,7 @@ def main() -> int:
         print(f"error: {root}/main.py missing", file=sys.stderr)
         return 1
 
-    for name in ("validation_cache.py", "sync_ipad_cache.html"):
+    for name in ("validation_cache.py", "sync_ipad_cache.html", "local_drive_fallback.py"):
         src = overlay / name
         if not src.exists():
             print(f"error: overlay file missing: {src}", file=sys.stderr)
@@ -36,13 +36,16 @@ def main() -> int:
     text = main_py.read_text(encoding="utf-8")
     if "register_validation_cache(" in text:
         print("main.py already wired for /sync-ipad")
-        return 0
-    if MARKER not in text:
+    elif MARKER not in text:
         print("error: expected marker not found in main.py", file=sys.stderr)
         return 1
-    main_py.write_text(text.replace(MARKER, SNIPPET + MARKER, 1), encoding="utf-8")
-    print("wired /sync-ipad and /api/validation-cache into main.py")
-    return 0
+    else:
+        main_py.write_text(text.replace(MARKER, SNIPPET + MARKER, 1), encoding="utf-8")
+        print("wired /sync-ipad and /api/validation-cache into main.py")
+
+    sys.path.insert(0, str(overlay))
+    from patch_auth_drive import main as patch_drive
+    return patch_drive()
 
 
 if __name__ == "__main__":

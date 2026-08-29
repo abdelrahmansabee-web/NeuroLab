@@ -23,6 +23,6 @@ PASSWORD: ........
 
 موقع Hugging Face **متقفلوش** لحد ما ننقل بيانات المرضى والآيباد.
 
-بعد التركيب: استخدم `https://<IP>.sslip.io/` لشهادة HTTPS مجانية من غير شراء دومين.
+بعد التركيب: استخدم `https://<name>.duckdns.org` بعد ربط DuckDNS بالـ IP، أو `https://<IP>.sslip.io/` كحل مؤقت.
 
 
