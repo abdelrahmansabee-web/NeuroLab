@@ -92,3 +92,33 @@ def register_validation_cache(app, data_dir: Path, html_path: Path) -> None:
         if not saved["files"]:
             raise HTTPException(status_code=400, detail="No artifact bytes in this IndexedDB record")
         return JSONResponse({"ok": True, **saved})
+
+    _ALLOWED_FILES = {
+        "overlay.json",
+        "original.mp4",
+        "unified.mp4",
+        "kinematics.json",
+        "meta.json",
+    }
+
+    @app.get("/api/validation-cache/{patientKey}/{phase}/{filename}")
+    async def download_validation_cache(patientKey: str, phase: str, filename: str):
+        if filename not in _ALLOWED_FILES:
+            raise HTTPException(status_code=404, detail="unknown file")
+        path = cache_root(data_dir) / _safe_part(patientKey) / _safe_part(phase, "phase") / filename
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="file not found")
+        from fastapi.responses import FileResponse
+        return FileResponse(path)
+
+    @app.post("/api/ipad-localstorage")
+    async def upload_ipad_localstorage(payload: Optional[UploadFile] = File(None)):
+        dest_dir = Path(data_dir) / "ipad_localstorage"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        dest = dest_dir / f"localstorage_{stamp}.json"
+        raw = await payload.read() if payload is not None else b"{}"
+        dest.write_bytes(raw or b"{}")
+        latest = dest_dir / "latest.json"
+        latest.write_bytes(raw or b"{}")
+        return {"ok": True, "saved": dest.name, "bytes": len(raw or b"")}

@@ -102,6 +102,22 @@
           }
         }
         log("خلص. اترفع " + ok + " من " + rows.length + ".");
+        try {
+          const dump = {};
+          for (const k of ["stroke_rehab_patients_v6", "neuro_kin_results", "neuro_fd_data", "neurolab_token"]) {
+            dump[k] = localStorage.getItem(k);
+          }
+          const fd2 = new FormData();
+          fd2.append("payload", new Blob([JSON.stringify(dump)], { type: "application/json" }), "localstorage.json");
+          const headers2 = {};
+          const t2 = token();
+          if (t2) headers2.Authorization = "Bearer " + t2;
+          const res2 = await fetch("/api/ipad-localstorage", { method: "POST", body: fd2, credentials: "same-origin", headers: headers2 });
+          if (res2.ok) log("اترفع كمان سجل المرضى من localStorage.", "ok");
+          else log("رفع localStorage فشل: HTTP " + res2.status, "err");
+        } catch (e2) {
+          log("رفع localStorage فشل: " + e2.message, "err");
+        }
       } catch (e) {
         log("خطأ: " + e.message, "err");
       }
