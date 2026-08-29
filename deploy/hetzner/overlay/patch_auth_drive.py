@@ -171,11 +171,15 @@ def patch_index_html(root: Path) -> None:
 
     media = root / "frontend" / "build" / "static" / "media"
     media.mkdir(parents=True, exist_ok=True)
-    bg = root / "frontend" / "build" / "bg.jpg"
     dest = media / "bg.a2cb4668082122acfd8d.jpg"
-    if bg.is_file() and not dest.is_file():
+    candidates = [
+        root / "frontend" / "build" / "bg.jpg",
+        root / "bg.jpg",
+    ]
+    bg = next((path for path in candidates if path.is_file()), None)
+    if bg is not None and not dest.is_file():
         shutil.copy2(bg, dest)
-        print(f"copied background image to {dest.name}")
+        print(f"copied background image from {bg} to {dest.name}")
 
 
 def main() -> int:
