@@ -1,5 +1,8 @@
 # NeuroLab - Oracle Cloud Free Tier Deployment
 
+> Clinic hosting moved to **Hetzner CX33**. Follow `deploy/hetzner/README.md`.
+> This Oracle guide is kept only as a historical reference.
+
 ## Step 1: Create Account & VM
 
 1. **Sign up**: https://signup.cloud.oracle.com/

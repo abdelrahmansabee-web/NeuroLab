@@ -2,6 +2,7 @@
 set -e
 
 echo "=== NeuroLab - Server Deployment ==="
+echo "Clinic production: Hetzner CX33 — see deploy/hetzner/README.md"
 echo ""
 
 # Detect project root (script location)

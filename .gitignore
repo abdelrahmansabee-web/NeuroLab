@@ -24,3 +24,7 @@ Thumbs.db
 # Secrets
 neurolab-*.json
 Backup-codes-*.txt
+deploy/hetzner/.env
+
+# Local runtime data
+backend/data/

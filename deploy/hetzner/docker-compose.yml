@@ -1,0 +1,15 @@
+services:
+  neurolab:
+    build: .
+    image: neurolab:hetzner
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NEUROLAB_DATA_DIR: /data/neurolab
+    volumes:
+      - /var/lib/neurolab/data:/data/neurolab
+    shm_size: "2gb"
+    ports:
+      - "127.0.0.1:7860:7860"
+    stop_grace_period: 30s
