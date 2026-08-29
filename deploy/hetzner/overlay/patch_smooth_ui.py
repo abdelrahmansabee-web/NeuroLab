@@ -2,12 +2,15 @@
 """Inject compositor-friendly clinic CSS. Does not change pose/analysis quality."""
 from __future__ import annotations
 
+import re
 import shutil
 import sys
 from pathlib import Path
 
-LINK = '<link rel="stylesheet" href="/clinic_smooth.css?v=1"/>'
+CSS_VER = "2"
+LINK = f'<link rel="stylesheet" href="/clinic_smooth.css?v={CSS_VER}"/>'
 BOOT = "<script>document.documentElement.classList.add('nl-clinic-smooth')</script>"
+HREF_RE = re.compile(r'href="/clinic_smooth\.css(?:\?v=\d+)?"')
 
 
 def patch_smooth_ui(root: Path) -> int:
@@ -29,7 +32,9 @@ def patch_smooth_ui(root: Path) -> int:
         print("WARN: index.html missing")
         return 0
     text = idx.read_text(encoding="utf-8", errors="replace")
-    if "clinic_smooth.css" not in text:
+    if HREF_RE.search(text):
+        text = HREF_RE.sub(f'href="/clinic_smooth.css?v={CSS_VER}"', text, count=1)
+    elif "clinic_smooth.css" not in text:
         if "</head>" in text:
             text = text.replace("</head>", LINK + "</head>", 1)
         else:

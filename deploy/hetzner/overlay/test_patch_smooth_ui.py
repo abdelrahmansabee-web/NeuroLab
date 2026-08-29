@@ -22,6 +22,8 @@ class PatchSmoothUiTests(unittest.TestCase):
             self.assertEqual(rc, 0)
             css = (build / "clinic_smooth.css").read_text(encoding="utf-8")
             self.assertIn("backdrop-filter: none", css)
+            self.assertNotIn("rgba(16, 22, 32, 0.94)", css)
+            self.assertNotIn("background-color:", css)
             html = (build / "index.html").read_text(encoding="utf-8")
             self.assertIn("/clinic_smooth.css", html)
             self.assertIn("nl-clinic-smooth", html)
@@ -40,7 +42,22 @@ class PatchSmoothUiTests(unittest.TestCase):
             self.assertEqual(patch_smooth_ui(root), 0)
             html = (build / "index.html").read_text(encoding="utf-8")
             self.assertEqual(html.count("clinic_smooth.css"), 1)
+            self.assertIn("clinic_smooth.css?v=2", html)
             self.assertEqual(html.count("nl-clinic-smooth"), 1)
+
+    def test_bumps_cached_css_query(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            build = root / "frontend" / "build"
+            build.mkdir(parents=True)
+            (build / "index.html").write_text(
+                '<html><head><link rel="stylesheet" href="/clinic_smooth.css?v=1"/></head></html>',
+                encoding="utf-8",
+            )
+            self.assertEqual(patch_smooth_ui(root), 0)
+            html = (build / "index.html").read_text(encoding="utf-8")
+            self.assertIn("clinic_smooth.css?v=2", html)
+            self.assertNotIn("clinic_smooth.css?v=1", html)
 
 
 if __name__ == "__main__":

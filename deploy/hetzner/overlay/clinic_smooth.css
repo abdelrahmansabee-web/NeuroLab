@@ -1,6 +1,6 @@
-/* Clinic UI smoothness. Follow the display refresh; drop iPad backdrop-filter jank.
-   Phones/iPads are 60 Hz or 120 Hz ProMotion. 240 Hz only exists on 240 Hz monitors.
-   This file does not change pose/analysis quality. */
+/* Clinic motion only. Do not restyle the glass theme to solid black.
+   Page background is already a blurred photo; skip per-panel backdrop-filter
+   so iPad scroll stays on vsync. Colors/gradients stay the app's own CSS. */
 
 html.nl-clinic-smooth {
   -webkit-font-smoothing: antialiased;
@@ -13,7 +13,6 @@ html.nl-clinic-smooth body {
   overscroll-behavior: none;
 }
 
-/* Kill every frosted-glass blur — this is the main iPad frame-drop source. */
 html.nl-clinic-smooth *,
 html.nl-clinic-smooth *::before,
 html.nl-clinic-smooth *::after {
@@ -21,52 +20,11 @@ html.nl-clinic-smooth *::after {
   -webkit-backdrop-filter: none !important;
 }
 
-html.nl-clinic-smooth .sidebar-shell,
-html.nl-clinic-smooth .glass-float,
-html.nl-clinic-smooth .content-shell,
-html.nl-clinic-smooth .section-header,
-html.nl-clinic-smooth .gselect-trigger,
-html.nl-clinic-smooth .gselect-menu,
-html.nl-clinic-smooth .app-topbar-glass {
-  background-image: none !important;
-  background-color: rgba(16, 22, 32, 0.94) !important;
-  background-blend-mode: normal !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22) !important;
-}
-
-html.nl-clinic-smooth .sidebar-shell::before,
-html.nl-clinic-smooth .glass-float::before,
-html.nl-clinic-smooth .content-shell::before,
-html.nl-clinic-smooth .sidebar-shell::after,
-html.nl-clinic-smooth .glass-float::after,
-html.nl-clinic-smooth .content-shell::after {
-  display: none !important;
-  content: none !important;
-  background: none !important;
-  opacity: 0 !important;
-}
-
-html.nl-clinic-smooth h1,
-html.nl-clinic-smooth h2,
-html.nl-clinic-smooth h3,
-html.nl-clinic-smooth p,
-html.nl-clinic-smooth span,
-html.nl-clinic-smooth label,
-html.nl-clinic-smooth button {
-  text-shadow: none !important;
-}
-
 html.nl-clinic-smooth button,
 html.nl-clinic-smooth a,
 html.nl-clinic-smooth [role="button"],
 html.nl-clinic-smooth .gselect-trigger {
   touch-action: manipulation;
-  transition:
-    transform 0.06s linear,
-    opacity 0.06s linear,
-    background-color 0.06s linear,
-    color 0.06s linear,
-    border-color 0.06s linear !important;
 }
 
 html.nl-clinic-smooth button:active,
@@ -84,12 +42,10 @@ html.nl-clinic-smooth .sidebar-shell {
   -webkit-backface-visibility: hidden;
 }
 
-/* Instant scroll — CSS smooth-scroll fights 120/240 Hz vsync. */
 html.nl-clinic-smooth * {
   scroll-behavior: auto !important;
 }
 
-/* Box-shadow pulse forces full-layer paints every frame. */
 html.nl-clinic-smooth .kin-analyzing-ring {
   animation: none !important;
 }
