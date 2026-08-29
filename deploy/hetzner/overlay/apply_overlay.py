@@ -51,10 +51,14 @@ def main() -> int:
     sys.path.insert(0, str(overlay))
     from patch_auth_drive import main as patch_drive
     from patch_persist_videos import main as patch_videos
+    from patch_smooth_ui import patch_smooth_ui
     drive_rc = patch_drive()
     if drive_rc != 0:
         return drive_rc
-    return patch_videos()
+    videos_rc = patch_videos()
+    if videos_rc != 0:
+        return videos_rc
+    return patch_smooth_ui(root)
 
 
 if __name__ == "__main__":

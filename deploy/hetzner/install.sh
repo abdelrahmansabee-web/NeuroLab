@@ -83,8 +83,13 @@ echo "==> Building and starting Docker image (first build downloads PyTorch — 
 cd "$APP_DIR"
 compose up -d --build
 
-echo "==> Nginx reverse proxy on port 80"
-cp "$DEPLOY_DIR/nginx.conf" /etc/nginx/sites-available/neurolab
+echo "==> Nginx reverse proxy"
+cp "$DEPLOY_DIR/nginx-gzip.conf" /etc/nginx/conf.d/neurolab-gzip.conf
+if [ -f /etc/letsencrypt/live/medlabai.duckdns.org/fullchain.pem ] && [ -f "$DEPLOY_DIR/nginx-https.example.conf" ]; then
+  echo "==> Keeping HTTPS vhost (Let's Encrypt certs present)"
+else
+  cp "$DEPLOY_DIR/nginx.conf" /etc/nginx/sites-available/neurolab
+fi
 ln -sfn /etc/nginx/sites-available/neurolab /etc/nginx/sites-enabled/neurolab
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
