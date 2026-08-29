@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>NeuroLab — رفع كاش الآيباد</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #121820; color: #e8eef6; margin: 0; padding: 24px; }
+    h1 { font-size: 1.25rem; font-weight: 600; }
+    p, li { color: #b7c2ce; line-height: 1.55; }
+    button {
+      width: 100%; max-width: 420px; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,.3);
+      background: rgba(255,255,255,.14); color: #fff; font-size: 1rem;
+    }
+    #log { white-space: pre-wrap; font-size: 13px; background: #0d1218; padding: 12px; border-radius: 10px; min-height: 140px; }
+    .ok { color: #8ee0b5; } .err { color: #ff9b9b; }
+  </style>
+</head>
+<body>
+  <h1>نقل فيديوهات الفاليديشن من الآيباد للسيرفر</h1>
+  <p>افتح هذه الصفحة <strong>من نفس الآيباد</strong> وأنت داخل موقع NeuroLab (نفس الرابط). الصفحة تقرأ الكاش المحلي وترفعه للسيرفر مباشرة — من غير زرار تحميل.</p>
+  <p><button id="go" type="button">ابدأ الرفع للسيرفر</button></p>
+  <div id="log">جاهز.</div>
+  <script>
+    const DB = "neurolab_validation_v1";
+    const STORE = "artifacts";
+    const logEl = document.getElementById("log");
+    function log(msg, cls) {
+      const line = document.createElement("div");
+      if (cls) line.className = cls;
+      line.textContent = msg;
+      logEl.appendChild(line);
+    }
+    function token() {
+      try { return localStorage.getItem("neurolab_token"); } catch { return null; }
+    }
+    function openDb() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB, 1);
+        req.onerror = () => reject(req.error || new Error("IndexedDB open failed"));
+        req.onsuccess = () => resolve(req.result);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
+        };
+      });
+    }
+    function getAll(db) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, "readonly");
+        const req = tx.objectStore(STORE).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function uploadRecord(rec) {
+      const fd = new FormData();
+      fd.append("patientKey", rec.patientKey || rec.id || "anon");
+      fd.append("phase", rec.phase || "unknown");
+      if (rec.csvFilename) fd.append("csvFilename", rec.csvFilename);
+      if (rec.videoFilename) fd.append("videoFilename", rec.videoFilename);
+      if (rec.unifiedVideoFilename) fd.append("unifiedVideoFilename", rec.unifiedVideoFilename);
+      if (rec.overlay) {
+        fd.append("overlay", new Blob([JSON.stringify(rec.overlay)], { type: "application/json" }), "overlay.json");
+      }
+      if (rec.originalVideoBlob instanceof Blob && rec.originalVideoBlob.size) {
+        fd.append("originalVideo", rec.originalVideoBlob, "original.mp4");
+      }
+      if (rec.unifiedVideoBlob instanceof Blob && rec.unifiedVideoBlob.size) {
+        fd.append("unifiedVideo", rec.unifiedVideoBlob, "unified.mp4");
+      }
+      if (rec.kinematicsSnapshot) {
+        fd.append("kinematics", new Blob([JSON.stringify(rec.kinematicsSnapshot)], { type: "application/json" }), "kinematics.json");
+      }
+      const headers = {};
+      const t = token();
+      if (t) headers.Authorization = "Bearer " + t;
+      const res = await fetch("/api/validation-cache", { method: "POST", body: fd, credentials: "same-origin", headers });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.detail || ("HTTP " + res.status));
+      return body;
+    }
+    document.getElementById("go").onclick = async () => {
+      logEl.textContent = "";
+      try {
+        const db = await openDb();
+        const rows = await getAll(db);
+        log("العثور على " + rows.length + " سجل في كاش الآيباد.");
+        if (!rows.length) {
+          log("مفيش فيديوهات في IndexedDB على هذا الجهاز/الرابط.", "err");
+          return;
+        }
+        let ok = 0;
+        for (const rec of rows) {
+          const label = (rec.patientKey || "?") + " / " + (rec.phase || "?");
+          try {
+            const r = await uploadRecord(rec);
+            ok += 1;
+            log("تم: " + label + " — " + JSON.stringify(r.files || {}), "ok");
+          } catch (e) {
+            log("فشل: " + label + " — " + e.message, "err");
+          }
+        }
+        log("خلص. اترفع " + ok + " من " + rows.length + ".");
+      } catch (e) {
+        log("خطأ: " + e.message, "err");
+      }
+    };
+  </script>
+</body>
+</html>

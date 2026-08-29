@@ -719,6 +719,9 @@ async def save_patients(patients: List[Any] = Body(..., embed=True)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+from validation_cache import register_validation_cache  # noqa: E402
+
+register_validation_cache(app, DATA_DIR, Path(__file__).resolve().parent / "sync_ipad_cache.html")
 
 
 # ─── Static Frontend (for single-port / remote/ngrok access) ───
