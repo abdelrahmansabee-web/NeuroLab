@@ -19,8 +19,14 @@ fi
 if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
 fi
-apt-get install -y -qq docker-compose-v2 docker-compose-plugin docker-compose 2>/dev/null || true
+apt-get install -y -qq docker-compose-v2 || apt-get install -y -qq docker-compose || true
 systemctl enable --now docker
+if ! docker compose version >/dev/null 2>&1 && ! command -v docker-compose >/dev/null 2>&1; then
+  mkdir -p /usr/local/lib/docker/cli-plugins
+  curl -fsSL "https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-x86_64" \
+    -o /usr/local/lib/docker/cli-plugins/docker-compose
+  chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+fi
 
 compose() {
   if docker compose version >/dev/null 2>&1; then
@@ -34,8 +40,8 @@ compose() {
 }
 
 if [ ! -f /swapfile ]; then
-  echo "==> Creating 4G swap"
-  fallocate -l 4G /swapfile
+  echo "==> Creating 8G swap"
+  fallocate -l 8G /swapfile
   chmod 600 /swapfile
   mkswap /swapfile
   swapon /swapfile
