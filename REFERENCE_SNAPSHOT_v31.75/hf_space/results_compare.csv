@@ -1,0 +1,13 @@
+Group,Variable,Unit,Pre,Post,Healthy,Delta_Pre_Post_%,Pre_vs_Healthy_%,Post_vs_Healthy_%,الحُكم,Confidence
+Primary,Pause % (<0.3 SW/s),%,24.8,21.4,15.6,-13.7,59.0,37.2,✅,3D
+Primary,nSUB,count,20.0,14.0,9.0,-30.0,122.2,55.6,✅,3D
+Primary,SPARC (whole),a.u.,-7.01,-6.98,-5.54,0.4,-26.5,-26.0,✅,3D
+Primary,SPARC (per-submove),a.u.,-2.37,-2.29,-2.16,3.4,-9.7,-6.0,✅,3D
+Primary,Trunk/Palm ratio,ratio,1.155,1.103,0.872,-4.5,32.5,26.5,✅,3D
+Secondary,Lateral Wiping Range,SW,0.651,0.477,0.798,-26.7,-18.4,-40.2,✅,2D-X
+Secondary,Peak Velocity,SW/s,3.362,2.9,3.543,-13.7,-5.1,-18.1,✅,3D
+Secondary,Path Efficiency (per-phase),ratio,19.18,11.47,5.71,-40.2,235.9,100.9,✅,3D
+Secondary,Mean Velocity,SW/s,0.723,0.782,1.041,8.2,-30.5,-24.9,✅,3D
+Tertiary,Trunk Lateral Disp.,SW,0.17,0.071,0.06,-58.2,183.3,18.3,✅,2D-X
+Tertiary,Shoulder Vert. Exc.,SW,0.043,0.033,0.076,-23.3,-43.4,-56.6,—,2D-Y
+Tertiary,Duration,sec,24.4,18.68,11.88,-23.4,105.4,57.2,✅,time

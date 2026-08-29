@@ -1,0 +1,3 @@
+[submodule "hf_repo"]
+	path = hf_repo
+	url = https://huggingface.co/spaces/AbdelrahmanSabee/neurolab.git

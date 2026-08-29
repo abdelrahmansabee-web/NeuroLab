@@ -1,0 +1,168 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.glass-slider-track {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.glass-slider-fill {
+  transition: width 0.1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.glass-slider-track.is-dragging .glass-slider-fill {
+  transition: none;
+}
+
+.glass-field:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: rgba(139, 92, 246, 0.45) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 0;
+  height: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+}
+
+@media print {
+  nav,
+  .sidebar-shell {
+    display: none !important;
+  }
+}
+
+/* Unified content shell — mid tone, no blur (no flicker on desktop, no clip on iPad) */
+.content-shell {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: none;
+  overflow: visible;
+}
+
+.content-shell-inner {
+  overflow: visible;
+  position: relative;
+}
+
+.section-transition-host {
+  position: relative;
+  overflow: visible;
+}
+
+.section-pane {
+  overflow: visible;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* Kinematics analysis — film strip animation */
+@keyframes kin-ring-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.12), 0 8px 24px rgba(0, 0, 0, 0.22);
+  }
+  50% {
+    box-shadow: 0 0 12px 2px rgba(251, 191, 36, 0.1), 0 8px 26px rgba(0, 0, 0, 0.26);
+  }
+}
+
+@keyframes kin-film-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.kin-film-strip {
+  width: 100%;
+  max-width: 280px;
+  position: relative;
+  z-index: 2;
+}
+
+.kin-film-strip__holes {
+  display: flex;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 0 8px;
+}
+
+.kin-film-strip__hole {
+  width: 7px;
+  height: 7px;
+  border-radius: 1.5px;
+  background: rgba(255, 255, 255, 0.38);
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.kin-film-strip__body {
+  overflow: hidden;
+  margin: 4px 0;
+  border-radius: 8px;
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  background: rgba(8, 10, 18, 0.82);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+.kin-film-strip__track {
+  display: flex;
+  width: max-content;
+  padding: 8px 0;
+  animation: kin-film-scroll 4.2s linear infinite;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.kin-film-frame {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 40px;
+  margin: 0 4px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.kin-film-frame svg {
+  display: block;
+  width: 40px;
+  height: 30px;
+}
+
+.kin-analyzing-overlay {
+  isolation: isolate;
+}
+
+.kin-analyzing-ring {
+  animation: kin-ring-pulse 2s ease-in-out infinite;
+}
+
+.kin-phase-chart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

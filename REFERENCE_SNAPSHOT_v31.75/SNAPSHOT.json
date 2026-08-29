@@ -1,0 +1,34 @@
+{
+  "snapshot_id": "REFERENCE_SNAPSHOT_v31.75",
+  "created_at": "2026-08-29T16:04:00Z",
+  "purpose": "Full restore point of the working NeuroLab program (Hugging Face Space + GitHub source).",
+  "hf_space": {
+    "url": "https://huggingface.co/spaces/AbdelrahmanSabee/neurolab",
+    "git_url": "https://huggingface.co/spaces/AbdelrahmanSabee/neurolab.git",
+    "commit": "1b5b3469f4bf1103754e818437619ec114385691",
+    "commit_title": "frontend 31.75: glass capsule New/Save on top bar with session dirty glow",
+    "commit_date": "2026-08-17T18:14:45Z",
+    "frontend_nl_version": "31.75",
+    "backend_deploy_version": "29.24",
+    "sdk": "docker",
+    "app_port": 7860
+  },
+  "github": {
+    "url": "https://github.com/abdelrahmansabee-web/neurolab",
+    "ref": "origin/master",
+    "commit": "71d88619b682b3bac7d4842f82d574d09c595ba4",
+    "frontend_nl_version": "29.12",
+    "note": "GitHub frontend is Create React App (App.js). Live HF frontend is Vite + TypeScript (App.tsx) at 31.75."
+  },
+  "excluded": [
+    ".git",
+    "venv/",
+    "node_modules/",
+    "uploads/",
+    "outputs/",
+    "data/ (users.db, patients, secrets)",
+    "*.task MediaPipe models (re-downloaded at Docker build / runtime)",
+    "*.js.map source maps",
+    "HF Space secrets (JWT_SECRET, MFA_ENCRYPTION_KEY, Google Drive credentials)"
+  ]
+}
