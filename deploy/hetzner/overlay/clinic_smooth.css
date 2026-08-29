@@ -1,6 +1,5 @@
-/* Clinic motion only. Do not restyle the glass theme to solid black.
-   Page background is already a blurred photo; skip per-panel backdrop-filter
-   so iPad scroll stays on vsync. Colors/gradients stay the app's own CSS. */
+/* Fast clinic paint. Keep the photo/glass look — do not fill panels solid black.
+   Live CSS filter/backdrop-filter on iPad is what made the UI heavy. */
 
 html.nl-clinic-smooth {
   -webkit-font-smoothing: antialiased;
@@ -13,11 +12,29 @@ html.nl-clinic-smooth body {
   overscroll-behavior: none;
 }
 
+html.nl-clinic-smooth,
 html.nl-clinic-smooth *,
 html.nl-clinic-smooth *::before,
 html.nl-clinic-smooth *::after {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+}
+
+html.nl-clinic-smooth .fixed.inset-0.z-0 > .absolute.inset-0:first-child,
+html.nl-clinic-smooth [style*="blur(24px)"] {
+  filter: none !important;
+  -webkit-filter: none !important;
+  transform: none !important;
+  background-image: url("/bg_soft.jpg") !important;
+}
+
+html.nl-clinic-smooth .sidebar-shell::before,
+html.nl-clinic-smooth .glass-float::before,
+html.nl-clinic-smooth .content-shell::before,
+html.nl-clinic-smooth .sidebar-shell::after,
+html.nl-clinic-smooth .glass-float::after,
+html.nl-clinic-smooth .content-shell::after {
+  mix-blend-mode: normal !important;
 }
 
 html.nl-clinic-smooth button,
@@ -27,26 +44,12 @@ html.nl-clinic-smooth .gselect-trigger {
   touch-action: manipulation;
 }
 
-html.nl-clinic-smooth button:active,
-html.nl-clinic-smooth a:active,
-html.nl-clinic-smooth [role="button"]:active {
-  transform: translateZ(0) scale(0.98);
-}
-
-html.nl-clinic-smooth .section-pane,
-html.nl-clinic-smooth main,
-html.nl-clinic-smooth .content-shell,
-html.nl-clinic-smooth .sidebar-shell {
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
 html.nl-clinic-smooth * {
   scroll-behavior: auto !important;
 }
 
-html.nl-clinic-smooth .kin-analyzing-ring {
+html.nl-clinic-smooth .kin-analyzing-ring,
+html.nl-clinic-smooth .kin-film-strip__track {
   animation: none !important;
 }
 
