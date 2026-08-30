@@ -336,10 +336,11 @@ def _sa_list_service():
     return build("drive", "v3", credentials=creds, cache_discovery=False), folder_id
 
 
-def _count_files(service, folder_id: str, *, depth: int = 0, limit: int = 40) -> Tuple[int, int, int]:
+def _count_files(service, folder_id: str, *, depth: int = 0) -> Tuple[int, int, int, Dict[str, int]]:
     if not folder_id or depth > 6:
-        return 0, 0, 0
+        return 0, 0, 0, {}
     videos = jsons = files = 0
+    kinds: Dict[str, int] = {}
     page = None
     scanned = 0
     while scanned < 400:
@@ -356,23 +357,28 @@ def _count_files(service, folder_id: str, *, depth: int = 0, limit: int = 40) ->
         scanned += len(items)
         for item in items:
             mime = item.get("mimeType") or ""
-            name = (item.get("name") or "").lower()
+            name = item.get("name") or ""
+            lower = name.lower()
             if mime == FOLDER_MIME:
-                if depth < limit:
-                    v, j, f = _count_files(service, item.get("id") or "", depth=depth + 1, limit=limit)
-                    videos += v
-                    jsons += j
-                    files += f
+                if lower == "reports":
+                    continue
+                v, j, f, k = _count_files(service, item.get("id") or "", depth=depth + 1)
+                videos += v
+                jsons += j
+                files += f
+                for key, count in k.items():
+                    kinds[key] = kinds.get(key, 0) + count
                 continue
             files += 1
-            if name.endswith(".mp4") or mime.startswith("video/"):
+            kinds[name] = kinds.get(name, 0) + 1
+            if lower.endswith(".mp4") or mime.startswith("video/"):
                 videos += 1
-            if name.endswith(".json") or mime == "application/json":
+            if lower.endswith(".json") or mime == "application/json":
                 jsons += 1
         page = res.get("nextPageToken")
         if not page:
             break
-    return videos, jsons, files
+    return videos, jsons, files, kinds
 
 
 _STRUCTURAL_ROOT = {
@@ -398,6 +404,7 @@ def list_clinic_folder() -> Dict[str, Any]:
         "rootChildren": [],
         "empty": True,
         "oauthReady": bool(oauth_ready()),
+        "fileKinds": {},
         "error": None,
     }
     service = None
@@ -430,10 +437,11 @@ def list_clinic_folder() -> Dict[str, Any]:
             if name in _STRUCTURAL_ROOT or name.startswith("_"):
                 names.append(name)
         out["rootChildren"] = names
-        videos, jsons, files = _count_files(service, folder_id)
+        videos, jsons, files, kinds = _count_files(service, folder_id)
         out["videoCount"] = videos
         out["jsonCount"] = jsons
         out["fileCount"] = files
+        out["fileKinds"] = kinds
         out["empty"] = files <= 0
         out["ok"] = True
         return out

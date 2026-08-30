@@ -85,9 +85,13 @@
         folderEl.textContent =
           "الفولدر «" + name + "» فاضي: " + files + " ملف، " + videos + " فيديو، " + jsons + " JSON. مفيش داتا مرضى لسه.";
       } else {
-        folderEl.className = "ok";
+        folderEl.className = files && videos === 0 ? "warn" : "ok";
+        const kinds = inv.fileKinds || {};
+        const kindText = Object.keys(kinds).slice(0, 8).map((k) => k + "×" + kinds[k]).join("، ");
         folderEl.textContent =
-          "الفولدر «" + name + "»: " + files + " ملف، " + videos + " فيديو، " + jsons + " JSON.";
+          "الفولدر «" + name + "»: " + files + " ملف، " + videos + " فيديو، " + jsons + " JSON."
+          + (kindText ? " الملفات: " + kindText : "")
+          + (videos === 0 ? " مفيش فيديوهات. افتحي team_patients." : "");
       }
     }
     Promise.all([
