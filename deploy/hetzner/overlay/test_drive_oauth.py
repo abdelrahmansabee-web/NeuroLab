@@ -34,7 +34,9 @@ class DriveOauthTests(unittest.TestCase):
         with patch.dict(os.environ, {"GOOGLE_OAUTH_REDIRECT_URI": ""}, clear=False):
             self.assertIn("auth/drive/callback", drive_oauth.redirect_uri())
 
-    def test_authorization_url_requests_offline_consent(self) -> None:
+    def test_persist_refresh_skips_without_hub_token(self) -> None:
+        with patch.dict(os.environ, {"HF_TOKEN": "", "HUGGINGFACE_HUB_TOKEN": "", "HUGGINGFACE_TOKEN": ""}, clear=False):
+            drive_oauth.persist_refresh_token_secret("rt-should-not-upload")
         src = Path(drive_oauth.__file__).read_text(encoding="utf-8")
         self.assertIn('access_type="offline"', src)
         self.assertIn('prompt="consent"', src)

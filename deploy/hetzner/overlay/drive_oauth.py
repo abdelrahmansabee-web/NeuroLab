@@ -69,13 +69,18 @@ def load_token() -> Dict[str, Any]:
     env_refresh = (os.environ.get("GOOGLE_OAUTH_REFRESH_TOKEN") or "").strip()
     path = token_path()
     data: Dict[str, Any] = {}
-    if path.is_file():
-        raw = path.read_bytes()
+    candidates = [path, Path("/data/neurolab") / TOKEN_FILE]
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        raw = candidate.read_bytes()
         try:
             data = json.loads(_fernet().decrypt(raw).decode("utf-8"))
+            break
         except Exception:
             try:
                 data = json.loads(raw.decode("utf-8"))
+                break
             except Exception:
                 data = {}
     if env_refresh and not (data.get("refresh_token") or "").strip():
@@ -86,11 +91,54 @@ def load_token() -> Dict[str, Any]:
 def save_token(data: Dict[str, Any]) -> None:
     payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
     dest = token_path()
+    dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(_fernet().encrypt(payload))
+    durable = Path("/data/neurolab") / TOKEN_FILE
+    if durable.resolve() != dest.resolve():
+        try:
+            durable.parent.mkdir(parents=True, exist_ok=True)
+            durable.write_bytes(dest.read_bytes())
+        except OSError as exc:
+            print(f"OAuth durable token copy skipped: {exc}", flush=True)
     try:
         dest.chmod(0o600)
     except OSError:
         pass
+
+
+def persist_refresh_token_secret(refresh: str) -> None:
+    """Keep the Google refresh token in Space secrets so rebuilds do not drop Drive."""
+    refresh = (refresh or "").strip()
+    hub = (
+        os.environ.get("HF_TOKEN")
+        or os.environ.get("HUGGINGFACE_HUB_TOKEN")
+        or os.environ.get("HUGGINGFACE_TOKEN")
+        or ""
+    ).strip()
+    repo = (
+        os.environ.get("SPACE_REPO_ID")
+        or os.environ.get("HF_SPACE_ID")
+        or "AbdelrahmanSabee/neurolab"
+    ).strip()
+    if not refresh:
+        return
+    if not hub:
+        print("OAuth refresh persist skipped: no HF_TOKEN in Space", flush=True)
+        return
+    import urllib.request
+
+    body = json.dumps({"key": "GOOGLE_OAUTH_REFRESH_TOKEN", "value": refresh}).encode("utf-8")
+    req = urllib.request.Request(
+        f"https://huggingface.co/api/spaces/{repo}/secrets",
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {hub}",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=45) as resp:
+        print(f"OAuth refresh persist status={resp.status}", flush=True)
 
 
 def clear_token() -> None:
@@ -108,6 +156,7 @@ def oauth_ready() -> bool:
 
 def oauth_status() -> Dict[str, Any]:
     token = load_token()
+    path = token_path()
     return {
         "clientConfigured": oauth_client_configured(),
         "ready": oauth_ready(),
@@ -115,6 +164,7 @@ def oauth_status() -> Dict[str, Any]:
         "redirectUri": redirect_uri(),
         "folderName": token.get("folderName"),
         "folderId": token.get("folderId"),
+        "tokenOnDisk": path.is_file(),
     }
 
 
@@ -217,6 +267,10 @@ def exchange_code(code: str) -> Dict[str, Any]:
     if not data.get("refresh_token"):
         raise RuntimeError("Google did not return a refresh token. Reconnect and allow offline access.")
     save_token(data)
+    try:
+        persist_refresh_token_secret(str(data.get("refresh_token") or ""))
+    except Exception as exc:
+        print("OAuth refresh persist:", exc, flush=True)
     return data
 
 
