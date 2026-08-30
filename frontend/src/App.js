@@ -53,6 +53,11 @@ function isIOSDevice() {
     || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
+function tapMotion(scale) {
+  if (typeof window !== "undefined" && isIOSDevice()) return undefined;
+  return { scale };
+}
+
 function isStandalonePWA() {
   return window.matchMedia("(display-mode: standalone)").matches
     || window.navigator.standalone === true;
@@ -516,7 +521,7 @@ const GBtn = ({ children, onClick, disabled, className = "", variant = "default"
   return (
     <motion.button
       whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.97 }}
+      whileTap={tapMotion(0.97)}
       onClick={onClick}
       disabled={disabled}
       className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed ${v[variant]} ${className}`}
@@ -583,7 +588,6 @@ const PullToRefresh = ({ scrollRef }) => {
       const dy = e.touches[0].clientY - startY.current;
       if (el.scrollTop <= 0 && dy > 0) {
         paint(el, Math.min(dy * 0.52, PTR_MAX_PULL), "pulling");
-        if (dy > 4 && e.cancelable) e.preventDefault();
       } else if (dy <= 0 && el.scrollTop <= 0) {
         paint(el, 0, "idle");
       }
@@ -602,7 +606,7 @@ const PullToRefresh = ({ scrollRef }) => {
     };
 
     el.addEventListener("touchstart", onStart, { passive: true });
-    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchmove", onMove, { passive: true });
     el.addEventListener("touchend", finish, { passive: true });
     el.addEventListener("touchcancel", finish, { passive: true });
     return () => {
@@ -1141,7 +1145,7 @@ const SWBlock = ({ phase, taskData, onUpdate }) => {
           ].map(({ Icon, fn, dis, cls, disCls }, i) => (
             <motion.button
               key={i}
-              whileTap={{ scale: 0.88 }}
+              whileTap={tapMotion(0.88)}
               onClick={fn}
               disabled={dis}
               className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all ${dis ? `${disCls} cursor-not-allowed` : cls}`}
@@ -1151,7 +1155,7 @@ const SWBlock = ({ phase, taskData, onUpdate }) => {
           ))}
 
           <motion.button
-            whileTap={{ scale: 0.88 }}
+            whileTap={tapMotion(0.88)}
             onClick={copyTime}
             className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all ${
               copied
@@ -1281,7 +1285,7 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
           {COMORBIDITIES.map((opt) => {
             const active = (data.comorbidities || []).includes(opt.value);
             return (
-              <motion.button key={opt.value} whileTap={{ scale:0.95 }} onClick={() => { const cur = data.comorbidities || []; s("comorbidities", cur.includes(opt.value) ? cur.filter((c) => c !== opt.value) : [...cur, opt.value]); }}
+              <motion.button key={opt.value} whileTap={tapMotion(0.95)} onClick={() => { const cur = data.comorbidities || []; s("comorbidities", cur.includes(opt.value) ? cur.filter((c) => c !== opt.value) : [...cur, opt.value]); }}
                 className={`text-left px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all ${active ? "bg-violet-500/25 border-violet-400/40 text-violet-200" : "bg-white/[0.05] border-white/[0.04] text-white/50 hover:bg-white/[0.08]"}`}>
                 <div className="flex items-center gap-2 min-w-0">
                   <div className={`w-3.5 h-3.5 rounded-sm border flex-shrink-0 flex items-center justify-center ${active ? "bg-violet-500 border-violet-400" : "border-white/20"}`}>{active && <Check className="w-2.5 h-2.5 text-white" />}</div>
@@ -5149,7 +5153,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           {/* PDF */}
           <motion.button
             whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
+            whileTap={tapMotion(0.98)}
             onClick={exportGlassReport}
             className="flex flex-col gap-3 p-5 rounded-xl bg-rose-500/10 border border-rose-400/25 hover:bg-rose-500/15 hover:border-rose-400/40 transition-all text-left"
           >
@@ -5170,7 +5174,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           {/* SPSS */}
           <motion.button
             whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
+            whileTap={tapMotion(0.98)}
             onClick={exportSPSS}
             className="flex flex-col gap-3 p-5 rounded-xl bg-violet-500/10 border border-violet-400/25 hover:bg-violet-500/15 hover:border-violet-400/40 transition-all text-left"
           >
@@ -5191,7 +5195,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           {/* JSON */}
           <motion.button
             whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
+            whileTap={tapMotion(0.98)}
             onClick={exportJSON}
             className="flex flex-col gap-3 p-5 rounded-xl bg-emerald-500/10 border border-emerald-400/25 hover:bg-emerald-500/15 hover:border-emerald-400/40 transition-all text-left"
           >
@@ -5212,7 +5216,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           {/* SPSS Syntax */}
           <motion.button
             whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
+            whileTap={tapMotion(0.98)}
             onClick={exportSPSSyntax}
             className="flex flex-col gap-3 p-5 rounded-xl bg-indigo-500/10 border border-indigo-400/25 hover:bg-indigo-500/15 hover:border-indigo-400/40 transition-all text-left"
           >
@@ -6130,7 +6134,7 @@ export default function App() {
       <div className="relative" ref={ref}>
         <motion.button
           whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
+          whileTap={tapMotion(0.92)}
           onClick={() => setOpen((p) => !p)}
           className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
           style={GLASS_FIELD}
@@ -6166,7 +6170,7 @@ export default function App() {
     const Action = ({ onClick, icon, label, colorClass = "hover:text-white" }) => (
       <motion.button
         whileHover={inMenu ? undefined : { scale: 1.08 }}
-        whileTap={{ scale: 0.92 }}
+        whileTap={tapMotion(0.92)}
         onClick={() => { onClick(); if (inMenu) closeMobileTopMenu(); }}
         className={`${btnBase} ${inMenu ? "" : colorClass}`}
         style={inMenu ? undefined : GLASS_FIELD}
@@ -6198,7 +6202,7 @@ export default function App() {
       <div className="flex items-center gap-2">
         <motion.button
           whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
+          whileTap={tapMotion(0.97)}
           onClick={() => newSession()}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-emerald-500/25 border border-emerald-400/40 hover:bg-emerald-500/35 transition-all"
           title="New Session"
@@ -6221,7 +6225,7 @@ export default function App() {
   const topBar = (
     <div className={`app-topbar-glass glass-float flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl ${GLASS_CLS}`} style={{ boxShadow: FLOAT_M }}>
       <motion.button
-        whileTap={{ scale: 0.9 }}
+        whileTap={tapMotion(0.9)}
         onClick={() => setSidebar((p) => !p)}
         className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0"
         style={GLASS_FIELD}
@@ -6273,7 +6277,7 @@ export default function App() {
         ) : (
           <motion.button
             whileHover={{ scale: 1.08 }}
-            whileTap={{ scale: 0.92 }}
+            whileTap={tapMotion(0.92)}
             onClick={() => setMobileTopMenuOpen((p) => !p)}
             className="w-9 h-9 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
             style={GLASS_FIELD}
@@ -6622,7 +6626,7 @@ export default function App() {
                   return (
                     <motion.button
                       key={item.id}
-                      whileTap={{ scale: 0.97 }}
+                      whileTap={tapMotion(0.97)}
                       onClick={() => { setActive(item.id); if (!isDesktop) setSidebar(false); }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors duration-200 relative group ${
                         on ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
@@ -6842,6 +6846,9 @@ export default function App() {
         .grid > * { min-width: 0; overflow-wrap: break-word; word-break: break-word; }
         input, select { min-height: 44px !important; }
         button { min-height: 44px !important; }
+        button, a, [role="button"], input, select, textarea, label, .gselect-trigger {
+          touch-action: manipulation;
+        }
 
         @keyframes gselect-open {
           0% { opacity: 0; transform: translateY(-12px) scale(0.96); }

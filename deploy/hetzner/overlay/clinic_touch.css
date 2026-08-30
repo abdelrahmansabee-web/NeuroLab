@@ -1,0 +1,13 @@
+/* Fast iPad taps. Does not change glass colors, blur, or fills. */
+
+button,
+a,
+[role="button"],
+input,
+select,
+textarea,
+label,
+summary,
+.gselect-trigger {
+  touch-action: manipulation;
+}

@@ -52,6 +52,7 @@ def main() -> int:
     from patch_auth_drive import main as patch_drive
     from patch_persist_videos import main as patch_videos
     from restore_original_glass import restore_original_glass
+    from patch_ipad_touch import patch_ipad_touch
 
     drive_rc = patch_drive()
     if drive_rc != 0:
@@ -61,7 +62,8 @@ def main() -> int:
     videos_rc = patch_videos()
     if videos_rc != 0:
         return videos_rc
-    return restore_original_glass(root, restore_js=False)
+    restore_original_glass(root, restore_js=False)
+    return patch_ipad_touch(root)
 
 
 if __name__ == "__main__":
