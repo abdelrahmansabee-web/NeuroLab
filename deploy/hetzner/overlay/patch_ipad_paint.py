@@ -7,7 +7,7 @@ import shutil
 import sys
 from pathlib import Path
 
-CSS_VER = "3"
+CSS_VER = "4"
 CSS_NAME = "clinic_ipad_paint.css"
 LINK = f'<link rel="stylesheet" href="/{CSS_NAME}?v={CSS_VER}"/>'
 BOOT = (
@@ -104,7 +104,7 @@ def wire_index_html(text: str) -> str:
                 text = BOOT + text
     text = re.sub(
         r"main\.0626212c\.js(?:\?[^\"']*)?",
-        "main.0626212c.js?paint=3",
+        "main.0626212c.js?paint=4",
         text,
     )
     return text

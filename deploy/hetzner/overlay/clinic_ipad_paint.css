@@ -37,12 +37,12 @@ html.nl-touch .content-panel-glass,
 html.nl-ipad-paint .content-panel-glass,
 html.nl-touch [class*="backdrop-blur"],
 html.nl-ipad-paint [class*="backdrop-blur"] {
-  background-color: rgba(18, 24, 36, 0.26) !important;
+  background-color: rgba(18, 24, 36, 0.34) !important;
 }
 
 html.nl-touch .content-shell,
 html.nl-ipad-paint .content-shell {
-  background-color: rgba(16, 22, 32, 0.30) !important;
+  background-color: rgba(16, 22, 32, 0.42) !important;
 }
 
 html.nl-touch .sidebar-shell,
@@ -51,7 +51,12 @@ html.nl-touch .app-topbar-glass,
 html.nl-ipad-paint .app-topbar-glass,
 html.nl-touch .section-header,
 html.nl-ipad-paint .section-header {
-  background-color: rgba(16, 22, 32, 0.38) !important;
+  background-color: rgba(16, 22, 32, 0.50) !important;
+}
+
+html.nl-touch .fixed.inset-0.z-0 > .absolute.inset-0:nth-child(2),
+html.nl-ipad-paint .fixed.inset-0.z-0 > .absolute.inset-0:nth-child(2) {
+  background-color: rgba(8, 8, 8, 0.36) !important;
 }
 
 /* Old cached JS may still live-blur the full-screen photo. */
