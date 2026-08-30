@@ -95,4 +95,17 @@ def backfill_data_dir(data_dir: Path) -> Dict[str, Any]:
         records = archive_from_data_dir(Path(data_dir))
     except Exception as exc:
         records = {"ok": False, "error": str(exc)}
-    return {"ok": True, "count": len(uploaded), "sessions": uploaded, "records": records}
+    originals: Dict[str, Any] = {}
+    try:
+        from drive_persist import promote_original_videos_on_drive
+
+        originals = promote_original_videos_on_drive()
+    except Exception as exc:
+        originals = {"ok": False, "error": str(exc)}
+    return {
+        "ok": True,
+        "count": len(uploaded),
+        "sessions": uploaded,
+        "records": records,
+        "originals": originals,
+    }

@@ -77,6 +77,28 @@ class DrivePersistTests(unittest.TestCase):
                     out = upload_root_bytes("_NEUROLAB_DRIVE_OK.json", b'{"ok":true}')
                     self.assertTrue(out.get("skipped"))
 
+    def test_renames_validation_original_on_drive(self) -> None:
+        from drive_persist import promote_original_videos_on_drive
+
+        service = MagicMock()
+        listed = [
+            {
+                "files": [
+                    {"id": "vid1", "name": "baseline_validation_original.mp4", "mimeType": "video/mp4"},
+                    {"id": "uni1", "name": "baseline_validation_unified.mp4", "mimeType": "video/mp4"},
+                ]
+            },
+            {"files": []},
+        ]
+        service.files.return_value.list.return_value.execute.side_effect = listed
+        service.files.return_value.update.return_value.execute.return_value = {"id": "vid1"}
+        with patch("drive_persist.drive_configured", return_value=True):
+            with patch("drive_persist._build_service", return_value=(service, "root")):
+                out = promote_original_videos_on_drive()
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["renamed"][0]["to"], "baseline_original.mp4")
+        service.files.return_value.update.assert_called()
+
     def _tmp_mp4(self):
         import tempfile
         from contextlib import contextmanager

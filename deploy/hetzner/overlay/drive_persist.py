@@ -294,6 +294,70 @@ def upload_named_files(
     return result
 
 
+_VALIDATION_ORIGINAL_SUFFIX = "_validation_original.mp4"
+
+
+def promote_original_videos_on_drive() -> Dict[str, Any]:
+    """Rename existing *_validation_original.mp4 files to *_original.mp4 on Drive."""
+    out: Dict[str, Any] = {"ok": False, "renamed": [], "skipped": []}
+    if not drive_configured():
+        out["reason"] = "drive_unset"
+        return out
+    service, folder_id = _build_service()
+    parent_id = folder_id or clinic_folder_id()
+    if service is None or not parent_id:
+        out["reason"] = "drive_init_failed"
+        return out
+
+    def _walk(fid: str, depth: int = 0) -> None:
+        if not fid or depth > 6:
+            return
+        page = None
+        scanned = 0
+        while scanned < 400:
+            res = service.files().list(
+                q=f"'{fid}' in parents and trashed=false",
+                spaces="drive",
+                pageSize=100,
+                pageToken=page,
+                fields="nextPageToken, files(id, name, mimeType)",
+                **_list_flags(),
+            ).execute()
+            items = res.get("files") or []
+            scanned += len(items)
+            for item in items:
+                mime = item.get("mimeType") or ""
+                name = item.get("name") or ""
+                if mime == FOLDER_MIME:
+                    _walk(item.get("id") or "", depth + 1)
+                    continue
+                if not name.lower().endswith(_VALIDATION_ORIGINAL_SUFFIX):
+                    continue
+                new_name = name[: -len(_VALIDATION_ORIGINAL_SUFFIX)] + "_original.mp4"
+                existing = service.files().list(
+                    q=f"'{fid}' in parents and name='{new_name.replace(chr(39), chr(92)+chr(39))}' and trashed=false",
+                    spaces="drive",
+                    fields="files(id, name)",
+                    **_list_flags(),
+                ).execute().get("files") or []
+                if existing:
+                    out["skipped"].append({"id": item.get("id"), "name": name, "reason": "already_has_original"})
+                    continue
+                service.files().update(
+                    fileId=item["id"],
+                    body={"name": new_name},
+                    **_write_flags(),
+                ).execute()
+                out["renamed"].append({"id": item.get("id"), "from": name, "to": new_name})
+            page = res.get("nextPageToken")
+            if not page:
+                break
+
+    _walk(parent_id)
+    out["ok"] = True
+    return out
+
+
 def upload_root_bytes(name: str, content: bytes) -> Dict[str, Any]:
     """Write a file at the clinic backup folder root. OAuth only; never SA."""
     result: Dict[str, Any] = {"ok": False, "name": name}
