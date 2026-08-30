@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from drive_persist import _sanitize, drive_configured, upload_named_files, upload_root_bytes
+from drive_persist import _sanitize, clinic_drive_filename, drive_configured, upload_named_files, upload_root_bytes
 
 
 class DrivePersistTests(unittest.TestCase):
@@ -24,10 +24,18 @@ class DrivePersistTests(unittest.TestCase):
         with self._tmp_mp4() as path:
             out = upload_named_files(
                 "p 101",
-                [("pre_validation_original.mp4", path, "videos")],
+                [
+                    ("pre_validation_original.mp4", path, "videos"),
+                    ("pre_validation_unified.mp4", path, "videos"),
+                    ("pre_validation_overlay.json", path, "data"),
+                ],
                 service=service,
                 folder_id="root",
             )
+        self.assertTrue(out["ok"])
+        self.assertIn("pre_original.mp4", out["files"])
+        self.assertNotIn("pre_validation_unified.mp4", out["files"])
+        self.assertNotIn("pre_validation_overlay.json", out["files"])
         self.assertTrue(out["ok"])
         self.assertEqual(out["patientKey"], "p_101")
         service.files.return_value.update.assert_called()
@@ -36,6 +44,13 @@ class DrivePersistTests(unittest.TestCase):
 
     def test_sanitize(self) -> None:
         self.assertEqual(_sanitize("pre/../x"), "pre_.._x")
+
+    def test_drive_keeps_original_videos_only(self) -> None:
+        self.assertEqual(clinic_drive_filename("pre_validation_original.mp4"), "pre_original.mp4")
+        self.assertIsNone(clinic_drive_filename("pre_validation_unified.mp4"))
+        self.assertIsNone(clinic_drive_filename("pre_validation_overlay.json"))
+        self.assertEqual(clinic_drive_filename("01_demographics.json"), "01_demographics.json")
+        self.assertEqual(clinic_drive_filename("post_original.mp4"), "post_original.mp4")
 
     def test_oauth_pending_does_not_use_service_account(self) -> None:
         env = {

@@ -235,6 +235,93 @@ EMPTY_FOLDERS_NEW = '''            try:
             _drive_upsert_bytes(service, "patient.json", snap, "application/json", parent_id=pf)
 '''
 
+BACKUP_FILE_OLD = '''        drive_name = name
+    else:
+        user_root = _drive_user_root_folder(service, user["id"])
+        parent = user_root
+        drive_name = f"neurolab_{user['id']}_{name}"
+    try:
+        file_id = _drive_upsert_bytes(service, drive_name, content, mime, parent_id=parent)
+'''
+
+BACKUP_FILE_NEW = '''        try:
+            from drive_persist import clinic_drive_filename
+
+            mapped = clinic_drive_filename(name)
+        except Exception:
+            mapped = name
+        if mapped is None:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "original_videos_only",
+                "fileName": name,
+            }
+        drive_name = mapped
+    else:
+        user_root = _drive_user_root_folder(service, user["id"])
+        parent = user_root
+        drive_name = f"neurolab_{user['id']}_{name}"
+    try:
+        file_id = _drive_upsert_bytes(service, drive_name, content, mime, parent_id=parent)
+'''
+
+BACKUP_UPLOAD_OLD = '''    drive_name = _drive_sanitize_name(name)
+    if not drive_name:
+        raise HTTPException(status_code=400, detail="name required")
+    sub = (subfolder or "videos").strip().lower()
+'''
+
+BACKUP_UPLOAD_NEW = '''    drive_name = _drive_sanitize_name(name)
+    if not drive_name:
+        raise HTTPException(status_code=400, detail="name required")
+    try:
+        from drive_persist import clinic_drive_filename
+
+        mapped = clinic_drive_filename(drive_name)
+    except Exception:
+        mapped = drive_name
+    if mapped is None:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "original_videos_only",
+            "fileName": drive_name,
+        }
+    drive_name = mapped
+    sub = (subfolder or "videos").strip().lower()
+'''
+
+RESTORE_FILE_OLD = '''    for sc in scopes:
+        parent = _drive_parent_for_patient_artifact(service, user["id"], safe_key, sub, sc)
+        found = _drive_find_file_bytes(service, parent, name)
+        if found:
+            content, mime, out_name = found
+            headers = {"Content-Disposition": f'inline; filename="{out_name}"'}
+            return Response(content=content, media_type=mime, headers=headers)
+    raise HTTPException(status_code=404, detail="File not found on Drive")
+'''
+
+RESTORE_FILE_NEW = '''    names = [name]
+    try:
+        from drive_persist import clinic_drive_filename
+
+        mapped = clinic_drive_filename(name)
+        if mapped and mapped not in names:
+            names.append(mapped)
+    except Exception:
+        pass
+    for sc in scopes:
+        parent = _drive_parent_for_patient_artifact(service, user["id"], safe_key, sub, sc)
+        for candidate in names:
+            found = _drive_find_file_bytes(service, parent, candidate)
+            if found:
+                content, mime, out_name = found
+                headers = {"Content-Disposition": f'inline; filename="{out_name}"'}
+                return Response(content=content, media_type=mime, headers=headers)
+    raise HTTPException(status_code=404, detail="File not found on Drive")
+'''
+
 
 def _replace_once(text: str, old: str, new: str, label: str) -> str:
     if new in text:
@@ -285,6 +372,27 @@ def patch_drive_oauth(root: Path) -> int:
         print("patched auth patient program archive")
     else:
         print("WARN: auth patient snapshot pattern missing")
+    if BACKUP_FILE_NEW in text:
+        print("already patched: auth original-only backup-file")
+    elif BACKUP_FILE_OLD in text:
+        text = text.replace(BACKUP_FILE_OLD, BACKUP_FILE_NEW, 1)
+        print("patched auth original-only backup-file")
+    else:
+        print("WARN: auth backup-file pattern missing")
+    if BACKUP_UPLOAD_NEW in text:
+        print("already patched: auth original-only backup-file-upload")
+    elif BACKUP_UPLOAD_OLD in text:
+        text = text.replace(BACKUP_UPLOAD_OLD, BACKUP_UPLOAD_NEW, 1)
+        print("patched auth original-only backup-file-upload")
+    else:
+        print("WARN: auth backup-file-upload pattern missing")
+    if RESTORE_FILE_NEW in text:
+        print("already patched: auth restore original fallback")
+    elif RESTORE_FILE_OLD in text:
+        text = text.replace(RESTORE_FILE_OLD, RESTORE_FILE_NEW, 1)
+        print("patched auth restore original fallback")
+    else:
+        print("WARN: auth restore-file pattern missing")
     if REGISTER_MARK not in text:
         text = text.rstrip() + REGISTER_SNIPPET
         print("patched auth oauth routes")

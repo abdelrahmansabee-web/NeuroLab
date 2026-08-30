@@ -1,4 +1,4 @@
-"""Upload clinic validation files to Google Drive. Never deletes Drive files."""
+"""Upload original clinic videos to Google Drive. Never deletes Drive files."""
 from __future__ import annotations
 
 import json
@@ -14,6 +14,21 @@ TEAM_ROOT_NAME = "team_patients"
 
 def _sanitize(name: str) -> str:
     return re.sub(r"[^\w.\-]", "_", (name or "").strip())[:180]
+
+
+def clinic_drive_filename(name: str) -> Optional[str]:
+    """Keep original clinic videos on Drive. Skip validation/unified overlays."""
+    raw = (name or "").strip()
+    if not raw:
+        return None
+    lower = raw.lower()
+    if "validation_unified" in lower or "validation_overlay" in lower:
+        return None
+    if lower.endswith("_validation_original.mp4"):
+        return raw[: -len("_validation_original.mp4")] + "_original.mp4"
+    if "validation" in lower and lower.endswith((".mp4", ".mov", ".m4v", ".webm")):
+        return None
+    return raw
 
 
 def drive_configured() -> bool:
@@ -256,7 +271,10 @@ def upload_named_files(
         src = Path(path)
         if not src.is_file() or src.stat().st_size <= 0:
             continue
-        payload.append((_sanitize(name) or src.name, src, subfolder, src.read_bytes()))
+        drive_name = clinic_drive_filename(_sanitize(name) or src.name)
+        if not drive_name:
+            continue
+        payload.append((drive_name, src, subfolder, src.read_bytes()))
 
     for alias in patient_key_aliases(key):
         for drive_name, src, subfolder, content in payload:

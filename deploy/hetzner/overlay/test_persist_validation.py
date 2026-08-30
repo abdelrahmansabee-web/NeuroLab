@@ -40,6 +40,19 @@ class PersistValidationTests(unittest.TestCase):
             self.assertTrue(rec["never_delete"])
             self.assertIn("pre", rec["phases"])
             self.assertTrue(saved.get("drive", {}).get("skipped"))
+            from unittest.mock import patch
+
+            with patch("drive_persist.upload_named_files", return_value={"ok": True, "files": {"pre_original.mp4": {"bytes": 9}}}) as mocked:
+                persist_phase_artifacts(
+                    data_dir,
+                    "101",
+                    "pre",
+                    original_video=video,
+                    overlay_json=overlay,
+                    unified_video=video,
+                )
+                names = [item[0] for item in mocked.call_args[0][1]]
+                self.assertEqual(names, ["pre_original.mp4"])
 
     def test_same_path_does_not_raise(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
