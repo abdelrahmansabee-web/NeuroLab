@@ -5,7 +5,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from patch_ipad_paint import CSS_NAME, wire_index_html
+from patch_ipad_paint import CSS_NAME, CSS_VER, patch_touch_blur_js, wire_index_html
+
+
+SAMPLE_TOUCH_JS = (
+    'html.nl-touch .sidebar-shell,\\n        html.nl-touch .glass-float,\\n'
+    '        html.nl-touch .content-shell {\\n          '
+    'backdrop-filter: blur(8px) saturate(1.45) !important;\\n          '
+    '-webkit-backdrop-filter: blur(8px) saturate(1.45) !important;\\n        }\\n'
+    '        html.nl-touch .content-shell .glass-float:not(.section-header):not(.app-topbar-glass),\\n'
+    '        html.nl-touch .content-shell .content-panel-glass {\\n          '
+    'backdrop-filter: blur(6px) saturate(1.25) !important;\\n          '
+    '-webkit-backdrop-filter: blur(6px) saturate(1.25) !important;\\n        }\\n'
+    '        .sidebar-shell { backdrop-filter: blur(12px) saturate(2.25) !important; }'
+)
 
 
 class IpadPaintTests(unittest.TestCase):
@@ -16,12 +29,12 @@ class IpadPaintTests(unittest.TestCase):
             "</body></html>"
         )
         out = wire_index_html(html)
-        self.assertIn(f"{CSS_NAME}?v=1", out)
+        self.assertIn(f"{CSS_NAME}?v={CSS_VER}", out)
         self.assertIn("nl-ipad-paint", out)
-        self.assertIn("main.0626212c.js?paint=1", out)
+        self.assertIn("MutationObserver(a)", out)
+        self.assertIn("main.0626212c.js?paint=2", out)
         self.assertNotIn("clinic_smooth", out)
         self.assertEqual(out.count(CSS_NAME), 1)
-        self.assertEqual(out.count("nl-ipad-paint"), 1)
 
     def test_idempotent(self) -> None:
         html = "<html><head></head></html>"
@@ -29,8 +42,8 @@ class IpadPaintTests(unittest.TestCase):
         twice = wire_index_html(once)
         self.assertEqual(once.count(CSS_NAME), 1)
         self.assertEqual(twice.count(CSS_NAME), 1)
-        self.assertEqual(once.count("nl-ipad-paint"), 1)
-        self.assertEqual(twice.count("nl-ipad-paint"), 1)
+        self.assertEqual(once.count("MutationObserver(a)"), 1)
+        self.assertEqual(twice.count("MutationObserver(a)"), 1)
 
     def test_refuses_smooth_override(self) -> None:
         with self.assertRaises(SystemExit):
@@ -45,26 +58,41 @@ class IpadPaintTests(unittest.TestCase):
         rules = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
         self.assertIsNone(re.search(r"background(?:-color)?\s*:", rules))
         self.assertIn("backdrop-filter: none", css)
-        self.assertIn("html.nl-ipad-paint", css)
+        self.assertIn("html.nl-ipad-paint.nl-touch", css)
         self.assertNotRegex(rules, r"rgba\(")
+
+    def test_kills_nl_touch_blur_keeps_desktop_glass(self) -> None:
+        out, hits = patch_touch_blur_js(SAMPLE_TOUCH_JS)
+        self.assertGreater(hits, 0)
+        self.assertNotIn("blur(8px) saturate(1.45)", out)
+        self.assertNotIn("blur(6px) saturate(1.25)", out)
+        self.assertIn("blur(12px) saturate(2.25)", out)
+        self.assertIn("html.nl-touch .sidebar-shell", out)
+        again, hits2 = patch_touch_blur_js(out)
+        self.assertEqual(hits2, 0)
+        self.assertEqual(again, out)
 
     def test_copy_into_build(self) -> None:
         from patch_ipad_paint import patch_ipad_paint
 
-        overlay = Path(__file__).resolve().parent
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             build = root / "frontend" / "build"
-            build.mkdir(parents=True)
+            js_dir = build / "static" / "js"
+            js_dir.mkdir(parents=True)
             (build / "index.html").write_text(
                 '<html><head></head><body><script src="/static/js/main.0626212c.js"></script></body></html>',
                 encoding="utf-8",
             )
+            (js_dir / "main.0626212c.js").write_text(SAMPLE_TOUCH_JS, encoding="utf-8")
             self.assertEqual(patch_ipad_paint(root), 0)
             self.assertTrue((build / CSS_NAME).is_file())
             html = (build / "index.html").read_text(encoding="utf-8")
             self.assertIn(CSS_NAME, html)
             self.assertIn("nl-ipad-paint", html)
+            js = (js_dir / "main.0626212c.js").read_text(encoding="utf-8")
+            self.assertNotIn("blur(8px) saturate(1.45)", js)
+            self.assertIn("blur(12px) saturate(2.25)", js)
 
 
 if __name__ == "__main__":

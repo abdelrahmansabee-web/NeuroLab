@@ -7,19 +7,76 @@ import shutil
 import sys
 from pathlib import Path
 
-CSS_VER = "1"
+CSS_VER = "2"
 CSS_NAME = "clinic_ipad_paint.css"
 LINK = f'<link rel="stylesheet" href="/{CSS_NAME}?v={CSS_VER}"/>'
 BOOT = (
-    "<script>(function(){var n=navigator;var i=/iPad|iPhone|iPod/.test(n.userAgent)"
+    "<script>(function(){function a(){var n=navigator;var i=/iPad|iPhone|iPod/.test(n.userAgent)"
     '||(n.platform==="MacIntel"&&n.maxTouchPoints>1);'
-    "if(i)document.documentElement.classList.add('nl-ipad-paint');})();</script>"
+    "if(i)document.documentElement.classList.add('nl-ipad-paint');}"
+    "a();new MutationObserver(a).observe(document.documentElement,{attributes:true,attributeFilter:['class']});"
+    "})();</script>"
 )
 HREF_RE = re.compile(rf'href="/{re.escape(CSS_NAME)}(?:\?v=\d+)?"')
 BOOT_RE = re.compile(
-    r"<script>\(function\(\)\{var n=navigator;var i=/iPad\|iPhone\|iPod/"
+    r"<script>\(function\(\)\{(?:function a\(\)\{)?var n=navigator;var i=/iPad\|iPhone\|iPod/"
     r".*?nl-ipad-paint.*?</script>"
 )
+
+# Clinic JS injects html.nl-touch { blur(8px) } after login. Replace webkit first
+# because it contains the shorter backdrop-filter substring.
+TOUCH_BLUR_REPLACEMENTS = (
+    (
+        "-webkit-backdrop-filter: blur(8px) saturate(1.45) !important;",
+        "-webkit-backdrop-filter: none !important;",
+    ),
+    (
+        "backdrop-filter: blur(8px) saturate(1.45) !important;",
+        "backdrop-filter: none !important;",
+    ),
+    (
+        "-webkit-backdrop-filter: blur(6px) saturate(1.25) !important;",
+        "-webkit-backdrop-filter: none !important;",
+    ),
+    (
+        "backdrop-filter: blur(6px) saturate(1.25) !important;",
+        "backdrop-filter: none !important;",
+    ),
+)
+
+
+def patch_touch_blur_js(text: str) -> tuple[str, int]:
+    hits = 0
+    if "html.nl-touch .sidebar-shell" not in text:
+        return text, 0
+    for old, new in TOUCH_BLUR_REPLACEMENTS:
+        if new in text and old not in text:
+            continue
+        if old in text:
+            n = text.count(old)
+            text = text.replace(old, new)
+            hits += n
+    return text, hits
+
+
+def patch_build_js(root: Path) -> int:
+    js_dir = root / "frontend" / "build" / "static" / "js"
+    if not js_dir.is_dir():
+        print("WARN: no frontend/build/static/js")
+        return 0
+    patched = 0
+    for path in sorted(js_dir.glob("main.*.js")):
+        if path.name.endswith(".map") or "LICENSE" in path.name:
+            continue
+        original = path.read_text(encoding="utf-8", errors="replace")
+        updated, hits = patch_touch_blur_js(original)
+        if hits:
+            path.write_text(updated, encoding="utf-8")
+            print(f"patched touch blur in {path.name} ({hits} replacements)")
+            patched += 1
+        else:
+            print(f"unchanged touch blur {path.name}")
+    return patched
 
 
 def wire_index_html(text: str) -> str:
@@ -33,13 +90,21 @@ def wire_index_html(text: str) -> str:
             text = LINK + text
     if BOOT_RE.search(text):
         text = BOOT_RE.sub(BOOT, text, count=1)
-    elif "nl-ipad-paint" not in text:
-        text = text.replace("<head>", f"<head>{BOOT}", 1)
-        if "nl-ipad-paint" not in text:
-            text = BOOT + text
+    elif "MutationObserver(a)" not in text:
+        if "nl-ipad-paint" in text:
+            text = re.sub(
+                r"<script>\(function\(\)\{var n=navigator;var i=/iPad\|iPhone\|iPod/.*?nl-ipad-paint.*?</script>",
+                BOOT,
+                text,
+                count=1,
+            )
+        else:
+            text = text.replace("<head>", f"<head>{BOOT}", 1)
+            if "nl-ipad-paint" not in text:
+                text = BOOT + text
     text = re.sub(
         r"main\.0626212c\.js(?:\?[^\"']*)?",
-        "main.0626212c.js?paint=1",
+        "main.0626212c.js?paint=2",
         text,
     )
     return text
@@ -80,6 +145,7 @@ def copy_css(overlay: Path, root: Path) -> None:
 def patch_ipad_paint(root: Path) -> int:
     overlay = Path(__file__).resolve().parent
     copy_css(overlay, root)
+    patch_build_js(root)
     patch_index_html(root)
     return 0
 

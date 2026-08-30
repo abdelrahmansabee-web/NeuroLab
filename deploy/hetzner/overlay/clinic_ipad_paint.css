@@ -1,7 +1,19 @@
 /* iPad/iPhone only. Keeps original glass colors/borders.
    Live backdrop-filter on many panels is what makes Safari stutter.
-   Do not change background-color, opacity, or borders here. */
+   Do not change background-color, opacity, or borders here.
+   html.nl-touch rules in the app JS also force blur(8px) after login —
+   these selectors are more specific so they win. */
 
+html.nl-ipad-paint.nl-touch .sidebar-shell,
+html.nl-ipad-paint.nl-touch .glass-float,
+html.nl-ipad-paint.nl-touch .content-shell,
+html.nl-ipad-paint.nl-touch .content-shell .glass-float,
+html.nl-ipad-paint.nl-touch .content-shell .content-panel-glass,
+html.nl-ipad-paint.nl-touch .section-header,
+html.nl-ipad-paint.nl-touch .gselect-trigger,
+html.nl-ipad-paint.nl-touch .gselect-menu,
+html.nl-ipad-paint.nl-touch .app-topbar-glass,
+html.nl-ipad-paint.nl-touch [class*="backdrop-blur"],
 html.nl-ipad-paint .sidebar-shell,
 html.nl-ipad-paint .glass-float,
 html.nl-ipad-paint .content-shell,
@@ -15,7 +27,8 @@ html.nl-ipad-paint [class*="backdrop-blur"] {
 }
 
 /* Old cached JS may still live-blur the full-screen photo. */
-html.nl-ipad-paint .fixed.inset-0.z-0 > .absolute.inset-0:first-child {
+html.nl-ipad-paint .fixed.inset-0.z-0 > .absolute.inset-0:first-child,
+html.nl-ipad-paint.nl-touch .fixed.inset-0.z-0 > .absolute.inset-0:first-child {
   filter: none !important;
   -webkit-filter: none !important;
   transform: none !important;
@@ -23,6 +36,9 @@ html.nl-ipad-paint .fixed.inset-0.z-0 > .absolute.inset-0:first-child {
 
 html.nl-ipad-paint aside,
 html.nl-ipad-paint main,
-html.nl-ipad-paint .fixed.top-0 {
+html.nl-ipad-paint .fixed.top-0,
+html.nl-ipad-paint.nl-touch aside,
+html.nl-ipad-paint.nl-touch main,
+html.nl-ipad-paint.nl-touch .fixed.top-0 {
   will-change: auto !important;
 }
