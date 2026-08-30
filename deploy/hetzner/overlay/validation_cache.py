@@ -136,17 +136,47 @@ def register_validation_cache(app, data_dir: Path, html_path: Path) -> None:
             raise HTTPException(status_code=404, detail="connect-drive missing")
         return HTMLResponse(path.read_text(encoding="utf-8"))
 
+    rebuild_job: Dict[str, Any] = {"running": False, "started": False, "result": None, "error": None}
+
     @app.post("/api/drive-backfill")
     async def drive_backfill():
         from backfill_drive import backfill_data_dir
 
         return backfill_data_dir(Path(data_dir))
 
+    def _run_rebuild() -> None:
+        rebuild_job["running"] = True
+        rebuild_job["started"] = True
+        rebuild_job["error"] = None
+        try:
+            from backfill_drive import rebuild_clinic_folder
+
+            rebuild_job["result"] = rebuild_clinic_folder(Path(data_dir))
+        except Exception as exc:
+            rebuild_job["error"] = str(exc)[:400]
+            rebuild_job["result"] = {"ok": False, "error": str(exc)[:400]}
+        finally:
+            rebuild_job["running"] = False
+
     @app.post("/api/drive-rebuild")
     async def drive_rebuild():
-        from backfill_drive import rebuild_clinic_folder
+        import threading
 
-        return rebuild_clinic_folder(Path(data_dir))
+        if rebuild_job.get("running"):
+            return {"ok": True, "started": True, "running": True}
+        thread = threading.Thread(target=_run_rebuild, daemon=True)
+        thread.start()
+        return {"ok": True, "started": True, "running": True}
+
+    @app.get("/api/drive-rebuild-status")
+    async def drive_rebuild_status():
+        return {
+            "ok": True,
+            "running": bool(rebuild_job.get("running")),
+            "started": bool(rebuild_job.get("started")),
+            "error": rebuild_job.get("error"),
+            "result": rebuild_job.get("result"),
+        }
 
     @app.post("/api/ipad-localstorage")
     async def upload_ipad_localstorage(payload: Optional[UploadFile] = File(None)):

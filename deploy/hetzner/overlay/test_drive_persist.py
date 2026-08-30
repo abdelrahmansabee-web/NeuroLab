@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from drive_persist import (
     _assemble_patient_record,
+    _is_legacy_root,
     _patient_key_from_parts,
     _sanitize,
     clinic_drive_filename,
@@ -66,6 +67,12 @@ class DrivePersistTests(unittest.TestCase):
         self.assertIsNone(clinic_drive_filename("session.json"))
         self.assertEqual(clinic_drive_filename("baseline_validation.mp4"), "baseline_validation.mp4")
         self.assertEqual(clinic_drive_filename("105_Ahmet_sever.pdf"), "105_Ahmet_sever.pdf")
+
+    def test_legacy_root_names(self) -> None:
+        self.assertTrue(_is_legacy_root("team_patients"))
+        self.assertTrue(_is_legacy_root("u1"))
+        self.assertTrue(_is_legacy_root("_NEUROLAB_DRIVE_OK.json"))
+        self.assertFalse(_is_legacy_root("105_Ahmet_sever"))
 
     def test_patient_key_from_nested_paths(self) -> None:
         self.assertEqual(

@@ -612,6 +612,7 @@ def reorganize_clinic_folder(*, service=None, folder_id: str = "") -> Dict[str, 
 
     keep_json = _section_json_names()
     grouped: Dict[str, Dict[str, Any]] = {}
+    json_candidates: Dict[str, List[Dict[str, Any]]] = {}
     for item in _walk_files(service, parent_id):
         key = _patient_key_from_parts(tuple(item.get("parts") or ()))
         if not key:
@@ -620,16 +621,31 @@ def reorganize_clinic_folder(*, service=None, folder_id: str = "") -> Dict[str, 
         name = item.get("name") or ""
         lower = name.lower()
         if lower in {n.lower() for n in keep_json} or name in keep_json:
-            try:
-                bucket["json"][name] = _download_bytes(service, item["id"])
-            except Exception as exc:
-                print(f"Drive JSON download skipped {name}: {exc}", flush=True)
+            json_candidates.setdefault(key, []).append(item)
             continue
         mapped = clinic_drive_filename(name)
         if mapped and mapped.endswith(".mp4"):
             bucket["videos"].append({**item, "driveName": mapped})
         elif mapped and mapped.endswith(".pdf"):
             bucket["pdfs"].append({**item, "driveName": mapped})
+
+    def _pick_json(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        named = {str(item.get("name") or "").lower(): item for item in items}
+        if "patient.json" in named:
+            return [named["patient.json"]]
+        if "01_demographics.json" in named:
+            return [item for item in items if str(item.get("name") or "").lower() != "_program_layout.json"]
+        return items[:8]
+
+    for key, items in json_candidates.items():
+        for item in _pick_json(items):
+            name = item.get("name") or ""
+            if name in grouped[key]["json"]:
+                continue
+            try:
+                grouped[key]["json"][name] = _download_bytes(service, item["id"])
+            except Exception as exc:
+                print(f"Drive JSON download skipped {name}: {exc}", flush=True)
 
     by_head: Dict[str, List[str]] = {}
     for key in grouped:
@@ -651,43 +667,72 @@ def reorganize_clinic_folder(*, service=None, folder_id: str = "") -> Dict[str, 
     from patient_pdf import build_patient_pdf, patient_pdf_filename
 
     for canon, bucket in merged.items():
-        patient = _assemble_patient_record(bucket["json"])
-        folder_name = patient_drive_key(patient) if patient else canon
-        folder_name = _sanitize(folder_name)[:120] or canon
-        dest_id = _find_or_create_folder(service, parent_id, folder_name)
-        keep_folder_ids.add(dest_id)
-        rec: Dict[str, Any] = {"patientKey": folder_name, "files": []}
-        if patient:
-            pdf_name = patient_pdf_filename(patient)
-            pdf_bytes = build_patient_pdf(patient)
-            file_id = _upsert_bytes(service, dest_id, pdf_name, pdf_bytes, "application/pdf")
-            rec["files"].append({"name": pdf_name, "id": file_id})
-            out["pdfs"] += 1
-        seen_videos = set()
-        for video in bucket["videos"]:
-            drive_name = video.get("driveName") or ""
-            if not drive_name or drive_name in seen_videos:
-                if drive_name in seen_videos and video.get("id"):
-                    _trash_file(service, video["id"])
-                    out["trashed"].append(video["id"])
-                continue
-            seen_videos.add(drive_name)
-            moved = _move_file(
-                service,
-                video.get("id") or "",
-                video.get("parent") or "",
-                dest_id,
-                drive_name,
-            )
-            rec["files"].append({"name": drive_name, "id": moved})
-            out["moved"].append(drive_name)
-            out["videos"] += 1
+        rec: Dict[str, Any] = {"patientKey": canon, "files": []}
+        try:
+            patient = _assemble_patient_record(bucket["json"])
+            folder_name = patient_drive_key(patient) if patient else canon
+            folder_name = _sanitize(folder_name)[:120] or canon
+            dest_id = _find_or_create_folder(service, parent_id, folder_name)
+            keep_folder_ids.add(dest_id)
+            rec["patientKey"] = folder_name
+            if patient:
+                pdf_name = patient_pdf_filename(patient)
+                pdf_bytes = build_patient_pdf(patient)
+                file_id = _upsert_bytes(service, dest_id, pdf_name, pdf_bytes, "application/pdf")
+                rec["files"].append({"name": pdf_name, "id": file_id})
+                out["pdfs"] += 1
+            seen_videos = set()
+            for video in bucket["videos"]:
+                drive_name = video.get("driveName") or ""
+                if not drive_name or drive_name in seen_videos:
+                    if drive_name in seen_videos and video.get("id"):
+                        _trash_file(service, video["id"])
+                        out["trashed"].append(video["id"])
+                    continue
+                seen_videos.add(drive_name)
+                moved = _move_file(
+                    service,
+                    video.get("id") or "",
+                    video.get("parent") or "",
+                    dest_id,
+                    drive_name,
+                )
+                rec["files"].append({"name": drive_name, "id": moved})
+                out["moved"].append(drive_name)
+                out["videos"] += 1
+        except Exception as exc:
+            rec["error"] = str(exc)[:200]
+            print(f"Drive rebuild patient {canon}: {exc}", flush=True)
         out["patients"].append(rec)
 
+    leftover = _trash_legacy_layout(service, parent_id, keep_folder_ids)
+    out["trashed"].extend(leftover)
+    out["ok"] = True
+    out["patientCount"] = len(out["patients"])
+    return out
+
+
+def _is_legacy_root(name: str) -> bool:
+    raw = (name or "").strip()
+    if raw in (TEAM_ROOT_NAME, "u1") or raw.startswith("_"):
+        return True
+    if len(raw) >= 2 and raw[0] == "u" and raw[1:].isdigit():
+        return True
+    if raw in ("NEUROLAB_VIDEOS_HERE.txt", "_NEUROLAB_DRIVE_OK.json"):
+        return True
+    return False
+
+
+def _trash_legacy_layout(service, parent_id: str, keep_folder_ids: set[str]) -> List[str]:
+    trashed: List[str] = []
     for item in _list_direct_children(service, parent_id):
         file_id = item.get("id") or ""
+        name = item.get("name") or ""
         mime = item.get("mimeType") or ""
-        if mime == FOLDER_MIME and file_id in keep_folder_ids:
+        if not file_id:
+            continue
+        if mime == FOLDER_MIME and not _is_legacy_root(name):
+            keep_folder_ids.add(file_id)
             for child in _list_direct_children(service, file_id):
                 child_name = (child.get("name") or "").lower()
                 child_mime = child.get("mimeType") or ""
@@ -696,14 +741,34 @@ def reorganize_clinic_folder(*, service=None, folder_id: str = "") -> Dict[str, 
                 )
                 if not keep and child.get("id"):
                     _trash_file(service, child["id"])
-                    out["trashed"].append(child["id"])
+                    trashed.append(child["id"])
             continue
-        if file_id:
-            _trash_file(service, file_id)
-            out["trashed"].append(file_id)
+        _trash_file(service, file_id)
+        trashed.append(file_id)
+    return trashed
 
+
+def trash_legacy_clinic_layout() -> Dict[str, Any]:
+    """Trash team_patients / u1 / markers. Keep patient folders that already have PDFs."""
+    out: Dict[str, Any] = {"ok": False, "trashed": []}
+    if not drive_configured():
+        out["reason"] = "drive_unset"
+        return out
+    service, folder_id = _build_service()
+    parent_id = folder_id or clinic_folder_id()
+    if service is None or not parent_id:
+        out["reason"] = "drive_init_failed"
+        return out
+    keep = {
+        item.get("id") or ""
+        for item in _list_direct_children(service, parent_id)
+        if (item.get("mimeType") == FOLDER_MIME)
+        and (item.get("name") or "") not in (TEAM_ROOT_NAME, "u1")
+        and not str(item.get("name") or "").startswith("_")
+    }
+    out["trashed"] = _trash_legacy_layout(service, parent_id, keep)
     out["ok"] = True
-    out["patientCount"] = len(out["patients"])
+    out["count"] = len(out["trashed"])
     return out
 
 

@@ -116,8 +116,14 @@ def rebuild_clinic_folder(data_dir: Path) -> Dict[str, Any]:
     """Rebuild Drive as one patient folder with PDF + validation videos only."""
     from drive_persist import list_clinic_folder, reorganize_clinic_folder
 
-    reorganized = reorganize_clinic_folder()
-    filled = backfill_data_dir(Path(data_dir))
+    try:
+        reorganized = reorganize_clinic_folder()
+    except Exception as exc:
+        reorganized = {"ok": False, "error": str(exc)[:300]}
+    try:
+        filled = backfill_data_dir(Path(data_dir))
+    except Exception as exc:
+        filled = {"ok": False, "error": str(exc)[:300]}
     inventory: Dict[str, Any] = {}
     try:
         inventory = list_clinic_folder()
