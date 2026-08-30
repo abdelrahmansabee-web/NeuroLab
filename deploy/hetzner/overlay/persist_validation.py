@@ -62,4 +62,33 @@ def persist_phase_artifacts(
             continue
         shutil.copy2(src_path, lib / name)
     (lib / "meta.json").write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    session_path = artifacts_root(data_dir) / "team" / key / "session.json"
+    session_path.parent.mkdir(parents=True, exist_ok=True)
+    session: Dict[str, Any] = {}
+    if session_path.is_file():
+        try:
+            loaded = json.loads(session_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                session = loaded
+        except Exception:
+            session = {}
+    phases = session.get("phases") if isinstance(session.get("phases"), dict) else {}
+    phases[phase_part] = {
+        "saved_at": saved["saved_at"],
+        "files": saved["files"],
+        "never_delete": True,
+    }
+    session.update(
+        {
+            "_id": key,
+            "demographics": {"participantId": key},
+            "patientKey": key,
+            "never_delete": True,
+            "updated_at": saved["saved_at"],
+            "phases": phases,
+        }
+    )
+    session_path.write_text(json.dumps(session, ensure_ascii=False, indent=2), encoding="utf-8")
+    saved["session"] = str(session_path)
     return saved

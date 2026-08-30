@@ -8,6 +8,14 @@ from pathlib import Path
 
 JS_OLD = 'o.append("phase",t),o.append("stroke_side",h)'
 JS_NEW = 'o.append("phase",t),Ce&&o.append("patientKey",String(Ce)),o.append("stroke_side",h)'
+JS_RESTORE_OLD = (
+    "p=!1!==c.overlay&&!(null!==h&&void 0!==h&&null!==(t=h.overlay)&&void 0!==t"
+    "&&null!==(n=t.frames)&&void 0!==n&&n.length),f=!1!==c.original&&!((null===h||void 0===h||"
+    "null===(r=h.originalVideoBlob)||void 0===r?void 0:r.size)>0),g=!1!==c.unified&&!((null===h"
+    "||void 0===h||null===(i=h.unifiedVideoBlob)||void 0===i?void 0:i.size)>0);"
+    "if(!p&&!f&&!g)return h&&Ee(e,h),h;"
+)
+JS_RESTORE_NEW = "p=!1!==c.overlay,f=!1!==c.original,g=!1!==c.unified;"
 
 MAIN_FORM_OLD = '''    patient_height_cm: str = Form("auto"),
 
@@ -99,6 +107,19 @@ def main() -> int:
     js = root / "frontend" / "build" / "static" / "js" / "main.0626212c.js"
     if js.is_file():
         _patch(js, JS_OLD, JS_NEW, "frontend patientKey on /analyze")
+        _patch(js, JS_RESTORE_OLD, JS_RESTORE_NEW, "restore validation from server disk first")
+        idx = root / "frontend" / "build" / "index.html"
+        if idx.is_file():
+            import re
+            html = idx.read_text(encoding="utf-8")
+            updated = re.sub(
+                r"main\.0626212c\.js(?:\?[^\"']*)?",
+                "main.0626212c.js?srv=1",
+                html,
+            )
+            if updated != html:
+                idx.write_text(updated, encoding="utf-8")
+                print("cache-bust index.html main JS ?srv=1")
     else:
         print("WARN: frontend bundle missing")
 

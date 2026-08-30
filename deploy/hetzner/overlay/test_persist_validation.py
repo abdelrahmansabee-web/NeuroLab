@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -33,6 +34,11 @@ class PersistValidationTests(unittest.TestCase):
             self.assertTrue(dest_o.is_file())
             lib = data_dir / "local_artifacts" / "library" / "pre_test" / "pre_validation_original.mp4"
             self.assertTrue(lib.is_file())
+            session = data_dir / "local_artifacts" / "team" / "101" / "session.json"
+            self.assertTrue(session.is_file())
+            rec = json.loads(session.read_text(encoding="utf-8"))
+            self.assertTrue(rec["never_delete"])
+            self.assertIn("pre", rec["phases"])
 
 
 if __name__ == "__main__":

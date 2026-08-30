@@ -32,12 +32,95 @@ def patients_backup_path(data_dir: Path, user_id: Any, filename: str) -> Path:
     return _user_dir(data_dir, user_id) / filename
 
 
+def _patient_id(patient: Any) -> str:
+    if not isinstance(patient, dict):
+        return ""
+    demo = patient.get("demographics") if isinstance(patient.get("demographics"), dict) else {}
+    return str(patient.get("_id") or demo.get("participantId") or patient.get("patientKey") or "").strip()
+
+
+def _is_probe_patient(patient: Any) -> bool:
+    return _patient_id(patient).lower() in {"", "probe"}
+
+
+def merge_patient_lists(*groups: List[Any]) -> List[Any]:
+    by_id: dict[str, Any] = {}
+    for group in groups:
+        if not isinstance(group, list):
+            continue
+        for patient in group:
+            key = _patient_id(patient)
+            if not key or _is_probe_patient(patient):
+                continue
+            prev = by_id.get(key)
+            if not isinstance(prev, dict):
+                by_id[key] = patient
+                continue
+            prev_ts = str(prev.get("_savedAt") or prev.get("updated_at") or "")
+            new_ts = str(patient.get("_savedAt") or patient.get("updated_at") or "")
+            by_id[key] = patient if new_ts >= prev_ts else prev
+    return list(by_id.values())
+
+
+def list_validation_sessions(data_dir: Path) -> List[Any]:
+    """Patients that have validation files on disk — never depends on IndexedDB."""
+    team = artifacts_root(data_dir) / "team"
+    if not team.is_dir():
+        return []
+    sessions: List[Any] = []
+    for key_dir in sorted(team.iterdir()):
+        if not key_dir.is_dir() or _is_probe_patient({"_id": key_dir.name}):
+            continue
+        has_file = False
+        for folder in (key_dir / "videos", key_dir / "data"):
+            if folder.is_dir() and any(
+                path.is_file() and path.stat().st_size > 0 and "validation" in path.name
+                for path in folder.iterdir()
+            ):
+                has_file = True
+                break
+        session_path = key_dir / "session.json"
+        rec: dict[str, Any] = {
+            "_id": key_dir.name,
+            "patientKey": key_dir.name,
+            "demographics": {"participantId": key_dir.name},
+            "_serverValidation": True,
+            "never_delete": True,
+        }
+        if session_path.is_file():
+            try:
+                loaded = json.loads(session_path.read_text(encoding="utf-8"))
+            except Exception:
+                loaded = None
+            if isinstance(loaded, dict):
+                rec.update({k: loaded[k] for k in loaded if k not in rec})
+                rec["_id"] = key_dir.name
+                rec["patientKey"] = key_dir.name
+                rec["never_delete"] = True
+                rec["_serverValidation"] = True
+                rec["_savedAt"] = loaded.get("updated_at") or loaded.get("saved_at") or rec.get("_savedAt")
+        if has_file or session_path.is_file():
+            sessions.append(rec)
+    return sessions
+
+
+def merge_validation_sessions(data_dir: Path, patients: List[Any]) -> List[Any]:
+    return merge_patient_lists(patients, list_validation_sessions(data_dir))
+
+
 def save_patients_backup(data_dir: Path, user_id: Any, filename: str, patients: List[Any]) -> Path:
     path = patients_backup_path(data_dir, user_id, filename)
+    incoming = patients if isinstance(patients, list) else []
+    existing = load_patients_backup(data_dir, user_id, filename)
+    # Do not let a health-check "probe" record wipe real clinic sessions.
+    if incoming and all(_is_probe_patient(p) for p in incoming) and merge_patient_lists(existing):
+        incoming = existing
+    merged = merge_validation_sessions(data_dir, merge_patient_lists(existing, incoming))
     payload = {
-        "patients": patients if isinstance(patients, list) else [],
+        "patients": merged,
         "updatedAt": datetime.now(timezone.utc).isoformat(),
         "local": True,
+        "never_delete": True,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     return path
@@ -94,7 +177,10 @@ def write_artifact(
     sanitize: Sanitize,
 ) -> Path:
     path = artifact_path(data_dir, user_id, patient_key, name, subfolder, scope, sanitize)
-    path.write_bytes(content or b"")
+    payload = content or b""
+    if path.is_file() and path.stat().st_size > 0 and not payload:
+        return path
+    path.write_bytes(payload)
     return path
 
 

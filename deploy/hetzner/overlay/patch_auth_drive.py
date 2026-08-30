@@ -48,9 +48,11 @@ async def restore_drive(user: dict = Depends(get_current_user)):
 async def restore_drive(user: dict = Depends(get_current_user)):
     service = _drive_service()
     if not service:
-        from local_drive_fallback import load_patients_backup
+        from local_drive_fallback import load_patients_backup, merge_validation_sessions
         file_name = _drive_patients_filename(user["id"])
-        patients = load_patients_backup(DATA_DIR, user["id"], file_name)
+        patients = merge_validation_sessions(
+            DATA_DIR, load_patients_backup(DATA_DIR, user["id"], file_name)
+        )
         return {"patients": patients, "fileName": file_name if patients else None, "local": True}
 ''',
     ),
@@ -150,6 +152,26 @@ async def restore_drive(user: dict = Depends(get_current_user)):
 ]
 
 
+RESTORE_OLD = """        patients = load_patients_backup(DATA_DIR, user["id"], file_name)
+        return {"patients": patients, "fileName": file_name if patients else None, "local": True}
+"""
+RESTORE_NEW = """        from local_drive_fallback import load_patients_backup, merge_validation_sessions
+        file_name = _drive_patients_filename(user["id"])
+        patients = merge_validation_sessions(
+            DATA_DIR, load_patients_backup(DATA_DIR, user["id"], file_name)
+        )
+        return {"patients": patients, "fileName": file_name if patients else None, "local": True}
+"""
+
+
+def _ensure_restore_merges_disk(text: str) -> str:
+    if "merge_validation_sessions" in text:
+        return text
+    if RESTORE_OLD in text:
+        return text.replace(RESTORE_OLD, RESTORE_NEW, 1)
+    return text
+
+
 def patch_index_html(root: Path) -> None:
     idx = root / "frontend" / "build" / "index.html"
     if not idx.is_file():
@@ -200,6 +222,10 @@ def main() -> int:
     text = auth.read_text(encoding="utf-8")
     if "from local_drive_fallback import" in text and "disabledDrive" in text:
         print("auth.py already has local Drive fallback")
+        merged = _ensure_restore_merges_disk(text)
+        if merged != text:
+            auth.write_text(merged, encoding="utf-8")
+            print("patched /auth/restore to merge server validation sessions")
         patch_index_html(root)
         return 0
 
@@ -209,6 +235,7 @@ def main() -> int:
             print(old[:120], file=sys.stderr)
             return 1
         text = text.replace(old, new, 1)
+    text = _ensure_restore_merges_disk(text)
     auth.write_text(text, encoding="utf-8")
     print("patched auth.py Drive endpoints to use local disk when Drive is unset")
     patch_index_html(root)
