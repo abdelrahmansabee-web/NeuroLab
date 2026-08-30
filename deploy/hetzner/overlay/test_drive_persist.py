@@ -17,13 +17,8 @@ class DrivePersistTests(unittest.TestCase):
 
     def test_upserts_existing_and_never_calls_delete(self) -> None:
         service = MagicMock()
-        service.files.return_value.list.return_value.execute.side_effect = [
-            {"files": [{"id": "team"}]},
-            {"files": [{"id": "patient"}]},
-            {"files": [{"id": "videos"}]},
-            {"files": [{"id": "file1"}]},
-        ]
-        service.files.return_value.update.return_value.execute.return_value = {"id": "file1"}
+        service.files.return_value.list.return_value.execute.return_value = {"files": [{"id": "existing"}]}
+        service.files.return_value.update.return_value.execute.return_value = {"id": "existing"}
         with self._tmp_mp4() as path:
             out = upload_named_files(
                 "p 101",

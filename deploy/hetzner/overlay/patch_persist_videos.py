@@ -127,6 +127,11 @@ def main() -> int:
     if fallback_src.is_file():
         shutil.copy2(fallback_src, root / "local_drive_fallback.py")
         print("copied local_drive_fallback.py")
+    for extra in ("backfill_drive.py", "validation_cache.py"):
+        src = overlay / extra
+        if src.is_file():
+            shutil.copy2(src, root / extra)
+            print(f"copied {extra}")
 
     js = root / "frontend" / "build" / "static" / "js" / "main.0626212c.js"
     if js.is_file():

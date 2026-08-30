@@ -117,6 +117,25 @@ def _team_subfolder(service, root_id: str, patient_key: str, subfolder: str) -> 
     return _find_or_create_folder(service, patient, sub)
 
 
+def _user_subfolder(service, root_id: str, user_id: int, patient_key: str, subfolder: str) -> str:
+    user_root = _find_or_create_folder(service, root_id, f"u{int(user_id)}")
+    patient = _find_or_create_folder(service, user_root, _sanitize(patient_key)[:120] or "anon")
+    sub = _sanitize(subfolder) or "files"
+    if sub not in ("videos", "reports", "data"):
+        sub = "data"
+    return _find_or_create_folder(service, patient, sub)
+
+
+def patient_key_aliases(patient_key: str) -> list[str]:
+    key = _sanitize(patient_key)[:120] or "anon"
+    aliases = [key]
+    if "_" in key:
+        head = key.split("_", 1)[0]
+        if head and head not in aliases:
+            aliases.append(head)
+    return aliases
+
+
 def _upsert_bytes(service, parent_id: str, name: str, content: bytes, mime: str) -> str:
     try:
         from googleapiclient.http import MediaIoBaseUpload
@@ -155,8 +174,9 @@ def upload_named_files(
     *,
     service=None,
     folder_id: str = "",
+    user_id: int = 1,
 ) -> Dict[str, Any]:
-    """Upsert validation files under team_patients/{patientKey}/{videos|data}.
+    """Upsert validation files under team_patients and u{user}/{patientKey}.
 
     Existing Drive files are updated in place. Nothing is trashed or deleted.
     """
@@ -166,6 +186,7 @@ def upload_named_files(
         "patientKey": key,
         "never_delete": True,
         "files": {},
+        "locations": [],
     }
     if service is None:
         if not drive_configured():
@@ -184,15 +205,26 @@ def upload_named_files(
         return result
 
     uploaded = 0
+    payload = []
     for name, path, subfolder in files:
         src = Path(path)
         if not src.is_file() or src.stat().st_size <= 0:
             continue
-        drive_name = _sanitize(name) or src.name
-        parent = _team_subfolder(service, parent_id, key, subfolder)
-        file_id = _upsert_bytes(service, parent, drive_name, src.read_bytes(), _mime_for(drive_name))
-        result["files"][drive_name] = {"id": file_id, "bytes": src.stat().st_size, "subfolder": subfolder}
-        uploaded += 1
+        payload.append((_sanitize(name) or src.name, src, subfolder, src.read_bytes()))
+
+    for alias in patient_key_aliases(key):
+        for drive_name, src, subfolder, content in payload:
+            parents = [
+                _team_subfolder(service, parent_id, alias, subfolder),
+                _user_subfolder(service, parent_id, user_id, alias, subfolder),
+            ]
+            for parent in parents:
+                file_id = _upsert_bytes(service, parent, drive_name, content, _mime_for(drive_name))
+                result["locations"].append(
+                    {"patientKey": alias, "name": drive_name, "id": file_id, "subfolder": subfolder}
+                )
+            result["files"][drive_name] = {"bytes": src.stat().st_size, "subfolder": subfolder}
+            uploaded += 1
     result["ok"] = uploaded > 0
     result["uploaded"] = uploaded
     return result

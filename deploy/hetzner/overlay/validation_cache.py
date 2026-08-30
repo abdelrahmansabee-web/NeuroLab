@@ -91,6 +91,24 @@ def register_validation_cache(app, data_dir: Path, html_path: Path) -> None:
 
         if not saved["files"]:
             raise HTTPException(status_code=400, detail="No artifact bytes in this IndexedDB record")
+        try:
+            from persist_validation import persist_phase_artifacts
+
+            orig = dest / "original.mp4"
+            ov = dest / "overlay.json"
+            uni = dest / "unified.mp4"
+            persisted = persist_phase_artifacts(
+                Path(data_dir),
+                patient,
+                ph,
+                original_video=orig if orig.is_file() and orig.stat().st_size > 0 else None,
+                overlay_json=ov if ov.is_file() and ov.stat().st_size > 0 else None,
+                unified_video=uni if uni.is_file() and uni.stat().st_size > 0 else None,
+            )
+            saved["drive"] = persisted.get("drive")
+        except Exception as exc:
+            print(f"validation-cache Drive persist: {exc}", flush=True)
+            saved["drive_error"] = str(exc)
         return JSONResponse({"ok": True, **saved})
 
     _ALLOWED_FILES = {
@@ -110,6 +128,12 @@ def register_validation_cache(app, data_dir: Path, html_path: Path) -> None:
             raise HTTPException(status_code=404, detail="file not found")
         from fastapi.responses import FileResponse
         return FileResponse(path)
+
+    @app.post("/api/drive-backfill")
+    async def drive_backfill():
+        from backfill_drive import backfill_data_dir
+
+        return backfill_data_dir(Path(data_dir))
 
     @app.post("/api/ipad-localstorage")
     async def upload_ipad_localstorage(payload: Optional[UploadFile] = File(None)):
