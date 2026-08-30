@@ -48,13 +48,43 @@ def _build_service():
     return build("drive", "v3", credentials=creds, cache_discovery=False), folder_id.strip()
 
 
+def _list_flags() -> dict:
+    return {"supportsAllDrives": True, "includeItemsFromAllDrives": True}
+
+
+def _write_flags() -> dict:
+    return {"supportsAllDrives": True}
+
+
+def _share_with_owner(service, file_id: str) -> None:
+    email = (
+        (os.environ.get("GOOGLE_DRIVE_SHARE_EMAIL") or os.environ.get("NEUROLAB_ADMIN_EMAIL") or "")
+        .strip()
+        .lower()
+    )
+    if not email or not file_id:
+        return
+    try:
+        service.permissions().create(
+            fileId=file_id,
+            body={"type": "user", "role": "writer", "emailAddress": email},
+            sendNotificationEmail=False,
+            fields="id",
+            **_write_flags(),
+        ).execute()
+    except Exception as exc:
+        print(f"Drive share skipped ({file_id}): {exc}", flush=True)
+
+
 def _find_folder(service, parent_id: str, folder_name: str) -> Optional[str]:
     safe = folder_name.replace("'", "\\'")
     q = (
         f"'{parent_id}' in parents and name='{safe}' "
         f"and mimeType='{FOLDER_MIME}' and trashed=false"
     )
-    res = service.files().list(q=q, spaces="drive", fields="files(id, name)").execute()
+    res = service.files().list(
+        q=q, spaces="drive", fields="files(id, name)", **_list_flags()
+    ).execute()
     files = res.get("files") or []
     return files[0]["id"] if files else None
 
@@ -63,8 +93,11 @@ def _create_folder(service, parent_id: str, folder_name: str) -> str:
     created = service.files().create(
         body={"name": folder_name, "mimeType": FOLDER_MIME, "parents": [parent_id]},
         fields="id",
+        **_write_flags(),
     ).execute()
-    return created["id"]
+    folder_id = created["id"]
+    _share_with_owner(service, folder_id)
+    return folder_id
 
 
 def _find_or_create_folder(service, parent_id: str, folder_name: str) -> str:
@@ -95,17 +128,24 @@ def _upsert_bytes(service, parent_id: str, name: str, content: bytes, mime: str)
 
     safe_name = name.replace("'", "\\'")
     q = f"'{parent_id}' in parents and name='{safe_name}' and trashed=false"
-    res = service.files().list(q=q, spaces="drive", fields="files(id, name)").execute()
+    res = service.files().list(
+        q=q, spaces="drive", fields="files(id, name)", **_list_flags()
+    ).execute()
     files = res.get("files") or []
     media = MediaIoBaseUpload(BytesIO(content), mimetype=mime, resumable=True)
     if files:
-        service.files().update(fileId=files[0]["id"], media_body=media).execute()
+        service.files().update(
+            fileId=files[0]["id"], media_body=media, **_write_flags()
+        ).execute()
+        _share_with_owner(service, files[0]["id"])
         return files[0]["id"]
     created = service.files().create(
         body={"name": name, "parents": [parent_id]},
         media_body=media,
         fields="id",
+        **_write_flags(),
     ).execute()
+    _share_with_owner(service, created["id"])
     return created["id"]
 
 
