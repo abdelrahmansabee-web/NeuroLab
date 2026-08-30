@@ -111,6 +111,19 @@ from drive_oauth_routes import register_drive_oauth_routes
 register_drive_oauth_routes(router, get_current_user)
 """
 
+SNAPSHOT_OLD = '''            snap = json.dumps(p, ensure_ascii=False, indent=2).encode("utf-8")
+            _drive_upsert_bytes(service, "patient.json", snap, "application/json", parent_id=pf)
+'''
+SNAPSHOT_NEW = '''            try:
+                from patient_drive_archive import archive_patients
+
+                archive_patients([p], user_id=user_id)
+            except Exception as arch_exc:
+                print("Patient program archive:", arch_exc, flush=True)
+                snap = json.dumps(p, ensure_ascii=False, indent=2).encode("utf-8")
+                _drive_upsert_bytes(service, "patient.json", snap, "application/json", parent_id=pf)
+'''
+
 
 def _replace_once(text: str, old: str, new: str, label: str) -> str:
     if new in text:
@@ -129,6 +142,13 @@ def patch_drive_oauth(root: Path) -> int:
     text = auth.read_text(encoding="utf-8")
     text = _replace_once(text, SERVICE_OLD, SERVICE_NEW, "auth _drive_service oauth")
     text = _replace_once(text, HEALTH_OLD, HEALTH_NEW, "auth _drive_health_summary oauth")
+    if SNAPSHOT_NEW in text:
+        print("already patched: auth patient program archive")
+    elif SNAPSHOT_OLD in text:
+        text = text.replace(SNAPSHOT_OLD, SNAPSHOT_NEW, 1)
+        print("patched auth patient program archive")
+    else:
+        print("WARN: auth patient snapshot pattern missing")
     if REGISTER_MARK not in text:
         text = text.rstrip() + REGISTER_SNIPPET
         print("patched auth oauth routes")

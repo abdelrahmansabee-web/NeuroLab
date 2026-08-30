@@ -88,4 +88,11 @@ def backfill_data_dir(data_dir: Path) -> Dict[str, Any]:
                 "drive_error": saved.get("drive_error"),
             }
         )
-    return {"ok": True, "count": len(uploaded), "sessions": uploaded}
+    records: Dict[str, Any] = {}
+    try:
+        from patient_drive_archive import archive_from_data_dir
+
+        records = archive_from_data_dir(Path(data_dir))
+    except Exception as exc:
+        records = {"ok": False, "error": str(exc)}
+    return {"ok": True, "count": len(uploaded), "sessions": uploaded, "records": records}

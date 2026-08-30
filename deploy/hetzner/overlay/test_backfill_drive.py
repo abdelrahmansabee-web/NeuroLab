@@ -40,6 +40,7 @@ class BackfillDriveTests(unittest.TestCase):
             out = backfill_data_dir(data_dir)
             self.assertEqual(out["count"], 1)
             self.assertTrue(out["sessions"][0]["drive"].get("skipped"))
+            self.assertIn("records", out)
 
     def _write(self, path: Path, content: bytes) -> Path:
         path.write_bytes(content)

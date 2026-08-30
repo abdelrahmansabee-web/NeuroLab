@@ -48,6 +48,26 @@ EXECUTE_NEW = '''        "patient_height_cm": raw.get("patient_height_cm", "auto
     }
 '''
 
+SAVE_PATIENTS_OLD = '''        _write_patients_file(_patients_file_for_user(user), patients)
+        return {"success": True, "count": len(patients)}
+'''
+SAVE_PATIENTS_NEW = '''        _write_patients_file(_patients_file_for_user(user), patients)
+        try:
+            import threading
+            from patient_drive_archive import archive_patients
+
+            uid = int((user or {}).get("id") or 1)
+            threading.Thread(
+                target=archive_patients,
+                args=(patients,),
+                kwargs={"user_id": uid},
+                daemon=True,
+            ).start()
+        except Exception as exc:
+            print(f"Drive patient archive: {exc}", flush=True)
+        return {"success": True, "count": len(patients)}
+'''
+
 PIPELINE_SIG_OLD = '''    original_filename: str,
     job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -127,7 +147,14 @@ def main() -> int:
     if fallback_src.is_file():
         shutil.copy2(fallback_src, root / "local_drive_fallback.py")
         print("copied local_drive_fallback.py")
-    for extra in ("backfill_drive.py", "validation_cache.py", "drive_oauth.py", "drive_oauth_routes.py", "connect_drive.html"):
+    for extra in (
+        "backfill_drive.py",
+        "validation_cache.py",
+        "drive_oauth.py",
+        "drive_oauth_routes.py",
+        "connect_drive.html",
+        "patient_drive_archive.py",
+    ):
         src = overlay / extra
         if src.is_file():
             shutil.copy2(src, root / extra)
@@ -160,6 +187,7 @@ def main() -> int:
 
     _patch(main_py, MAIN_FORM_OLD, MAIN_FORM_NEW, "analyze patientKey form")
     _patch(main_py, KWARGS_OLD, KWARGS_NEW, "analyze kwargs patient_key")
+    _patch(main_py, SAVE_PATIENTS_OLD, SAVE_PATIENTS_NEW, "archive patients to Drive")
     _patch(runner, EXECUTE_OLD, EXECUTE_NEW, "worker patient_key")
     _patch(runner, PIPELINE_SIG_OLD, PIPELINE_SIG_NEW, "pipeline signature")
     _patch(runner, PLAYBACK_OLD, PLAYBACK_NEW, "keep playback video")

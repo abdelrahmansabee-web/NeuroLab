@@ -152,4 +152,10 @@ def register_validation_cache(app, data_dir: Path, html_path: Path) -> None:
         dest.write_bytes(raw or b"{}")
         latest = dest_dir / "latest.json"
         latest.write_bytes(raw or b"{}")
+        try:
+            from patient_drive_archive import archive_patients, parse_patients_payload
+
+            archive_patients(parse_patients_payload(raw or b"{}"))
+        except Exception as exc:
+            print(f"ipad-localstorage Drive archive: {exc}", flush=True)
         return {"ok": True, "saved": dest.name, "bytes": len(raw or b"")}
