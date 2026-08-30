@@ -84,7 +84,10 @@ cd "$APP_DIR"
 compose up -d --build
 
 echo "==> Nginx reverse proxy"
+mkdir -p /etc/nginx/snippets
 cp "$DEPLOY_DIR/nginx-gzip.conf" /etc/nginx/conf.d/neurolab-gzip.conf
+cp "$DEPLOY_DIR/nginx-static-cache.conf" /etc/nginx/snippets/neurolab-static-cache.conf
+cp "$DEPLOY_DIR/nginx-static-cache-locations.conf" /etc/nginx/snippets/neurolab-static-cache-locations.conf
 if [ -f /etc/letsencrypt/live/medlabai.duckdns.org/fullchain.pem ] && [ -f "$DEPLOY_DIR/nginx-https.example.conf" ]; then
   echo "==> Keeping HTTPS vhost (Let's Encrypt certs present)"
 else
@@ -92,6 +95,7 @@ else
 fi
 ln -sfn /etc/nginx/sites-available/neurolab /etc/nginx/sites-enabled/neurolab
 rm -f /etc/nginx/sites-enabled/default
+python3 "$DEPLOY_DIR/overlay/patch_nginx_server_max.py" /etc/nginx/sites-available/neurolab
 nginx -t
 systemctl enable --now nginx
 systemctl reload nginx
