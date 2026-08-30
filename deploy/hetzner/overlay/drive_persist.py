@@ -788,6 +788,9 @@ def _trash_legacy_layout(service, parent_id: str, keep_folder_ids: set[str]) -> 
                 if not keep and child.get("id"):
                     _trash_file(service, child["id"])
                     trashed.append(child["id"])
+            if not _list_direct_children(service, file_id):
+                _trash_file(service, file_id)
+                trashed.append(file_id)
             continue
         _trash_file(service, file_id)
         trashed.append(file_id)
