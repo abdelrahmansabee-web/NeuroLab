@@ -10,6 +10,8 @@ from pathlib import Path
 CSS_VER = "1"
 CSS_NAME = "clinic_touch.css"
 LINK = f'<link rel="stylesheet" href="/{CSS_NAME}?v={CSS_VER}"/>'
+PWA_SYNC_JS = "pwa_ipad_sync.js"
+PWA_SYNC_TAG = f'<script src="/{PWA_SYNC_JS}?v=1"></script>'
 HREF_RE = re.compile(rf'href="/{re.escape(CSS_NAME)}(?:\?v=\d+)?"')
 WHILE_TAP_RE = re.compile(r"whileTap:(?:x\?void 0:)?Yw\([^)]+\)")
 PTR_MOVE_OLD = 'addEventListener("touchmove",r,{passive:!1})'
@@ -68,6 +70,11 @@ def wire_index_html(text: str) -> str:
         "main.0626212c.js?touch=1",
         text,
     )
+    if PWA_SYNC_JS not in text:
+        if "</body>" in text:
+            text = text.replace("</body>", PWA_SYNC_TAG + "</body>", 1)
+        else:
+            text = text + PWA_SYNC_TAG
     return text
 
 
@@ -103,6 +110,11 @@ def copy_css(overlay: Path, root: Path) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest)
         print(f"copied {CSS_NAME} -> {dest}")
+    sync_src = overlay / PWA_SYNC_JS
+    if sync_src.is_file():
+        for dest in dests:
+            shutil.copy2(sync_src, dest.parent / PWA_SYNC_JS)
+            print(f"copied {PWA_SYNC_JS} -> {dest.parent / PWA_SYNC_JS}")
 
 
 def patch_ipad_touch(root: Path) -> int:
