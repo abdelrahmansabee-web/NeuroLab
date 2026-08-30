@@ -43,6 +43,7 @@ def main() -> int:
         text = path.read_text(encoding="utf-8")
         updated = text
         for old in (
+            'DEPLOY_VERSION = "29.40"',
             'DEPLOY_VERSION = "29.39"',
             'DEPLOY_VERSION = "29.38"',
             'DEPLOY_VERSION = "29.37"',
@@ -52,10 +53,10 @@ def main() -> int:
             'DEPLOY_VERSION = "29.33"',
             'DEPLOY_VERSION = "29.32"',
         ):
-            updated = updated.replace(old, 'DEPLOY_VERSION = "29.40"')
+            updated = updated.replace(old, 'DEPLOY_VERSION = "29.41"')
         if updated != text:
             path.write_text(updated, encoding="utf-8")
-            print(f"bumped {rel} to 29.40")
+            print(f"bumped {rel} to 29.41")
     return 0
 
 

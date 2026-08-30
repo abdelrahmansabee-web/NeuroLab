@@ -511,42 +511,86 @@ def _walk_files(
     return found
 
 
+def _sa_service_or_none():
+    try:
+        sa, _folder = _sa_list_service()
+        return sa
+    except Exception:
+        return None
+
+
 def _download_bytes(service, file_id: str) -> bytes:
-    return service.files().get_media(fileId=file_id).execute() or b""
+    try:
+        return service.files().get_media(fileId=file_id).execute() or b""
+    except Exception as exc:
+        sa = _sa_service_or_none()
+        if sa is None:
+            raise
+        try:
+            return sa.files().get_media(fileId=file_id).execute() or b""
+        except Exception:
+            print(f"Drive download skipped {file_id}: {exc}", flush=True)
+            return b""
 
 
 def _trash_file(service, file_id: str) -> None:
     if not file_id:
         return
-    service.files().update(fileId=file_id, body={"trashed": True}, **_write_flags()).execute()
+    try:
+        service.files().update(fileId=file_id, body={"trashed": True}, **_write_flags()).execute()
+        return
+    except Exception as exc:
+        sa = _sa_service_or_none()
+        if sa is None:
+            print(f"Drive trash skipped {file_id}: {exc}", flush=True)
+            return
+        try:
+            sa.files().update(fileId=file_id, body={"trashed": True}, **_write_flags()).execute()
+        except Exception as sa_exc:
+            print(f"Drive trash skipped {file_id}: {sa_exc}", flush=True)
 
 
 def _move_file(service, file_id: str, old_parent: str, new_parent: str, new_name: str) -> str:
     if not file_id or not new_parent:
         return ""
-    safe = new_name.replace("'", "\\'")
-    existing = (
-        service.files()
-        .list(
-            q=f"'{new_parent}' in parents and name='{safe}' and trashed=false",
-            spaces="drive",
-            fields="files(id, name)",
-            **_list_flags(),
+
+    def _run(svc) -> str:
+        safe = new_name.replace("'", "\\'")
+        existing = (
+            svc.files()
+            .list(
+                q=f"'{new_parent}' in parents and name='{safe}' and trashed=false",
+                spaces="drive",
+                fields="files(id, name)",
+                **_list_flags(),
+            )
+            .execute()
+            .get("files")
+            or []
         )
-        .execute()
-        .get("files")
-        or []
-    )
-    if existing and existing[0]["id"] != file_id:
-        _trash_file(service, file_id)
-        return existing[0]["id"]
-    body = {"name": new_name} if new_name else {}
-    kwargs = dict(_write_flags())
-    if old_parent and old_parent != new_parent:
-        kwargs["addParents"] = new_parent
-        kwargs["removeParents"] = old_parent
-    service.files().update(fileId=file_id, body=body, **kwargs).execute()
-    return file_id
+        if existing and existing[0]["id"] != file_id:
+            _trash_file(svc, file_id)
+            return existing[0]["id"]
+        body = {"name": new_name} if new_name else {}
+        kwargs = dict(_write_flags())
+        if old_parent and old_parent != new_parent:
+            kwargs["addParents"] = new_parent
+            kwargs["removeParents"] = old_parent
+        svc.files().update(fileId=file_id, body=body, **kwargs).execute()
+        return file_id
+
+    try:
+        return _run(service)
+    except Exception as exc:
+        sa = _sa_service_or_none()
+        if sa is None:
+            print(f"Drive move skipped {file_id}: {exc}", flush=True)
+            return ""
+        try:
+            return _run(sa)
+        except Exception as sa_exc:
+            print(f"Drive move skipped {file_id}: {sa_exc}", flush=True)
+            return ""
 
 
 def _section_json_names() -> set[str]:
@@ -643,7 +687,9 @@ def reorganize_clinic_folder(*, service=None, folder_id: str = "") -> Dict[str, 
             if name in grouped[key]["json"]:
                 continue
             try:
-                grouped[key]["json"][name] = _download_bytes(service, item["id"])
+                blob = _download_bytes(service, item["id"])
+                if blob:
+                    grouped[key]["json"][name] = blob
             except Exception as exc:
                 print(f"Drive JSON download skipped {name}: {exc}", flush=True)
 
