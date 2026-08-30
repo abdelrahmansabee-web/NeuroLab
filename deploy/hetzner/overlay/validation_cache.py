@@ -129,6 +129,13 @@ def register_validation_cache(app, data_dir: Path, html_path: Path) -> None:
         from fastapi.responses import FileResponse
         return FileResponse(path)
 
+    @app.get("/connect-drive", response_class=HTMLResponse, include_in_schema=False)
+    async def connect_drive_page():
+        path = Path(__file__).resolve().parent / "connect_drive.html"
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="connect-drive missing")
+        return HTMLResponse(path.read_text(encoding="utf-8"))
+
     @app.post("/api/drive-backfill")
     async def drive_backfill():
         from backfill_drive import backfill_data_dir

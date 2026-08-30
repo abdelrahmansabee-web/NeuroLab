@@ -12,6 +12,7 @@ from patch_persist_videos import (
     PLAYBACK_OLD,
     _patch,
     collapse_stacked_runner_patches,
+    main as patch_videos_main,
 )
 
 
@@ -46,6 +47,34 @@ class PersistPatchIdempotentTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertEqual(text.count("playback_video = video_path"), 1)
             self.assertEqual(text.count("_downscale_video_for_analysis"), 1)
+
+    def test_copies_oauth_files(self) -> None:
+        import sys
+
+        overlay = Path(__file__).resolve().parent
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "frontend" / "build" / "static" / "js").mkdir(parents=True)
+            (root / "main.py").write_text("# placeholder\n", encoding="utf-8")
+            (root / "analyze_job_runner.py").write_text("# placeholder\n", encoding="utf-8")
+            argv = sys.argv[:]
+            try:
+                sys.argv = ["patch_persist_videos.py", str(root)]
+                # Patterns are missing, so patching main/runner fails after copies.
+                with self.assertRaises(SystemExit):
+                    patch_videos_main()
+            finally:
+                sys.argv = argv
+            for name in (
+                "drive_oauth.py",
+                "drive_oauth_routes.py",
+                "connect_drive.html",
+                "drive_persist.py",
+                "backfill_drive.py",
+                "validation_cache.py",
+            ):
+                self.assertTrue((root / name).is_file(), name)
+            self.assertTrue((overlay / "drive_oauth.py").is_file())
 
 
 if __name__ == "__main__":

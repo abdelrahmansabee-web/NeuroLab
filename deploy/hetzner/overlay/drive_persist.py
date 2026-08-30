@@ -17,6 +17,17 @@ def _sanitize(name: str) -> str:
 
 
 def drive_configured() -> bool:
+    try:
+        from drive_oauth import oauth_client_configured, oauth_ready
+
+        if oauth_ready():
+            return True
+        if oauth_client_configured():
+            # OAuth secrets are set but the clinic Gmail is not linked yet.
+            # Do not fall back to the service account: it has no storage quota.
+            return False
+    except Exception:
+        pass
     return bool(
         (os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or "").strip()
         and (os.environ.get("GOOGLE_DRIVE_FOLDER_ID") or "").strip()
@@ -33,6 +44,25 @@ def _mime_for(name: str) -> str:
 
 
 def _build_service():
+    try:
+        from drive_oauth import oauth_client_configured, oauth_drive_service, oauth_folder_id, oauth_ready
+
+        if oauth_ready():
+            svc = oauth_drive_service()
+            if svc:
+                return svc, oauth_folder_id()
+            return None, ""
+        if oauth_client_configured():
+            return None, ""
+    except Exception as exc:
+        print("OAuth Drive persist:", exc, flush=True)
+        try:
+            from drive_oauth import oauth_client_configured as _oauth_client_configured
+
+            if _oauth_client_configured():
+                return None, ""
+        except Exception:
+            pass
     raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or ""
     folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID") or ""
     if not raw.strip() or not folder_id.strip():
@@ -57,6 +87,13 @@ def _write_flags() -> dict:
 
 
 def _share_with_owner(service, file_id: str) -> None:
+    try:
+        from drive_oauth import oauth_ready
+
+        if oauth_ready():
+            return
+    except Exception:
+        pass
     email = (
         (os.environ.get("GOOGLE_DRIVE_SHARE_EMAIL") or os.environ.get("NEUROLAB_ADMIN_EMAIL") or "")
         .strip()

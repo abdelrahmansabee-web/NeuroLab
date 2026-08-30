@@ -127,7 +127,7 @@ def main() -> int:
     if fallback_src.is_file():
         shutil.copy2(fallback_src, root / "local_drive_fallback.py")
         print("copied local_drive_fallback.py")
-    for extra in ("backfill_drive.py", "validation_cache.py"):
+    for extra in ("backfill_drive.py", "validation_cache.py", "drive_oauth.py", "drive_oauth_routes.py", "connect_drive.html"):
         src = overlay / extra
         if src.is_file():
             shutil.copy2(src, root / extra)

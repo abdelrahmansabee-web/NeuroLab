@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
+import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from drive_persist import _sanitize, upload_named_files
+from drive_persist import _sanitize, drive_configured, upload_named_files
 
 
 class DrivePersistTests(unittest.TestCase):
@@ -34,6 +36,19 @@ class DrivePersistTests(unittest.TestCase):
 
     def test_sanitize(self) -> None:
         self.assertEqual(_sanitize("pre/../x"), "pre_.._x")
+
+    def test_oauth_pending_does_not_use_service_account(self) -> None:
+        env = {
+            "GOOGLE_OAUTH_CLIENT_ID": "cid",
+            "GOOGLE_OAUTH_CLIENT_SECRET": "csec",
+            "GOOGLE_SERVICE_ACCOUNT_JSON": "{}",
+            "GOOGLE_DRIVE_FOLDER_ID": "folder",
+            "GOOGLE_OAUTH_REFRESH_TOKEN": "",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            with tempfile.TemporaryDirectory() as raw:
+                with patch("drive_oauth._data_dir", return_value=Path(raw)):
+                    self.assertFalse(drive_configured())
 
     def _tmp_mp4(self):
         import tempfile

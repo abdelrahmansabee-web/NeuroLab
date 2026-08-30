@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>NeuroLab — ربط Google Drive</title>
+  <style>
+    body { margin:0; background:#121820; color:#e8eef6; font-family: Inter, system-ui, sans-serif; }
+    .wrap { max-width: 32rem; margin: 8vh auto; padding: 0 1.25rem 3rem; }
+    .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px; padding: 1.4rem 1.3rem 1.5rem; }
+    h1 { font-size: 1.25rem; margin: 0 0 .35rem; }
+    p, li { line-height: 1.55; color: rgba(255,255,255,0.78); font-size: 0.95rem; }
+    code { font-size: .8rem; background: rgba(0,0,0,.35); padding: .12rem .35rem; border-radius: 6px; direction: ltr; display: inline-block; }
+    .ok { color: #86efac; }
+    .warn { color: #fcd34d; }
+    .btn { display: inline-block; margin-top: 1rem; background: #3b82f6; color: white; border: 0;
+           border-radius: 10px; padding: .7rem 1.1rem; font-size: 1rem; cursor: pointer; text-decoration: none; }
+    .btn[disabled] { opacity: .45; cursor: not-allowed; }
+    a { color: #7dd3fc; }
+    ol { padding-right: 1.2rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>ربط Google Drive</h1>
+      <p id="status">جاري التحقق…</p>
+      <div id="setup" hidden>
+        <p>محتاجين مفتاح جوجل مرة واحدة (Client ID + Secret). من غيرهم الزر مش هيشتغل.</p>
+        <ol>
+          <li>افتحي <a href="https://console.cloud.google.com/apis/credentials?project=neurolab-502305" target="_blank" rel="noopener">Google Cloud → Credentials</a></li>
+          <li>Create credentials → OAuth client ID → Web application</li>
+          <li>Authorized redirect URI:
+            <br/><code id="redir"></code></li>
+          <li>في Hugging Face Space → Settings → Variables and secrets، أضيفي:
+            <br/><code>GOOGLE_OAUTH_CLIENT_ID</code>
+            <br/><code>GOOGLE_OAUTH_CLIENT_SECRET</code></li>
+          <li>Restart للـ Space، وبعدين ارجعي للصفحة دي.</li>
+        </ol>
+      </div>
+      <p id="detail"></p>
+      <button class="btn" id="connect" type="button" hidden>ربط درايفك</button>
+      <p style="margin-top:1.2rem;font-size:.85rem;color:rgba(255,255,255,.55)">
+        لو الـ Space اتعمل له rebuild، افتحي الصفحة دي تاني واربطي.
+      </p>
+      <p style="margin-top:1.2rem"><a href="/">رجوع للبرنامج</a></p>
+    </div>
+  </div>
+  <script>
+    const statusEl = document.getElementById("status");
+    const setupEl = document.getElementById("setup");
+    const detailEl = document.getElementById("detail");
+    const btn = document.getElementById("connect");
+    document.getElementById("redir").textContent =
+      "https://abdelrahmansabee-neurolab.hf.space/auth/drive/callback";
+    const params = new URLSearchParams(location.search);
+    if (params.get("ok") === "1") {
+      statusEl.className = "ok";
+      statusEl.textContent = "الدرايف اتربط. الفيديوهات الجديدة هتتحفظ على حسابك.";
+    }
+    if (params.get("error")) {
+      statusEl.className = "warn";
+      statusEl.textContent = "الربط فشل: " + params.get("error");
+    }
+    const token = (() => { try { return localStorage.getItem("neurolab_token") || ""; } catch (e) { return ""; } })();
+    const headers = token ? { Authorization: "Bearer " + token } : {};
+    fetch("/auth/drive/oauth-status", { credentials: "same-origin", headers })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ready) {
+          statusEl.className = "ok";
+          statusEl.textContent = "الدرايف مربوط" + (d.email ? " (" + d.email + ")" : "") + ".";
+          if (d.folderName) detailEl.textContent = "الفولدر: " + d.folderName;
+          return;
+        }
+        if (!d.clientConfigured) {
+          statusEl.className = "warn";
+          statusEl.textContent = "لسه محتاجين مفاتيح جوجل في إعدادات الـ Space.";
+          setupEl.hidden = false;
+          return;
+        }
+        if (!token) {
+          statusEl.textContent = "سجّلي دخول البرنامج أول، بعدين افتحي الصفحة دي تاني.";
+          return;
+        }
+        statusEl.textContent = "جاهز للربط. اضغطي الزر وسجّلي بجيميل الدرايف اللي فيه الـ 5 تيرا.";
+        btn.hidden = false;
+        btn.onclick = async () => {
+          btn.disabled = true;
+          const r = await fetch("/auth/drive/connect-cookie", {
+            method: "POST",
+            credentials: "same-origin",
+            headers,
+          });
+          if (!r.ok) {
+            statusEl.className = "warn";
+            statusEl.textContent = "سجّلي دخول البرنامج أول.";
+            btn.disabled = false;
+            return;
+          }
+          window.location.href = "/auth/drive/connect";
+        };
+      })
+      .catch(() => {
+        statusEl.className = "warn";
+        statusEl.textContent = "البرنامج لسه بيصحى. استني دقيقة وارفريشي.";
+      });
+  </script>
+</body>
+</html>

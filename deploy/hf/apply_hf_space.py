@@ -23,12 +23,16 @@ def main() -> int:
         return 1
 
     sys.path.insert(0, str(OVERLAY))
+    from patch_drive_oauth import patch_drive_oauth
     from patch_ipad_touch import patch_ipad_touch
     from patch_persist_videos import main as patch_videos
 
     videos_rc = patch_videos()
     if videos_rc != 0:
         return videos_rc
+    oauth_rc = patch_drive_oauth(root)
+    if oauth_rc != 0:
+        return oauth_rc
     return patch_ipad_touch(root)
 
 
