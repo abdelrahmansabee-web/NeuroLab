@@ -28,24 +28,24 @@ html.nl-clinic-smooth [style*="blur(24px)"] {
   background-image: url("/bg_soft.jpg") !important;
 }
 
-/* Photo shows through the page. Cards are light frost, not a dark slab. */
+/* Middle frost: cards readable, photo still in the page. */
 html.nl-clinic-smooth .content-shell {
-  background-color: rgba(255, 255, 255, 0.05) !important;
+  background-color: rgba(24, 34, 48, 0.22) !important;
 }
 
 html.nl-clinic-smooth .sidebar-shell,
 html.nl-clinic-smooth .section-header,
 html.nl-clinic-smooth .app-topbar-glass {
-  background-color: rgba(255, 255, 255, 0.12) !important;
+  background-color: rgba(24, 34, 48, 0.50) !important;
 }
 
 html.nl-clinic-smooth .glass-float {
-  background-color: rgba(255, 255, 255, 0.10) !important;
+  background-color: rgba(24, 34, 48, 0.44) !important;
 }
 
 html.nl-clinic-smooth .gselect-trigger,
 html.nl-clinic-smooth .gselect-menu {
-  background-color: rgba(36, 44, 56, 0.86) !important;
+  background-color: rgba(36, 44, 56, 0.90) !important;
 }
 
 html.nl-clinic-smooth .sidebar-shell::before,

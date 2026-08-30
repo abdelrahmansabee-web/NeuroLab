@@ -7,7 +7,7 @@ import shutil
 import sys
 from pathlib import Path
 
-CSS_VER = "5"
+CSS_VER = "6"
 LINK = f'<link rel="stylesheet" href="/clinic_smooth.css?v={CSS_VER}"/>'
 BOOT = "<script>document.documentElement.classList.add('nl-clinic-smooth')</script>"
 SCRIPT = f'<script src="/clinic_smooth.js?v={CSS_VER}"></script>'
