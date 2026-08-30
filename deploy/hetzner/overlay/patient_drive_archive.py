@@ -52,37 +52,12 @@ def program_patient_record(patient: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def files_for_patient(patient: Dict[str, Any]) -> List[tuple[str, bytes, str]]:
+    """One PDF per patient. Drive folders must not receive JSON or extras."""
+    from patient_pdf import build_patient_pdf, patient_pdf_filename
+
     rec = program_patient_record(patient)
-    payload: List[tuple[str, bytes, str]] = [
-        (
-            "patient.json",
-            json.dumps(rec, ensure_ascii=False, indent=2).encode("utf-8"),
-            "data",
-        ),
-        (
-            "_program_layout.json",
-            json.dumps(
-                {
-                    "matchesApp": True,
-                    "sections": list(PROGRAM_SECTIONS),
-                    "files": ["patient.json"]
-                    + [f"{i:02d}_{name}.json" for i, name in enumerate(PROGRAM_SECTIONS, 1)],
-                },
-                ensure_ascii=False,
-                indent=2,
-            ).encode("utf-8"),
-            "data",
-        ),
-    ]
-    for index, section in enumerate(PROGRAM_SECTIONS, 1):
-        payload.append(
-            (
-                f"{index:02d}_{section}.json",
-                json.dumps(rec.get(section) or {}, ensure_ascii=False, indent=2).encode("utf-8"),
-                "data",
-            )
-        )
-    return payload
+    name = patient_pdf_filename(rec)
+    return [(name, build_patient_pdf(rec), "")]
 
 
 def decrypt_patients_text(raw: str) -> Optional[Any]:

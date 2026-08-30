@@ -142,6 +142,12 @@ def register_validation_cache(app, data_dir: Path, html_path: Path) -> None:
 
         return backfill_data_dir(Path(data_dir))
 
+    @app.post("/api/drive-rebuild")
+    async def drive_rebuild():
+        from backfill_drive import rebuild_clinic_folder
+
+        return rebuild_clinic_folder(Path(data_dir))
+
     @app.post("/api/ipad-localstorage")
     async def upload_ipad_localstorage(payload: Optional[UploadFile] = File(None)):
         dest_dir = Path(data_dir) / "ipad_localstorage"

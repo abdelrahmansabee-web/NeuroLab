@@ -208,6 +208,7 @@ def main() -> int:
         "drive_oauth_routes.py",
         "connect_drive.html",
         "patient_drive_archive.py",
+        "patient_pdf.py",
     ):
         src = overlay / extra
         if src.is_file():

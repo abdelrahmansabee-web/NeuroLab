@@ -45,11 +45,11 @@
       <button class="btn" id="connect" type="button" hidden>ربط درايفك</button>
       <p style="margin-top:1.2rem;font-size:.85rem;color:rgba(255,255,255,.55)">
         افتحي الصفحة دي من أيقونة الشاشة الرئيسية، مش من سفاري.
-        بعد الربط افتحي البرنامج عشان ملفات المرضى تتحط في
-        <code>team_patients / رقم المريض / data</code>
-        وبعدين اضغطي «رفع فيديوهات الآيباد» عشان فيديو الفاليديشن يتحط في
-        <code>team_patients / رقم المريض / videos / baseline_validation.mp4</code>
-        (الفيديو اللي عليه الرسم، مش فيديو التصوير الأصلي).
+        بعد الربط، كل مريض هيبقى فولدر لوحده فيه:
+        <code>105_Ahmet_sever.pdf</code>
+        و
+        <code>baseline_validation.mp4</code>
+        (فيديو الفاليديشن اللي عليه الرسم). مفيش JSON ولا فيديو تصوير أصلي.
       </p>
       <p style="margin-top:1.2rem"><a href="/">رجوع للبرنامج</a></p>
     </div>
@@ -82,18 +82,20 @@
       const videos = inv.videoCount || 0;
       const jsons = inv.jsonCount || 0;
       const files = inv.fileCount || 0;
+      const pdfs = inv.pdfCount || 0;
+      const patients = (inv.patientFolders || []).length;
       if (inv.empty || files === 0) {
         folderEl.className = "warn";
         folderEl.textContent =
-          "الفولدر «" + name + "» فاضي: " + files + " ملف، " + videos + " فيديو، " + jsons + " JSON. مفيش داتا مرضى لسه.";
+          "الفولدر «" + name + "» فاضي: " + files + " ملف، " + videos + " فيديو، " + pdfs + " PDF.";
       } else {
-        folderEl.className = files && videos === 0 ? "warn" : "ok";
-        const kinds = inv.fileKinds || {};
-        const kindText = Object.keys(kinds).slice(0, 8).map((k) => k + "×" + kinds[k]).join("، ");
+        folderEl.className = jsons > 0 ? "warn" : "ok";
+        const folders = (inv.patientFolders || []).slice(0, 8).join("، ");
         folderEl.textContent =
-          "الفولدر «" + name + "»: " + files + " ملف، " + videos + " فيديو، " + jsons + " JSON."
-          + (kindText ? " الملفات: " + kindText : "")
-          + (videos === 0 ? " مفيش فيديوهات. افتحي team_patients." : "");
+          "الفولدر «" + name + "»: " + patients + " مريض، " + files + " ملف، " + videos + " فيديو فاليديشن، " + pdfs + " PDF، " + jsons + " JSON."
+          + (folders ? " الفولدرات: " + folders : "")
+          + (jsons > 0 ? " لسه فيه JSON — محتاج إعادة بناء." : "")
+          + (videos === 0 ? " مفيش فيديوهات فاليديشن لسه." : "");
       }
     }
     Promise.all([

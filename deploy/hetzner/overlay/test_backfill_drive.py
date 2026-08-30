@@ -39,9 +39,42 @@ class BackfillDriveTests(unittest.TestCase):
             )
             out = backfill_data_dir(data_dir)
             self.assertEqual(out["count"], 1)
-            self.assertTrue(out["sessions"][0]["drive"].get("skipped"))
+            self.assertTrue(out["sessions"][0].get("skipped") or out["sessions"][0]["drive"].get("skipped"))
             self.assertIn("records", out)
-            self.assertIn("originals", out)
+            self.assertNotIn("originals", out)
+
+    def test_backfill_uploads_unified_validation_only(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            data_dir = Path(raw)
+            cache = data_dir / "validation_cache" / "105_Ahmet_sever" / "baseline"
+            cache.mkdir(parents=True)
+            (cache / "original.mp4").write_bytes(b"camera")
+            (cache / "unified.mp4").write_bytes(b"overlay-video")
+            (cache / "overlay.json").write_bytes(b"{}")
+            out = backfill_data_dir(data_dir)
+            session = out["sessions"][0]
+            self.assertEqual(session["patientKey"], "105_Ahmet_sever")
+            self.assertIn("baseline_validation_unified.mp4", session["files"])
+            self.assertNotIn("baseline_validation_original.mp4", session["files"])
+            self.assertTrue(session["drive"].get("skipped"))
+
+    def test_rebuild_calls_reorganize(self) -> None:
+        from unittest.mock import patch
+
+        from backfill_drive import rebuild_clinic_folder
+
+        with tempfile.TemporaryDirectory() as raw:
+            data_dir = Path(raw)
+            with patch(
+                "drive_persist.reorganize_clinic_folder",
+                return_value={"ok": True, "patientCount": 1, "pdfs": 1, "videos": 1},
+            ):
+                with patch("drive_persist.list_clinic_folder", return_value={"ok": True, "jsonCount": 0}):
+                    out = rebuild_clinic_folder(data_dir)
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["reorganized"]["patientCount"], 1)
+        self.assertIn("backfill", out)
+        self.assertEqual(out["inventory"]["jsonCount"], 0)
 
     def _write(self, path: Path, content: bytes) -> Path:
         path.write_bytes(content)

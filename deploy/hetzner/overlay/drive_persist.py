@@ -1,4 +1,4 @@
-"""Upload clinic validation videos to Google Drive. Never deletes Drive files."""
+"""Upload one PDF + validation videos per patient. No extra Drive clutter."""
 from __future__ import annotations
 
 import json
@@ -6,7 +6,7 @@ import os
 import re
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
 TEAM_ROOT_NAME = "team_patients"
@@ -17,11 +17,14 @@ def _sanitize(name: str) -> str:
 
 
 def clinic_drive_filename(name: str) -> Optional[str]:
-    """Keep the validation (overlay) mp4 on Drive. Skip camera originals."""
+    """Keep only the patient PDF and validation overlay mp4s."""
     raw = (name or "").strip()
     if not raw:
         return None
     lower = raw.lower()
+    if lower.endswith(".pdf"):
+        stem = _sanitize(Path(raw).stem) or "report"
+        return f"{stem}.pdf"
     if lower.endswith((".mp4", ".mov", ".m4v", ".webm")):
         if "validation_unified" in lower or "unified_validation" in lower:
             stem = Path(raw).stem
@@ -32,11 +35,9 @@ def clinic_drive_filename(name: str) -> Optional[str]:
                 stem = f"{stem}_validation"
             return f"{stem}.mp4"
         if lower.endswith("_validation.mp4"):
-            return raw
+            return _sanitize(Path(raw).stem) + ".mp4"
         return None
-    if "validation_overlay" in lower:
-        return None
-    return raw
+    return None
 
 
 def drive_configured() -> bool:
@@ -70,6 +71,8 @@ def _mime_for(name: str) -> str:
     lower = name.lower()
     if lower.endswith(".mp4"):
         return "video/mp4"
+    if lower.endswith(".pdf"):
+        return "application/pdf"
     if lower.endswith(".json"):
         return "application/json"
     return "application/octet-stream"
@@ -177,22 +180,47 @@ def _find_or_create_folder(service, parent_id: str, folder_name: str) -> str:
     return _create_folder(service, parent_id, name)
 
 
-def _team_subfolder(service, root_id: str, patient_key: str, subfolder: str) -> str:
-    team = _find_or_create_folder(service, root_id, TEAM_ROOT_NAME)
-    patient = _find_or_create_folder(service, team, _sanitize(patient_key)[:120] or "anon")
-    sub = _sanitize(subfolder) or "files"
-    if sub not in ("videos", "reports", "data"):
-        sub = "data"
-    return _find_or_create_folder(service, patient, sub)
+def _list_child_folders(service, parent_id: str) -> List[Dict[str, str]]:
+    folders: List[Dict[str, str]] = []
+    page = None
+    scanned = 0
+    while scanned < 400:
+        res = service.files().list(
+            q=f"'{parent_id}' in parents and mimeType='{FOLDER_MIME}' and trashed=false",
+            spaces="drive",
+            pageSize=100,
+            pageToken=page,
+            fields="nextPageToken, files(id, name)",
+            **_list_flags(),
+        ).execute()
+        items = res.get("files") or []
+        scanned += len(items)
+        folders.extend({"id": item.get("id") or "", "name": item.get("name") or ""} for item in items)
+        page = res.get("nextPageToken")
+        if not page:
+            break
+    return folders
 
 
-def _user_subfolder(service, root_id: str, user_id: int, patient_key: str, subfolder: str) -> str:
-    user_root = _find_or_create_folder(service, root_id, f"u{int(user_id)}")
-    patient = _find_or_create_folder(service, user_root, _sanitize(patient_key)[:120] or "anon")
-    sub = _sanitize(subfolder) or "files"
-    if sub not in ("videos", "reports", "data"):
-        sub = "data"
-    return _find_or_create_folder(service, patient, sub)
+def _patient_folder(service, root_id: str, patient_key: str) -> str:
+    """One folder per patient directly under NeuroLab_Backups. No nested data/videos."""
+    key = _sanitize(patient_key)[:120] or "anon"
+    existing = _find_folder(service, root_id, key)
+    if existing:
+        return existing
+    head = key.split("_", 1)[0]
+    if head:
+        matches = [
+            folder
+            for folder in _list_child_folders(service, root_id)
+            if folder["name"] == key or folder["name"].startswith(f"{head}_")
+        ]
+        if len(matches) == 1:
+            return matches[0]["id"]
+        named = next((folder for folder in matches if folder["name"] == key), None)
+        if named:
+            return named["id"]
+    return _create_folder(service, root_id, key)
 
 
 def patient_key_aliases(patient_key: str) -> list[str]:
@@ -245,15 +273,12 @@ def upload_named_files(
     folder_id: str = "",
     user_id: int = 1,
 ) -> Dict[str, Any]:
-    """Upsert validation files under team_patients and u{user}/{patientKey}.
-
-    Existing Drive files are updated in place. Nothing is trashed or deleted.
-    """
+    """Upsert PDF + validation mp4s under NeuroLab_Backups/<patientKey>/."""
+    _ = user_id
     key = _sanitize(patient_key)[:120] or "anon"
     result: Dict[str, Any] = {
         "ok": False,
         "patientKey": key,
-        "never_delete": True,
         "files": {},
         "locations": [],
     }
@@ -275,28 +300,26 @@ def upload_named_files(
 
     uploaded = 0
     payload = []
-    for name, path, subfolder in files:
+    for name, path, _subfolder in files:
         src = Path(path)
         if not src.is_file() or src.stat().st_size <= 0:
             continue
         drive_name = clinic_drive_filename(_sanitize(name) or src.name)
         if not drive_name:
             continue
-        payload.append((drive_name, src, subfolder, src.read_bytes()))
+        payload.append((drive_name, src, src.read_bytes()))
 
-    for alias in patient_key_aliases(key):
-        for drive_name, src, subfolder, content in payload:
-            parents = [
-                _team_subfolder(service, parent_id, alias, subfolder),
-                _user_subfolder(service, parent_id, user_id, alias, subfolder),
-            ]
-            for parent in parents:
-                file_id = _upsert_bytes(service, parent, drive_name, content, _mime_for(drive_name))
-                result["locations"].append(
-                    {"patientKey": alias, "name": drive_name, "id": file_id, "subfolder": subfolder}
-                )
-            result["files"][drive_name] = {"bytes": src.stat().st_size, "subfolder": subfolder}
-            uploaded += 1
+    if not payload:
+        result["skipped"] = True
+        result["reason"] = "pdf_and_validation_videos_only"
+        return result
+
+    parent = _patient_folder(service, parent_id, key)
+    for drive_name, src, content in payload:
+        file_id = _upsert_bytes(service, parent, drive_name, content, _mime_for(drive_name))
+        result["locations"].append({"patientKey": key, "name": drive_name, "id": file_id})
+        result["files"][drive_name] = {"bytes": src.stat().st_size}
+        uploaded += 1
     result["ok"] = uploaded > 0
     result["uploaded"] = uploaded
     return result
@@ -393,21 +416,295 @@ def upload_root_bytes(name: str, content: bytes) -> Dict[str, Any]:
 
 
 def write_drive_connected_marker(*, email: str = "", folder_name: str = "") -> Dict[str, Any]:
-    payload = {
+    """Do not put marker JSON in the clinic folder. Patient folders stay PDF + videos only."""
+    return {
         "ok": True,
+        "skipped": True,
+        "reason": "patient_folders_only",
         "email": email,
         "folderName": folder_name,
         "folderId": clinic_folder_id(),
-        "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
-        "layout": {
-            "patients": "team_patients/<id_name>/data/01_demographics.json … 08_kinematics.json",
-            "videos": "team_patients/<id_name>/videos/",
-        },
     }
-    return upload_root_bytes(
-        "_NEUROLAB_DRIVE_OK.json",
-        json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
+
+
+def _list_direct_children(service, folder_id: str) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    page = None
+    scanned = 0
+    while scanned < 800:
+        res = service.files().list(
+            q=f"'{folder_id}' in parents and trashed=false",
+            spaces="drive",
+            pageSize=100,
+            pageToken=page,
+            fields="nextPageToken, files(id, name, mimeType)",
+            **_list_flags(),
+        ).execute()
+        batch = res.get("files") or []
+        scanned += len(batch)
+        items.extend(batch)
+        page = res.get("nextPageToken")
+        if not page:
+            break
+    return items
+
+
+def trash_clinic_folder_contents() -> Dict[str, Any]:
+    """Move every child of NeuroLab_Backups to Drive trash so the folder can be rebuilt."""
+    out: Dict[str, Any] = {"ok": False, "trashed": [], "errors": []}
+    if not drive_configured():
+        out["reason"] = "drive_unset"
+        return out
+    service, folder_id = _build_service()
+    parent_id = folder_id or clinic_folder_id()
+    if service is None or not parent_id:
+        out["reason"] = "drive_init_failed"
+        return out
+    children = _list_direct_children(service, parent_id)
+    for item in children:
+        file_id = item.get("id") or ""
+        name = item.get("name") or ""
+        if not file_id:
+            continue
+        try:
+            service.files().update(
+                fileId=file_id,
+                body={"trashed": True},
+                **_write_flags(),
+            ).execute()
+            out["trashed"].append({"id": file_id, "name": name})
+        except Exception as exc:
+            out["errors"].append({"id": file_id, "name": name, "error": str(exc)[:200]})
+    out["ok"] = not out["errors"]
+    out["count"] = len(out["trashed"])
+    return out
+
+
+def _patient_key_from_parts(parts: Tuple[str, ...]) -> str:
+    names = [part for part in parts if part]
+    if names and (
+        names[0] == TEAM_ROOT_NAME
+        or (len(names[0]) >= 2 and names[0][0] == "u" and names[0][1:].isdigit())
+    ):
+        names = names[1:]
+    if names and names[0] in ("data", "videos", "reports"):
+        names = names[1:]
+    if not names:
+        return ""
+    return _sanitize(names[0])[:120]
+
+
+def _walk_files(
+    service, folder_id: str, parts: Tuple[str, ...] = (), depth: int = 0
+) -> List[Dict[str, Any]]:
+    found: List[Dict[str, Any]] = []
+    if not folder_id or depth > 8:
+        return found
+    for item in _list_direct_children(service, folder_id):
+        name = item.get("name") or ""
+        mime = item.get("mimeType") or ""
+        file_id = item.get("id") or ""
+        if mime == FOLDER_MIME:
+            found.extend(_walk_files(service, file_id, parts + (name,), depth + 1))
+            continue
+        found.append({"id": file_id, "name": name, "parent": folder_id, "parts": parts})
+    return found
+
+
+def _download_bytes(service, file_id: str) -> bytes:
+    return service.files().get_media(fileId=file_id).execute() or b""
+
+
+def _trash_file(service, file_id: str) -> None:
+    if not file_id:
+        return
+    service.files().update(fileId=file_id, body={"trashed": True}, **_write_flags()).execute()
+
+
+def _move_file(service, file_id: str, old_parent: str, new_parent: str, new_name: str) -> str:
+    if not file_id or not new_parent:
+        return ""
+    safe = new_name.replace("'", "\\'")
+    existing = (
+        service.files()
+        .list(
+            q=f"'{new_parent}' in parents and name='{safe}' and trashed=false",
+            spaces="drive",
+            fields="files(id, name)",
+            **_list_flags(),
+        )
+        .execute()
+        .get("files")
+        or []
     )
+    if existing and existing[0]["id"] != file_id:
+        _trash_file(service, file_id)
+        return existing[0]["id"]
+    body = {"name": new_name} if new_name else {}
+    kwargs = dict(_write_flags())
+    if old_parent and old_parent != new_parent:
+        kwargs["addParents"] = new_parent
+        kwargs["removeParents"] = old_parent
+    service.files().update(fileId=file_id, body=body, **kwargs).execute()
+    return file_id
+
+
+def _section_json_names() -> set[str]:
+    from patient_drive_archive import PROGRAM_SECTIONS
+
+    names = {"patient.json"}
+    for index, section in enumerate(PROGRAM_SECTIONS, 1):
+        names.add(f"{index:02d}_{section}.json")
+    return names
+
+
+def _assemble_patient_record(json_files: Dict[str, bytes]) -> Optional[Dict[str, Any]]:
+    from patient_drive_archive import PROGRAM_SECTIONS, parse_patients_payload
+
+    raw = json_files.get("patient.json")
+    if raw:
+        try:
+            parsed = json.loads(raw.decode("utf-8"))
+            if isinstance(parsed, dict) and (
+                parsed.get("demographics") or parsed.get("_id") or parsed.get("patientKey")
+            ):
+                return parsed
+            patients = parse_patients_payload(parsed)
+            if patients:
+                return patients[0]
+        except Exception:
+            pass
+    rec: Dict[str, Any] = {}
+    for index, section in enumerate(PROGRAM_SECTIONS, 1):
+        blob = json_files.get(f"{index:02d}_{section}.json")
+        if not blob:
+            continue
+        try:
+            rec[section] = json.loads(blob.decode("utf-8"))
+        except Exception:
+            rec[section] = {}
+    return rec or None
+
+
+def _canonical_patient_key(keys: List[str]) -> str:
+    return sorted(keys, key=lambda key: (key.count("_"), len(key)), reverse=True)[0]
+
+
+def reorganize_clinic_folder(*, service=None, folder_id: str = "") -> Dict[str, Any]:
+    """Rebuild NeuroLab_Backups as one folder per patient: PDF + validation mp4s only."""
+    out: Dict[str, Any] = {
+        "ok": False,
+        "patients": [],
+        "trashed": [],
+        "moved": [],
+        "pdfs": 0,
+        "videos": 0,
+    }
+    if service is None:
+        if not drive_configured():
+            out["reason"] = "drive_unset"
+            return out
+        service, folder_id = _build_service()
+    parent_id = folder_id or clinic_folder_id()
+    if service is None or not parent_id:
+        out["reason"] = "drive_init_failed"
+        return out
+
+    keep_json = _section_json_names()
+    grouped: Dict[str, Dict[str, Any]] = {}
+    for item in _walk_files(service, parent_id):
+        key = _patient_key_from_parts(tuple(item.get("parts") or ()))
+        if not key:
+            continue
+        bucket = grouped.setdefault(key, {"json": {}, "videos": [], "pdfs": []})
+        name = item.get("name") or ""
+        lower = name.lower()
+        if lower in {n.lower() for n in keep_json} or name in keep_json:
+            try:
+                bucket["json"][name] = _download_bytes(service, item["id"])
+            except Exception as exc:
+                print(f"Drive JSON download skipped {name}: {exc}", flush=True)
+            continue
+        mapped = clinic_drive_filename(name)
+        if mapped and mapped.endswith(".mp4"):
+            bucket["videos"].append({**item, "driveName": mapped})
+        elif mapped and mapped.endswith(".pdf"):
+            bucket["pdfs"].append({**item, "driveName": mapped})
+
+    by_head: Dict[str, List[str]] = {}
+    for key in grouped:
+        by_head.setdefault(key.split("_", 1)[0], []).append(key)
+    alias_to_canon = {
+        key: _canonical_patient_key(keys) for keys in by_head.values() for key in keys
+    }
+
+    merged: Dict[str, Dict[str, Any]] = {}
+    for key, bucket in grouped.items():
+        canon = alias_to_canon.get(key) or key
+        dest = merged.setdefault(canon, {"json": {}, "videos": [], "pdfs": []})
+        dest["json"].update(bucket["json"])
+        dest["videos"].extend(bucket["videos"])
+        dest["pdfs"].extend(bucket["pdfs"])
+
+    keep_folder_ids: set[str] = set()
+    from patient_drive_archive import patient_drive_key
+    from patient_pdf import build_patient_pdf, patient_pdf_filename
+
+    for canon, bucket in merged.items():
+        patient = _assemble_patient_record(bucket["json"])
+        folder_name = patient_drive_key(patient) if patient else canon
+        folder_name = _sanitize(folder_name)[:120] or canon
+        dest_id = _find_or_create_folder(service, parent_id, folder_name)
+        keep_folder_ids.add(dest_id)
+        rec: Dict[str, Any] = {"patientKey": folder_name, "files": []}
+        if patient:
+            pdf_name = patient_pdf_filename(patient)
+            pdf_bytes = build_patient_pdf(patient)
+            file_id = _upsert_bytes(service, dest_id, pdf_name, pdf_bytes, "application/pdf")
+            rec["files"].append({"name": pdf_name, "id": file_id})
+            out["pdfs"] += 1
+        seen_videos = set()
+        for video in bucket["videos"]:
+            drive_name = video.get("driveName") or ""
+            if not drive_name or drive_name in seen_videos:
+                if drive_name in seen_videos and video.get("id"):
+                    _trash_file(service, video["id"])
+                    out["trashed"].append(video["id"])
+                continue
+            seen_videos.add(drive_name)
+            moved = _move_file(
+                service,
+                video.get("id") or "",
+                video.get("parent") or "",
+                dest_id,
+                drive_name,
+            )
+            rec["files"].append({"name": drive_name, "id": moved})
+            out["moved"].append(drive_name)
+            out["videos"] += 1
+        out["patients"].append(rec)
+
+    for item in _list_direct_children(service, parent_id):
+        file_id = item.get("id") or ""
+        mime = item.get("mimeType") or ""
+        if mime == FOLDER_MIME and file_id in keep_folder_ids:
+            for child in _list_direct_children(service, file_id):
+                child_name = (child.get("name") or "").lower()
+                child_mime = child.get("mimeType") or ""
+                keep = child_mime != FOLDER_MIME and (
+                    child_name.endswith(".pdf") or child_name.endswith("_validation.mp4")
+                )
+                if not keep and child.get("id"):
+                    _trash_file(service, child["id"])
+                    out["trashed"].append(child["id"])
+            continue
+        if file_id:
+            _trash_file(service, file_id)
+            out["trashed"].append(file_id)
+
+    out["ok"] = True
+    out["patientCount"] = len(out["patients"])
+    return out
 
 
 def _sa_list_service():
@@ -450,8 +747,6 @@ def _count_files(service, folder_id: str, *, depth: int = 0) -> Tuple[int, int, 
             name = item.get("name") or ""
             lower = name.lower()
             if mime == FOLDER_MIME:
-                if lower == "reports":
-                    continue
                 v, j, f, k = _count_files(service, item.get("id") or "", depth=depth + 1)
                 videos += v
                 jsons += j
@@ -471,15 +766,6 @@ def _count_files(service, folder_id: str, *, depth: int = 0) -> Tuple[int, int, 
     return videos, jsons, files, kinds
 
 
-_STRUCTURAL_ROOT = {
-    "team_patients",
-    "u1",
-    "_system",
-    "_NEUROLAB_DRIVE_OK.json",
-    "NEUROLAB_VIDEOS_HERE.txt",
-}
-
-
 def list_clinic_folder() -> Dict[str, Any]:
     """Read-only inventory. Uses OAuth when linked, otherwise SA list-only."""
     from drive_oauth import oauth_ready
@@ -489,13 +775,16 @@ def list_clinic_folder() -> Dict[str, Any]:
         "folderId": clinic_folder_id(),
         "folderName": None,
         "videoCount": 0,
+        "pdfCount": 0,
         "jsonCount": 0,
         "fileCount": 0,
+        "patientFolders": [],
         "rootChildren": [],
         "empty": True,
         "oauthReady": bool(oauth_ready()),
         "fileKinds": {},
         "error": None,
+        "layout": "<patientId_name>/<patientId_name>.pdf + <phase>_validation.mp4",
     }
     service = None
     folder_id = clinic_folder_id()
@@ -514,23 +803,24 @@ def list_clinic_folder() -> Dict[str, Any]:
         ).execute()
         out["folderName"] = meta.get("name")
         out["folderId"] = meta.get("id") or folder_id
-        res = service.files().list(
-            q=f"'{folder_id}' in parents and trashed=false",
-            spaces="drive",
-            pageSize=100,
-            fields="files(id, name, mimeType)",
-            **_list_flags(),
-        ).execute()
+        children = _list_direct_children(service, folder_id)
         names = []
-        for item in res.get("files") or []:
+        patients = []
+        for item in children:
             name = item.get("name") or ""
-            if name in _STRUCTURAL_ROOT or name.startswith("_"):
-                names.append(name)
+            mime = item.get("mimeType") or ""
+            names.append(name)
+            if mime == FOLDER_MIME:
+                patients.append(name)
         out["rootChildren"] = names
+        out["patientFolders"] = patients
         videos, jsons, files, kinds = _count_files(service, folder_id)
         out["videoCount"] = videos
         out["jsonCount"] = jsons
         out["fileCount"] = files
+        out["pdfCount"] = sum(
+            count for name, count in kinds.items() if str(name).lower().endswith(".pdf")
+        )
         out["fileKinds"] = kinds
         out["empty"] = files <= 0
         out["ok"] = True

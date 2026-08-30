@@ -43,14 +43,15 @@ class PatientDriveArchiveTests(unittest.TestCase):
         self.assertEqual(rec["ipaq"], {})
         self.assertNotIn("extra", rec)
 
-    def test_section_files_are_numbered_like_the_app(self) -> None:
+    def test_section_files_are_a_single_pdf(self) -> None:
         files = files_for_patient({"demographics": {"participantId": "101", "name": "Ahmet"}})
-        names = [name for name, _content, sub in files]
-        self.assertIn("patient.json", names)
-        self.assertIn("01_demographics.json", names)
-        self.assertIn("08_kinematics.json", names)
-        self.assertEqual(names[-1], "08_kinematics.json")
-        self.assertTrue(all(sub == "data" for _n, _c, sub in files))
+        self.assertEqual(len(files), 1)
+        name, content, sub = files[0]
+        self.assertEqual(name, "101_Ahmet.pdf")
+        self.assertTrue(content.startswith(b"%PDF"))
+        self.assertEqual(sub, "")
+        self.assertNotIn("patient.json", name)
+        self.assertNotIn("01_demographics.json", name)
 
     def test_parses_localstorage_dump(self) -> None:
         blob = {

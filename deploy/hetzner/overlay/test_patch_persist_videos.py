@@ -73,6 +73,7 @@ class PersistPatchIdempotentTests(unittest.TestCase):
                 "backfill_drive.py",
                 "validation_cache.py",
                 "patient_drive_archive.py",
+                "patient_pdf.py",
             ):
                 self.assertTrue((root / name).is_file(), name)
             self.assertTrue((overlay / "drive_oauth.py").is_file())

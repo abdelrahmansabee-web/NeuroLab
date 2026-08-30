@@ -70,13 +70,22 @@ def backfill_data_dir(data_dir: Path) -> Dict[str, Any]:
     sessions = collect_local_sessions(data_dir)
     uploaded = []
     for key, phase, files in sessions:
+        unified = files.get("unified_video")
+        if unified is None:
+            uploaded.append(
+                {
+                    "patientKey": key,
+                    "phase": phase,
+                    "skipped": True,
+                    "reason": "no_validation_video",
+                }
+            )
+            continue
         saved = persist_phase_artifacts(
             Path(data_dir),
             key,
             phase,
-            original_video=files.get("original_video"),
-            overlay_json=files.get("overlay_json"),
-            unified_video=files.get("unified_video"),
+            unified_video=unified,
             library_name=f"{phase}_{key}_backfill",
         )
         uploaded.append(
@@ -95,17 +104,28 @@ def backfill_data_dir(data_dir: Path) -> Dict[str, Any]:
         records = archive_from_data_dir(Path(data_dir))
     except Exception as exc:
         records = {"ok": False, "error": str(exc)}
-    originals: Dict[str, Any] = {}
-    try:
-        from drive_persist import promote_original_videos_on_drive
-
-        originals = promote_original_videos_on_drive()
-    except Exception as exc:
-        originals = {"ok": False, "error": str(exc)}
     return {
         "ok": True,
         "count": len(uploaded),
         "sessions": uploaded,
         "records": records,
-        "originals": originals,
+    }
+
+
+def rebuild_clinic_folder(data_dir: Path) -> Dict[str, Any]:
+    """Rebuild Drive as one patient folder with PDF + validation videos only."""
+    from drive_persist import list_clinic_folder, reorganize_clinic_folder
+
+    reorganized = reorganize_clinic_folder()
+    filled = backfill_data_dir(Path(data_dir))
+    inventory: Dict[str, Any] = {}
+    try:
+        inventory = list_clinic_folder()
+    except Exception as exc:
+        inventory = {"ok": False, "error": str(exc)}
+    return {
+        "ok": bool(reorganized.get("ok") or filled.get("ok")),
+        "reorganized": reorganized,
+        "backfill": filled,
+        "inventory": inventory,
     }

@@ -206,8 +206,6 @@ SNAPSHOT_NEW = '''            try:
                 archive_patients([p], user_id=user_id)
             except Exception as arch_exc:
                 print("Patient program archive:", arch_exc, flush=True)
-                snap = json.dumps(p, ensure_ascii=False, indent=2).encode("utf-8")
-                _drive_upsert_bytes(service, "patient.json", snap, "application/json", parent_id=pf)
 '''
 
 EMPTY_FOLDERS_OLD = '''            pf = _drive_patient_folder(service, user_id, key)
@@ -223,7 +221,7 @@ EMPTY_FOLDERS_OLD = '''            pf = _drive_patient_folder(service, user_id, 
                 _drive_upsert_bytes(service, "patient.json", snap, "application/json", parent_id=pf)
 '''
 
-EMPTY_FOLDERS_NEW = '''            try:
+EMPTY_FOLDERS_ALREADY = '''            try:
                 from patient_drive_archive import archive_patients
 
                 archive_patients([p], user_id=user_id)
@@ -233,6 +231,16 @@ EMPTY_FOLDERS_NEW = '''            try:
             pf = _drive_patient_folder(service, user_id, key)
             snap = json.dumps(p, ensure_ascii=False, indent=2).encode("utf-8")
             _drive_upsert_bytes(service, "patient.json", snap, "application/json", parent_id=pf)
+'''
+
+EMPTY_FOLDERS_NEW = '''            try:
+                from patient_drive_archive import archive_patients
+
+                archive_patients([p], user_id=user_id)
+                continue
+            except Exception as arch_exc:
+                print("Patient program archive:", arch_exc, flush=True)
+            continue
 '''
 
 BACKUP_FILE_OLD = '''        drive_name = name
@@ -362,6 +370,9 @@ def patch_drive_oauth(root: Path) -> int:
     )
     if EMPTY_FOLDERS_NEW in text:
         print("already patched: auth skip empty Drive folders")
+    elif EMPTY_FOLDERS_ALREADY in text:
+        text = text.replace(EMPTY_FOLDERS_ALREADY, EMPTY_FOLDERS_NEW, 1)
+        print("patched auth skip JSON fallback folders")
     elif EMPTY_FOLDERS_OLD in text:
         text = text.replace(EMPTY_FOLDERS_OLD, EMPTY_FOLDERS_NEW, 1)
         print("patched auth skip empty Drive folders")
