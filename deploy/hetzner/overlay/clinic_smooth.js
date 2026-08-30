@@ -8,7 +8,12 @@
     "backdrop-filter:none!important;-webkit-backdrop-filter:none!important}" +
     "html.nl-clinic-smooth .fixed.inset-0.z-0>.absolute.inset-0:first-child," +
     'html.nl-clinic-smooth [style*="blur(24px)"]{' +
-    'filter:none!important;-webkit-filter:none!important;transform:none!important;background-image:url("/bg_soft.jpg")!important}';
+    'filter:none!important;-webkit-filter:none!important;transform:none!important;background-image:url("/bg_soft.jpg")!important}' +
+    "html.nl-clinic-smooth .sidebar-shell,html.nl-clinic-smooth .glass-float," +
+    "html.nl-clinic-smooth .content-shell,html.nl-clinic-smooth .section-header," +
+    "html.nl-clinic-smooth .app-topbar-glass{background-color:rgba(18,26,36,0.72)!important}" +
+    "html.nl-clinic-smooth .gselect-trigger,html.nl-clinic-smooth .gselect-menu{" +
+    "background-color:rgba(28,34,46,0.90)!important}";
 
   var GLASS =
     '.sidebar-shell,.glass-float,.content-shell,.section-header,.gselect-trigger,.gselect-menu,.app-topbar-glass,[class*="backdrop-blur"]';

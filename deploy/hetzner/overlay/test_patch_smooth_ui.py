@@ -25,12 +25,13 @@ class PatchSmoothUiTests(unittest.TestCase):
             css = (build / "clinic_smooth.css").read_text(encoding="utf-8")
             self.assertIn("backdrop-filter: none", css)
             self.assertNotIn("rgba(16, 22, 32, 0.94)", css)
+            self.assertIn("rgba(18, 26, 36, 0.72)", css)
             self.assertIn("bg_soft.jpg", css)
             html = (build / "index.html").read_text(encoding="utf-8")
-            self.assertIn("clinic_smooth.css?v=3", html)
-            self.assertIn("clinic_smooth.js?v=3", html)
+            self.assertIn("clinic_smooth.css?v=4", html)
+            self.assertIn("clinic_smooth.js?v=4", html)
             self.assertIn("nl-clinic-smooth", html)
-            self.assertIn("main.0626212c.js?v=3", html)
+            self.assertIn("main.0626212c.js?v=4", html)
             self.assertTrue((build / "bg_soft.jpg").is_file())
             self.assertTrue((build / "clinic_smooth.js").is_file())
 
@@ -61,9 +62,9 @@ class PatchSmoothUiTests(unittest.TestCase):
             )
             self.assertEqual(patch_smooth_ui(root), 0)
             html = (build / "index.html").read_text(encoding="utf-8")
-            self.assertIn("clinic_smooth.css?v=3", html)
-            self.assertIn("clinic_smooth.js?v=3", html)
-            self.assertNotIn("?v=2", html)
+            self.assertIn("clinic_smooth.css?v=4", html)
+            self.assertIn("clinic_smooth.js?v=4", html)
+            self.assertNotIn("?v=3", html)
 
     def test_strips_live_blur_from_bundle(self) -> None:
         sample = (
