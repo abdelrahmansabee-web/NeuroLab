@@ -62,7 +62,7 @@ class IpadTouchTests(unittest.TestCase):
         )
         out = wire_index_html(html)
         self.assertIn(f"{CSS_NAME}?v=1", out)
-        self.assertIn("main.0626212c.js?touch=1", out)
+        self.assertIn("main.0626212c.js?touch=2", out)
         self.assertIn("pwa_ipad_sync.js?v=2", out)
         self.assertNotIn("clinic_smooth", out)
         self.assertNotIn("clinic_ipad_paint", out)

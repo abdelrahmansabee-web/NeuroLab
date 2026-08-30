@@ -67,7 +67,7 @@ def wire_index_html(text: str) -> str:
             text = LINK + text
     text = re.sub(
         r"main\.0626212c\.js(?:\?[^\"']*)?",
-        "main.0626212c.js?touch=1",
+        "main.0626212c.js?touch=2",
         text,
     )
     text = re.sub(
