@@ -17,6 +17,8 @@ JS_RESTORE_OLD = (
     "if(!p&&!f&&!g)return h&&Ee(e,h),h;"
 )
 JS_RESTORE_NEW = "p=!1!==c.overlay,f=!1!==c.original,g=!1!==c.unified;"
+JS_KEEP_DRIVE_OLD = "return Y_(b,d)?(await K_(b),Ee(e,b),b):h"
+JS_KEEP_DRIVE_NEW = "return v||Y_(b,d)?(await K_(b),Ee(e,b),b):h"
 
 MAIN_FORM_OLD = '''    patient_height_cm: str = Form("auto"),
 
@@ -117,11 +119,20 @@ def main() -> int:
     overlay = Path(__file__).resolve().parent
     shutil.copy2(overlay / "persist_validation.py", root / "persist_validation.py")
     print("copied persist_validation.py")
+    drive_src = overlay / "drive_persist.py"
+    if drive_src.is_file():
+        shutil.copy2(drive_src, root / "drive_persist.py")
+        print("copied drive_persist.py")
+    fallback_src = overlay / "local_drive_fallback.py"
+    if fallback_src.is_file():
+        shutil.copy2(fallback_src, root / "local_drive_fallback.py")
+        print("copied local_drive_fallback.py")
 
     js = root / "frontend" / "build" / "static" / "js" / "main.0626212c.js"
     if js.is_file():
         _patch(js, JS_OLD, JS_NEW, "frontend patientKey on /analyze")
         _patch(js, JS_RESTORE_OLD, JS_RESTORE_NEW, "restore validation from server disk first")
+        _patch(js, JS_KEEP_DRIVE_OLD, JS_KEEP_DRIVE_NEW, "keep Drive videos even if kinematics csv missing")
         idx = root / "frontend" / "build" / "index.html"
         if idx.is_file():
             html = idx.read_text(encoding="utf-8")

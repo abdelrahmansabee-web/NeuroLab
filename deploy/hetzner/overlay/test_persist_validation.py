@@ -39,6 +39,7 @@ class PersistValidationTests(unittest.TestCase):
             rec = json.loads(session.read_text(encoding="utf-8"))
             self.assertTrue(rec["never_delete"])
             self.assertIn("pre", rec["phases"])
+            self.assertTrue(saved.get("drive", {}).get("skipped"))
 
     def test_same_path_does_not_raise(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

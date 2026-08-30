@@ -94,4 +94,19 @@ def persist_phase_artifacts(
     )
     session_path.write_text(json.dumps(session, ensure_ascii=False, indent=2), encoding="utf-8")
     saved["session"] = str(session_path)
+
+    drive_files = []
+    for _src, name, sub in mapping:
+        dest = artifact_path(data_dir, 0, key, name, sub, "team", _sanitize)
+        if dest.is_file() and dest.stat().st_size > 0:
+            drive_files.append((name, dest, sub))
+    if session_path.is_file():
+        drive_files.append(("session.json", session_path, "data"))
+    try:
+        from drive_persist import upload_named_files
+
+        saved["drive"] = upload_named_files(key, drive_files)
+    except Exception as exc:
+        print(f"Drive validation upload warning: {exc}", flush=True)
+        saved["drive_error"] = str(exc)
     return saved
