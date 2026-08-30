@@ -7,7 +7,7 @@ import shutil
 import sys
 from pathlib import Path
 
-CSS_VER = "2"
+CSS_VER = "3"
 CSS_NAME = "clinic_ipad_paint.css"
 LINK = f'<link rel="stylesheet" href="/{CSS_NAME}?v={CSS_VER}"/>'
 BOOT = (
@@ -104,7 +104,7 @@ def wire_index_html(text: str) -> str:
                 text = BOOT + text
     text = re.sub(
         r"main\.0626212c\.js(?:\?[^\"']*)?",
-        "main.0626212c.js?paint=2",
+        "main.0626212c.js?paint=3",
         text,
     )
     return text
@@ -130,8 +130,12 @@ def copy_css(overlay: Path, root: Path) -> None:
         raise SystemExit(f"missing {src}")
     css = src.read_text(encoding="utf-8")
     rules = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
-    if re.search(r"background(?:-color)?\s*:", rules):
-        raise SystemExit("iPad paint CSS must not change fills")
+    if "rgba(24, 34, 48, 0.50)" in rules or "rgba(24, 34, 48, 0.44)" in rules:
+        raise SystemExit("refusing rejected clinic_smooth panel fills")
+    if re.search(r"background(?:-color)?\s*:\s*(#000\b|rgb\(\s*0\s*,\s*0\s*,\s*0)", rules):
+        raise SystemExit("iPad frost must not fill panels solid black")
+    if "background-color: rgba(16, 22, 32" not in rules:
+        raise SystemExit("expected iPad frost fills to replace live blur")
     dests = [
         root / CSS_NAME,
         root / "frontend" / "build" / CSS_NAME,

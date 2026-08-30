@@ -32,7 +32,7 @@ class IpadPaintTests(unittest.TestCase):
         self.assertIn(f"{CSS_NAME}?v={CSS_VER}", out)
         self.assertIn("nl-ipad-paint", out)
         self.assertIn("MutationObserver(a)", out)
-        self.assertIn("main.0626212c.js?paint=2", out)
+        self.assertIn("main.0626212c.js?paint=3", out)
         self.assertNotIn("clinic_smooth", out)
         self.assertEqual(out.count(CSS_NAME), 1)
 
@@ -51,15 +51,19 @@ class IpadPaintTests(unittest.TestCase):
                 '<html><head><link rel="stylesheet" href="/clinic_smooth.css?v=6"/></head></html>'
             )
 
-    def test_css_does_not_change_fills(self) -> None:
+    def test_css_frost_fills_not_solid_black(self) -> None:
         import re
 
         css = Path(__file__).resolve().parent.joinpath(CSS_NAME).read_text(encoding="utf-8")
         rules = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
-        self.assertIsNone(re.search(r"background(?:-color)?\s*:", rules))
         self.assertIn("backdrop-filter: none", css)
         self.assertIn("html.nl-ipad-paint.nl-touch", css)
-        self.assertNotRegex(rules, r"rgba\(")
+        self.assertIn("background-color: rgba(16, 22, 32, 0.38)", rules)
+        self.assertIn("background-color: rgba(16, 22, 32, 0.30)", rules)
+        self.assertIn("background-color: rgba(18, 24, 36, 0.26)", rules)
+        self.assertNotIn("rgba(24, 34, 48, 0.50)", rules)
+        self.assertNotIn("rgba(24, 34, 48, 0.44)", rules)
+        self.assertIsNone(re.search(r"background(?:-color)?\s*:\s*(#000\b|rgb\(\s*0\s*,\s*0\s*,\s*0)", rules))
 
     def test_kills_nl_touch_blur_keeps_desktop_glass(self) -> None:
         out, hits = patch_touch_blur_js(SAMPLE_TOUCH_JS)
