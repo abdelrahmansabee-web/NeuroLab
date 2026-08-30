@@ -12,14 +12,14 @@ BOOT_RE = re.compile(
 )
 CSS_RE = re.compile(r'<link rel="stylesheet" href="/clinic_smooth\.css\?v=\d+"/>')
 JS_RE = re.compile(r'<script src="/clinic_smooth\.js\?v=\d+"></script>')
-MAIN_VER_RE = re.compile(r'(src="/static/js/main\.[a-zA-Z0-9]+\.js)\?v=\d+"')
+MAIN_SRC_RE = re.compile(r'(src="/static/js/main\.[a-zA-Z0-9]+\.js)(?:\?[^"]*)?"')
 
 
 def restore_index_html(text: str) -> str:
     text = BOOT_RE.sub("", text)
     text = CSS_RE.sub("", text)
     text = JS_RE.sub("", text)
-    text = MAIN_VER_RE.sub(r'\1"', text)
+    text = MAIN_SRC_RE.sub(r'\1?orig=1"', text, count=1)
     return text
 
 

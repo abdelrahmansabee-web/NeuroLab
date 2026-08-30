@@ -22,7 +22,7 @@ class RestoreOriginalGlassTests(unittest.TestCase):
         self.assertNotIn("nl-clinic-smooth", out)
         self.assertNotIn("clinic_smooth.css", out)
         self.assertNotIn("clinic_smooth.js", out)
-        self.assertIn('src="/static/js/main.0626212c.js"', out)
+        self.assertIn('src="/static/js/main.0626212c.js?orig=1"', out)
         self.assertNotIn("main.0626212c.js?v=", out)
 
     def test_restores_js_from_backup(self) -> None:
