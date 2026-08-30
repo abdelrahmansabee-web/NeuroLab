@@ -48,7 +48,8 @@ def persist_phase_artifacts(
             continue
         dest = artifact_path(data_dir, 0, key, name, sub, "team", _sanitize)
         dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src_path, dest)
+        if dest.resolve() != src_path.resolve():
+            shutil.copy2(src_path, dest)
         saved["files"][name] = dest.stat().st_size
 
     lib_stem = _sanitize(library_name or f"{phase_part}_{key}") or phase_part
@@ -60,7 +61,9 @@ def persist_phase_artifacts(
         src_path = Path(src)
         if not src_path.is_file():
             continue
-        shutil.copy2(src_path, lib / name)
+        dest_lib = lib / name
+        if dest_lib.resolve() != src_path.resolve():
+            shutil.copy2(src_path, dest_lib)
     (lib / "meta.json").write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
 
     session_path = artifacts_root(data_dir) / "team" / key / "session.json"

@@ -40,6 +40,22 @@ class PersistValidationTests(unittest.TestCase):
             self.assertTrue(rec["never_delete"])
             self.assertIn("pre", rec["phases"])
 
+    def test_same_path_does_not_raise(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            data_dir = Path(raw)
+            dest_dir = data_dir / "local_artifacts" / "team" / "101" / "videos"
+            dest_dir.mkdir(parents=True)
+            video = dest_dir / "pre_validation_original.mp4"
+            video.write_bytes(b"same-file")
+            overlay = data_dir / "ov.json"
+            overlay.write_text("{}", encoding="utf-8")
+            saved = persist_phase_artifacts(
+                data_dir, "101", "pre", original_video=video, overlay_json=overlay
+            )
+            self.assertIn("pre_validation_original.mp4", saved["files"])
+            session = data_dir / "local_artifacts" / "team" / "101" / "session.json"
+            self.assertTrue(session.is_file())
+
 
 if __name__ == "__main__":
     unittest.main()
