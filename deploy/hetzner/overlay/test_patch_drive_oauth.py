@@ -72,7 +72,7 @@ class PatchDriveOauthTests(unittest.TestCase):
             )
             self.assertEqual(patch_drive_oauth(root), 0)
             text = auth.read_text(encoding="utf-8")
-            self.assertIn("original_videos_only", text)
+            self.assertIn("validation_videos_only", text)
             self.assertIn("clinic_drive_filename", text)
 
 

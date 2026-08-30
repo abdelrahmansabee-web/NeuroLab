@@ -96,20 +96,20 @@ def persist_phase_artifacts(
     saved["session"] = str(session_path)
 
     drive_files = []
-    orig_name = f"{phase_part}_validation_original.mp4"
-    orig_dest = artifact_path(data_dir, 0, key, orig_name, "videos", "team", _sanitize)
-    if orig_dest.is_file() and orig_dest.stat().st_size > 0:
-        drive_files.append((f"{phase_part}_original.mp4", orig_dest, "videos"))
+    uni_name = f"{phase_part}_validation_unified.mp4"
+    uni_dest = artifact_path(data_dir, 0, key, uni_name, "videos", "team", _sanitize)
+    if uni_dest.is_file() and uni_dest.stat().st_size > 0:
+        drive_files.append((f"{phase_part}_validation.mp4", uni_dest, "videos"))
     try:
         from drive_persist import upload_named_files
 
         saved["drive"] = upload_named_files(key, drive_files) if drive_files else {
             "ok": False,
             "skipped": True,
-            "reason": "no_original_video",
+            "reason": "no_validation_video",
             "never_delete": True,
         }
     except Exception as exc:
-        print(f"Drive original-video upload warning: {exc}", flush=True)
+        print(f"Drive validation-video upload warning: {exc}", flush=True)
         saved["drive_error"] = str(exc)
     return saved

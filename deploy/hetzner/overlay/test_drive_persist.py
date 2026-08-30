@@ -33,8 +33,9 @@ class DrivePersistTests(unittest.TestCase):
                 folder_id="root",
             )
         self.assertTrue(out["ok"])
-        self.assertIn("pre_original.mp4", out["files"])
-        self.assertNotIn("pre_validation_unified.mp4", out["files"])
+        self.assertIn("pre_validation.mp4", out["files"])
+        self.assertNotIn("pre_validation_original.mp4", out["files"])
+        self.assertNotIn("pre_original.mp4", out["files"])
         self.assertNotIn("pre_validation_overlay.json", out["files"])
         self.assertTrue(out["ok"])
         self.assertEqual(out["patientKey"], "p_101")
@@ -45,12 +46,14 @@ class DrivePersistTests(unittest.TestCase):
     def test_sanitize(self) -> None:
         self.assertEqual(_sanitize("pre/../x"), "pre_.._x")
 
-    def test_drive_keeps_original_videos_only(self) -> None:
-        self.assertEqual(clinic_drive_filename("pre_validation_original.mp4"), "pre_original.mp4")
-        self.assertIsNone(clinic_drive_filename("pre_validation_unified.mp4"))
+    def test_drive_keeps_validation_videos_only(self) -> None:
+        self.assertEqual(clinic_drive_filename("pre_validation_unified.mp4"), "pre_validation.mp4")
+        self.assertEqual(clinic_drive_filename("clip_unified_validation.mp4"), "clip_validation.mp4")
+        self.assertIsNone(clinic_drive_filename("pre_validation_original.mp4"))
+        self.assertIsNone(clinic_drive_filename("pre_original.mp4"))
         self.assertIsNone(clinic_drive_filename("pre_validation_overlay.json"))
         self.assertEqual(clinic_drive_filename("01_demographics.json"), "01_demographics.json")
-        self.assertEqual(clinic_drive_filename("post_original.mp4"), "post_original.mp4")
+        self.assertEqual(clinic_drive_filename("baseline_validation.mp4"), "baseline_validation.mp4")
 
     def test_oauth_pending_does_not_use_service_account(self) -> None:
         env = {

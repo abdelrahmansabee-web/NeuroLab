@@ -254,7 +254,7 @@ BACKUP_FILE_NEW = '''        try:
             return {
                 "ok": True,
                 "skipped": True,
-                "reason": "original_videos_only",
+                "reason": "validation_videos_only",
                 "fileName": name,
             }
         drive_name = mapped
@@ -285,7 +285,7 @@ BACKUP_UPLOAD_NEW = '''    drive_name = _drive_sanitize_name(name)
         return {
             "ok": True,
             "skipped": True,
-            "reason": "original_videos_only",
+            "reason": "validation_videos_only",
             "fileName": drive_name,
         }
     drive_name = mapped
@@ -393,6 +393,9 @@ def patch_drive_oauth(root: Path) -> int:
         print("patched auth restore original fallback")
     else:
         print("WARN: auth restore-file pattern missing")
+    if "original_videos_only" in text:
+        text = text.replace("original_videos_only", "validation_videos_only")
+        print("patched auth skip reason to validation videos")
     if REGISTER_MARK not in text:
         text = text.rstrip() + REGISTER_SNIPPET
         print("patched auth oauth routes")

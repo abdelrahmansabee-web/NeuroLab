@@ -1,4 +1,4 @@
-"""Upload original clinic videos to Google Drive. Never deletes Drive files."""
+"""Upload clinic validation videos to Google Drive. Never deletes Drive files."""
 from __future__ import annotations
 
 import json
@@ -17,16 +17,24 @@ def _sanitize(name: str) -> str:
 
 
 def clinic_drive_filename(name: str) -> Optional[str]:
-    """Keep original clinic videos on Drive. Skip validation/unified overlays."""
+    """Keep the validation (overlay) mp4 on Drive. Skip camera originals."""
     raw = (name or "").strip()
     if not raw:
         return None
     lower = raw.lower()
-    if "validation_unified" in lower or "validation_overlay" in lower:
+    if lower.endswith((".mp4", ".mov", ".m4v", ".webm")):
+        if "validation_unified" in lower or "unified_validation" in lower:
+            stem = Path(raw).stem
+            stem = stem.replace("_validation_unified", "_validation").replace(
+                "_unified_validation", "_validation"
+            )
+            if not stem.endswith("_validation"):
+                stem = f"{stem}_validation"
+            return f"{stem}.mp4"
+        if lower.endswith("_validation.mp4"):
+            return raw
         return None
-    if lower.endswith("_validation_original.mp4"):
-        return raw[: -len("_validation_original.mp4")] + "_original.mp4"
-    if "validation" in lower and lower.endswith((".mp4", ".mov", ".m4v", ".webm")):
+    if "validation_overlay" in lower:
         return None
     return raw
 

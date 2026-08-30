@@ -19,6 +19,8 @@ JS_RESTORE_OLD = (
 JS_RESTORE_NEW = "p=!1!==c.overlay,f=!1!==c.original,g=!1!==c.unified;"
 JS_KEEP_DRIVE_OLD = "return Y_(b,d)?(await K_(b),Ee(e,b),b):h"
 JS_KEEP_DRIVE_NEW = "return v||Y_(b,d)?(await K_(b),Ee(e,b),b):h"
+JS_UV_OLD = 't.append("csv_filename",r.csv_filename),t.append("video_filename",r.video_filename)'
+JS_UV_NEW = 't.append("csv_filename",r.csv_filename),t.append("video_filename",r.video_filename),Ce&&t.append("patientKey",String(Ce)),t.append("phase",e)'
 
 MAIN_FORM_OLD = '''    patient_height_cm: str = Form("auto"),
 
@@ -109,6 +111,58 @@ PERSIST_NEW = '''    try:
 PERSIST_TRY = PERSIST_NEW.split('    _prog(95', 1)[0]
 PLAYBACK_STACK_RE = re.compile(r"(?:    playback_video = video_path\n){2,}")
 
+UV_SIG_OLD = '''def _run_uv_generation(job_id: str, csv_path: Path, video_path: Path, rotation: str):
+'''
+UV_SIG_NEW = '''def _run_uv_generation(job_id: str, csv_path: Path, video_path: Path, rotation: str, patient_key: str = "", phase: str = ""):
+'''
+UV_FORM_OLD = '''async def unified_validation(
+    csv_filename: str = Form(...),
+    video_filename: str = Form(...),
+    rotation: str = Form("auto"),
+):
+'''
+UV_FORM_NEW = '''async def unified_validation(
+    csv_filename: str = Form(...),
+    video_filename: str = Form(...),
+    rotation: str = Form("auto"),
+    patientKey: str = Form(""),
+    phase: str = Form(""),
+):
+'''
+UV_JOB_OLD = '''        loop.run_in_executor(None, _run_uv_generation, job_id, csv_path, video_path, rotation)
+'''
+UV_JOB_NEW = '''        loop.run_in_executor(
+            None,
+            _run_uv_generation,
+            job_id,
+            csv_path,
+            video_path,
+            rotation,
+            (patientKey or "").strip(),
+            (phase or "").strip(),
+        )
+'''
+UV_SAVE_OLD = '''        if uv_path and Path(uv_path).exists() and Path(uv_path).stat().st_size > 1000:
+            uv_jobs[job_id].update({
+                "status": "done",
+'''
+UV_SAVE_NEW = '''        if uv_path and Path(uv_path).exists() and Path(uv_path).stat().st_size > 1000:
+            try:
+                from persist_validation import persist_phase_artifacts
+
+                persist_phase_artifacts(
+                    DATA_DIR,
+                    patient_key or "",
+                    phase or "baseline",
+                    unified_video=Path(uv_path),
+                    library_name=Path(uv_path).stem,
+                )
+            except Exception as persist_exc:
+                print(f"Drive validation video persist: {persist_exc}", flush=True)
+            uv_jobs[job_id].update({
+                "status": "done",
+'''
+
 
 def collapse_stacked_runner_patches(text: str) -> str:
     """Undo restacked persist/playback replacements if the patch ran twice."""
@@ -165,17 +219,18 @@ def main() -> int:
         _patch(js, JS_OLD, JS_NEW, "frontend patientKey on /analyze")
         _patch(js, JS_RESTORE_OLD, JS_RESTORE_NEW, "restore validation from server disk first")
         _patch(js, JS_KEEP_DRIVE_OLD, JS_KEEP_DRIVE_NEW, "keep Drive videos even if kinematics csv missing")
+        _patch(js, JS_UV_OLD, JS_UV_NEW, "frontend patientKey on /unified-validation")
         idx = root / "frontend" / "build" / "index.html"
         if idx.is_file():
             html = idx.read_text(encoding="utf-8")
             updated = re.sub(
                 r"main\.0626212c\.js(?:\?[^\"']*)?",
-                "main.0626212c.js?srv=1",
+                "main.0626212c.js?srv=2",
                 html,
             )
             if updated != html:
                 idx.write_text(updated, encoding="utf-8")
-                print("cache-bust index.html main JS ?srv=1")
+                print("cache-bust index.html main JS ?srv=2")
     else:
         print("WARN: frontend bundle missing")
 
@@ -192,6 +247,10 @@ def main() -> int:
     _patch(runner, PIPELINE_SIG_OLD, PIPELINE_SIG_NEW, "pipeline signature")
     _patch(runner, PLAYBACK_OLD, PLAYBACK_NEW, "keep playback video")
     _patch(runner, PERSIST_OLD, PERSIST_NEW, "persist after overlay")
+    _patch(main_py, UV_SIG_OLD, UV_SIG_NEW, "uv worker patient key")
+    _patch(main_py, UV_FORM_OLD, UV_FORM_NEW, "uv form patientKey")
+    _patch(main_py, UV_JOB_OLD, UV_JOB_NEW, "uv job patient key")
+    _patch(main_py, UV_SAVE_OLD, UV_SAVE_NEW, "persist unified validation to Drive")
     stacked = runner.read_text(encoding="utf-8")
     collapsed = collapse_stacked_runner_patches(stacked)
     if collapsed != stacked:
