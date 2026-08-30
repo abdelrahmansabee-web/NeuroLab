@@ -52,13 +52,17 @@ def main() -> int:
     from patch_auth_drive import main as patch_drive
     from patch_persist_videos import main as patch_videos
     from patch_ipad_bg import main as patch_bg
+    from patch_ipad_paint import main as patch_paint
     drive_rc = patch_drive()
     if drive_rc != 0:
         return drive_rc
     videos_rc = patch_videos()
     if videos_rc != 0:
         return videos_rc
-    return patch_bg()
+    bg_rc = patch_bg()
+    if bg_rc != 0:
+        return bg_rc
+    return patch_paint()
 
 
 if __name__ == "__main__":

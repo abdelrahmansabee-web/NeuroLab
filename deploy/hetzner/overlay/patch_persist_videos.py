@@ -2,6 +2,7 @@
 """Save validation videos on VPS disk and send patientKey from the clinic UI."""
 from __future__ import annotations
 
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -83,9 +84,22 @@ PERSIST_NEW = '''    try:
 '''
 
 
+PERSIST_TRY = PERSIST_NEW.split('    _prog(95', 1)[0]
+PLAYBACK_STACK_RE = re.compile(r"(?:    playback_video = video_path\n){2,}")
+
+
+def collapse_stacked_runner_patches(text: str) -> str:
+    """Undo restacked persist/playback replacements if the patch ran twice."""
+    text = PLAYBACK_STACK_RE.sub("    playback_video = video_path\n", text)
+    doubled = PERSIST_TRY + PERSIST_TRY
+    while doubled in text:
+        text = text.replace(doubled, PERSIST_TRY)
+    return text
+
+
 def _patch(path: Path, old: str, new: str, label: str) -> None:
     text = path.read_text(encoding="utf-8")
-    if new in text and old not in text:
+    if new in text:
         print(f"already patched: {label}")
         return
     if old not in text:
@@ -110,7 +124,6 @@ def main() -> int:
         _patch(js, JS_RESTORE_OLD, JS_RESTORE_NEW, "restore validation from server disk first")
         idx = root / "frontend" / "build" / "index.html"
         if idx.is_file():
-            import re
             html = idx.read_text(encoding="utf-8")
             updated = re.sub(
                 r"main\.0626212c\.js(?:\?[^\"']*)?",
@@ -135,6 +148,11 @@ def main() -> int:
     _patch(runner, PIPELINE_SIG_OLD, PIPELINE_SIG_NEW, "pipeline signature")
     _patch(runner, PLAYBACK_OLD, PLAYBACK_NEW, "keep playback video")
     _patch(runner, PERSIST_OLD, PERSIST_NEW, "persist after overlay")
+    stacked = runner.read_text(encoding="utf-8")
+    collapsed = collapse_stacked_runner_patches(stacked)
+    if collapsed != stacked:
+        runner.write_text(collapsed, encoding="utf-8")
+        print("collapsed restacked persist/playback blocks")
     return 0
 
 

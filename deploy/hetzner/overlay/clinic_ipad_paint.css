@@ -1,0 +1,28 @@
+/* iPad/iPhone only. Keeps original glass colors/borders.
+   Live backdrop-filter on many panels is what makes Safari stutter.
+   Do not change background-color, opacity, or borders here. */
+
+html.nl-ipad-paint .sidebar-shell,
+html.nl-ipad-paint .glass-float,
+html.nl-ipad-paint .content-shell,
+html.nl-ipad-paint .section-header,
+html.nl-ipad-paint .gselect-trigger,
+html.nl-ipad-paint .gselect-menu,
+html.nl-ipad-paint .app-topbar-glass,
+html.nl-ipad-paint [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Old cached JS may still live-blur the full-screen photo. */
+html.nl-ipad-paint .fixed.inset-0.z-0 > .absolute.inset-0:first-child {
+  filter: none !important;
+  -webkit-filter: none !important;
+  transform: none !important;
+}
+
+html.nl-ipad-paint aside,
+html.nl-ipad-paint main,
+html.nl-ipad-paint .fixed.top-0 {
+  will-change: auto !important;
+}
