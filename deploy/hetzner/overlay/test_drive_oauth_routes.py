@@ -12,6 +12,7 @@ class DriveOauthRoutesTests(unittest.TestCase):
         self.assertIn("/auth/drive/connect-cookie", html)
         self.assertIn("/auth/drive/connect", html)
         self.assertIn("/auth/drive/callback", html)
+        self.assertIn("[hidden] { display: none !important; }", html)
 
     def test_route_decorators_in_source(self) -> None:
         src = Path(__file__).with_name("drive_oauth_routes.py").read_text(encoding="utf-8")
