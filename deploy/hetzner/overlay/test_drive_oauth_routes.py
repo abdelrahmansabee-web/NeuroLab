@@ -11,15 +11,16 @@ class DriveOauthRoutesTests(unittest.TestCase):
         self.assertIn("/auth/drive/oauth-status", html)
         self.assertIn("/auth/drive/connect-cookie", html)
         self.assertIn("/auth/drive/connect", html)
-        self.assertIn("/auth/drive/callback", html)
-        self.assertIn("[hidden] { display: none !important; }", html)
+        self.assertIn("/auth/drive/folder-status", html)
+        self.assertIn("الفولدر", html)
 
     def test_route_decorators_in_source(self) -> None:
         src = Path(__file__).with_name("drive_oauth_routes.py").read_text(encoding="utf-8")
         self.assertIn('@router.get("/drive/oauth-status")', src)
         self.assertIn('@router.post("/drive/connect-cookie")', src)
         self.assertIn('@router.get("/drive/connect")', src)
-        self.assertIn('@router.get("/drive/callback")', src)
+        self.assertIn('@router.get("/drive/folder-status")', src)
+        self.assertIn("write_drive_connected_marker", src)
 
 
 if __name__ == "__main__":

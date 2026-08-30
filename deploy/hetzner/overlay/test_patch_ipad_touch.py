@@ -63,7 +63,7 @@ class IpadTouchTests(unittest.TestCase):
         out = wire_index_html(html)
         self.assertIn(f"{CSS_NAME}?v=1", out)
         self.assertIn("main.0626212c.js?touch=1", out)
-        self.assertIn("pwa_ipad_sync.js?v=1", out)
+        self.assertIn("pwa_ipad_sync.js?v=2", out)
         self.assertNotIn("clinic_smooth", out)
         self.assertNotIn("clinic_ipad_paint", out)
 
@@ -98,6 +98,8 @@ class IpadTouchTests(unittest.TestCase):
             js_sync = (build / "pwa_ipad_sync.js").read_text(encoding="utf-8")
             self.assertIn("navigator.standalone", js_sync)
             self.assertIn("/sync-ipad", js_sync)
+            self.assertIn("/connect-drive", js_sync)
+            self.assertIn("ربط الدرايف", js_sync)
 
 
 if __name__ == "__main__":

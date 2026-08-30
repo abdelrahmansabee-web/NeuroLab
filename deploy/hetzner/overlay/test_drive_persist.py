@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from drive_persist import _sanitize, drive_configured, upload_named_files
+from drive_persist import _sanitize, drive_configured, upload_named_files, upload_root_bytes
 
 
 class DrivePersistTests(unittest.TestCase):
@@ -49,6 +49,18 @@ class DrivePersistTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as raw:
                 with patch("drive_oauth._data_dir", return_value=Path(raw)):
                     self.assertFalse(drive_configured())
+
+    def test_root_upload_skips_without_oauth(self) -> None:
+        env = {
+            "GOOGLE_OAUTH_CLIENT_ID": "cid",
+            "GOOGLE_OAUTH_CLIENT_SECRET": "csec",
+            "GOOGLE_OAUTH_REFRESH_TOKEN": "",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            with tempfile.TemporaryDirectory() as raw:
+                with patch("drive_oauth._data_dir", return_value=Path(raw)):
+                    out = upload_root_bytes("_NEUROLAB_DRIVE_OK.json", b'{"ok":true}')
+                    self.assertTrue(out.get("skipped"))
 
     def _tmp_mp4(self):
         import tempfile

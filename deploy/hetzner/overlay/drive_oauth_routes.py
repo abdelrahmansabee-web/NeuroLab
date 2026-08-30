@@ -15,6 +15,12 @@ def register_drive_oauth_routes(router: APIRouter, get_current_user, require_adm
 
         return oauth_status()
 
+    @router.get("/drive/folder-status")
+    async def drive_folder_status():
+        from drive_persist import list_clinic_folder
+
+        return list_clinic_folder()
+
     @router.post("/drive/connect-cookie")
     async def drive_connect_cookie(request: Request, user: dict = Depends(get_current_user)):
         token = request.cookies.get("neurolab_token")
@@ -80,6 +86,15 @@ def register_drive_oauth_routes(router: APIRouter, get_current_user, require_adm
             from drive_oauth import exchange_code
 
             info = exchange_code(code)
+            try:
+                from drive_persist import write_drive_connected_marker
+
+                write_drive_connected_marker(
+                    email=str(info.get("email") or ""),
+                    folder_name=str(info.get("folderName") or ""),
+                )
+            except Exception as marker_exc:
+                print("Drive connected marker:", marker_exc, flush=True)
             try:
                 import auth as auth_mod
 

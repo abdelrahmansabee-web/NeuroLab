@@ -16,6 +16,9 @@ from typing import Any, Dict, Optional, Tuple
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 TOKEN_FILE = "google_oauth_token.json"
 DEFAULT_FOLDER_NAME = "NeuroLab_Backups"
+# The clinic Gmail folder (leading space in the Drive name). Never create a second copy.
+CLINIC_DRIVE_FOLDER_ID = "1o30Gi0XlWtpHoI5rsUoc8217IWoJUInK"
+FOLDER_NAME_ALIASES = (" NeuroLab_Backups", "NeuroLab_Backups")
 DEFAULT_REDIRECT = "https://abdelrahmansabee-neurolab.hf.space/auth/drive/callback"
 
 
@@ -154,6 +157,17 @@ def oauth_ready() -> bool:
     return bool((token.get("refresh_token") or "").strip())
 
 
+def clinic_backup_folder_id() -> str:
+    env = (os.environ.get("GOOGLE_DRIVE_FOLDER_ID") or "").strip()
+    if env:
+        return env
+    token = load_token()
+    tid = (token.get("folderId") or "").strip()
+    if tid:
+        return tid
+    return CLINIC_DRIVE_FOLDER_ID
+
+
 def oauth_status() -> Dict[str, Any]:
     token = load_token()
     path = token_path()
@@ -163,8 +177,9 @@ def oauth_status() -> Dict[str, Any]:
         "email": token.get("email"),
         "redirectUri": redirect_uri(),
         "folderName": token.get("folderName"),
-        "folderId": token.get("folderId"),
+        "folderId": token.get("folderId") or clinic_backup_folder_id(),
         "tokenOnDisk": path.is_file(),
+        "needsReconnect": oauth_client_configured() and not oauth_ready(),
     }
 
 
@@ -275,11 +290,17 @@ def exchange_code(code: str) -> Dict[str, Any]:
 
 
 def ensure_backup_folder(service) -> Tuple[str, str]:
-    configured = (os.environ.get("GOOGLE_DRIVE_FOLDER_ID") or "").strip()
-    if configured:
+    seen = []
+    for fid in (
+        (os.environ.get("GOOGLE_DRIVE_FOLDER_ID") or "").strip(),
+        CLINIC_DRIVE_FOLDER_ID,
+    ):
+        if not fid or fid in seen:
+            continue
+        seen.append(fid)
         try:
             meta = service.files().get(
-                fileId=configured,
+                fileId=fid,
                 fields="id,name,trashed",
                 supportsAllDrives=True,
             ).execute()
@@ -287,14 +308,16 @@ def ensure_backup_folder(service) -> Tuple[str, str]:
                 return meta["id"], meta.get("name") or DEFAULT_FOLDER_NAME
         except Exception as exc:
             print(f"Configured Drive folder not usable with OAuth: {exc}", flush=True)
-    q = (
-        f"name='{DEFAULT_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' "
-        "and trashed=false and 'me' in owners"
-    )
-    res = service.files().list(q=q, spaces="drive", fields="files(id, name)", pageSize=5).execute()
-    files = res.get("files") or []
-    if files:
-        return files[0]["id"], files[0].get("name") or DEFAULT_FOLDER_NAME
+    for name in FOLDER_NAME_ALIASES:
+        safe = name.replace("'", "\\'")
+        q = (
+            f"name='{safe}' and mimeType='application/vnd.google-apps.folder' "
+            "and trashed=false and 'me' in owners"
+        )
+        res = service.files().list(q=q, spaces="drive", fields="files(id, name)", pageSize=5).execute()
+        files = res.get("files") or []
+        if files:
+            return files[0]["id"], files[0].get("name") or DEFAULT_FOLDER_NAME
     created = service.files().create(
         body={"name": DEFAULT_FOLDER_NAME, "mimeType": "application/vnd.google-apps.folder"},
         fields="id,name",
@@ -304,4 +327,4 @@ def ensure_backup_folder(service) -> Tuple[str, str]:
 
 def oauth_folder_id() -> str:
     token = load_token()
-    return (token.get("folderId") or os.environ.get("GOOGLE_DRIVE_FOLDER_ID") or "").strip()
+    return (token.get("folderId") or clinic_backup_folder_id()).strip()

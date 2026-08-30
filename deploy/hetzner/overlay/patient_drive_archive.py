@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Optional
 
 # Same order as NAV_ITEMS / the clinic sidebar (excluding report/analysis/users).
 PROGRAM_SECTIONS = (
@@ -84,6 +85,69 @@ def files_for_patient(patient: Dict[str, Any]) -> List[tuple[str, bytes, str]]:
     return payload
 
 
+def decrypt_patients_text(raw: str) -> Optional[Any]:
+    """Decrypt HF disk patients (`enc:…`) using the same key as security.py."""
+    if not isinstance(raw, str) or not raw.startswith("enc:"):
+        return None
+    secret = (os.environ.get("JWT_SECRET") or os.environ.get("NEUROLAB_JWT_SECRET") or "").strip()
+    if not secret:
+        print("encrypted patients skipped: JWT_SECRET missing", flush=True)
+        return None
+    try:
+        from security import decrypt_json_from_str
+
+        return decrypt_json_from_str(raw, secret)
+    except Exception:
+        pass
+    try:
+        import base64
+
+        from cryptography.fernet import Fernet
+        from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=b"neurolab_static_salt_v1",
+            iterations=200000,
+            backend=default_backend(),
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(secret.encode()))
+        return json.loads(Fernet(key).decrypt(raw[4:].encode("utf-8")).decode("utf-8"))
+    except Exception as exc:
+        print(f"encrypted patients decrypt failed: {exc}", flush=True)
+        return None
+
+
+def load_patients_file(path: Path) -> List[Dict[str, Any]]:
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return []
+    if raw.startswith("enc:"):
+        data = decrypt_patients_text(raw)
+        if data is None:
+            return []
+        return parse_patients_payload(data)
+    return parse_patients_payload(raw)
+
+
+def merge_patients(*groups: Iterable[Any]) -> List[Dict[str, Any]]:
+    by_key: Dict[str, Dict[str, Any]] = {}
+    order: List[str] = []
+    for group in groups:
+        for patient in group or []:
+            if not isinstance(patient, dict):
+                continue
+            key = patient_drive_key(patient)
+            if key not in by_key:
+                order.append(key)
+            by_key[key] = patient
+    return [by_key[key] for key in order]
+
+
 def parse_patients_payload(raw: Any) -> List[Dict[str, Any]]:
     data = raw
     if isinstance(raw, (bytes, bytearray)):
@@ -141,21 +205,17 @@ def archive_patients(patients: Iterable[Any], *, user_id: int = 1) -> Dict[str, 
 
 
 def archive_from_data_dir(data_dir: Path, *, user_id: int = 1) -> Dict[str, Any]:
-    patients: List[Dict[str, Any]] = []
+    groups: List[List[Dict[str, Any]]] = []
     patients_dir = Path(data_dir) / "patients"
     if patients_dir.is_dir():
         for path in sorted(patients_dir.glob("*.json")):
-            try:
-                raw = path.read_text(encoding="utf-8")
-                if raw.startswith("enc:"):
-                    continue
-                patients.extend(parse_patients_payload(raw))
-            except Exception:
-                continue
+            loaded = load_patients_file(path)
+            if loaded:
+                groups.append(loaded)
     dump = Path(data_dir) / "ipad_localstorage" / "latest.json"
     if dump.is_file():
         try:
-            patients.extend(parse_patients_payload(dump.read_bytes()))
+            groups.append(parse_patients_payload(dump.read_bytes()))
         except Exception:
             pass
-    return archive_patients(patients, user_id=user_id)
+    return archive_patients(merge_patients(*groups), user_id=user_id)

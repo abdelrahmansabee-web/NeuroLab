@@ -33,7 +33,21 @@ def main() -> int:
     oauth_rc = patch_drive_oauth(root)
     if oauth_rc != 0:
         return oauth_rc
-    return patch_ipad_touch(root)
+    touch_rc = patch_ipad_touch(root)
+    if touch_rc != 0:
+        return touch_rc
+    for rel in ("main.py", "analyze_job_runner.py"):
+        path = root / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        updated = text
+        for old in ('DEPLOY_VERSION = "29.33"', 'DEPLOY_VERSION = "29.32"'):
+            updated = updated.replace(old, 'DEPLOY_VERSION = "29.34"')
+        if updated != text:
+            path.write_text(updated, encoding="utf-8")
+            print(f"bumped {rel} to 29.34")
+    return 0
 
 
 if __name__ == "__main__":

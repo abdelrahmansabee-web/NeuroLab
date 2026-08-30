@@ -40,10 +40,14 @@
           <li>Restart للـ Space، وبعدين ارجعي للصفحة دي.</li>
         </ol>
       </div>
+      <p id="folder"></p>
       <p id="detail"></p>
       <button class="btn" id="connect" type="button" hidden>ربط درايفك</button>
       <p style="margin-top:1.2rem;font-size:.85rem;color:rgba(255,255,255,.55)">
-        لو الـ Space اتعمل له rebuild، افتحي الصفحة دي تاني واربطي.
+        افتحي الصفحة دي من أيقونة الشاشة الرئيسية، مش من سفاري.
+        بعد الربط افتحي البرنامج عشان ملفات المرضى تتحط في
+        <code>team_patients / رقم المريض / data</code>
+        وبعدين اضغطي «رفع فيديوهات الآيباد».
       </p>
       <p style="margin-top:1.2rem"><a href="/">رجوع للبرنامج</a></p>
     </div>
@@ -51,6 +55,7 @@
   <script>
     const statusEl = document.getElementById("status");
     const setupEl = document.getElementById("setup");
+    const folderEl = document.getElementById("folder");
     const detailEl = document.getElementById("detail");
     const btn = document.getElementById("connect");
     document.getElementById("redir").textContent =
@@ -58,7 +63,7 @@
     const params = new URLSearchParams(location.search);
     if (params.get("ok") === "1") {
       statusEl.className = "ok";
-      statusEl.textContent = "الدرايف اتربط. الفيديوهات الجديدة هتتحفظ على حسابك.";
+      statusEl.textContent = "الدرايف اتربط. استني ثواني وهيتكتب ملف في الفولدر.";
     }
     if (params.get("error")) {
       statusEl.className = "warn";
@@ -66,9 +71,31 @@
     }
     const token = (() => { try { return localStorage.getItem("neurolab_token") || ""; } catch (e) { return ""; } })();
     const headers = token ? { Authorization: "Bearer " + token } : {};
-    fetch("/auth/drive/oauth-status", { credentials: "same-origin", headers })
-      .then((r) => r.json())
-      .then((d) => {
+    function showFolder(inv) {
+      if (!inv || inv.error && !inv.folderName) {
+        folderEl.textContent = "مقدرناش نعد الملفات في فولدر الدرايف دلوقتي.";
+        return;
+      }
+      const name = inv.folderName || "NeuroLab_Backups";
+      const videos = inv.videoCount || 0;
+      const jsons = inv.jsonCount || 0;
+      const files = inv.fileCount || 0;
+      if (inv.empty || files === 0) {
+        folderEl.className = "warn";
+        folderEl.textContent =
+          "الفولدر «" + name + "» فاضي: " + files + " ملف، " + videos + " فيديو، " + jsons + " JSON. مفيش داتا مرضى لسه.";
+      } else {
+        folderEl.className = "ok";
+        folderEl.textContent =
+          "الفولدر «" + name + "»: " + files + " ملف، " + videos + " فيديو، " + jsons + " JSON.";
+      }
+    }
+    Promise.all([
+      fetch("/auth/drive/oauth-status", { credentials: "same-origin", headers }).then((r) => r.json()),
+      fetch("/auth/drive/folder-status", { credentials: "same-origin", headers }).then((r) => r.json()).catch(() => null),
+    ])
+      .then(([d, inv]) => {
+        showFolder(inv);
         if (d.ready) {
           statusEl.className = "ok";
           statusEl.textContent = "الدرايف مربوط" + (d.email ? " (" + d.email + ")" : "") + ".";
@@ -82,10 +109,12 @@
           return;
         }
         if (!token) {
-          statusEl.textContent = "سجّلي دخول البرنامج أول، بعدين افتحي الصفحة دي تاني.";
+          statusEl.className = "warn";
+          statusEl.textContent = "سجّلي دخول البرنامج من أيقونة الشاشة الرئيسية أول، بعدين افتحي الصفحة دي تاني.";
           return;
         }
-        statusEl.textContent = "جاهز للربط. اضغطي الزر وسجّلي بجيميل الدرايف اللي فيه الـ 5 تيرا.";
+        statusEl.className = "warn";
+        statusEl.textContent = "الدرايف مش مربوط. عشان كده الفولدر فاضي. اضغطي الزر وسجّلي بالجيميل اللي فيه الـ 5 تيرا.";
         btn.hidden = false;
         btn.onclick = async () => {
           btn.disabled = true;

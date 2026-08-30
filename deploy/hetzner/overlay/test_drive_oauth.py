@@ -34,6 +34,22 @@ class DriveOauthTests(unittest.TestCase):
         with patch.dict(os.environ, {"GOOGLE_OAUTH_REDIRECT_URI": ""}, clear=False):
             self.assertIn("auth/drive/callback", drive_oauth.redirect_uri())
 
+    def test_status_asks_for_reconnect_when_client_set(self) -> None:
+        env = {
+            "GOOGLE_OAUTH_CLIENT_ID": "cid",
+            "GOOGLE_OAUTH_CLIENT_SECRET": "csec",
+            "GOOGLE_OAUTH_REFRESH_TOKEN": "",
+            "GOOGLE_DRIVE_FOLDER_ID": "1o30Gi0XlWtpHoI5rsUoc8217IWoJUInK",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            with tempfile.TemporaryDirectory() as raw:
+                with patch.object(drive_oauth, "_data_dir", return_value=Path(raw)):
+                    status = drive_oauth.oauth_status()
+                    self.assertTrue(status["clientConfigured"])
+                    self.assertFalse(status["ready"])
+                    self.assertTrue(status["needsReconnect"])
+                    self.assertEqual(status["folderId"], "1o30Gi0XlWtpHoI5rsUoc8217IWoJUInK")
+
     def test_persist_refresh_skips_without_hub_token(self) -> None:
         with patch.dict(os.environ, {"HF_TOKEN": "", "HUGGINGFACE_HUB_TOKEN": "", "HUGGINGFACE_TOKEN": ""}, clear=False):
             drive_oauth.persist_refresh_token_secret("rt-should-not-upload")

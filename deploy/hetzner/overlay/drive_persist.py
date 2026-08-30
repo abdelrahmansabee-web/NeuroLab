@@ -34,6 +34,15 @@ def drive_configured() -> bool:
     )
 
 
+def clinic_folder_id() -> str:
+    try:
+        from drive_oauth import clinic_backup_folder_id
+
+        return clinic_backup_folder_id()
+    except Exception:
+        return (os.environ.get("GOOGLE_DRIVE_FOLDER_ID") or "").strip() or "1o30Gi0XlWtpHoI5rsUoc8217IWoJUInK"
+
+
 def _mime_for(name: str) -> str:
     lower = name.lower()
     if lower.endswith(".mp4"):
@@ -64,7 +73,7 @@ def _build_service():
         except Exception:
             pass
     raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or ""
-    folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID") or ""
+    folder_id = clinic_folder_id()
     if not raw.strip() or not folder_id.strip():
         return None, ""
     from google.oauth2 import service_account as google_service_account
@@ -235,7 +244,7 @@ def upload_named_files(
             result["skipped"] = True
             result["reason"] = "drive_init_failed"
             return result
-    parent_id = folder_id or (os.environ.get("GOOGLE_DRIVE_FOLDER_ID") or "").strip()
+    parent_id = folder_id or clinic_folder_id()
     if not parent_id:
         result["skipped"] = True
         result["reason"] = "drive_unset"
@@ -265,3 +274,169 @@ def upload_named_files(
     result["ok"] = uploaded > 0
     result["uploaded"] = uploaded
     return result
+
+
+def upload_root_bytes(name: str, content: bytes) -> Dict[str, Any]:
+    """Write a file at the clinic backup folder root. OAuth only; never SA."""
+    result: Dict[str, Any] = {"ok": False, "name": name}
+    if not content:
+        result["reason"] = "empty"
+        return result
+    if not drive_configured():
+        result["skipped"] = True
+        result["reason"] = "drive_unset"
+        return result
+    service, folder_id = _build_service()
+    if service is None:
+        result["skipped"] = True
+        result["reason"] = "drive_init_failed"
+        return result
+    parent_id = folder_id or clinic_folder_id()
+    if not parent_id:
+        result["skipped"] = True
+        result["reason"] = "drive_unset"
+        return result
+    file_id = _upsert_bytes(service, parent_id, name, content, _mime_for(name))
+    result["ok"] = True
+    result["id"] = file_id
+    return result
+
+
+def write_drive_connected_marker(*, email: str = "", folder_name: str = "") -> Dict[str, Any]:
+    payload = {
+        "ok": True,
+        "email": email,
+        "folderName": folder_name,
+        "folderId": clinic_folder_id(),
+        "saved_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+        "layout": {
+            "patients": "team_patients/<id_name>/data/01_demographics.json … 08_kinematics.json",
+            "videos": "team_patients/<id_name>/videos/",
+        },
+    }
+    return upload_root_bytes(
+        "_NEUROLAB_DRIVE_OK.json",
+        json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
+    )
+
+
+def _sa_list_service():
+    raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or ""
+    folder_id = clinic_folder_id()
+    if not raw.strip() or not folder_id:
+        return None, ""
+    from google.oauth2 import service_account as google_service_account
+    from googleapiclient.discovery import build
+
+    info = json.loads(raw)
+    creds = google_service_account.Credentials.from_service_account_info(
+        info,
+        scopes=["https://www.googleapis.com/auth/drive"],
+    )
+    return build("drive", "v3", credentials=creds, cache_discovery=False), folder_id
+
+
+def _count_files(service, folder_id: str, *, depth: int = 0, limit: int = 40) -> Tuple[int, int, int]:
+    if not folder_id or depth > 6:
+        return 0, 0, 0
+    videos = jsons = files = 0
+    page = None
+    scanned = 0
+    while scanned < 400:
+        kwargs = dict(_list_flags())
+        res = service.files().list(
+            q=f"'{folder_id}' in parents and trashed=false",
+            spaces="drive",
+            pageSize=100,
+            pageToken=page,
+            fields="nextPageToken, files(id, name, mimeType)",
+            **kwargs,
+        ).execute()
+        items = res.get("files") or []
+        scanned += len(items)
+        for item in items:
+            mime = item.get("mimeType") or ""
+            name = (item.get("name") or "").lower()
+            if mime == FOLDER_MIME:
+                if depth < limit:
+                    v, j, f = _count_files(service, item.get("id") or "", depth=depth + 1, limit=limit)
+                    videos += v
+                    jsons += j
+                    files += f
+                continue
+            files += 1
+            if name.endswith(".mp4") or mime.startswith("video/"):
+                videos += 1
+            if name.endswith(".json") or mime == "application/json":
+                jsons += 1
+        page = res.get("nextPageToken")
+        if not page:
+            break
+    return videos, jsons, files
+
+
+_STRUCTURAL_ROOT = {
+    "team_patients",
+    "u1",
+    "_system",
+    "_NEUROLAB_DRIVE_OK.json",
+    "NEUROLAB_VIDEOS_HERE.txt",
+}
+
+
+def list_clinic_folder() -> Dict[str, Any]:
+    """Read-only inventory. Uses OAuth when linked, otherwise SA list-only."""
+    from drive_oauth import oauth_ready
+
+    out: Dict[str, Any] = {
+        "ok": False,
+        "folderId": clinic_folder_id(),
+        "folderName": None,
+        "videoCount": 0,
+        "jsonCount": 0,
+        "fileCount": 0,
+        "rootChildren": [],
+        "empty": True,
+        "oauthReady": bool(oauth_ready()),
+        "error": None,
+    }
+    service = None
+    folder_id = clinic_folder_id()
+    try:
+        if oauth_ready():
+            service, folder_id = _build_service()
+        if service is None:
+            service, folder_id = _sa_list_service()
+        if service is None or not folder_id:
+            out["error"] = "drive_list_unavailable"
+            return out
+        meta = service.files().get(
+            fileId=folder_id,
+            fields="id,name",
+            supportsAllDrives=True,
+        ).execute()
+        out["folderName"] = meta.get("name")
+        out["folderId"] = meta.get("id") or folder_id
+        res = service.files().list(
+            q=f"'{folder_id}' in parents and trashed=false",
+            spaces="drive",
+            pageSize=100,
+            fields="files(id, name, mimeType)",
+            **_list_flags(),
+        ).execute()
+        names = []
+        for item in res.get("files") or []:
+            name = item.get("name") or ""
+            if name in _STRUCTURAL_ROOT or name.startswith("_"):
+                names.append(name)
+        out["rootChildren"] = names
+        videos, jsons, files = _count_files(service, folder_id)
+        out["videoCount"] = videos
+        out["jsonCount"] = jsons
+        out["fileCount"] = files
+        out["empty"] = files <= 0
+        out["ok"] = True
+        return out
+    except Exception as exc:
+        out["error"] = str(exc)[:300]
+        return out

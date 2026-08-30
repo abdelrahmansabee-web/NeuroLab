@@ -11,7 +11,7 @@ CSS_VER = "1"
 CSS_NAME = "clinic_touch.css"
 LINK = f'<link rel="stylesheet" href="/{CSS_NAME}?v={CSS_VER}"/>'
 PWA_SYNC_JS = "pwa_ipad_sync.js"
-PWA_SYNC_TAG = f'<script src="/{PWA_SYNC_JS}?v=1"></script>'
+PWA_SYNC_TAG = f'<script src="/{PWA_SYNC_JS}?v=2"></script>'
 HREF_RE = re.compile(rf'href="/{re.escape(CSS_NAME)}(?:\?v=\d+)?"')
 WHILE_TAP_RE = re.compile(r"whileTap:(?:x\?void 0:)?Yw\([^)]+\)")
 PTR_MOVE_OLD = 'addEventListener("touchmove",r,{passive:!1})'
@@ -68,6 +68,11 @@ def wire_index_html(text: str) -> str:
     text = re.sub(
         r"main\.0626212c\.js(?:\?[^\"']*)?",
         "main.0626212c.js?touch=1",
+        text,
+    )
+    text = re.sub(
+        rf'<script src="/{re.escape(PWA_SYNC_JS)}(?:\?v=\d+)?"></script>',
+        PWA_SYNC_TAG,
         text,
     )
     if PWA_SYNC_JS not in text:
