@@ -22,8 +22,25 @@ class RestoreOriginalGlassTests(unittest.TestCase):
         self.assertNotIn("nl-clinic-smooth", out)
         self.assertNotIn("clinic_smooth.css", out)
         self.assertNotIn("clinic_smooth.js", out)
-        self.assertIn('src="/static/js/main.0626212c.js?orig=1"', out)
+        self.assertIn('src="/static/js/main.0626212c.js?orig=2"', out)
         self.assertNotIn("main.0626212c.js?v=", out)
+
+    def test_strips_ipad_paint_from_index(self) -> None:
+        html = (
+            "<html><head>"
+            "<script>(function(){function a(){var n=navigator;var i=/iPad|iPhone|iPod/.test(n.userAgent)"
+            '||(n.platform==="MacIntel"&&n.maxTouchPoints>1);'
+            "if(i)document.documentElement.classList.add('nl-ipad-paint');}"
+            "a();new MutationObserver(a).observe(document.documentElement,"
+            "{attributes:true,attributeFilter:['class']});})();</script>"
+            '<link rel="stylesheet" href="/clinic_ipad_paint.css?v=4"/>'
+            '<script defer="defer" src="/static/js/main.0626212c.js?paint=4"></script>'
+            "</head></html>"
+        )
+        out = restore_index_html(html)
+        self.assertNotIn("clinic_ipad_paint", out)
+        self.assertNotIn("nl-ipad-paint", out)
+        self.assertIn('src="/static/js/main.0626212c.js?orig=2"', out)
 
     def test_restores_js_from_backup(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
