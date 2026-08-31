@@ -31,6 +31,9 @@ def patch_touch_js(text: str) -> tuple[str, int]:
     if PTR_PREVENT_OLD in text:
         text = text.replace(PTR_PREVENT_OLD, PTR_PREVENT_NEW)
         hits += 1
+    if "#f5f0eb" in text:
+        text = text.replace("#f5f0eb", "#ffffff")
+        hits += 1
     return text, hits
 
 
@@ -67,7 +70,7 @@ def wire_index_html(text: str) -> str:
             text = LINK + text
     text = re.sub(
         r"main\.0626212c\.js(?:\?[^\"']*)?",
-        "main.0626212c.js?touch=2",
+        "main.0626212c.js?touch=3",
         text,
     )
     text = re.sub(

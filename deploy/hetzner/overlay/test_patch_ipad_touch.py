@@ -39,6 +39,13 @@ class IpadTouchTests(unittest.TestCase):
         self.assertIn("rgba(255,255,255,0.008)", out)
         self.assertIn("blur(8px) saturate(1.45)", out)
 
+    def test_export_report_page_is_white(self) -> None:
+        css = "body { background:#f5f0eb; } background:#f5f0eb !important;"
+        out, hits = patch_touch_js(css)
+        self.assertGreaterEqual(hits, 1)
+        self.assertNotIn("#f5f0eb", out)
+        self.assertIn("#ffffff", out)
+
     def test_idempotent(self) -> None:
         once, _ = patch_touch_js(SAMPLE)
         twice, hits = patch_touch_js(once)
@@ -62,7 +69,7 @@ class IpadTouchTests(unittest.TestCase):
         )
         out = wire_index_html(html)
         self.assertIn(f"{CSS_NAME}?v=1", out)
-        self.assertIn("main.0626212c.js?touch=2", out)
+        self.assertIn("main.0626212c.js?touch=3", out)
         self.assertIn("pwa_ipad_sync.js?v=2", out)
         self.assertNotIn("clinic_smooth", out)
         self.assertNotIn("clinic_ipad_paint", out)
