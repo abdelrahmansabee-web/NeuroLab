@@ -3101,6 +3101,17 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                     </div>
                   )}
 
+                  {hasResult && (originalVideoBlobs[ph.k] || data[`${vidKey(ph.k)}_url`]) && (
+                    <video
+                      src={originalVideoBlobs[ph.k] || data[`${vidKey(ph.k)}_url`]}
+                      className="w-full rounded-lg bg-black"
+                      controls
+                      playsInline
+                      muted
+                      autoPlay
+                    />
+                  )}
+
                   {hasResult && (
                       <div className="grid grid-cols-2 gap-1.5">
                         {CARD_PREVIEW_KEYS.map((key) => {
