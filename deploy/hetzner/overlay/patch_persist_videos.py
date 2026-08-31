@@ -204,6 +204,7 @@ def main() -> int:
     for extra in (
         "backfill_drive.py",
         "validation_cache.py",
+        "sync_ipad_cache.html",
         "drive_oauth.py",
         "drive_oauth_routes.py",
         "connect_drive.html",

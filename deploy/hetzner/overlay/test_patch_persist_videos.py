@@ -72,6 +72,7 @@ class PersistPatchIdempotentTests(unittest.TestCase):
                 "drive_persist.py",
                 "backfill_drive.py",
                 "validation_cache.py",
+                "sync_ipad_cache.html",
                 "patient_drive_archive.py",
                 "patient_pdf.py",
                 "glass_report.py",
