@@ -2553,6 +2553,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       const { unified_validation_video_b64: _, ...resultWithoutB64 } = result;
       const nextResults = { ...kinematicsResults, [phase]: { ...resultWithoutB64, video_filename: result.video_filename || file.name } };
       setKinematicsResults(nextResults);
+      setShowResultsTable(true);
       onChange({
         ...data,
         analysisResults: nextResults,
@@ -2561,9 +2562,13 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       });
       showToast(`✓ Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials → mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
       setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
-      // Fetch lightweight overlay data so the browser can render the validation overlay live.
-      // Load the original video blob first so the player never falls back to the
-      // attachment-style /download endpoint, which browsers cannot play inline.
+      requestAnimationFrame(() => {
+        try {
+          document.getElementById("kin-validation-video")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        } catch (_) { /* ignore */ }
+      });
+      // Fetch overlay JSON in the background. The camera file and kinematic numbers
+      // must already be visible — do not wait for overlay-data or unified video.
       if (!isCsv) {
         const loadAndFetchOverlay = async () => {
           if (!originalVideoBlobs[phase]) {
@@ -2573,11 +2578,6 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
         };
         loadAndFetchOverlay();
       }
-      // Always generate the unified validation video in the background if it wasn't
-      // returned inline. Free HF Spaces can time out, so we queue a background job and
-      // poll until it is ready. Pass the result explicitly to avoid a race with React state.
-      const uvPayload = { ...resultWithoutB64, video_filename: result.video_filename || file.name };
-      setTimeout(() => generateUnifiedValidation(phase, { result: uvPayload }), 300);
     } catch (err) {
       if (err.name === "AbortError") {
         showToast(`✕ Analysis cancelled for ${phase}`, "info");
@@ -2757,10 +2757,6 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     setUvErrors((prev) => ({ ...prev, [phase]: null }));
     setAnalysisStatus((prev) => ({ ...prev, [phase]: "generating_unified" }));
 
-    // Hide the results table while any analyzed phase is still waiting for its
-    // unified validation video.
-    setShowResultsTable(false);
-
     try {
       const formData = new FormData();
       formData.append("csv_filename", result.csv_filename);
@@ -2794,7 +2790,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
               }));
               loadVideoBlob(phase, status.unified_validation_video);
               showToast("Unified validation video ready", "success");
-              setShowResultsTable(false);
+              setShowResultsTable(true);
             } else {
               throw new Error(status.error || "Video generation failed");
             }
@@ -2818,19 +2814,12 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     }
   };
 
-  // Show the kinematic results table only when every analyzed phase has a ready
-  // client-side overlay. This guarantees the table numbers are always derived from
-  // the actual video frames used by the validation overlay, not from server-side
-  // analysis that may differ from the video.
+  // Show kinematic numbers as soon as analysis finishes. Overlay JSON can arrive
+  // later and refine the same fields; do not hide the table while it loads.
   useEffect(() => {
     const analyzedPhases = phases.filter((ph) => kinematicsResults[ph.k]);
-    if (analyzedPhases.length === 0) {
-      setShowResultsTable(false);
-      return;
-    }
-    const anyPending = analyzedPhases.some((ph) => !overlayData[ph.k] && !uvErrors[ph.k]);
-    setShowResultsTable(!anyPending);
-  }, [kinematicsResults, uvErrors, overlayData]);
+    setShowResultsTable(analyzedPhases.length > 0);
+  }, [kinematicsResults]);
 
   // Re-fetch overlay data for persisted sessions (page reload, saved report, etc.)
   // where the in-memory overlay state was lost but the backend CSV still exists.
@@ -2862,6 +2851,9 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
         if (num !== null) return num;
       }
     }
+    const fromResult = pickKinField(result, key) ?? pickKinField(result.overlay_metrics, key)
+      ?? pickKinField(result.validation_summary, key);
+    if (fromResult !== null && fromResult !== undefined) return fromResult;
     if (key === "side_analyzed" || key === "side") {
       return result.side_analyzed ?? result.side ?? "—";
     }
@@ -3110,7 +3102,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                   )}
 
                   {hasResult && (
-                      <div className="sm:hidden grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-2 gap-1.5">
                         {CARD_PREVIEW_KEYS.map((key) => {
                           const meta = KINEMATIC_VARS.find((v) => v.key === key);
                           if (!meta) return null;
@@ -3171,7 +3163,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       </Glass>
 
       {Object.keys(kinematicsResults).length > 0 && (
-        <Glass className="p-4 sm:p-5">
+        <Glass id="kin-validation-video" className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3 gap-2">
             <p className="text-sm font-extrabold text-white/80">Validation Video</p>
           </div>
@@ -3193,22 +3185,32 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                     </div>
                   )}
                 </div>
-                {overlayData[ph.k] ? (
-                  originalVideoBlobs[ph.k] ? (
+                {overlayData[ph.k] && (originalVideoBlobs[ph.k] || data[`${vidKey(ph.k)}_url`]) ? (
                     <ValidationOverlayPlayer
-                      videoUrl={originalVideoBlobs[ph.k]}
+                      videoUrl={originalVideoBlobs[ph.k] || data[`${vidKey(ph.k)}_url`]}
                       overlayData={overlayData[ph.k]}
                       phaseLabel={ph.l}
                       autoPlay
                       autoRender
                       onError={() => showToast(`${ph.l} overlay player error`, "error")}
                     />
-                  ) : (
+                ) : overlayData[ph.k] ? (
                     <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3">
                       <p className="text-[11px] text-white/50 mb-2">Loading original video…</p>
                       <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
                     </div>
-                  )
+                ) : (originalVideoBlobs[ph.k] || data[`${vidKey(ph.k)}_url`]) ? (
+                    <div className="rounded-lg overflow-hidden bg-black">
+                      <video
+                        src={originalVideoBlobs[ph.k] || data[`${vidKey(ph.k)}_url`]}
+                        className="w-full rounded-lg bg-black"
+                        controls
+                        autoPlay
+                        muted
+                        playsInline
+                      />
+                      <p className="text-[11px] text-white/50 mt-2 mb-1 text-center">Preparing skeleton overlay…</p>
+                    </div>
                 ) : kinematicsResults[ph.k]?.unified_validation_video ? (
                   videoBlobs[ph.k] ? (
                     <InlineValidationVideo
