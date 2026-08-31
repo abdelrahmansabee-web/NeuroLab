@@ -78,6 +78,7 @@ class ShowResultsNowTests(unittest.TestCase):
             js_dir.mkdir(parents=True)
             (js_dir / "main.0626212c.js").write_text(SAMPLE, encoding="utf-8")
             (root / "frontend" / "build" / "index.html").write_text(
+                '<meta name="nl-version" content="31.75"/>'
                 '<script src="/static/js/main.0626212c.js?kin=3"></script>',
                 encoding="utf-8",
             )
@@ -87,6 +88,7 @@ class ShowResultsNowTests(unittest.TestCase):
             self.assertIn(PREPARING_NEW, js)
             html = (root / "frontend" / "build" / "index.html").read_text(encoding="utf-8")
             self.assertIn("main.0626212c.js?kin=4", html)
+            self.assertIn('nl-version" content="31.76"', html)
 
     def test_live_bundle_has_patterns(self) -> None:
         bundle = Path("/tmp/hf-neurolab/frontend/build/static/js/main.0626212c.js")

@@ -127,6 +127,16 @@ def patch_show_results_now(root: Path) -> int:
         if busted != html:
             idx.write_text(busted, encoding="utf-8")
             print("cache-bust index.html main JS ?kin=4")
+        html2 = idx.read_text(encoding="utf-8")
+        versioned = re.sub(
+            r'(meta name="nl-version" content=")[^"]+',
+            r'\g<1>31.76',
+            html2,
+            count=1,
+        )
+        if versioned != html2:
+            idx.write_text(versioned, encoding="utf-8")
+            print("bumped nl-version to 31.76 for PWA reload")
     return 0
 
 
