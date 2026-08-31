@@ -15,6 +15,29 @@ def _sanitize(name: str) -> str:
     return re.sub(r"[^\w.\-]", "_", (name or "").strip())[:180]
 
 
+def hydrate_output_file(data_dir: Path, dest_dir: Path, filename: str) -> Optional[Path]:
+    """Copy a persisted analysis file back into OUTPUT/UPLOAD if the live copy vanished."""
+    name = Path(filename or "").name
+    if not name:
+        return None
+    dest_dir = Path(dest_dir)
+    dest = dest_dir / name
+    if dest.is_file() and dest.stat().st_size > 0:
+        return dest
+    roots = [artifacts_root(data_dir), Path(data_dir) / "validation_cache"]
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in root.rglob(name):
+            if not path.is_file() or path.stat().st_size <= 0:
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if dest.resolve() != path.resolve():
+                shutil.copy2(path, dest)
+            return dest
+    return None
+
+
 def persist_phase_artifacts(
     data_dir: Path,
     patient_key: str,
@@ -23,6 +46,7 @@ def persist_phase_artifacts(
     original_video: Optional[Path] = None,
     overlay_json: Optional[Path] = None,
     unified_video: Optional[Path] = None,
+    pose_csv: Optional[Path] = None,
     library_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Save playback files for /auth/restore-file (team/{patientKey}/...)."""
@@ -35,11 +59,15 @@ def persist_phase_artifacts(
         "files": {},
     }
 
-    mapping = (
+    mapping = [
         (original_video, f"{phase_part}_validation_original.mp4", "videos"),
         (overlay_json, f"{phase_part}_validation_overlay.json", "data"),
         (unified_video, f"{phase_part}_validation_unified.mp4", "videos"),
-    )
+    ]
+    if pose_csv is not None:
+        src = Path(pose_csv)
+        mapping.append((src, src.name, "data"))
+        mapping.append((src, f"{phase_part}_pose.csv", "data"))
     for src, name, sub in mapping:
         if src is None:
             continue

@@ -98,6 +98,7 @@ PERSIST_NEW = '''    try:
             phase,
             original_video=playback_video if playback_video.exists() else video_path,
             overlay_json=overlay_file if overlay_file.exists() else None,
+            pose_csv=Path(analysis_csv_path) if Path(analysis_csv_path).exists() else None,
             library_name=base_name,
         )
         print(f"Saved clinic validation files for patientKey={patient_key or 'anon'} phase={phase}", flush=True)

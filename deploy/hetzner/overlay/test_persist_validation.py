@@ -92,6 +92,39 @@ class PersistValidationTests(unittest.TestCase):
             session = data_dir / "local_artifacts" / "team" / "101" / "session.json"
             self.assertTrue(session.is_file())
 
+    def test_persists_pose_csv_without_uploading_it_to_drive(self) -> None:
+        from persist_validation import hydrate_output_file
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as raw:
+            data_dir = Path(raw)
+            src = data_dir / "src"
+            src.mkdir()
+            csv = src / "baseline_raw_pose.csv"
+            csv.write_text("t,x,y\n0,1,2\n", encoding="utf-8")
+            with patch("drive_persist.upload_named_files") as mocked:
+                saved = persist_phase_artifacts(
+                    data_dir,
+                    "111_Douan_ertan",
+                    "baseline",
+                    pose_csv=csv,
+                )
+                mocked.assert_not_called()
+            dest = (
+                data_dir
+                / "local_artifacts"
+                / "team"
+                / "111_Douan_ertan"
+                / "data"
+                / "baseline_raw_pose.csv"
+            )
+            self.assertTrue(dest.is_file())
+            self.assertIn("baseline_pose.csv", saved["files"])
+            outputs = Path(raw) / "outputs"
+            restored = hydrate_output_file(data_dir, outputs, "baseline_raw_pose.csv")
+            self.assertIsNotNone(restored)
+            self.assertEqual(restored.read_text(encoding="utf-8"), "t,x,y\n0,1,2\n")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -26,7 +26,7 @@ class PwaIpadSyncTests(unittest.TestCase):
         self.assertIn("no_validation_video", self.js)
         self.assertIn("cameraOnly", self.js)
         self.assertIn("Generate Unified", self.js)
-        self.assertIn("اضغطي ▶ للتحليل", self.js)
+        self.assertIn("لو الجدول ظاهر اضغطي UV", self.js)
         self.assertNotIn("الفيديو بيتحلل.", self.js)
         self.assertNotIn("فيديوهات الفاليديشن متزامنة مع ملفات المرضى", self.js)
 
