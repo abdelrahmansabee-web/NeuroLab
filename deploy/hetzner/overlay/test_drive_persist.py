@@ -68,6 +68,15 @@ class DrivePersistTests(unittest.TestCase):
         self.assertEqual(clinic_drive_filename("baseline_validation.mp4"), "baseline_validation.mp4")
         self.assertEqual(clinic_drive_filename("105_Ahmet_sever.pdf"), "105_Ahmet_sever.pdf")
 
+    def test_recovered_video_names(self) -> None:
+        from drive_persist import recovered_drive_video_name
+
+        self.assertEqual(recovered_drive_video_name("baseline_original.mp4"), "baseline_validation.mp4")
+        self.assertEqual(recovered_drive_video_name("baseline_validation_original.mp4"), "baseline_validation.mp4")
+        self.assertEqual(recovered_drive_video_name("pre_validation_unified.mp4"), "pre_validation.mp4")
+        self.assertEqual(recovered_drive_video_name("baseline_validation.mp4"), "baseline_validation.mp4")
+        self.assertIsNone(recovered_drive_video_name("patient.json"))
+
     def test_legacy_root_names(self) -> None:
         self.assertTrue(_is_legacy_root("team_patients"))
         self.assertTrue(_is_legacy_root("u1"))

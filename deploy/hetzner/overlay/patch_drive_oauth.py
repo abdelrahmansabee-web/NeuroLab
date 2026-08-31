@@ -189,6 +189,55 @@ HEALTH_NEW = '''def _drive_health_summary() -> dict:
         return out
 '''
 
+ENSURE_OLD = '''        team_id = _drive_find_or_create_folder(service, GOOGLE_DRIVE_FOLDER_ID, "team_patients")
+        _drive_share_with_owner(service, team_id)
+        marker = (
+            "NeuroLab\\n"
+            "الفيديوهات هنا: team_patients / رقم المريض / videos\\n"
+            "مثال: team_patients/101/videos/pre_validation_original.mp4\\n"
+            "الملف ده دليل إن البرنامج واصل فولدر الدرايف الصحيح.\\n"
+            "Search Google Drive for: NEUROLAB_VIDEOS_HERE\\n"
+        ).encode("utf-8")
+        marker_id = _drive_upsert_bytes(
+            service,
+            "NEUROLAB_VIDEOS_HERE.txt",
+            marker,
+            "text/plain",
+            parent_id=GOOGLE_DRIVE_FOLDER_ID,
+        )
+'''
+
+ENSURE_NEW = '''        marker_id = None
+        team_id = None
+'''
+
+PARENT_ARTIFACT_OLD = '''def _drive_parent_for_patient_artifact(
+    service,
+    user_id: int,
+    patient_key: str,
+    subfolder: str,
+    scope: str,
+) -> str:
+    sub = (subfolder or "videos").strip().lower()
+    if sub not in ("videos", "reports", "data"):
+        sub = "videos"
+    if (scope or "team").strip().lower() == "user":
+        return _drive_patient_subfolder(service, user_id, patient_key, sub)
+    return _drive_team_patient_subfolder(service, patient_key, sub)
+'''
+
+PARENT_ARTIFACT_NEW = '''def _drive_parent_for_patient_artifact(
+    service,
+    user_id: int,
+    patient_key: str,
+    subfolder: str,
+    scope: str,
+) -> str:
+    from drive_persist import _patient_folder, clinic_folder_id
+
+    _ = (user_id, subfolder, scope)
+    return _patient_folder(service, clinic_folder_id() or GOOGLE_DRIVE_FOLDER_ID, patient_key)
+'''
 REGISTER_MARK = "register_drive_oauth_routes(router, get_current_user)"
 REGISTER_SNIPPET = """
 
@@ -407,6 +456,30 @@ def patch_drive_oauth(root: Path) -> int:
     if "original_videos_only" in text:
         text = text.replace("original_videos_only", "validation_videos_only")
         print("patched auth skip reason to validation videos")
+    if PARENT_ARTIFACT_NEW in text:
+        print("already patched: auth flat patient folder")
+    elif PARENT_ARTIFACT_OLD in text:
+        text = text.replace(PARENT_ARTIFACT_OLD, PARENT_ARTIFACT_NEW, 1)
+        print("patched auth flat patient folder")
+    else:
+        print("WARN: auth parent artifact pattern missing")
+    if ENSURE_NEW in text and "team_patients / رقم المريض / videos" not in text.split("def _ensure_drive_visible_to_owner")[-1][:800]:
+        print("already patched: auth skip team_patients marker")
+    elif ENSURE_OLD in text:
+        text = text.replace(ENSURE_OLD, ENSURE_NEW, 1)
+        print("patched auth skip team_patients marker")
+    else:
+        print("WARN: auth ensure-visible pattern missing")
+    json_dump_old = '''        user_root = _drive_user_root_folder(service, user["id"])
+        file_id = _drive_upsert_bytes(service, file_name, payload, "application/json", parent_id=user_root)
+'''
+    json_dump_new = '''        file_id = None
+'''
+    if json_dump_new in text and json_dump_old not in text:
+        print("already patched: auth skip patients JSON dump")
+    elif json_dump_old in text:
+        text = text.replace(json_dump_old, json_dump_new, 1)
+        print("patched auth skip patients JSON dump")
     if REGISTER_MARK not in text:
         text = text.rstrip() + REGISTER_SNIPPET
         print("patched auth oauth routes")

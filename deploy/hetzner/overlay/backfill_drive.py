@@ -114,12 +114,20 @@ def backfill_data_dir(data_dir: Path) -> Dict[str, Any]:
 
 def rebuild_clinic_folder(data_dir: Path) -> Dict[str, Any]:
     """Rebuild Drive as one patient folder with PDF + validation videos only."""
-    from drive_persist import list_clinic_folder, reorganize_clinic_folder
+    from drive_persist import (
+        list_clinic_folder,
+        reorganize_clinic_folder,
+        restore_trashed_videos_to_patients,
+    )
 
     try:
         reorganized = reorganize_clinic_folder()
     except Exception as exc:
         reorganized = {"ok": False, "error": str(exc)[:300]}
+    try:
+        restored = restore_trashed_videos_to_patients()
+    except Exception as exc:
+        restored = {"ok": False, "error": str(exc)[:300]}
     try:
         filled = backfill_data_dir(Path(data_dir))
     except Exception as exc:
@@ -130,8 +138,9 @@ def rebuild_clinic_folder(data_dir: Path) -> Dict[str, Any]:
     except Exception as exc:
         inventory = {"ok": False, "error": str(exc)}
     return {
-        "ok": bool(reorganized.get("ok") or filled.get("ok")),
+        "ok": bool(reorganized.get("ok") or restored.get("ok") or filled.get("ok")),
         "reorganized": reorganized,
+        "restoredVideos": restored,
         "backfill": filled,
         "inventory": inventory,
     }
