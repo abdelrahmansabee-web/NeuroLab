@@ -168,6 +168,19 @@ def register_validation_cache(app, data_dir: Path, html_path: Path) -> None:
         thread.start()
         return {"ok": True, "started": True, "running": True}
 
+    @app.post("/api/drive-rehome")
+    async def drive_rehome():
+        from drive_persist import (
+            list_clinic_folder,
+            rehome_misplaced_clinic_videos,
+            trash_legacy_clinic_layout,
+        )
+
+        rehomed = rehome_misplaced_clinic_videos()
+        leftover = trash_legacy_clinic_layout()
+        inventory = list_clinic_folder()
+        return {"ok": True, "rehomed": rehomed, "leftover": leftover, "inventory": inventory}
+
     @app.get("/api/drive-rebuild-status")
     async def drive_rebuild_status():
         return {

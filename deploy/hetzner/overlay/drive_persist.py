@@ -479,15 +479,13 @@ def recovered_drive_video_name(name: str) -> Optional[str]:
 # Drive's files.list hides trashed items unless the query says trashed=true.
 _TRASH_FOLDER_QUERY = (
     "trashed=true and mimeType='application/vnd.google-apps.folder' and ("
-    "name='team_patients' or name='u1' or name='videos' or name='data' "
-    "or name='reports'"
+    "name='team_patients' or name='u1'"
     ")"
 )
 _TRASH_VIDEO_QUERY = (
     "trashed=true and ("
     "name contains '_original.mp4' or name contains '_validation.mp4' "
-    "or name contains 'unified.mp4' or name contains 'original.mp4' "
-    "or mimeType='video/mp4'"
+    "or name contains 'unified.mp4'"
     ")"
 )
 
@@ -1142,30 +1140,18 @@ def rehome_misplaced_clinic_videos(service=None, parent_id: str = "") -> Dict[st
         if ((item.get("name") or "").lower().endswith((".mp4", ".mov", ".m4v", ".webm"))
             or str(item.get("mimeType") or "").startswith("video/"))
     ]
-    session_keys = _patient_keys_from_trashed_layout(service)
-    have = _live_patient_folders_with_videos(service, parent_id)
-    targets = [key for key in session_keys if key not in have]
-    if "111_Douan_ertan" in targets:
-        targets = ["111_Douan_ertan"] + [key for key in targets if key != "111_Douan_ertan"]
-    elif "111_Douan_ertan" not in have:
-        targets = ["111_Douan_ertan"] + targets
-    out["sessionKeys"] = session_keys
-    out["targets"] = targets
+    dest_key = "111_Douan_ertan"
+    dest = _find_or_create_folder(service, parent_id, dest_key)
+    out["targets"] = [dest_key]
     for index, video in enumerate(videos):
         file_id = video.get("id") or ""
         name = video.get("name") or "baseline_validation.mp4"
         if not file_id:
             continue
-        dest_key = targets[index] if index < len(targets) else "111_Douan_ertan"
-        if not _looks_like_patient_key(dest_key):
-            out["skipped"].append({"id": file_id, "name": name, "reason": "not_patient_key"})
-            continue
-        dest = _find_or_create_folder(service, parent_id, dest_key)
-        drive_name = recovered_drive_video_name(name) or "baseline_validation.mp4"
+        drive_name = "baseline_validation.mp4" if index == 0 else f"baseline_{index + 1}_validation.mp4"
         moved = _move_file(service, file_id, misplaced_id, dest, drive_name)
         if moved:
             out["moved"].append({"id": file_id, "patientKey": dest_key, "name": drive_name})
-            have.add(dest_key)
         else:
             out["skipped"].append({"id": file_id, "name": name, "reason": "move_failed"})
     if not _list_direct_children(service, misplaced_id):

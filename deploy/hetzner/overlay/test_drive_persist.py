@@ -134,6 +134,25 @@ class DrivePersistTests(unittest.TestCase):
         names = [item.get("name") for rows in service.tree.values() for item in rows]
         self.assertIn("baseline_validation.mp4", names)
 
+    def test_rehomes_my_drive_videos_into_111(self) -> None:
+        from drive_persist import rehome_misplaced_clinic_videos
+
+        service = _FakeDriveService()
+        folder = "application/vnd.google-apps.folder"
+        service.tree["root"].append({"id": "myd", "name": "My_Drive", "mimeType": folder})
+        service.tree["myd"] = [
+            {"id": "v1", "name": "baseline_validation.mp4", "mimeType": "video/mp4"},
+            {"id": "v2", "name": "baseline_validation.mp4", "mimeType": "video/mp4"},
+        ]
+        with patch("drive_persist.drive_configured", return_value=True):
+            with patch("drive_persist._sa_service_or_none", return_value=None):
+                out = rehome_misplaced_clinic_videos(service=service, parent_id="root")
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["moved"][0]["patientKey"], "111_Douan_ertan")
+        names = [item.get("name") for rows in service.tree.values() for item in rows]
+        self.assertIn("baseline_validation.mp4", names)
+        self.assertIn("baseline_2_validation.mp4", names)
+
     def test_legacy_root_names(self) -> None:
         self.assertTrue(_is_legacy_root("team_patients"))
         self.assertTrue(_is_legacy_root("u1"))
