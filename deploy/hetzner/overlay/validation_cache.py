@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 
 router = APIRouter()
@@ -106,9 +106,24 @@ def register_validation_cache(app, data_dir: Path, html_path: Path) -> None:
                 unified_video=uni if uni.is_file() and uni.stat().st_size > 0 else None,
             )
             saved["drive"] = persisted.get("drive")
+            drive = saved.get("drive") or {}
+            print(
+                "validation-cache Drive persist: "
+                f"patient={patient} phase={ph} files={saved.get('files')} drive={drive}",
+                flush=True,
+            )
+            if not drive.get("ok"):
+                saved["skipped"] = True
+                saved["reason"] = (
+                    drive.get("reason")
+                    or persisted.get("drive_error")
+                    or "drive_failed"
+                )
         except Exception as exc:
             print(f"validation-cache Drive persist: {exc}", flush=True)
             saved["drive_error"] = str(exc)
+            saved["skipped"] = True
+            saved["reason"] = str(exc)
         return JSONResponse({"ok": True, **saved})
 
     _ALLOWED_FILES = {
@@ -190,6 +205,42 @@ def register_validation_cache(app, data_dir: Path, html_path: Path) -> None:
             "error": rebuild_job.get("error"),
             "result": rebuild_job.get("result"),
         }
+
+    @app.post("/api/ipad-sync-report")
+    async def ipad_sync_report(request: Request):
+        dest_dir = Path(data_dir) / "ipad_localstorage"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {"raw": str(payload)[:1000]}
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        dest = dest_dir / f"sync_report_{stamp}.json"
+        dest.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        (dest_dir / "sync_report_latest.json").write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        print(
+            "iPad sync report: "
+            f"total={payload.get('total')} overlay={payload.get('overlay')} "
+            f"cameraOnly={payload.get('cameraOnly')} uploaded={payload.get('uploaded')} "
+            f"driveFail={payload.get('driveFail')} failed={payload.get('failed')} "
+            f"lastDrive={payload.get('lastDrive')}",
+            flush=True,
+        )
+        return {"ok": True, "saved": dest.name}
+
+    @app.get("/api/ipad-sync-report")
+    async def ipad_sync_report_latest():
+        path = Path(data_dir) / "ipad_localstorage" / "sync_report_latest.json"
+        if not path.is_file():
+            return {"ok": True, "report": None}
+        try:
+            return {"ok": True, "report": json.loads(path.read_text(encoding="utf-8"))}
+        except Exception:
+            return {"ok": True, "report": None}
 
     @app.post("/api/ipad-localstorage")
     async def upload_ipad_localstorage(payload: Optional[UploadFile] = File(None)):

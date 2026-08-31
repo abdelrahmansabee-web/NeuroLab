@@ -70,7 +70,7 @@ class IpadTouchTests(unittest.TestCase):
         out = wire_index_html(html)
         self.assertIn(f"{CSS_NAME}?v=1", out)
         self.assertIn("main.0626212c.js?touch=3", out)
-        self.assertIn("pwa_ipad_sync.js?v=3", out)
+        self.assertIn("pwa_ipad_sync.js?v=4", out)
         self.assertNotIn("clinic_smooth", out)
         self.assertNotIn("clinic_ipad_paint", out)
 
@@ -106,7 +106,7 @@ class IpadTouchTests(unittest.TestCase):
             self.assertIn("navigator.standalone", js_sync)
             self.assertIn("/api/validation-cache", js_sync)
             self.assertIn("unifiedVideo", js_sync)
-            self.assertNotIn("originalVideo", js_sync)
+            self.assertNotIn('fd.append("originalVideo"', js_sync)
             self.assertIn("/connect-drive", js_sync)
             self.assertIn("ربط الدرايف", js_sync)
             self.assertIn("رفع الفاليديشن للدرايف", js_sync)

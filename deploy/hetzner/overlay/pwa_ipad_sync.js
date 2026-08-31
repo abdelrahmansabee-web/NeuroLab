@@ -12,7 +12,7 @@
 
   var DB = "neurolab_validation_v1";
   var STORE = "artifacts";
-  var FINGERPRINT_KEY = "nl_pwa_drive_sync_v1";
+  var FINGERPRINT_KEY = "nl_pwa_drive_ok_v1";
   var syncing = false;
 
   function token() {
@@ -21,6 +21,17 @@
     } catch (e) {
       return null;
     }
+  }
+
+  function authHeaders() {
+    var headers = {};
+    var t = token();
+    if (t) headers.Authorization = "Bearer " + t;
+    return headers;
+  }
+
+  function blobSize(blob) {
+    return blob instanceof Blob && blob.size ? blob.size : 0;
   }
 
   function loadFingerprints() {
@@ -40,9 +51,7 @@
   }
 
   function fingerprint(rec) {
-    var blob = rec && rec.unifiedVideoBlob;
-    var size = blob && blob.size ? blob.size : 0;
-    return String(rec.patientKey || rec.id || "anon") + "|" + String(rec.phase || "") + "|" + String(size);
+    return String(rec.patientKey || rec.id || "anon") + "|" + String(rec.phase || "") + "|" + String(blobSize(rec.unifiedVideoBlob));
   }
 
   function openDb() {
@@ -85,9 +94,13 @@
     el.style.color = kind === "err" ? "#ffb4b4" : kind === "ok" ? "#8ee0b5" : "#fff";
   }
 
+  function driveOk(body) {
+    return !!(body && body.drive && body.drive.ok);
+  }
+
   function uploadRecord(rec) {
     var blob = rec.unifiedVideoBlob;
-    if (!(blob instanceof Blob) || !blob.size) {
+    if (!blobSize(blob)) {
       return Promise.resolve({ skipped: true, reason: "no_validation_video" });
     }
     var fd = new FormData();
@@ -95,14 +108,11 @@
     fd.append("phase", rec.phase || "unknown");
     if (rec.unifiedVideoFilename) fd.append("unifiedVideoFilename", rec.unifiedVideoFilename);
     fd.append("unifiedVideo", blob, "unified.mp4");
-    var headers = {};
-    var t = token();
-    if (t) headers.Authorization = "Bearer " + t;
     return fetch("/api/validation-cache", {
       method: "POST",
       body: fd,
       credentials: "same-origin",
-      headers: headers,
+      headers: authHeaders(),
     }).then(function (res) {
       return res.json().catch(function () {
         return {};
@@ -120,14 +130,24 @@
       for (var i = 0; i < keys.length; i++) dump[keys[i]] = localStorage.getItem(keys[i]);
       var fd = new FormData();
       fd.append("payload", new Blob([JSON.stringify(dump)], { type: "application/json" }), "localstorage.json");
-      var headers = {};
-      var t = token();
-      if (t) headers.Authorization = "Bearer " + t;
       return fetch("/api/ipad-localstorage", {
         method: "POST",
         body: fd,
         credentials: "same-origin",
-        headers: headers,
+        headers: authHeaders(),
+      });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  }
+
+  function sendReport(report) {
+    try {
+      return fetch("/api/ipad-sync-report", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
+        body: JSON.stringify(report),
       });
     } catch (e) {
       return Promise.resolve(null);
@@ -143,52 +163,88 @@
       .then(function (rows) {
         var seen = loadFingerprints();
         var uploaded = 0;
-        var skipped = 0;
+        var overlay = 0;
+        var cameraOnly = 0;
         var failed = 0;
+        var driveFail = 0;
+        var lastDrive = "";
+        var inventory = [];
         var chain = Promise.resolve();
         rows.forEach(function (rec) {
+          var unified = blobSize(rec.unifiedVideoBlob);
+          var original = blobSize(rec.originalVideoBlob);
+          inventory.push({
+            patientKey: rec.patientKey || rec.id || "anon",
+            phase: rec.phase || "",
+            unifiedBytes: unified,
+            originalBytes: original,
+          });
           chain = chain.then(function () {
-            var blob = rec.unifiedVideoBlob;
-            if (!(blob instanceof Blob) || !blob.size) {
-              skipped += 1;
+            if (!unified) {
+              if (original) cameraOnly += 1;
               return;
             }
+            overlay += 1;
             var key = fingerprint(rec);
             if (!force && seen[key]) {
-              skipped += 1;
+              uploaded += 1;
               return;
             }
             return uploadRecord(rec)
               .then(function (body) {
                 if (body && body.skipped) {
-                  skipped += 1;
+                  driveFail += 1;
+                  lastDrive = body.reason || "skipped";
+                  return;
+                }
+                if (!driveOk(body)) {
+                  driveFail += 1;
+                  lastDrive = ((body.drive && (body.drive.reason || body.drive.error)) || body.drive_error || "drive_failed");
                   return;
                 }
                 seen[key] = Date.now();
                 saveFingerprints(seen);
                 uploaded += 1;
               })
-              .catch(function () {
+              .catch(function (err) {
                 failed += 1;
+                lastDrive = (err && err.message) || "upload_failed";
               });
           });
         });
         return chain.then(function () {
-          return { uploaded: uploaded, skipped: skipped, failed: failed, total: rows.length };
+          return {
+            uploaded: uploaded,
+            overlay: overlay,
+            cameraOnly: cameraOnly,
+            failed: failed,
+            driveFail: driveFail,
+            lastDrive: lastDrive,
+            total: rows.length,
+            inventory: inventory,
+          };
         });
       })
       .then(function (stats) {
-        return uploadPatients().then(function () {
-          return stats;
-        });
+        return uploadPatients()
+          .then(function () {
+            return sendReport(stats);
+          })
+          .then(function () {
+            return stats;
+          });
       })
       .then(function (stats) {
         if (stats.failed) {
-          setStatus("اترفع " + stats.uploaded + " — فشل " + stats.failed + ". اضغط للمحاولة", "err");
+          setStatus("فشل رفع " + stats.failed + " فيديو. اضغطي تاني. " + (stats.lastDrive || ""), "err");
+        } else if (stats.driveFail) {
+          setStatus("الأوفرلاي وصل السيرفر ومقدرش يكتب الدرايف: " + (stats.lastDrive || "خطأ"), "err");
         } else if (stats.uploaded) {
-          setStatus("اترفع " + stats.uploaded + " فيديو فاليديشن لملفات المرضى", "ok");
+          setStatus("اترفع " + stats.uploaded + " فيديو أوفرلاي على ملفات المرضى في الدرايف", "ok");
+        } else if (stats.cameraOnly && !stats.overlay) {
+          setStatus("في التطبيق فيديو كاميرا بس. Generate Unified لكل مرحلة وبعدين ارفعي. الدرايف فاضي من غير أوفرلاي.", "err");
         } else if (stats.total) {
-          setStatus("فيديوهات الفاليديشن متزامنة مع ملفات المرضى", "ok");
+          setStatus("مفيش فيديو أوفرلاي في الكاش. اعملي Generate Unified بعدين ارفعي.", "err");
         } else {
           setStatus("مفيش فيديو فاليديشن في التطبيق", "");
         }
@@ -237,7 +293,7 @@
     var status = document.createElement("div");
     status.id = "nl-pwa-sync-status";
     status.setAttribute("dir", "rtl");
-    status.style.cssText = "max-width:240px;font:12px/1.35 system-ui,sans-serif;color:#fff;text-align:right;";
+    status.style.cssText = "max-width:260px;font:12px/1.35 system-ui,sans-serif;color:#fff;text-align:right;";
     wrap.appendChild(status);
     document.body.appendChild(wrap);
   }
