@@ -257,7 +257,11 @@ def main() -> int:
     else:
         _patch(runner, PERSIST_OLD, PERSIST_NEW, "persist after overlay")
     _patch(main_py, UV_SIG_OLD, UV_SIG_NEW, "uv worker patient key")
-    _patch(main_py, UV_FORM_OLD, UV_FORM_NEW, "uv form patientKey")
+    main_now = main_py.read_text(encoding="utf-8")
+    if 'patientKey: str = Form("")' in main_now:
+        print("already patched: uv form patientKey")
+    else:
+        _patch(main_py, UV_FORM_OLD, UV_FORM_NEW, "uv form patientKey")
     _patch(main_py, UV_JOB_OLD, UV_JOB_NEW, "uv job patient key")
     _patch(main_py, UV_SAVE_OLD, UV_SAVE_NEW, "persist unified validation to Drive")
     stacked = runner.read_text(encoding="utf-8")

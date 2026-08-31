@@ -162,7 +162,7 @@ JS_PATCHES = (
 def _apply(text: str, patches: tuple, already_ok: str) -> tuple[str, list[str]]:
     applied: list[str] = []
     for label, old, new in patches:
-        if new in text and old not in text:
+        if new in text:
             applied.append(f"already {label}")
             continue
         if old not in text:

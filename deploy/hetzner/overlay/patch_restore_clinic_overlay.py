@@ -36,7 +36,7 @@ PATCHES = (
 def patch_js_text(text: str) -> tuple[str, list[str]]:
     applied: list[str] = []
     for label, old, new in PATCHES:
-        if new in text and old not in text:
+        if new in text:
             applied.append(f"already {label}")
             continue
         if old not in text:
