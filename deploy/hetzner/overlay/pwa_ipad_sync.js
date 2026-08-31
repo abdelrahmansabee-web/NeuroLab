@@ -210,17 +210,14 @@
     lastForce = !!force;
     if (!force && busy > 0) {
       pendingAfterBusy = true;
-      setStatus("التحليل شغال. الرفع للدرايف بعد ما يخلص.", "");
       return Promise.resolve();
     }
     if (force && busy > 0) {
       pendingAfterBusy = true;
-      setStatus("استني التحليل يخلص، وبعدين الرفع يتم تلقائي.", "");
       return Promise.resolve();
     }
     if (syncing) return Promise.resolve();
     syncing = true;
-    setStatus("جاري رفع فيديوهات الفاليديشن…", "");
     return openDb()
       .then(getAll)
       .then(function (rows) {
@@ -305,31 +302,25 @@
       })
       .then(function (stats) {
         if (stats.deferred && busy > 0) {
-          setStatus("التحليل شغال. الرفع للدرايف بعد ما يخلص.", "");
           return;
         }
-        if (stats.failed) {
-          setStatus("فشل رفع الأوفرلاي لأن السيرفر مشغول بالتحليل. بعد ما يخلص اضغطي رفع تاني.", "err");
-        } else if (stats.driveFail) {
+        if (stats.failed && force) {
+          setStatus("السيرفر مشغول. الرفع بعد ما التحليل يخلص.", "err");
+        } else if (stats.driveFail && force) {
           setStatus("الأوفرلاي وصل السيرفر ومقدرش يكتب الدرايف: " + (stats.lastDrive || "خطأ"), "err");
         } else if (stats.uploaded) {
-          setStatus("اترفع " + stats.uploaded + " فيديو أوفرلاي على ملفات المرضى في الدرايف", "ok");
-        } else if (stats.cameraOnly && !stats.overlay) {
-          setStatus("لو الجدول ظاهر اضغطي UV. لو طلعت CSV not found اضغطي ▶ وبعدين UV.", "");
-        } else if (stats.total) {
-          setStatus("مفيش أوفرلاي جاهز لسه. بعد التحليل وGenerate Unified هيترفع للدرايف.", "");
+          setStatus("اترفع " + stats.uploaded + " فيديو فاليديشن على الدرايف", "ok");
         } else {
-          setStatus("مفيش فيديو فاليديشن في التطبيق", "");
+          setStatus("", "");
         }
       })
       .catch(function () {
         if (busy > 0) {
           pendingAfterBusy = true;
-          setStatus("التحليل شغال. الرفع للدرايف بعد ما يخلص.", "");
           return;
         }
         if (force) {
-          setStatus("السيرفر مشغول أو الشبكة قطعت. استني التحليل يخلص واضغطي رفع تاني.", "err");
+          setStatus("السيرفر مشغول أو الشبكة قطعت.", "err");
         }
       })
       .then(function () {
@@ -355,7 +346,7 @@
     wrap.id = "nl-pwa-sync";
     wrap.setAttribute("dir", "rtl");
     wrap.style.cssText =
-      "position:fixed;z-index:2147483000;bottom:12px;right:12px;display:flex;" +
+      "position:fixed;z-index:20;bottom:12px;right:12px;display:flex;" +
       "flex-direction:column;gap:8px;align-items:flex-end;";
     wrap.appendChild(link("/connect-drive", "ربط الدرايف"));
     var btn = document.createElement("button");

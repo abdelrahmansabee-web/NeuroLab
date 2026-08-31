@@ -25,10 +25,19 @@ class PwaIpadSyncTests(unittest.TestCase):
     def test_skips_records_without_overlay_video(self) -> None:
         self.assertIn("no_validation_video", self.js)
         self.assertIn("cameraOnly", self.js)
-        self.assertIn("Generate Unified", self.js)
-        self.assertIn("لو الجدول ظاهر اضغطي UV", self.js)
         self.assertNotIn("الفيديو بيتحلل.", self.js)
+        self.assertNotIn("لو الجدول ظاهر اضغطي UV", self.js)
+        self.assertNotIn("CSV not found", self.js)
         self.assertNotIn("فيديوهات الفاليديشن متزامنة مع ملفات المرضى", self.js)
+        self.assertIn("z-index:20", self.js)
+        self.assertNotIn("z-index:2147483000", self.js)
+
+    def test_does_not_fight_analysis(self) -> None:
+        self.assertIn("isClinicJob", self.js)
+        self.assertIn("/analyze", self.js)
+        self.assertIn("/unified-validation", self.js)
+        self.assertIn("quietFetch", self.js)
+        self.assertNotIn("فشل الرفع: ", self.js)
 
     def test_requires_drive_ok_before_success(self) -> None:
         self.assertIn("driveOk", self.js)
@@ -42,14 +51,6 @@ class PwaIpadSyncTests(unittest.TestCase):
         self.assertIn("syncVideos(true)", self.js)
         self.assertIn("syncVideos(false)", self.js)
         self.assertIn("/api/ipad-localstorage", self.js)
-
-    def test_does_not_fight_analysis(self) -> None:
-        self.assertIn("isClinicJob", self.js)
-        self.assertIn("/analyze", self.js)
-        self.assertIn("/unified-validation", self.js)
-        self.assertIn("quietFetch", self.js)
-        self.assertIn("التحليل شغال. الرفع للدرايف بعد ما يخلص.", self.js)
-        self.assertNotIn("فشل الرفع: ", self.js)
 
 
 if __name__ == "__main__":
