@@ -63,7 +63,7 @@ def main() -> int:
             updated = updated.replace(old, 'DEPLOY_VERSION = "29.48"')
         if updated != text:
             path.write_text(updated, encoding="utf-8")
-            print(f"bumped {rel} to 29.47")
+            print(f"bumped {rel} to 29.48")
     return 0
 
 
