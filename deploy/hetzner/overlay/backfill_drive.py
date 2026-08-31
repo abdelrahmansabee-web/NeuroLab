@@ -124,13 +124,13 @@ def rebuild_clinic_folder(data_dir: Path) -> Dict[str, Any]:
     )
 
     try:
-        reorganized = reorganize_clinic_folder()
-    except Exception as exc:
-        reorganized = {"ok": False, "error": str(exc)[:300]}
-    try:
         restored = restore_trashed_videos_to_patients()
     except Exception as exc:
         restored = {"ok": False, "error": str(exc)[:300]}
+    try:
+        reorganized = reorganize_clinic_folder()
+    except Exception as exc:
+        reorganized = {"ok": False, "error": str(exc)[:300]}
     try:
         filled = backfill_data_dir(Path(data_dir))
     except Exception as exc:

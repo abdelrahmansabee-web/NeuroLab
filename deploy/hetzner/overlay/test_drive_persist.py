@@ -77,6 +77,20 @@ class DrivePersistTests(unittest.TestCase):
         self.assertEqual(recovered_drive_video_name("baseline_validation.mp4"), "baseline_validation.mp4")
         self.assertIsNone(recovered_drive_video_name("patient.json"))
 
+    def test_patient_key_prefers_id_over_my_drive(self) -> None:
+        from drive_persist import _patient_key_from_chain
+
+        self.assertEqual(
+            _patient_key_from_chain(
+                ["team_patients", " NeuroLab_Backups", "My Drive", "111_Douan_ertan", "videos"]
+            ),
+            "111_Douan_ertan",
+        )
+        self.assertEqual(
+            _patient_key_from_chain(["videos", "105_Ahmet_sever", "u1"]),
+            "105_Ahmet_sever",
+        )
+
     def test_collects_videos_inside_trashed_nested_folders(self) -> None:
         from drive_persist import _collect_videos_from_trashed_trees
 
@@ -108,7 +122,11 @@ class DrivePersistTests(unittest.TestCase):
                         "drive_persist._collect_videos_from_trashed_trees",
                         return_value=found,
                     ):
-                        out = restore_trashed_videos_to_patients()
+                        with patch(
+                            "drive_persist.rehome_misplaced_clinic_videos",
+                            return_value={"ok": True, "moved": []},
+                        ):
+                            out = restore_trashed_videos_to_patients()
         self.assertTrue(out["ok"])
         self.assertEqual(out["count"], 1)
         self.assertEqual(out["restored"][0]["patientKey"], "111_Douan_ertan")
@@ -121,6 +139,7 @@ class DrivePersistTests(unittest.TestCase):
         self.assertTrue(_is_legacy_root("u1"))
         self.assertTrue(_is_legacy_root("_NEUROLAB_DRIVE_OK.json"))
         self.assertFalse(_is_legacy_root("105_Ahmet_sever"))
+        self.assertFalse(_is_legacy_root("111_Douan_ertan"))
 
     def test_patient_key_from_nested_paths(self) -> None:
         self.assertEqual(

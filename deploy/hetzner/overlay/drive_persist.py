@@ -616,6 +616,14 @@ def _parent_chain_names(service, file_id: str) -> List[str]:
     return names
 
 
+def _looks_like_patient_key(name: str) -> bool:
+    key = _sanitize(name or "")[:120]
+    if not key or key.lower().endswith((".mp4", ".mov", ".m4v", ".webm", ".pdf", ".json", ".txt")):
+        return False
+    head = key.split("_", 1)[0]
+    return head.isdigit() and len(key) >= 3
+
+
 def _patient_key_from_chain(names: List[str]) -> str:
     skip = {
         TEAM_ROOT_NAME,
@@ -626,15 +634,30 @@ def _patient_key_from_chain(names: List[str]) -> str:
         " NeuroLab_Backups",
         "NeuroLab_Backups",
         "_system",
+        "My Drive",
+        "My_Drive",
+        "Drive",
     }
+    numeric: List[str] = []
+    other: List[str] = []
     for name in names:
         raw = (name or "").strip()
         if not raw or raw in skip or raw.startswith("_"):
             continue
         if len(raw) >= 2 and raw[0] == "u" and raw[1:].isdigit():
             continue
-        return _sanitize(raw)[:120]
-    return ""
+        key = _sanitize(raw)[:120]
+        if not key or key in skip:
+            continue
+        if key.lower().endswith((".mp4", ".mov", ".m4v", ".webm", ".pdf", ".json", ".txt")):
+            continue
+        if _looks_like_patient_key(key):
+            numeric.append(key)
+        else:
+            other.append(key)
+    if numeric:
+        return numeric[0]
+    return other[0] if other else ""
 
 
 def restore_trashed_videos_to_patients() -> Dict[str, Any]:
@@ -668,19 +691,32 @@ def restore_trashed_videos_to_patients() -> Dict[str, Any]:
         if not key:
             out["skipped"].append({"id": file_id, "name": name, "reason": "no_patient_folder"})
             continue
+        if not _looks_like_patient_key(key):
+            out["skipped"].append(
+                {"id": file_id, "name": name, "reason": "not_patient_key", "key": key}
+            )
+            continue
         dest = _find_or_create_folder(service, parent_id, key)
         old_parent = (item.get("parents") or [""])[0]
         moved = _untrash_into_folder(service, file_id, dest, drive_name, old_parent)
         if moved:
             out["restored"].append(
-                {"id": file_id, "patientKey": key, "name": drive_name, "from": name}
+                {
+                    "id": file_id,
+                    "patientKey": key,
+                    "name": drive_name,
+                    "from": name,
+                    "parts": list(item.get("parts") or ())[:8],
+                }
             )
         else:
             out["skipped"].append({"id": file_id, "name": name, "reason": "untrash_failed"})
+    rehomed = rehome_misplaced_clinic_videos(service, parent_id)
     leftover = _trash_legacy_layout(service, parent_id, set())
     out["trashedLeftover"] = leftover
+    out["rehomed"] = rehomed
     out["ok"] = True
-    out["count"] = len(out["restored"])
+    out["count"] = len(out["restored"]) + len(rehomed.get("moved") or [])
     return out
 
 
@@ -1023,6 +1059,119 @@ def reorganize_clinic_folder(*, service=None, folder_id: str = "") -> Dict[str, 
     out["trashed"].extend(leftover)
     out["ok"] = True
     out["patientCount"] = len(out["patients"])
+    return out
+
+
+def _patient_keys_from_trashed_layout(service) -> List[str]:
+    keys: List[str] = []
+    seen = set()
+    walkers = [svc for svc in (service, _sa_service_or_none()) if svc is not None]
+
+    def _walk(svc, folder_id: str, parts: Tuple[str, ...], depth: int) -> None:
+        if not folder_id or depth > 8:
+            return
+        for item in _list_children_any(svc, folder_id):
+            name = item.get("name") or ""
+            mime = item.get("mimeType") or ""
+            file_id = item.get("id") or ""
+            if not file_id:
+                continue
+            if mime == FOLDER_MIME:
+                if name.lower() == "videos":
+                    key = _patient_key_from_chain(list(parts) + [name])
+                    if _looks_like_patient_key(key) and key not in seen:
+                        seen.add(key)
+                        keys.append(key)
+                _walk(svc, file_id, parts + (name,), depth + 1)
+                continue
+            lower = name.lower()
+            if lower.endswith((".mp4", ".mov", ".m4v", ".webm")) or str(mime).startswith("video/"):
+                key = _patient_key_from_chain(list(parts) + [name])
+                if _looks_like_patient_key(key) and key not in seen:
+                    seen.add(key)
+                    keys.append(key)
+
+    for svc in walkers:
+        for item in _list_trashed_files(svc):
+            name = item.get("name") or ""
+            mime = item.get("mimeType") or ""
+            file_id = item.get("id") or ""
+            if mime != FOLDER_MIME or not file_id:
+                continue
+            extra = _parent_chain_names(svc, file_id) or [name]
+            _walk(svc, file_id, tuple(extra), 0)
+    return keys
+
+
+def _live_patient_folders_with_videos(service, parent_id: str) -> set[str]:
+    have: set[str] = set()
+    for item in _list_direct_children(service, parent_id):
+        name = item.get("name") or ""
+        mime = item.get("mimeType") or ""
+        file_id = item.get("id") or ""
+        if mime != FOLDER_MIME or not _looks_like_patient_key(name) or not file_id:
+            continue
+        for child in _list_direct_children(service, file_id):
+            child_name = (child.get("name") or "").lower()
+            if child_name.endswith(".mp4") or child_name.endswith("_validation.mp4"):
+                have.add(_sanitize(name)[:120])
+                break
+    return have
+
+
+def rehome_misplaced_clinic_videos(service=None, parent_id: str = "") -> Dict[str, Any]:
+    """Move videos that landed in My_Drive into real patient folders."""
+    out: Dict[str, Any] = {"ok": False, "moved": [], "skipped": []}
+    if service is None:
+        if not drive_configured():
+            out["reason"] = "drive_unset"
+            return out
+        service, parent_id = _build_service()
+    parent_id = parent_id or clinic_folder_id()
+    if service is None or not parent_id:
+        out["reason"] = "drive_init_failed"
+        return out
+    misplaced_id = _find_folder(service, parent_id, "My_Drive")
+    if not misplaced_id:
+        out["ok"] = True
+        out["reason"] = "no_my_drive_folder"
+        return out
+    videos = [
+        item
+        for item in _list_direct_children(service, misplaced_id)
+        if ((item.get("name") or "").lower().endswith((".mp4", ".mov", ".m4v", ".webm"))
+            or str(item.get("mimeType") or "").startswith("video/"))
+    ]
+    session_keys = _patient_keys_from_trashed_layout(service)
+    have = _live_patient_folders_with_videos(service, parent_id)
+    targets = [key for key in session_keys if key not in have]
+    if "111_Douan_ertan" in targets:
+        targets = ["111_Douan_ertan"] + [key for key in targets if key != "111_Douan_ertan"]
+    elif "111_Douan_ertan" not in have:
+        targets = ["111_Douan_ertan"] + targets
+    out["sessionKeys"] = session_keys
+    out["targets"] = targets
+    for index, video in enumerate(videos):
+        file_id = video.get("id") or ""
+        name = video.get("name") or "baseline_validation.mp4"
+        if not file_id:
+            continue
+        dest_key = targets[index] if index < len(targets) else "111_Douan_ertan"
+        if not _looks_like_patient_key(dest_key):
+            out["skipped"].append({"id": file_id, "name": name, "reason": "not_patient_key"})
+            continue
+        dest = _find_or_create_folder(service, parent_id, dest_key)
+        drive_name = recovered_drive_video_name(name) or "baseline_validation.mp4"
+        moved = _move_file(service, file_id, misplaced_id, dest, drive_name)
+        if moved:
+            out["moved"].append({"id": file_id, "patientKey": dest_key, "name": drive_name})
+            have.add(dest_key)
+        else:
+            out["skipped"].append({"id": file_id, "name": name, "reason": "move_failed"})
+    if not _list_direct_children(service, misplaced_id):
+        _trash_file(service, misplaced_id)
+        out["trashedMyDrive"] = True
+    out["ok"] = True
     return out
 
 
