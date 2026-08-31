@@ -116,7 +116,8 @@ class PatientPdfTests(unittest.TestCase):
         self.assertIn("Summary / Özet", html)
         self.assertIn("Clinical Narrative / Klinik Anlatım", html)
         self.assertNotIn("0_gorsel", html)
-        self.assertIn("#f5f0eb", html)
+        self.assertIn("#ffffff", html)
+        self.assertNotIn("#f5f0eb", html)
         self.assertIn("#800020", html)
 
     def test_matches_program_labels_not_raw_keys(self) -> None:

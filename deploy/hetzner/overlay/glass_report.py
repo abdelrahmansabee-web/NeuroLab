@@ -30,7 +30,7 @@ TOOL_META = {
 
 GLASS_CSS = r"""
   * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',system-ui,-apple-system,'DejaVu Sans',sans-serif; }
-  body { background:#f5f0eb; color:#1e293b; padding:28px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body { background:#ffffff; color:#1e293b; padding:28px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   .wrap { max-width:920px; margin:0 auto; }
   .header { border:1px solid rgba(255,255,255,0.3); border-radius:1rem; box-shadow:0 25px 50px -8px rgba(0,0,0,0.10); padding:22px 30px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; }
   .header h1 { font-size:20px; color:#1e293b; font-weight:800; }
@@ -62,10 +62,10 @@ GLASS_CSS = r"""
   .singlecol .card { break-inside:avoid; page-break-inside:avoid; background:rgba(255,255,255,0.65); border:1px solid rgba(255,255,255,0.3); border-radius:1rem; box-shadow:0 25px 50px -8px rgba(0,0,0,0.10); padding:18px 22px; margin-bottom:20px; }
   .pagebreak { break-before:page; page-break-before:always; }
   @media print {
-    body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; background:#f5f0eb !important; padding:16px; }
+    body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; background:#ffffff !important; padding:16px; }
     .card, .header, .patient { box-shadow:0 10px 30px -6px rgba(0,0,0,0.08) !important; page-break-inside:avoid; break-inside:avoid; }
     .badge, thead th, .tblwrap { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
-    @page { margin:12mm; size: A4; }
+    @page { margin:12mm; size: A4; background:#ffffff; }
   }
 """
 
