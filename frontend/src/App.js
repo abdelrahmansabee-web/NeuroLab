@@ -2292,18 +2292,18 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     };
   }, []);
 
-  // Reload kinematics when switching patient session
+  // Reload kinematics when switching patient session.
+  // Do not wipe in-memory / localStorage results when analysisResults is empty:
+  // first Save remaps sessionKey from participantId to _loadedId and would
+  // otherwise hide a completed analysis while the camera file stays in the picker.
   useEffect(() => {
     if (!sessionKey) return;
     const fromFd = data?.analysisResults;
     if (fromFd && typeof fromFd === "object" && Object.keys(fromFd).length > 0) {
       const cleaned = { ...fromFd };
       delete cleaned.during;
-      setKinematicsResults(cleaned);
+      setKinematicsResults((prev) => ({ ...prev, ...cleaned }));
       localStorage.setItem(KIN_LS_KEY, JSON.stringify(cleaned));
-    } else {
-      setKinematicsResults({});
-      localStorage.removeItem(KIN_LS_KEY);
     }
   }, [sessionKey]);
 
@@ -3612,7 +3612,16 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
                 if (curId) {
                   const cur = merged.find((p) => (p._id || p.demographics?.participantId) === curId);
                   if (cur) {
-                    setFd((prev) => ({ ...prev, ...cur }));
+                    setFd((prev) => {
+                      const next = { ...prev, ...cur };
+                      const incoming = cur.kinematics?.analysisResults;
+                      const local = prev.kinematics?.analysisResults;
+                      const incomingEmpty = !incoming || typeof incoming !== "object" || Object.keys(incoming).length === 0;
+                      if (incomingEmpty && local && typeof local === "object" && Object.keys(local).length > 0) {
+                        next.kinematics = { ...(cur.kinematics || prev.kinematics || {}), analysisResults: local };
+                      }
+                      return next;
+                    });
                     if (cur.kinematics?.analysisResults) {
                       localStorage.setItem(KIN_LS_KEY, JSON.stringify(cur.kinematics.analysisResults));
                     }
@@ -6538,7 +6547,7 @@ export default function App() {
     kinematics: (
       <KinSection
         data={fd.kinematics}
-        sessionKey={fd._loadedId || fd.demographics?.participantId}
+        sessionKey={fd.demographics?.participantId || fd._loadedId}
         demographics={fd.demographics}
         onChange={(d) => upd("kinematics", d)}
         showToast={showToast}

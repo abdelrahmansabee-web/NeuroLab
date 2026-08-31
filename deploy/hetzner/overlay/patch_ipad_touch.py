@@ -11,7 +11,7 @@ CSS_VER = "1"
 CSS_NAME = "clinic_touch.css"
 LINK = f'<link rel="stylesheet" href="/{CSS_NAME}?v={CSS_VER}"/>'
 PWA_SYNC_JS = "pwa_ipad_sync.js"
-PWA_SYNC_TAG = f'<script src="/{PWA_SYNC_JS}?v=5"></script>'
+PWA_SYNC_TAG = f'<script src="/{PWA_SYNC_JS}?v=6"></script>'
 HREF_RE = re.compile(rf'href="/{re.escape(CSS_NAME)}(?:\?v=\d+)?"')
 WHILE_TAP_RE = re.compile(r"whileTap:(?:x\?void 0:)?Yw\([^)]+\)")
 PTR_MOVE_OLD = 'addEventListener("touchmove",r,{passive:!1})'

@@ -25,6 +25,7 @@ def main() -> int:
     sys.path.insert(0, str(OVERLAY))
     from patch_drive_oauth import patch_drive_oauth
     from patch_ipad_touch import patch_ipad_touch
+    from patch_keep_kin_results import patch_keep_kin_results
     from patch_persist_videos import main as patch_videos
 
     videos_rc = patch_videos()
@@ -36,6 +37,9 @@ def main() -> int:
     touch_rc = patch_ipad_touch(root)
     if touch_rc != 0:
         return touch_rc
+    kin_rc = patch_keep_kin_results(root)
+    if kin_rc != 0:
+        return kin_rc
     for rel in ("main.py", "analyze_job_runner.py"):
         path = root / rel
         if not path.is_file():
@@ -43,6 +47,7 @@ def main() -> int:
         text = path.read_text(encoding="utf-8")
         updated = text
         for old in (
+            'DEPLOY_VERSION = "29.54"',
             'DEPLOY_VERSION = "29.53"',
             'DEPLOY_VERSION = "29.52"',
             'DEPLOY_VERSION = "29.51"',
@@ -66,10 +71,10 @@ def main() -> int:
             'DEPLOY_VERSION = "29.33"',
             'DEPLOY_VERSION = "29.32"',
         ):
-            updated = updated.replace(old, 'DEPLOY_VERSION = "29.54"')
+            updated = updated.replace(old, 'DEPLOY_VERSION = "29.55"')
         if updated != text:
             path.write_text(updated, encoding="utf-8")
-            print(f"bumped {rel} to 29.54")
+            print(f"bumped {rel} to 29.55")
     _ensure_weasyprint(root)
     return 0
 

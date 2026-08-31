@@ -315,7 +315,7 @@
         } else if (stats.uploaded) {
           setStatus("اترفع " + stats.uploaded + " فيديو أوفرلاي على ملفات المرضى في الدرايف", "ok");
         } else if (stats.cameraOnly && !stats.overlay) {
-          setStatus("الفيديو بيتحلل. بعد Generate Unified هيترفع للدرايف لوحده.", "");
+          setStatus("الكاميرا موجودة. اضغطي ▶ للتحليل واستني Analysis complete، وبعدين Generate Unified.", "");
         } else if (stats.total) {
           setStatus("مفيش أوفرلاي جاهز لسه. بعد التحليل وGenerate Unified هيترفع للدرايف.", "");
         } else {
