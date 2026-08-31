@@ -110,6 +110,7 @@ PERSIST_NEW = '''    try:
 
 
 PERSIST_TRY = PERSIST_NEW.split('    _prog(95', 1)[0]
+PERSIST_ALREADY = "persist_phase_artifacts("
 PLAYBACK_STACK_RE = re.compile(r"(?:    playback_video = video_path\n){2,}")
 
 UV_SIG_OLD = '''def _run_uv_generation(job_id: str, csv_path: Path, video_path: Path, rotation: str):
@@ -250,7 +251,11 @@ def main() -> int:
     _patch(runner, EXECUTE_OLD, EXECUTE_NEW, "worker patient_key")
     _patch(runner, PIPELINE_SIG_OLD, PIPELINE_SIG_NEW, "pipeline signature")
     _patch(runner, PLAYBACK_OLD, PLAYBACK_NEW, "keep playback video")
-    _patch(runner, PERSIST_OLD, PERSIST_NEW, "persist after overlay")
+    runner_text = runner.read_text(encoding="utf-8")
+    if PERSIST_ALREADY in runner_text:
+        print("already patched: persist after overlay")
+    else:
+        _patch(runner, PERSIST_OLD, PERSIST_NEW, "persist after overlay")
     _patch(main_py, UV_SIG_OLD, UV_SIG_NEW, "uv worker patient key")
     _patch(main_py, UV_FORM_OLD, UV_FORM_NEW, "uv form patientKey")
     _patch(main_py, UV_JOB_OLD, UV_JOB_NEW, "uv job patient key")
