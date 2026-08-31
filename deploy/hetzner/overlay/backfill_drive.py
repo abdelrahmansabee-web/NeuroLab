@@ -71,14 +71,13 @@ def backfill_data_dir(data_dir: Path) -> Dict[str, Any]:
     uploaded = []
     for key, phase, files in sessions:
         unified = files.get("unified_video")
-        original = files.get("original_video")
-        if unified is None and original is None:
+        if unified is None:
             uploaded.append(
                 {
                     "patientKey": key,
                     "phase": phase,
                     "skipped": True,
-                    "reason": "no_playable_video",
+                    "reason": "no_validation_video",
                 }
             )
             continue
@@ -86,8 +85,6 @@ def backfill_data_dir(data_dir: Path) -> Dict[str, Any]:
             Path(data_dir),
             key,
             phase,
-            original_video=original if unified is None else None,
-            overlay_json=files.get("overlay_json"),
             unified_video=unified,
             library_name=f"{phase}_{key}_backfill",
         )
@@ -116,19 +113,17 @@ def backfill_data_dir(data_dir: Path) -> Dict[str, Any]:
 
 
 def rebuild_clinic_folder(data_dir: Path) -> Dict[str, Any]:
-    """Rebuild Drive as one patient folder with PDF + validation videos only."""
-    from drive_persist import (
-        list_clinic_folder,
-        reorganize_clinic_folder,
-        restore_trashed_videos_to_patients,
-    )
+    """Reorganize Drive from program sessions: clinical PDF + matching overlay videos."""
+    from drive_persist import list_clinic_folder, reorganize_clinic_folder
+    from patient_drive_archive import load_program_patients
 
     try:
-        restored = restore_trashed_videos_to_patients()
+        program_patients = load_program_patients(Path(data_dir))
     except Exception as exc:
-        restored = {"ok": False, "error": str(exc)[:300]}
+        program_patients = []
+        print(f"program patients load skipped: {exc}", flush=True)
     try:
-        reorganized = reorganize_clinic_folder()
+        reorganized = reorganize_clinic_folder(program_patients=program_patients)
     except Exception as exc:
         reorganized = {"ok": False, "error": str(exc)[:300]}
     try:
@@ -141,9 +136,9 @@ def rebuild_clinic_folder(data_dir: Path) -> Dict[str, Any]:
     except Exception as exc:
         inventory = {"ok": False, "error": str(exc)}
     return {
-        "ok": bool(reorganized.get("ok") or restored.get("ok") or filled.get("ok")),
+        "ok": bool(reorganized.get("ok") or filled.get("ok")),
+        "programPatients": len(program_patients),
         "reorganized": reorganized,
-        "restoredVideos": restored,
         "backfill": filled,
         "inventory": inventory,
     }

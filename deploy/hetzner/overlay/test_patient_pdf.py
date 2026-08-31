@@ -24,13 +24,20 @@ class PatientPdfTests(unittest.TestCase):
         }
         lines = patient_pdf_lines(patient)
         blob = "\n".join(lines)
+        self.assertIn("Clinical Assessment Report", blob)
         self.assertIn("Ahmet Sever", blob)
-        self.assertIn("Study ID: 105", blob)
+        self.assertIn("ID: 105", blob)
         self.assertIn("Male", blob)
         self.assertIn("Ischemic", blob)
         pdf = build_patient_pdf(patient)
-        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertTrue(pdf.startswith(b"%PDF-1.4"))
         self.assertIn(b"%%EOF", pdf)
+        self.assertIn(b"startxref", pdf)
+        xref_at = pdf.rfind(b"startxref")
+        self.assertGreater(xref_at, 0)
+        obj1 = pdf.find(b"1 0 obj")
+        self.assertGreater(obj1, 8)
+        self.assertNotEqual(pdf[pdf.find(b"xref"):].split(b"\n")[2], b"0000000000 00000 n ")
 
 
 if __name__ == "__main__":

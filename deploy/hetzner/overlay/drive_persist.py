@@ -16,8 +16,15 @@ def _sanitize(name: str) -> str:
     return re.sub(r"[^\w.\-]", "_", (name or "").strip())[:180]
 
 
+ALLOWED_VALIDATION_VIDEOS = {
+    "pre_validation.mp4",
+    "post_validation.mp4",
+    "healthy_validation.mp4",
+}
+
+
 def clinic_drive_filename(name: str) -> Optional[str]:
-    """Keep only the patient PDF and validation overlay mp4s."""
+    """Keep only the patient PDF and pre / post / healthy-side overlay mp4s."""
     raw = (name or "").strip()
     if not raw:
         return None
@@ -26,16 +33,21 @@ def clinic_drive_filename(name: str) -> Optional[str]:
         stem = _sanitize(Path(raw).stem) or "report"
         return f"{stem}.pdf"
     if lower.endswith((".mp4", ".mov", ".m4v", ".webm")):
-        if "validation_unified" in lower or "unified_validation" in lower:
-            stem = Path(raw).stem
-            stem = stem.replace("_validation_unified", "_validation").replace(
-                "_unified_validation", "_validation"
-            )
-            if not stem.endswith("_validation"):
-                stem = f"{stem}_validation"
-            return f"{stem}.mp4"
-        if lower.endswith("_validation.mp4"):
-            return _sanitize(Path(raw).stem) + ".mp4"
+        stem = Path(raw).stem.lower()
+        stem = (
+            stem.replace("_validation_unified", "")
+            .replace("_unified_validation", "")
+            .replace("_validation", "")
+        )
+        if stem in ("baseline", "healthy", "healthy_side"):
+            return "healthy_validation.mp4"
+        if stem == "pre":
+            return "pre_validation.mp4"
+        if stem == "post":
+            return "post_validation.mp4"
+        mapped = _sanitize(Path(raw).stem) + ".mp4"
+        if mapped.lower() in ALLOWED_VALIDATION_VIDEOS:
+            return mapped.lower()
         return None
     return None
 
@@ -592,6 +604,38 @@ def _collect_videos_from_trashed_trees(service) -> List[Dict[str, Any]]:
     return videos
 
 
+def _trashed_json_files(service) -> List[Dict[str, Any]]:
+    found: List[Dict[str, Any]] = []
+    seen = set()
+    walkers = [svc for svc in (service, _sa_service_or_none()) if svc is not None]
+
+    def _walk(svc, folder_id: str, parts: Tuple[str, ...], depth: int) -> None:
+        if not folder_id or depth > 8:
+            return
+        for item in _list_children_any(svc, folder_id):
+            name = item.get("name") or ""
+            mime = item.get("mimeType") or ""
+            file_id = item.get("id") or ""
+            if not file_id or file_id in seen:
+                continue
+            seen.add(file_id)
+            if mime == FOLDER_MIME:
+                _walk(svc, file_id, parts + (name,), depth + 1)
+                continue
+            if name.lower().endswith(".json"):
+                found.append({**item, "parts": parts})
+
+    for svc in walkers:
+        for item in _list_trashed_files(svc):
+            mime = item.get("mimeType") or ""
+            file_id = item.get("id") or ""
+            name = item.get("name") or ""
+            if mime == FOLDER_MIME and file_id:
+                extra = _parent_chain_names(svc, file_id) or [name]
+                _walk(svc, file_id, tuple(extra), 0)
+    return found
+
+
 def _parent_chain_names(service, file_id: str) -> List[str]:
     names: List[str] = []
     current = file_id
@@ -936,8 +980,10 @@ def _canonical_patient_key(keys: List[str]) -> str:
     return sorted(keys, key=lambda key: (key.count("_"), len(key)), reverse=True)[0]
 
 
-def reorganize_clinic_folder(*, service=None, folder_id: str = "") -> Dict[str, Any]:
-    """Rebuild NeuroLab_Backups as one folder per patient: PDF + validation mp4s only."""
+def reorganize_clinic_folder(
+    *, service=None, folder_id: str = "", program_patients: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """Rebuild NeuroLab_Backups as one folder per program patient: PDF + matching overlay videos."""
     out: Dict[str, Any] = {
         "ok": False,
         "patients": [],
@@ -975,6 +1021,15 @@ def reorganize_clinic_folder(*, service=None, folder_id: str = "") -> Dict[str, 
         elif mapped and mapped.endswith(".pdf"):
             bucket["pdfs"].append({**item, "driveName": mapped})
 
+    for item in _trashed_json_files(service):
+        key = _patient_key_from_chain(list(item.get("parts") or ()) + [item.get("name") or ""])
+        if not key:
+            key = _patient_key_from_parts(tuple(item.get("parts") or ()))
+        if not key:
+            continue
+        grouped.setdefault(key, {"json": {}, "videos": [], "pdfs": []})
+        json_candidates.setdefault(key, []).append(item)
+
     def _pick_json(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         named = {str(item.get("name") or "").lower(): item for item in items}
         if "patient.json" in named:
@@ -1005,10 +1060,20 @@ def reorganize_clinic_folder(*, service=None, folder_id: str = "") -> Dict[str, 
     merged: Dict[str, Dict[str, Any]] = {}
     for key, bucket in grouped.items():
         canon = alias_to_canon.get(key) or key
-        dest = merged.setdefault(canon, {"json": {}, "videos": [], "pdfs": []})
+        dest = merged.setdefault(canon, {"json": {}, "videos": [], "pdfs": [], "patient": None})
         dest["json"].update(bucket["json"])
         dest["videos"].extend(bucket["videos"])
         dest["pdfs"].extend(bucket["pdfs"])
+
+    from patient_drive_archive import patient_drive_key, program_patient_record
+
+    for patient in program_patients or []:
+        if not isinstance(patient, dict):
+            continue
+        rec = program_patient_record(patient)
+        key = patient_drive_key(rec)
+        dest = merged.setdefault(key, {"json": {}, "videos": [], "pdfs": [], "patient": None})
+        dest["patient"] = rec
 
     keep_folder_ids: set[str] = set()
     from patient_drive_archive import patient_drive_key
@@ -1017,7 +1082,7 @@ def reorganize_clinic_folder(*, service=None, folder_id: str = "") -> Dict[str, 
     for canon, bucket in merged.items():
         rec: Dict[str, Any] = {"patientKey": canon, "files": []}
         try:
-            patient = _assemble_patient_record(bucket["json"])
+            patient = bucket.get("patient") or _assemble_patient_record(bucket["json"])
             folder_name = patient_drive_key(patient) if patient else canon
             folder_name = _sanitize(folder_name)[:120] or canon
             dest_id = _find_or_create_folder(service, parent_id, folder_name)
@@ -1029,25 +1094,16 @@ def reorganize_clinic_folder(*, service=None, folder_id: str = "") -> Dict[str, 
                 file_id = _upsert_bytes(service, dest_id, pdf_name, pdf_bytes, "application/pdf")
                 rec["files"].append({"name": pdf_name, "id": file_id})
                 out["pdfs"] += 1
-            seen_videos = set()
+            # Existing Drive mp4s are untrusted (wrong patient). Do not keep them.
             for video in bucket["videos"]:
-                drive_name = video.get("driveName") or ""
-                if not drive_name or drive_name in seen_videos:
-                    if drive_name in seen_videos and video.get("id"):
-                        _trash_file(service, video["id"])
-                        out["trashed"].append(video["id"])
-                    continue
-                seen_videos.add(drive_name)
-                moved = _move_file(
-                    service,
-                    video.get("id") or "",
-                    video.get("parent") or "",
-                    dest_id,
-                    drive_name,
-                )
-                rec["files"].append({"name": drive_name, "id": moved})
-                out["moved"].append(drive_name)
-                out["videos"] += 1
+                if video.get("id"):
+                    _trash_file(service, video["id"])
+                    out["trashed"].append(video["id"])
+            for child in _list_direct_children(service, dest_id):
+                child_name = (child.get("name") or "").lower()
+                if child_name.endswith((".mp4", ".mov", ".m4v", ".webm")) and child.get("id"):
+                    _trash_file(service, child["id"])
+                    out["trashed"].append(child["id"])
         except Exception as exc:
             rec["error"] = str(exc)[:200]
             print(f"Drive rebuild patient {canon}: {exc}", flush=True)
@@ -1186,7 +1242,8 @@ def _trash_legacy_layout(service, parent_id: str, keep_folder_ids: set[str]) -> 
                 child_name = (child.get("name") or "").lower()
                 child_mime = child.get("mimeType") or ""
                 keep = child_mime != FOLDER_MIME and (
-                    child_name.endswith(".pdf") or child_name.endswith("_validation.mp4")
+                    child_name.endswith(".pdf")
+                    or child_name in ALLOWED_VALIDATION_VIDEOS
                 )
                 if not keep and child.get("id"):
                     _trash_file(service, child["id"])

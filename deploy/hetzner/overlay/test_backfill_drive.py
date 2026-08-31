@@ -67,9 +67,8 @@ class BackfillDriveTests(unittest.TestCase):
             out = backfill_data_dir(data_dir)
             session = out["sessions"][0]
             self.assertEqual(session["patientKey"], "111_Douan_ertan")
-            self.assertFalse(session.get("skipped"))
-            self.assertIn("baseline_validation_original.mp4", session["files"])
-            self.assertTrue(session["drive"].get("skipped"))
+            self.assertTrue(session.get("skipped"))
+            self.assertEqual(session.get("reason"), "no_validation_video")
 
     def test_rebuild_calls_reorganize(self) -> None:
         from unittest.mock import patch

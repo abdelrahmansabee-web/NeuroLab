@@ -58,14 +58,16 @@ class DrivePersistTests(unittest.TestCase):
 
     def test_drive_keeps_pdf_and_validation_videos_only(self) -> None:
         self.assertEqual(clinic_drive_filename("pre_validation_unified.mp4"), "pre_validation.mp4")
-        self.assertEqual(clinic_drive_filename("clip_unified_validation.mp4"), "clip_validation.mp4")
+        self.assertEqual(clinic_drive_filename("post_validation_unified.mp4"), "post_validation.mp4")
+        self.assertEqual(clinic_drive_filename("baseline_validation_unified.mp4"), "healthy_validation.mp4")
+        self.assertEqual(clinic_drive_filename("healthy_validation.mp4"), "healthy_validation.mp4")
         self.assertIsNone(clinic_drive_filename("pre_validation_original.mp4"))
         self.assertIsNone(clinic_drive_filename("pre_original.mp4"))
         self.assertIsNone(clinic_drive_filename("pre_validation_overlay.json"))
         self.assertIsNone(clinic_drive_filename("01_demographics.json"))
         self.assertIsNone(clinic_drive_filename("patient.json"))
         self.assertIsNone(clinic_drive_filename("session.json"))
-        self.assertEqual(clinic_drive_filename("baseline_validation.mp4"), "baseline_validation.mp4")
+        self.assertEqual(clinic_drive_filename("pre_validation.mp4"), "pre_validation.mp4")
         self.assertEqual(clinic_drive_filename("105_Ahmet_sever.pdf"), "105_Ahmet_sever.pdf")
 
     def test_recovered_video_names(self) -> None:
@@ -232,8 +234,8 @@ class DrivePersistTests(unittest.TestCase):
         out = reorganize_clinic_folder(service=service, folder_id="root")
         self.assertTrue(out["ok"])
         self.assertGreaterEqual(out["pdfs"], 1)
-        self.assertGreaterEqual(out["videos"], 1)
-        self.assertIn("baseline_validation.mp4", out["moved"])
+        self.assertEqual(out["videos"], 0)
+        self.assertIn("vid1", out["trashed"])
         self.assertIn("team", out["trashed"])
         self.assertIn("marker", out["trashed"])
 

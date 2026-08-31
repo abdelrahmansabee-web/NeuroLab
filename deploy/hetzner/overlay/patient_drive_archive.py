@@ -123,6 +123,31 @@ def merge_patients(*groups: Iterable[Any]) -> List[Dict[str, Any]]:
     return [by_key[key] for key in order]
 
 
+def load_program_patients(data_dir: Path) -> List[Dict[str, Any]]:
+    """Patients from the clinic program copies on disk (Home Screen sync / patients.json)."""
+    groups: List[List[Dict[str, Any]]] = []
+    patients_dir = Path(data_dir) / "patients"
+    if patients_dir.is_dir():
+        for path in sorted(patients_dir.glob("*.json")):
+            loaded = load_patients_file(path)
+            if loaded:
+                groups.append(loaded)
+    for extra in (
+        Path(data_dir) / "patients.json",
+        Path(data_dir) / "ipad_localstorage" / "latest.json",
+    ):
+        if extra.is_file():
+            loaded = load_patients_file(extra)
+            if loaded:
+                groups.append(loaded)
+    root = Path(data_dir)
+    for path in sorted(root.glob("neurolab_patients_*.json")):
+        loaded = load_patients_file(path)
+        if loaded:
+            groups.append(loaded)
+    return merge_patients(*groups)
+
+
 def parse_patients_payload(raw: Any) -> List[Dict[str, Any]]:
     data = raw
     if isinstance(raw, (bytes, bytearray)):
@@ -180,17 +205,4 @@ def archive_patients(patients: Iterable[Any], *, user_id: int = 1) -> Dict[str, 
 
 
 def archive_from_data_dir(data_dir: Path, *, user_id: int = 1) -> Dict[str, Any]:
-    groups: List[List[Dict[str, Any]]] = []
-    patients_dir = Path(data_dir) / "patients"
-    if patients_dir.is_dir():
-        for path in sorted(patients_dir.glob("*.json")):
-            loaded = load_patients_file(path)
-            if loaded:
-                groups.append(loaded)
-    dump = Path(data_dir) / "ipad_localstorage" / "latest.json"
-    if dump.is_file():
-        try:
-            groups.append(parse_patients_payload(dump.read_bytes()))
-        except Exception:
-            pass
-    return archive_patients(merge_patients(*groups), user_id=user_id)
+    return archive_patients(load_program_patients(Path(data_dir)), user_id=user_id)
