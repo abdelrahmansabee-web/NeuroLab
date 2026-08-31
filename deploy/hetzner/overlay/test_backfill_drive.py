@@ -58,6 +58,19 @@ class BackfillDriveTests(unittest.TestCase):
             self.assertNotIn("baseline_validation_original.mp4", session["files"])
             self.assertTrue(session["drive"].get("skipped"))
 
+    def test_backfill_uses_original_when_unified_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            data_dir = Path(raw)
+            cache = data_dir / "validation_cache" / "111_Douan_ertan" / "baseline"
+            cache.mkdir(parents=True)
+            (cache / "original.mp4").write_bytes(b"camera")
+            out = backfill_data_dir(data_dir)
+            session = out["sessions"][0]
+            self.assertEqual(session["patientKey"], "111_Douan_ertan")
+            self.assertFalse(session.get("skipped"))
+            self.assertIn("baseline_validation_original.mp4", session["files"])
+            self.assertTrue(session["drive"].get("skipped"))
+
     def test_rebuild_calls_reorganize(self) -> None:
         from unittest.mock import patch
 

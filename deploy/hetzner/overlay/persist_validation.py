@@ -98,8 +98,14 @@ def persist_phase_artifacts(
     drive_files = []
     uni_name = f"{phase_part}_validation_unified.mp4"
     uni_dest = artifact_path(data_dir, 0, key, uni_name, "videos", "team", _sanitize)
+    orig_name = f"{phase_part}_validation_original.mp4"
+    orig_dest = artifact_path(data_dir, 0, key, orig_name, "videos", "team", _sanitize)
     if uni_dest.is_file() and uni_dest.stat().st_size > 0:
         drive_files.append((f"{phase_part}_validation.mp4", uni_dest, "videos"))
+    elif orig_dest.is_file() and orig_dest.stat().st_size > 0:
+        # Overlay burn needs a landmarks CSV. Until then, put a playable
+        # session mp4 next to the PDF so iPad Drive is not an empty videos folder.
+        drive_files.append((f"{phase_part}_validation.mp4", orig_dest, "videos"))
     try:
         from drive_persist import upload_named_files
 

@@ -71,13 +71,14 @@ def backfill_data_dir(data_dir: Path) -> Dict[str, Any]:
     uploaded = []
     for key, phase, files in sessions:
         unified = files.get("unified_video")
-        if unified is None:
+        original = files.get("original_video")
+        if unified is None and original is None:
             uploaded.append(
                 {
                     "patientKey": key,
                     "phase": phase,
                     "skipped": True,
-                    "reason": "no_validation_video",
+                    "reason": "no_playable_video",
                 }
             )
             continue
@@ -85,6 +86,8 @@ def backfill_data_dir(data_dir: Path) -> Dict[str, Any]:
             Path(data_dir),
             key,
             phase,
+            original_video=original if unified is None else None,
+            overlay_json=files.get("overlay_json"),
             unified_video=unified,
             library_name=f"{phase}_{key}_backfill",
         )

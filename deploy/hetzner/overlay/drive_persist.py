@@ -476,13 +476,29 @@ def recovered_drive_video_name(name: str) -> Optional[str]:
     return f"{phase}.mp4"
 
 
-def _list_trashed_files(service, *, limit: int = 400) -> List[Dict[str, Any]]:
+# Drive's files.list hides trashed items unless the query says trashed=true.
+_TRASH_FOLDER_QUERY = (
+    "trashed=true and mimeType='application/vnd.google-apps.folder' and ("
+    "name='team_patients' or name='u1' or name='videos' or name='data' "
+    "or name='reports'"
+    ")"
+)
+_TRASH_VIDEO_QUERY = (
+    "trashed=true and ("
+    "name contains '_original.mp4' or name contains '_validation.mp4' "
+    "or name contains 'unified.mp4' or name contains 'original.mp4' "
+    "or mimeType='video/mp4'"
+    ")"
+)
+
+
+def _list_query_files(service, query: str, *, limit: int = 800) -> List[Dict[str, Any]]:
     items: List[Dict[str, Any]] = []
     page = None
     scanned = 0
     while scanned < limit:
         res = service.files().list(
-            q="trashed=true",
+            q=query,
             spaces="drive",
             pageSize=100,
             pageToken=page,
@@ -496,6 +512,86 @@ def _list_trashed_files(service, *, limit: int = 400) -> List[Dict[str, Any]]:
         if not page:
             break
     return items
+
+
+def _list_trashed_files(service, *, limit: int = 800) -> List[Dict[str, Any]]:
+    """Clinic trash only: nested layout folders plus session/validation mp4s."""
+    _ = limit
+    found: List[Dict[str, Any]] = []
+    seen = set()
+    for query in (_TRASH_FOLDER_QUERY, _TRASH_VIDEO_QUERY):
+        for item in _list_query_files(service, query):
+            file_id = item.get("id") or ""
+            if not file_id or file_id in seen:
+                continue
+            seen.add(file_id)
+            found.append(item)
+    return found
+
+
+def _list_children_any(service, folder_id: str) -> List[Dict[str, Any]]:
+    """List children even if the parent folder is in trash.
+
+    Drive defaults to trashed=false, so a trashed team_patients tree is
+    invisible unless we query trashed=true explicitly.
+    """
+    items: List[Dict[str, Any]] = []
+    seen = set()
+    for trashed in ("true", "false"):
+        for item in _list_query_files(
+            service, f"'{folder_id}' in parents and trashed={trashed}"
+        ):
+            file_id = item.get("id") or ""
+            if not file_id or file_id in seen:
+                continue
+            seen.add(file_id)
+            items.append(item)
+    return items
+
+
+def _collect_videos_from_trashed_trees(service) -> List[Dict[str, Any]]:
+    videos: List[Dict[str, Any]] = []
+    seen = set()
+
+    def _walk(svc, folder_id: str, parts: Tuple[str, ...], depth: int) -> None:
+        if not folder_id or depth > 8:
+            return
+        for item in _list_children_any(svc, folder_id):
+            name = item.get("name") or ""
+            mime = item.get("mimeType") or ""
+            file_id = item.get("id") or ""
+            if not file_id or file_id in seen:
+                continue
+            seen.add(file_id)
+            if mime == FOLDER_MIME:
+                _walk(svc, file_id, parts + (name,), depth + 1)
+                continue
+            lower = name.lower()
+            if lower.endswith((".mp4", ".mov", ".m4v", ".webm")) or mime.startswith("video/"):
+                videos.append({**item, "parts": parts})
+
+    walkers = [svc for svc in (service, _sa_service_or_none()) if svc is not None]
+    for svc in walkers:
+        for item in _list_trashed_files(svc):
+            name = item.get("name") or ""
+            mime = item.get("mimeType") or ""
+            file_id = item.get("id") or ""
+            if mime == FOLDER_MIME:
+                extra: List[str] = []
+                for walker in walkers:
+                    extra = _parent_chain_names(walker, file_id)
+                    if extra:
+                        break
+                start_parts = tuple(extra) if extra else (name,)
+                for walker in walkers:
+                    _walk(walker, file_id, start_parts, 0)
+                continue
+            lower = name.lower()
+            if lower.endswith((".mp4", ".mov", ".m4v", ".webm")) or mime.startswith("video/"):
+                if file_id not in seen:
+                    seen.add(file_id)
+                    videos.append(item)
+    return videos
 
 
 def _parent_chain_names(service, file_id: str) -> List[str]:
@@ -552,7 +648,9 @@ def restore_trashed_videos_to_patients() -> Dict[str, Any]:
     if service is None or not parent_id:
         out["reason"] = "drive_init_failed"
         return out
-    for item in _list_trashed_files(service):
+    collected = _collect_videos_from_trashed_trees(service)
+    out["scanned"] = len(collected)
+    for item in collected:
         name = item.get("name") or ""
         mime = item.get("mimeType") or ""
         file_id = item.get("id") or ""
@@ -565,35 +663,20 @@ def restore_trashed_videos_to_patients() -> Dict[str, Any]:
         if not drive_name:
             out["skipped"].append({"id": file_id, "name": name, "reason": "not_clinic_video"})
             continue
-        chain = _parent_chain_names(service, file_id)
+        chain = list(item.get("parts") or ()) + _parent_chain_names(service, file_id)
         key = _patient_key_from_chain(chain)
         if not key:
             out["skipped"].append({"id": file_id, "name": name, "reason": "no_patient_folder"})
             continue
         dest = _find_or_create_folder(service, parent_id, key)
-        try:
-            service.files().update(
-                fileId=file_id,
-                body={"trashed": False, "name": drive_name},
-                addParents=dest,
-                **_write_flags(),
-            ).execute()
-            out["restored"].append({"id": file_id, "patientKey": key, "name": drive_name, "from": name})
-        except Exception as exc:
-            sa = _sa_service_or_none()
-            if sa is None:
-                out["skipped"].append({"id": file_id, "name": name, "error": str(exc)[:200]})
-                continue
-            try:
-                sa.files().update(
-                    fileId=file_id,
-                    body={"trashed": False, "name": drive_name},
-                    addParents=dest,
-                    **_write_flags(),
-                ).execute()
-                out["restored"].append({"id": file_id, "patientKey": key, "name": drive_name, "from": name, "via": "sa"})
-            except Exception as sa_exc:
-                out["skipped"].append({"id": file_id, "name": name, "error": str(sa_exc)[:200]})
+        old_parent = (item.get("parents") or [""])[0]
+        moved = _untrash_into_folder(service, file_id, dest, drive_name, old_parent)
+        if moved:
+            out["restored"].append(
+                {"id": file_id, "patientKey": key, "name": drive_name, "from": name}
+            )
+        else:
+            out["skipped"].append({"id": file_id, "name": name, "reason": "untrash_failed"})
     leftover = _trash_legacy_layout(service, parent_id, set())
     out["trashedLeftover"] = leftover
     out["ok"] = True
@@ -683,6 +766,39 @@ def _download_bytes(service, file_id: str) -> bytes:
         except Exception:
             print(f"Drive download skipped {file_id}: {exc}", flush=True)
             return b""
+
+
+def _untrash_into_folder(
+    service, file_id: str, dest: str, drive_name: str, old_parent: str = ""
+) -> str:
+    """Move a trashed mp4 into the live patient folder, next to the PDF."""
+
+    def _run(svc) -> str:
+        kwargs = dict(_write_flags())
+        if dest:
+            kwargs["addParents"] = dest
+        if old_parent and old_parent != dest:
+            kwargs["removeParents"] = old_parent
+        svc.files().update(
+            fileId=file_id,
+            body={"trashed": False, "name": drive_name},
+            **kwargs,
+        ).execute()
+        _share_with_owner(svc, file_id)
+        return file_id
+
+    try:
+        return _run(service)
+    except Exception as exc:
+        sa = _sa_service_or_none()
+        if sa is None:
+            print(f"Drive untrash skipped {file_id}: {exc}", flush=True)
+            return ""
+        try:
+            return _run(sa)
+        except Exception as sa_exc:
+            print(f"Drive untrash skipped {file_id}: {sa_exc}", flush=True)
+            return ""
 
 
 def _trash_file(service, file_id: str) -> None:
@@ -1080,6 +1196,16 @@ def list_clinic_folder() -> Dict[str, Any]:
                 patients.append(name)
         out["rootChildren"] = names
         out["patientFolders"] = patients
+        samples: Dict[str, List[str]] = {}
+        for item in children:
+            name = item.get("name") or ""
+            mime = item.get("mimeType") or ""
+            if mime == FOLDER_MIME and item.get("id"):
+                samples[name] = [
+                    child.get("name") or ""
+                    for child in _list_direct_children(service, item["id"])
+                ]
+        out["patientContents"] = samples
         videos, jsons, files, kinds = _count_files(service, folder_id)
         out["videoCount"] = videos
         out["jsonCount"] = jsons

@@ -54,6 +54,28 @@ class PersistValidationTests(unittest.TestCase):
                 names = [item[0] for item in mocked.call_args[0][1]]
                 self.assertEqual(names, ["pre_validation.mp4"])
 
+    def test_uploads_original_as_validation_when_unified_missing(self) -> None:
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as raw:
+            data_dir = Path(raw)
+            src = data_dir / "src"
+            src.mkdir()
+            video = src / "clip.mp4"
+            video.write_bytes(b"mp4-bytes")
+            with patch(
+                "drive_persist.upload_named_files",
+                return_value={"ok": True, "files": {"pre_validation.mp4": {"bytes": 9}}},
+            ) as mocked:
+                persist_phase_artifacts(
+                    data_dir,
+                    "101",
+                    "pre",
+                    original_video=video,
+                )
+                names = [item[0] for item in mocked.call_args[0][1]]
+                self.assertEqual(names, ["pre_validation.mp4"])
+
     def test_same_path_does_not_raise(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             data_dir = Path(raw)

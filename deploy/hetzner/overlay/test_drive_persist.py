@@ -77,6 +77,45 @@ class DrivePersistTests(unittest.TestCase):
         self.assertEqual(recovered_drive_video_name("baseline_validation.mp4"), "baseline_validation.mp4")
         self.assertIsNone(recovered_drive_video_name("patient.json"))
 
+    def test_collects_videos_inside_trashed_nested_folders(self) -> None:
+        from drive_persist import _collect_videos_from_trashed_trees
+
+        service = _FakeTrashDrive()
+        with patch("drive_persist._sa_service_or_none", return_value=None):
+            videos = _collect_videos_from_trashed_trees(service)
+        names = [item.get("name") for item in videos]
+        self.assertIn("baseline_original.mp4", names)
+        rec = next(item for item in videos if item.get("name") == "baseline_original.mp4")
+        self.assertIn("111_Douan_ertan", rec.get("parts") or ())
+
+    def test_restore_puts_validation_mp4_in_patient_folder(self) -> None:
+        from drive_persist import restore_trashed_videos_to_patients
+
+        service = _FakeDriveService()
+        found = [
+            {
+                "id": "mp4",
+                "name": "baseline_original.mp4",
+                "mimeType": "video/mp4",
+                "parents": ["videos"],
+                "parts": ("team_patients", "111_Douan_ertan", "videos"),
+            }
+        ]
+        with patch("drive_persist.drive_configured", return_value=True):
+            with patch("drive_persist._build_service", return_value=(service, "root")):
+                with patch("drive_persist._sa_service_or_none", return_value=None):
+                    with patch(
+                        "drive_persist._collect_videos_from_trashed_trees",
+                        return_value=found,
+                    ):
+                        out = restore_trashed_videos_to_patients()
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["count"], 1)
+        self.assertEqual(out["restored"][0]["patientKey"], "111_Douan_ertan")
+        self.assertEqual(out["restored"][0]["name"], "baseline_validation.mp4")
+        names = [item.get("name") for rows in service.tree.values() for item in rows]
+        self.assertIn("baseline_validation.mp4", names)
+
     def test_legacy_root_names(self) -> None:
         self.assertTrue(_is_legacy_root("team_patients"))
         self.assertTrue(_is_legacy_root("u1"))
@@ -194,6 +233,71 @@ class DrivePersistTests(unittest.TestCase):
                 yield path
 
         return ctx()
+
+
+class _FakeTrashDrive:
+    """Nested mp4s in trash are invisible unless the query includes trashed=true."""
+
+    FOLDER = "application/vnd.google-apps.folder"
+
+    def __init__(self) -> None:
+        self.trash_roots = [
+            {
+                "id": "team",
+                "name": "team_patients",
+                "mimeType": self.FOLDER,
+                "parents": ["gone"],
+            }
+        ]
+        self.trash_children = {
+            "team": [
+                {
+                    "id": "p111",
+                    "name": "111_Douan_ertan",
+                    "mimeType": self.FOLDER,
+                    "parents": ["team"],
+                }
+            ],
+            "p111": [
+                {
+                    "id": "videos",
+                    "name": "videos",
+                    "mimeType": self.FOLDER,
+                    "parents": ["p111"],
+                }
+            ],
+            "videos": [
+                {
+                    "id": "mp4",
+                    "name": "baseline_original.mp4",
+                    "mimeType": "video/mp4",
+                    "parents": ["videos"],
+                }
+            ],
+        }
+        self.meta = {
+            "team": {"id": "team", "name": "team_patients", "parents": ["gone"]},
+            "p111": {"id": "p111", "name": "111_Douan_ertan", "parents": ["team"]},
+            "videos": {"id": "videos", "name": "videos", "parents": ["p111"]},
+            "mp4": {"id": "mp4", "name": "baseline_original.mp4", "parents": ["videos"]},
+            "gone": {"id": "gone", "name": " NeuroLab_Backups", "parents": []},
+        }
+
+    def files(self):
+        return self
+
+    def list(self, q="", **_kwargs):
+        items = []
+        if " in parents" in q:
+            parent = q.split("'", 2)[1]
+            kids = list(self.trash_children.get(parent) or [])
+            items = kids if "trashed=true" in q else []
+        elif "trashed=true" in q and "mimeType='application/vnd.google-apps.folder'" in q:
+            items = list(self.trash_roots)
+        return _Exec({"files": items, "nextPageToken": None})
+
+    def get(self, fileId="", **_kwargs):
+        return _Exec(self.meta.get(fileId) or {"id": fileId, "name": "", "parents": []})
 
 
 class _FakeDriveService:
