@@ -14,6 +14,9 @@
   var STORE = "artifacts";
   var FINGERPRINT_KEY = "nl_pwa_drive_ok_v1";
   var syncing = false;
+  var busy = 0;
+  var pendingAfterBusy = false;
+  var lastForce = false;
 
   function token() {
     try {
@@ -32,6 +35,55 @@
 
   function blobSize(blob) {
     return blob instanceof Blob && blob.size ? blob.size : 0;
+  }
+
+  function requestUrl(arg) {
+    if (typeof arg === "string") return arg;
+    if (arg && arg.url) return String(arg.url);
+    return "";
+  }
+
+  function isClinicJob(url) {
+    var u = String(url || "");
+    return u.indexOf("/analyze") !== -1 || u.indexOf("/unified-validation") !== -1;
+  }
+
+  if (!window.__nlDriveSyncFetchHook) {
+    window.__nlDriveSyncFetchHook = true;
+    var origFetch = window.fetch;
+    window.fetch = function () {
+      var job = isClinicJob(requestUrl(arguments[0]));
+      if (job) busy += 1;
+      var p = origFetch.apply(this, arguments);
+      if (!job) return p;
+      return Promise.resolve(p).then(
+        function (res) {
+          busy = Math.max(0, busy - 1);
+          if (busy === 0 && pendingAfterBusy) {
+            pendingAfterBusy = false;
+            setTimeout(function () {
+              syncVideos(lastForce);
+            }, 2000);
+          }
+          return res;
+        },
+        function (err) {
+          busy = Math.max(0, busy - 1);
+          throw err;
+        }
+      );
+    };
+  }
+
+  function quietFetch(url, opts) {
+    return fetch(url, opts).then(
+      function (res) {
+        return res;
+      },
+      function () {
+        return null;
+      }
+    );
   }
 
   function loadFingerprints() {
@@ -130,7 +182,7 @@
       for (var i = 0; i < keys.length; i++) dump[keys[i]] = localStorage.getItem(keys[i]);
       var fd = new FormData();
       fd.append("payload", new Blob([JSON.stringify(dump)], { type: "application/json" }), "localstorage.json");
-      return fetch("/api/ipad-localstorage", {
+      return quietFetch("/api/ipad-localstorage", {
         method: "POST",
         body: fd,
         credentials: "same-origin",
@@ -143,7 +195,7 @@
 
   function sendReport(report) {
     try {
-      return fetch("/api/ipad-sync-report", {
+      return quietFetch("/api/ipad-sync-report", {
         method: "POST",
         credentials: "same-origin",
         headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
@@ -155,6 +207,17 @@
   }
 
   function syncVideos(force) {
+    lastForce = !!force;
+    if (!force && busy > 0) {
+      pendingAfterBusy = true;
+      setStatus("التحليل شغال. الرفع للدرايف بعد ما يخلص.", "");
+      return Promise.resolve();
+    }
+    if (force && busy > 0) {
+      pendingAfterBusy = true;
+      setStatus("استني التحليل يخلص، وبعدين الرفع يتم تلقائي.", "");
+      return Promise.resolve();
+    }
     if (syncing) return Promise.resolve();
     syncing = true;
     setStatus("جاري رفع فيديوهات الفاليديشن…", "");
@@ -180,6 +243,10 @@
             originalBytes: original,
           });
           chain = chain.then(function () {
+            if (busy > 0) {
+              pendingAfterBusy = true;
+              return;
+            }
             if (!unified) {
               if (original) cameraOnly += 1;
               return;
@@ -222,10 +289,12 @@
             lastDrive: lastDrive,
             total: rows.length,
             inventory: inventory,
+            deferred: pendingAfterBusy,
           };
         });
       })
       .then(function (stats) {
+        if (stats.deferred && busy > 0) return stats;
         return uploadPatients()
           .then(function () {
             return sendReport(stats);
@@ -235,22 +304,33 @@
           });
       })
       .then(function (stats) {
+        if (stats.deferred && busy > 0) {
+          setStatus("التحليل شغال. الرفع للدرايف بعد ما يخلص.", "");
+          return;
+        }
         if (stats.failed) {
-          setStatus("فشل رفع " + stats.failed + " فيديو. اضغطي تاني. " + (stats.lastDrive || ""), "err");
+          setStatus("فشل رفع الأوفرلاي لأن السيرفر مشغول بالتحليل. بعد ما يخلص اضغطي رفع تاني.", "err");
         } else if (stats.driveFail) {
           setStatus("الأوفرلاي وصل السيرفر ومقدرش يكتب الدرايف: " + (stats.lastDrive || "خطأ"), "err");
         } else if (stats.uploaded) {
           setStatus("اترفع " + stats.uploaded + " فيديو أوفرلاي على ملفات المرضى في الدرايف", "ok");
         } else if (stats.cameraOnly && !stats.overlay) {
-          setStatus("في التطبيق فيديو كاميرا بس. Generate Unified لكل مرحلة وبعدين ارفعي. الدرايف فاضي من غير أوفرلاي.", "err");
+          setStatus("الفيديو بيتحلل. بعد Generate Unified هيترفع للدرايف لوحده.", "");
         } else if (stats.total) {
-          setStatus("مفيش فيديو أوفرلاي في الكاش. اعملي Generate Unified بعدين ارفعي.", "err");
+          setStatus("مفيش أوفرلاي جاهز لسه. بعد التحليل وGenerate Unified هيترفع للدرايف.", "");
         } else {
           setStatus("مفيش فيديو فاليديشن في التطبيق", "");
         }
       })
-      .catch(function (err) {
-        setStatus("فشل الرفع: " + ((err && err.message) || "خطأ"), "err");
+      .catch(function () {
+        if (busy > 0) {
+          pendingAfterBusy = true;
+          setStatus("التحليل شغال. الرفع للدرايف بعد ما يخلص.", "");
+          return;
+        }
+        if (force) {
+          setStatus("السيرفر مشغول أو الشبكة قطعت. استني التحليل يخلص واضغطي رفع تاني.", "err");
+        }
       })
       .then(function () {
         syncing = false;
@@ -304,7 +384,7 @@
   function start() {
     setTimeout(function () {
       syncVideos(false);
-    }, 2500);
+    }, 8000);
   }
   if (document.readyState === "complete") start();
   else window.addEventListener("load", start);
