@@ -1094,16 +1094,50 @@ def reorganize_clinic_folder(
                 file_id = _upsert_bytes(service, dest_id, pdf_name, pdf_bytes, "application/pdf")
                 rec["files"].append({"name": pdf_name, "id": file_id})
                 out["pdfs"] += 1
-            # Existing Drive mp4s are untrusted (wrong patient). Do not keep them.
+            placed: Dict[str, str] = {}
             for video in bucket["videos"]:
-                if video.get("id"):
-                    _trash_file(service, video["id"])
-                    out["trashed"].append(video["id"])
+                vid = video.get("id") or ""
+                mapped = video.get("driveName") or clinic_drive_filename(video.get("name") or "")
+                if not vid:
+                    continue
+                if mapped and mapped.lower() in ALLOWED_VALIDATION_VIDEOS:
+                    if mapped in placed and placed[mapped] != vid:
+                        _trash_file(service, vid)
+                        out["trashed"].append(vid)
+                        continue
+                    parent = video.get("parent") or ""
+                    if parent != dest_id or (video.get("name") or "") != mapped:
+                        vid = _move_file(service, vid, parent, dest_id, mapped) or vid
+                    placed[mapped] = vid
+                    rec["files"].append({"name": mapped, "id": vid})
+                    out["videos"] += 1
+                    out["moved"].append(vid)
+                    continue
+                _trash_file(service, vid)
+                out["trashed"].append(vid)
+            placed_ids = set(placed.values())
             for child in _list_direct_children(service, dest_id):
-                child_name = (child.get("name") or "").lower()
-                if child_name.endswith((".mp4", ".mov", ".m4v", ".webm")) and child.get("id"):
-                    _trash_file(service, child["id"])
-                    out["trashed"].append(child["id"])
+                child_id = child.get("id") or ""
+                child_name = child.get("name") or ""
+                lower = child_name.lower()
+                if not child_id or child_id in placed_ids:
+                    continue
+                if not lower.endswith((".mp4", ".mov", ".m4v", ".webm")):
+                    continue
+                mapped = clinic_drive_filename(child_name)
+                if mapped and mapped.lower() in ALLOWED_VALIDATION_VIDEOS:
+                    if mapped in placed and placed[mapped] != child_id:
+                        _trash_file(service, child_id)
+                        out["trashed"].append(child_id)
+                        continue
+                    if child_name != mapped:
+                        child_id = _move_file(service, child_id, dest_id, dest_id, mapped) or child_id
+                    placed[mapped] = child_id
+                    rec["files"].append({"name": mapped, "id": child_id})
+                    out["videos"] += 1
+                    continue
+                _trash_file(service, child_id)
+                out["trashed"].append(child_id)
         except Exception as exc:
             rec["error"] = str(exc)[:200]
             print(f"Drive rebuild patient {canon}: {exc}", flush=True)

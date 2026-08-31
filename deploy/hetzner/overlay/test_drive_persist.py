@@ -234,10 +234,34 @@ class DrivePersistTests(unittest.TestCase):
         out = reorganize_clinic_folder(service=service, folder_id="root")
         self.assertTrue(out["ok"])
         self.assertGreaterEqual(out["pdfs"], 1)
-        self.assertEqual(out["videos"], 0)
-        self.assertIn("vid1", out["trashed"])
+        self.assertGreaterEqual(out["videos"], 1)
+        self.assertNotIn("vid1", out["trashed"])
         self.assertIn("team", out["trashed"])
         self.assertIn("marker", out["trashed"])
+        names = [item.get("name") for rows in service.tree.values() for item in rows]
+        self.assertIn("healthy_validation.mp4", names)
+
+    def test_reorganize_keeps_overlay_videos_in_patient_folder(self) -> None:
+        service = _FakeDriveService()
+        folder = "application/vnd.google-apps.folder"
+        service.tree = {
+            "root": [
+                {"id": "p111", "name": "111_Douan_ertan", "mimeType": folder},
+            ],
+            "p111": [
+                {"id": "pdf1", "name": "111_Douan_ertan.pdf", "mimeType": "application/pdf"},
+                {"id": "pre1", "name": "pre_validation.mp4", "mimeType": "video/mp4"},
+                {"id": "orig1", "name": "camera_original.mp4", "mimeType": "video/mp4"},
+            ],
+        }
+        out = reorganize_clinic_folder(service=service, folder_id="root")
+        self.assertTrue(out["ok"])
+        self.assertGreaterEqual(out["videos"], 1)
+        self.assertNotIn("pre1", out["trashed"])
+        self.assertIn("orig1", out["trashed"])
+        names = [item.get("name") for rows in service.tree.values() for item in rows]
+        self.assertIn("pre_validation.mp4", names)
+        self.assertNotIn("camera_original.mp4", names)
 
     def test_renames_validation_original_on_drive(self) -> None:
         from drive_persist import promote_original_videos_on_drive
