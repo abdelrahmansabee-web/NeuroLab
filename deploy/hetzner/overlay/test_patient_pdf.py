@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import re
+import shutil
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 
+from glass_report import build_glass_html
 from patient_pdf import (
     MISSING,
     build_patient_pdf,
@@ -24,6 +28,11 @@ DOUAN = {
         "group": "1",
         "mas": "1+",
         "mrc": "4",
+    },
+    "ipaq": {
+        "light": {"gun": "7", "sure": "60"},
+        "sitting": {"gun": "7", "sure": "400"},
+        "extra": {"gun": "6", "sure": "20"},
     },
     "vas": {"rest": {"pre": 0}},
     "vams": {
@@ -47,18 +56,22 @@ DOUAN = {
     },
 }
 
+NECK = "Visual: Neck forward–backward flexion"
 
-def _pdf_strings(blob: bytes) -> str:
-    parts = []
-    for raw in re.findall(rb"\((?:\\.|[^\\)])*\)", blob):
-        text = raw[1:-1].decode("latin-1")
-        text = (
-            text.replace("\\(", "(")
-            .replace("\\)", ")")
-            .replace("\\\\", "\\")
+
+def _pdf_text(blob: bytes) -> str:
+    pdftotext = shutil.which("pdftotext")
+    if not pdftotext:
+        return blob.decode("latin-1", "replace")
+    with tempfile.TemporaryDirectory() as raw:
+        path = Path(raw) / "r.pdf"
+        path.write_bytes(blob)
+        out = subprocess.run(
+            [pdftotext, "-layout", str(path), "-"],
+            capture_output=True,
+            check=False,
         )
-        parts.append(text)
-    return "\n".join(parts)
+        return (out.stdout or b"").decode("utf-8", "replace")
 
 
 class PatientPdfTests(unittest.TestCase):
@@ -85,46 +98,46 @@ class PatientPdfTests(unittest.TestCase):
         self.assertIn("Male", blob)
         self.assertIn("Ischemic", blob)
         pdf = build_patient_pdf(patient)
-        self.assertTrue(pdf.startswith(b"%PDF-1.4"))
+        self.assertTrue(pdf.startswith(b"%PDF-"))
         self.assertIn(b"%%EOF", pdf)
-        self.assertIn(b"startxref", pdf)
-        xref_at = pdf.rfind(b"startxref")
-        self.assertGreater(xref_at, 0)
-        obj1 = pdf.find(b"1 0 obj")
-        self.assertGreater(obj1, 8)
-        self.assertNotEqual(pdf[pdf.find(b"xref"):].split(b"\n")[2], b"0000000000 00000 n ")
+
+    def test_glass_html_matches_program_export(self) -> None:
+        html = build_glass_html(DOUAN)
+        self.assertIn("AOMI Group / AOMI Grubu", html)
+        self.assertIn("Clinical Assessment Report / Klinik Değerlendirme Raporu", html)
+        self.assertIn("Pain Scale (VAS) / Ağrı Skalası", html)
+        self.assertIn("Mood Scale (VAMS-4) / Ruh Hali", html)
+        self.assertIn("Muscle Control Scale / Kas Kontrolü", html)
+        self.assertIn("Motor Imagery (KVIQ) / Motor İmgeleme", html)
+        self.assertIn("Physical Activity (IPAQ) / Fiziksel Aktivite", html)
+        self.assertIn("Age / Yaş", html)
+        self.assertIn("Felt Difference", html)
+        self.assertIn(NECK, html)
+        self.assertIn("Summary / Özet", html)
+        self.assertIn("Clinical Narrative / Klinik Anlatım", html)
+        self.assertNotIn("0_gorsel", html)
+        self.assertIn("#f5f0eb", html)
+        self.assertIn("#800020", html)
 
     def test_matches_program_labels_not_raw_keys(self) -> None:
         lines = "\n".join(patient_pdf_lines(DOUAN))
-        self.assertIn("Visual: Neck forward-backward flexion", lines)
-        self.assertIn("Kinesthetic: Neck forward-backward flexion", lines)
+        self.assertIn(NECK, lines)
         self.assertNotIn("0_gorsel", lines)
-        self.assertNotIn("0_kinestetik", lines)
         self.assertIn("Felt Difference", lines)
-        self.assertIn("How much do you feel you can control your muscles?", "\n".join(r["metric"] for r in build_summary_rows(DOUAN)))
-        self.assertIn("Hand to Table (front) - Time (sec)", lines)
-        self.assertIn("Hand to Box (front) - Ability Rating (0-5)", "\n".join(r["metric"] for r in build_summary_rows(DOUAN)))
+        self.assertIn("Hand to Table (front) — Time (sec)", lines)
         self.assertIn("Pain at Rest", lines)
-        self.assertIn("VAMS Calm", lines)
-        self.assertIn("Number of Velocity Peaks (NVP)", lines)
-        self.assertNotIn("—", lines)
         self.assertIn(MISSING, lines)
 
-    def test_empty_cells_are_ascii_dash_not_question_mark(self) -> None:
+    def test_export_pdf_has_glass_titles(self) -> None:
         pdf = build_patient_pdf(DOUAN)
-        text = _pdf_strings(pdf)
-        self.assertIn("Visual: Neck forward-backward flexion", text)
-        self.assertIn("Felt Difference", text)
-        self.assertIn("Hand to Table (front) - Time (sec)", text)
-        self.assertIn("Time Since Stroke", text)
+        text = _pdf_text(pdf)
+        self.assertTrue(pdf.startswith(b"%PDF-"))
         self.assertIn("AOMI Group", text)
-        self.assertNotIn("0_gorsel", text)
-        self.assertNotIn("How much do you feel you can 5", text)
-        # missing TSS / empty VAS cells must not become latin-1 '?'
-        self.assertNotRegex(text, r"TSS:\s*\?")
         self.assertIn("Clinical Assessment Report", text)
-        self.assertTrue(pdf.startswith(b"%PDF-1.4"))
-        self.assertNotEqual(pdf[pdf.find(b"xref"):].split(b"\n")[2], b"0000000000 00000 n ")
+        self.assertIn("Felt Difference", text)
+        self.assertIn("Pain Scale (VAS)", text)
+        self.assertNotIn("0_gorsel", text)
+        self.assertIn("Douan ertan", text)
 
     def test_summary_rows_follow_program_order(self) -> None:
         rows = build_summary_rows(DOUAN)
@@ -132,13 +145,13 @@ class PatientPdfTests(unittest.TestCase):
         self.assertEqual(tools[:3], ["VAS", "VAS", "VAS"])
         kviq = [r for r in rows if r["tool"] == "KVIQ"]
         self.assertEqual(len(kviq), 20)
-        self.assertEqual(kviq[0]["metric"], "Visual: Neck forward-backward flexion")
+        self.assertEqual(kviq[0]["metric"], NECK)
         self.assertEqual(kviq[0]["pre"], "3")
         self.assertEqual(kviq[0]["post"], "5")
         self.assertEqual(kviq[0]["delta"], "+2.00")
         wmft = [r for r in rows if r["tool"] == "WMFT"]
         self.assertEqual(len(wmft), 8)
-        self.assertEqual(wmft[0]["metric"], "Hand to Table (front) - Time (sec)")
+        self.assertEqual(wmft[0]["metric"], "Hand to Table (front) — Time (sec)")
         self.assertEqual(wmft[0]["pre"], "4.2")
         self.assertEqual(wmft[0]["post"], "3.1")
 

@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from patient_drive_archive import PROGRAM_SECTIONS, patient_drive_key, program_patient_record
 
-MISSING = "-"
+MISSING = "\u2014"
 
 SEX = {"1": "Male", "2": "Female"}
 STROKE = {"1": "Ischemic", "2": "Hemorrhagic"}
@@ -29,7 +29,7 @@ MOTOR_ITEMS = (
     ("difference", "post", "How much do you feel a difference in muscle control?"),
 )
 KGIA_MOVEMENTS = (
-    "Neck forward-backward flexion",
+    "Neck forward–backward flexion",
     "Shoulder elevation (shrug)",
     "Forward arm raise",
     "Elbow flexion",
@@ -313,8 +313,8 @@ def build_summary_rows(patient: Dict[str, Any]) -> List[Dict[str, Any]]:
         post = item.get("post") if isinstance(item.get("post"), dict) else {}
         pre_t, post_t = _cell(pre.get("time")), _cell(post.get("time"))
         pre_r, post_r = _cell(pre.get("rating")), _cell(post.get("rating"))
-        time_metric = f"{label} - Time (sec)"
-        rate_metric = f"{label} - Ability Rating (0-5)"
+        time_metric = f"{label} — Time (sec)"
+        rate_metric = f"{label} — Ability Rating (0–5)"
         rows.append(
             {
                 "tool": "WMFT",
@@ -901,6 +901,14 @@ def build_patient_pdf(patient: Dict[str, Any]) -> bytes:
         if isinstance(patient.get("demographics"), dict)
         else ""
     )
+    try:
+        from glass_report import build_glass_pdf
+
+        blob = build_glass_pdf(patient)
+        if blob:
+            return blob
+    except Exception as exc:
+        print(f"glass Export Report PDF fallback: {exc}", flush=True)
     return render_clinical_pdf(
         patient,
         title=f"Clinical Assessment Report - {name or patient_drive_key(patient)}",

@@ -209,6 +209,7 @@ def main() -> int:
         "connect_drive.html",
         "patient_drive_archive.py",
         "patient_pdf.py",
+        "glass_report.py",
     ):
         src = overlay / extra
         if src.is_file():

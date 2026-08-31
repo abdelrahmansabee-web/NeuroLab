@@ -43,6 +43,7 @@ def main() -> int:
         text = path.read_text(encoding="utf-8")
         updated = text
         for old in (
+            'DEPLOY_VERSION = "29.48"',
             'DEPLOY_VERSION = "29.47"',
             'DEPLOY_VERSION = "29.46"',
             'DEPLOY_VERSION = "29.45"',
@@ -60,11 +61,39 @@ def main() -> int:
             'DEPLOY_VERSION = "29.33"',
             'DEPLOY_VERSION = "29.32"',
         ):
-            updated = updated.replace(old, 'DEPLOY_VERSION = "29.48"')
+            updated = updated.replace(old, 'DEPLOY_VERSION = "29.49"')
         if updated != text:
             path.write_text(updated, encoding="utf-8")
-            print(f"bumped {rel} to 29.48")
+            print(f"bumped {rel} to 29.49")
+    _ensure_weasyprint(root)
     return 0
+
+
+WEASY_MARKER = "weasyprint==63.1"
+
+
+def _ensure_weasyprint(root: Path) -> None:
+    docker = root / "Dockerfile"
+    if not docker.is_file():
+        return
+    text = docker.read_text(encoding="utf-8")
+    if WEASY_MARKER in text:
+        print("Dockerfile already has weasyprint")
+        return
+    snippet = """
+# Glass Export Report HTML -> PDF (same document as Download PDF)
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+    libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \\
+    libgdk-pixbuf-2.0-0 libcairo2 fonts-dejavu-core \\
+    && rm -rf /var/lib/apt/lists/* \\
+    && pip install --no-cache-dir weasyprint==63.1
+"""
+    if "COPY . ." in text:
+        text = text.replace("COPY . .", "COPY . .\n" + snippet, 1)
+        docker.write_text(text, encoding="utf-8")
+        print("added weasyprint to Dockerfile after COPY")
+        return
+    print("WARN: Dockerfile COPY . . not found; weasyprint not added")
 
 
 if __name__ == "__main__":
