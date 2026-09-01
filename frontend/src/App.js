@@ -68,8 +68,7 @@ const SIDEBAR_W = 255;
 const SIDEBAR_X_HIDDEN = -280;
 const MOBILE_SIDEBAR_W = "75%";
 const SIDEBAR_SPRING = { type: "spring", stiffness: 180, damping: 26, mass: 1.1 };
-const SIDEBAR_EASE = "transform 520ms cubic-bezier(0.22, 1, 0.36, 1)";
-const LAYOUT_EASE = "padding-left 520ms cubic-bezier(0.22, 1, 0.36, 1)";
+const PANEL_EASE = "transform 600ms cubic-bezier(0.16, 1, 0.3, 1)";
 
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
@@ -5896,10 +5895,10 @@ const SectionTransition = React.memo(function SectionTransition({ active, active
         <motion.div
           key={active}
           className="section-pane w-full"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
         >
           {activeSection}
         </motion.div>
@@ -6727,7 +6726,7 @@ export default function App() {
           width: isDesktop ? sidebarPush : MOBILE_SIDEBAR_W,
           paddingTop: SAFE_TOP,
           transform: sidebar ? "translate3d(0,0,0)" : (isDesktop ? `translate3d(-${sidebarPush}px,0,0)` : "translate3d(-100%,0,0)"),
-          transition: SIDEBAR_EASE,
+          transition: PANEL_EASE,
           willChange: "transform",
           backfaceVisibility: "hidden",
           WebkitBackfaceVisibility: "hidden",
@@ -6804,10 +6803,12 @@ export default function App() {
         style={{
           left: 0,
           width: "100%",
-          boxSizing: "border-box",
-          paddingLeft: isDesktop && sidebar ? sidebarPush : 0,
           paddingTop: SAFE_TOP,
-          transition: LAYOUT_EASE,
+          transform: isDesktop && sidebar ? `translate3d(${sidebarPush}px,0,0)` : "translate3d(0,0,0)",
+          transition: PANEL_EASE,
+          willChange: "transform",
+          backfaceVisibility: "hidden",
+          WebkitBackfaceVisibility: "hidden",
         }}
       >
         {topBar}
@@ -6832,9 +6833,11 @@ export default function App() {
         style={{
           width: "100%",
           minWidth: 0,
-          boxSizing: "border-box",
-          paddingLeft: isDesktop && sidebar ? sidebarPush : 0,
-          transition: LAYOUT_EASE,
+          transform: isDesktop && sidebar ? `translate3d(${sidebarPush}px,0,0)` : "translate3d(0,0,0)",
+          transition: PANEL_EASE,
+          willChange: "transform",
+          backfaceVisibility: "hidden",
+          WebkitBackfaceVisibility: "hidden",
         }}
       >
         <div aria-hidden="true" style={{ height: topBarHeight || 96 }} />
@@ -6850,6 +6853,7 @@ export default function App() {
       {/* Global Styles */}
       <style>{`
         * { box-sizing: border-box; }
+        html, body, #root { overflow-x: hidden; }
         h1, h2, h3, p, span, label, button {
           text-shadow: 0 1px 2px rgba(0,0,0,0.12);
         }

@@ -88,6 +88,7 @@ def main() -> int:
             'DEPLOY_VERSION = "29.64"',
             'DEPLOY_VERSION = "29.63"',
             'DEPLOY_VERSION = "29.65"',
+            'DEPLOY_VERSION = "29.67"',
             'DEPLOY_VERSION = "29.66"',
             'DEPLOY_VERSION = "29.59"',
             'DEPLOY_VERSION = "29.58"',
@@ -118,10 +119,10 @@ def main() -> int:
             'DEPLOY_VERSION = "29.33"',
             'DEPLOY_VERSION = "29.32"',
         ):
-            updated = updated.replace(old, 'DEPLOY_VERSION = "29.66"')
+            updated = updated.replace(old, 'DEPLOY_VERSION = "29.67"')
         if updated != text:
             path.write_text(updated, encoding="utf-8")
-            print(f"bumped {rel} to 29.66")
+            print(f"bumped {rel} to 29.67")
     _ensure_weasyprint(root)
     return 0
 

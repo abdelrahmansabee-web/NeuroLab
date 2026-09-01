@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Smooth sidebar show/hide and a light fade/slide between sections.
+"""GPU-only sidebar push and a short opacity dissolve between sections.
 
-Live clinic animates width between 100% and calc(100% - Npx). Browsers cannot
-interpolate those, so the layout jumps. Keep width at 100% and ease padding-left
-in pixels instead. Section keyframes currently move 3–5px with almost no opacity
-change; give them a real fade and a short vertical slide.
+Padding/width/margin animations reflow every frame and still look like a cut,
+especially on iPad. Keep width at 100% and slide the sidebar, topbar, and main
+pane with the same translate3d. Section changes fade only — no bounce or slide.
 """
 from __future__ import annotations
 
@@ -15,77 +14,76 @@ from pathlib import Path
 
 JS_NAME = "main.0626212c.js"
 CSS_NAME = "main.17fa781b.css"
-KIN = "12"
-NL_VERSION = "31.84"
-START_URL = "./?v=29.66-pwa"
-DEPLOY_VERSION = "29.66"
+KIN = "13"
+NL_VERSION = "31.85"
+START_URL = "./?v=29.67-pwa"
+DEPLOY_VERSION = "29.67"
 
-LAYOUT_EASE = "padding-left 520ms cubic-bezier(0.22, 1, 0.36, 1)"
-SIDEBAR_EASE = "transform 520ms cubic-bezier(0.22, 1, 0.36, 1)"
+PANEL_EASE = "transform 600ms cubic-bezier(0.16, 1, 0.3, 1)"
 
 JS_PATCHES = (
     (
-        "sidebar layout eases padding-left",
-        'const $w="left 320ms cubic-bezier(0.32, 0.72, 0, 1), width 320ms cubic-bezier(0.32, 0.72, 0, 1), margin-left 320ms cubic-bezier(0.32, 0.72, 0, 1)"',
-        f'const $w="{LAYOUT_EASE}"',
+        "panel motion uses transform not padding",
+        'const $w="padding-left 520ms cubic-bezier(0.22, 1, 0.36, 1)"',
+        f'const $w="{PANEL_EASE}"',
     ),
     (
-        "keep main width at 100%",
-        'it=rt?"calc(100% - ".concat(X,"px)"):"100%"',
-        'it="100%"',
-    ),
-    (
-        "topbar pads instead of jumping left/width",
-        "at={left:rt?X:0,width:it,paddingTop:Bw,transition:$w}",
+        "topbar slides with translate3d",
         'at={left:0,width:it,paddingLeft:rt?X:0,paddingTop:Bw,boxSizing:"border-box",transition:$w}',
+        'at={left:0,width:it,paddingTop:Bw,transform:rt?"translate3d(".concat(X,"px,0,0)"):"translate3d(0,0,0)",transition:$w,backfaceVisibility:"hidden",WebkitBackfaceVisibility:"hidden"}',
     ),
     (
-        "main pads instead of jumping margin/width",
-        "style:{width:it,marginLeft:rt?X:0,minWidth:0,transition:$w}",
+        "main slides with translate3d",
         'style:{width:it,marginLeft:0,paddingLeft:rt?X:0,minWidth:0,boxSizing:"border-box",transition:$w}',
+        'style:{width:it,minWidth:0,transform:rt?"translate3d(".concat(X,"px,0,0)"):"translate3d(0,0,0)",transition:$w,backfaceVisibility:"hidden",WebkitBackfaceVisibility:"hidden"}',
     ),
     (
-        "sidebar transform eases longer",
-        'transition:"transform 320ms cubic-bezier(0.32, 0.72, 0, 1)"',
-        f'transition:"{SIDEBAR_EASE}"',
-    ),
-    (
-        "do not snap-hide mobile topbar",
-        '.concat(!V&&U?"hidden":"")',
-        "",
+        "sidebar uses the same transform ease",
+        'transition:"transform 520ms cubic-bezier(0.22, 1, 0.36, 1)"',
+        f'transition:"{PANEL_EASE}"',
     ),
 )
 
 CSS_PATCHES = (
     (
         "section timing",
-        "--section-bounce-out-ms:150ms;--section-bounce-in-ms:280ms;--section-bounce-out-ease:cubic-bezier(0.4,0,0.2,1);--section-bounce-in-ease:cubic-bezier(0.25,0.9,0.35,1)",
         "--section-bounce-out-ms:280ms;--section-bounce-in-ms:420ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
+        "--section-bounce-out-ms:140ms;--section-bounce-in-ms:220ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
     ),
     (
         "mobile fade timing",
-        "--mobile-fade-out-ms:140ms;--mobile-fade-in-ms:180ms;--mobile-fade-ease:cubic-bezier(0.4,0,0.2,1)",
         "--mobile-fade-out-ms:240ms;--mobile-fade-in-ms:360ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
+        "--mobile-fade-out-ms:140ms;--mobile-fade-in-ms:220ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
     ),
     (
         "mobile fade mount opacity",
-        ".section-transition-host-mobile .section-fade-mount{opacity:.94;pointer-events:none}",
         ".section-transition-host-mobile .section-fade-mount{opacity:0;transform:translate3d(0,10px,0);pointer-events:none}",
+        ".section-transition-host-mobile .section-fade-mount{opacity:0;pointer-events:none}",
     ),
     (
         "mobile fade keyframes",
-        "@keyframes nl-mobile-fade-out{0%{opacity:1}to{opacity:.94}}@keyframes nl-mobile-fade-in{0%{opacity:.94}to{opacity:1}}",
         "@keyframes nl-mobile-fade-out{0%{opacity:1;transform:translateZ(0)}to{opacity:0;transform:translate3d(0,-8px,0)}}@keyframes nl-mobile-fade-in{0%{opacity:0;transform:translate3d(0,10px,0)}to{opacity:1;transform:translateZ(0)}}",
+        "@keyframes nl-mobile-fade-out{0%{opacity:1}to{opacity:0}}@keyframes nl-mobile-fade-in{0%{opacity:0}to{opacity:1}}",
     ),
     (
         "desktop bounce mount",
-        ".section-nav-motion.section-bounce-mount:not(.section-bounce-in){pointer-events:none;transform:translate3d(0,5px,0)}",
         ".section-nav-motion.section-bounce-mount:not(.section-bounce-in){pointer-events:none;opacity:0;transform:translate3d(0,12px,0)}",
+        ".section-nav-motion.section-bounce-mount:not(.section-bounce-in){pointer-events:none;opacity:0}",
     ),
     (
         "desktop bounce keyframes",
-        "@keyframes nl-bounce-out{0%{transform:translateZ(0)}to{transform:translate3d(0,3px,0)}}@keyframes nl-bounce-in{0%{transform:translate3d(0,5px,0)}to{transform:translateZ(0)}}",
         "@keyframes nl-bounce-out{0%{opacity:1;transform:translateZ(0)}to{opacity:0;transform:translate3d(0,-10px,0)}}@keyframes nl-bounce-in{0%{opacity:0;transform:translate3d(0,12px,0)}to{opacity:1;transform:translateZ(0)}}",
+        "@keyframes nl-bounce-out{0%{opacity:1}to{opacity:0}}@keyframes nl-bounce-in{0%{opacity:0}to{opacity:1}}",
+    ),
+    (
+        "section will-change opacity",
+        ".section-transition-host:not(.section-transition-host-mobile).section-transition-animating .section-nav-motion{will-change:transform}",
+        ".section-transition-host:not(.section-transition-host-mobile).section-transition-animating .section-nav-motion{will-change:opacity}",
+    ),
+    (
+        "clip horizontal overflow while panels slide",
+        ".section-pane{overflow:visible}",
+        "html,body,#root{overflow-x:hidden}.section-pane{overflow:visible}",
     ),
 )
 
@@ -93,12 +91,12 @@ CSS_PATCHES = (
 def _apply_pairs(text: str, pairs: tuple[tuple[str, str, str], ...]) -> tuple[str, list[str]]:
     applied: list[str] = []
     for label, old, new in pairs:
+        if new in text:
+            applied.append(f"already {label}")
+            continue
         if old in text:
             text = text.replace(old, new, 1)
             applied.append(label)
-            continue
-        if new in text:
-            applied.append(f"already {label}")
             continue
         raise SystemExit(f"pattern not found: {label}")
     return text, applied
@@ -124,7 +122,7 @@ def patch_pwa_reload(root: Path) -> list[str]:
         )
         updated = re.sub(
             r"main\.17fa781b\.css(?:\?[^\"']*)?",
-            f"main.17fa781b.css?m=1",
+            f"main.17fa781b.css?m=2",
             updated,
         )
         updated = re.sub(
@@ -135,7 +133,7 @@ def patch_pwa_reload(root: Path) -> list[str]:
         )
         if updated != html:
             idx.write_text(updated, encoding="utf-8")
-            notes.append(f"index kin={KIN} css?m=1 nl-version {NL_VERSION}")
+            notes.append(f"index kin={KIN} css?m=2 nl-version {NL_VERSION}")
     manifest = root / "frontend" / "build" / "manifest.json"
     if manifest.is_file():
         try:
@@ -159,6 +157,7 @@ def patch_deploy_version(root: Path) -> list[str]:
         text = path.read_text(encoding="utf-8")
         updated = text
         for old in (
+            'DEPLOY_VERSION = "29.66"',
             'DEPLOY_VERSION = "29.65"',
             'DEPLOY_VERSION = "29.64"',
             'DEPLOY_VERSION = "29.63"',

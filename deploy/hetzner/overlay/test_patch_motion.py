@@ -20,29 +20,27 @@ CSS_SAMPLE = "".join(old for _label, old, _new in CSS_PATCHES)
 
 
 class MotionPatchTests(unittest.TestCase):
-    def test_js_uses_padding_left_not_calc_width(self) -> None:
+    def test_js_uses_transform_not_padding(self) -> None:
         out, applied = patch_js_text(JS_SAMPLE)
         self.assertEqual(len(applied), len(JS_PATCHES))
-        self.assertIn("padding-left 520ms cubic-bezier(0.22, 1, 0.36, 1)", out)
-        self.assertIn('it="100%"', out)
-        self.assertIn("paddingLeft:rt?X:0", out)
-        self.assertIn("boxSizing", out)
-        self.assertIn("transform 520ms cubic-bezier(0.22, 1, 0.36, 1)", out)
-        self.assertNotIn("calc(100% - ", out)
+        self.assertIn("transform 600ms cubic-bezier(0.16, 1, 0.3, 1)", out)
+        self.assertIn('transform:rt?"translate3d(".concat(X,"px,0,0)")', out)
+        self.assertNotIn("padding-left 520ms", out)
+        self.assertNotIn("paddingLeft:rt?X:0", out)
         self.assertNotIn("left 320ms", out)
-        self.assertNotIn("marginLeft:rt?X:0", out)
-        self.assertNotIn('!V&&U?"hidden"', out)
+        self.assertNotIn("calc(100% - ", out)
 
-    def test_css_fade_is_visible(self) -> None:
+    def test_css_is_opacity_only(self) -> None:
         out, applied = patch_css_text(CSS_SAMPLE)
         self.assertEqual(len(applied), len(CSS_PATCHES))
-        self.assertIn("--section-bounce-out-ms:280ms", out)
-        self.assertIn("--section-bounce-in-ms:420ms", out)
-        self.assertIn("opacity:0;transform:translate3d(0,12px,0)", out)
-        self.assertIn("@keyframes nl-bounce-out{0%{opacity:1;", out)
-        self.assertIn("@keyframes nl-mobile-fade-out{0%{opacity:1;", out)
-        self.assertNotIn("opacity:.94", out)
-        self.assertNotIn("translate3d(0,3px,0)", out)
+        self.assertIn("--section-bounce-out-ms:140ms", out)
+        self.assertIn("--section-bounce-in-ms:220ms", out)
+        self.assertIn("@keyframes nl-bounce-out{0%{opacity:1}to{opacity:0}}", out)
+        self.assertIn("@keyframes nl-mobile-fade-in{0%{opacity:0}to{opacity:1}}", out)
+        self.assertIn("will-change:opacity", out)
+        self.assertIn("html,body,#root{overflow-x:hidden}", out)
+        self.assertNotIn("translate3d(0,12px,0)", out)
+        self.assertNotIn("translate3d(0,-10px,0)", out)
 
     def test_idempotent(self) -> None:
         once, _ = patch_js_text(JS_SAMPLE)
@@ -64,16 +62,16 @@ class MotionPatchTests(unittest.TestCase):
             (js_dir / "main.0626212c.js").write_text(JS_SAMPLE, encoding="utf-8")
             (css_dir / "main.17fa781b.css").write_text(CSS_SAMPLE, encoding="utf-8")
             (root / "frontend" / "build" / "index.html").write_text(
-                '<meta name="nl-version" content="31.83"/>'
-                '<script src="/static/js/main.0626212c.js?kin=11"></script>'
-                '<link href="/static/css/main.17fa781b.css" rel="stylesheet">',
+                '<meta name="nl-version" content="31.84"/>'
+                '<script src="/static/js/main.0626212c.js?kin=12"></script>'
+                '<link href="/static/css/main.17fa781b.css?m=1" rel="stylesheet">',
                 encoding="utf-8",
             )
             (root / "frontend" / "build" / "manifest.json").write_text(
-                json.dumps({"start_url": "./?v=29.65-pwa"}),
+                json.dumps({"start_url": "./?v=29.66-pwa"}),
                 encoding="utf-8",
             )
-            (root / "main.py").write_text('DEPLOY_VERSION = "29.65"\n', encoding="utf-8")
+            (root / "main.py").write_text('DEPLOY_VERSION = "29.66"\n', encoding="utf-8")
             self.assertEqual(patch_motion(root), 0)
             js = (js_dir / "main.0626212c.js").read_text(encoding="utf-8")
             css = (css_dir / "main.17fa781b.css").read_text(encoding="utf-8")
@@ -82,13 +80,13 @@ class MotionPatchTests(unittest.TestCase):
                 (root / "frontend" / "build" / "manifest.json").read_text(encoding="utf-8")
             )
             main_py = (root / "main.py").read_text(encoding="utf-8")
-            self.assertIn("paddingLeft:rt?X:0", js)
-            self.assertIn("opacity:0;transform:translate3d(0,12px,0)", css)
-            self.assertIn("kin=12", html)
-            self.assertIn("css/main.17fa781b.css?m=1", html)
-            self.assertIn("31.84", html)
-            self.assertEqual(manifest["start_url"], "./?v=29.66-pwa")
-            self.assertIn('DEPLOY_VERSION = "29.66"', main_py)
+            self.assertIn('transform:rt?"translate3d(".concat(X,"px,0,0)")', js)
+            self.assertIn("@keyframes nl-bounce-out{0%{opacity:1}to{opacity:0}}", css)
+            self.assertIn("kin=13", html)
+            self.assertIn("css/main.17fa781b.css?m=2", html)
+            self.assertIn("31.85", html)
+            self.assertEqual(manifest["start_url"], "./?v=29.67-pwa")
+            self.assertIn('DEPLOY_VERSION = "29.67"', main_py)
 
     def test_applies_to_live_clinic_bundle(self) -> None:
         bundle = Path("/tmp/hf-neurolab/frontend/build/static/js/main.0626212c.js")
@@ -101,9 +99,10 @@ class MotionPatchTests(unittest.TestCase):
         css_out, css_applied = patch_css_text(css_text)
         self.assertEqual(len(js_applied), len(JS_PATCHES))
         self.assertEqual(len(css_applied), len(CSS_PATCHES))
-        self.assertIn("padding-left 520ms", js_out)
-        self.assertNotIn("calc(100% - ", js_out)
-        self.assertIn("@keyframes nl-bounce-out{0%{opacity:1;", css_out)
+        self.assertIn("transform 600ms cubic-bezier(0.16, 1, 0.3, 1)", js_out)
+        self.assertNotIn("paddingLeft:rt?X:0", js_out)
+        self.assertIn("@keyframes nl-bounce-out{0%{opacity:1}to{opacity:0}}", css_out)
+        self.assertNotIn("translate3d(0,12px,0)", css_out)
 
 
 if __name__ == "__main__":
