@@ -68,6 +68,8 @@ const SIDEBAR_W = 255;
 const SIDEBAR_X_HIDDEN = -280;
 const MOBILE_SIDEBAR_W = "75%";
 const SIDEBAR_SPRING = { type: "spring", stiffness: 180, damping: 26, mass: 1.1 };
+const SIDEBAR_EASE = "transform 520ms cubic-bezier(0.22, 1, 0.36, 1)";
+const LAYOUT_EASE = "padding-left 520ms cubic-bezier(0.22, 1, 0.36, 1)";
 
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
@@ -5890,14 +5892,14 @@ const getTodayDate = () => new Date().toISOString().split("T")[0];
 const SectionTransition = React.memo(function SectionTransition({ active, activeSection }) {
   return (
     <div className="section-transition-host min-h-[420px]">
-      <AnimatePresence mode="sync" initial={false}>
+      <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={active}
           className="section-pane w-full"
-          initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
-          transition={{ duration: 0.3 }}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
         >
           {activeSection}
         </motion.div>
@@ -6378,7 +6380,7 @@ export default function App() {
         {sidebar ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
       </motion.button>
 
-      {(!sidebar || isDesktop) && nav && (() => {
+      {nav && (() => {
         const Icon = nav.icon;
         return (
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -6391,10 +6393,6 @@ export default function App() {
           </div>
         );
       })()}
-
-      {sidebar && !isDesktop && (
-        <span className="flex-1 text-sm font-extrabold text-white/70 truncate">Navigation</span>
-      )}
 
       <div className={`ml-auto flex items-center gap-2 flex-shrink-0 ${sidebar && !isDesktop ? "hidden" : ""}`}>
         <input
@@ -6729,7 +6727,7 @@ export default function App() {
           width: isDesktop ? sidebarPush : MOBILE_SIDEBAR_W,
           paddingTop: SAFE_TOP,
           transform: sidebar ? "translate3d(0,0,0)" : (isDesktop ? `translate3d(-${sidebarPush}px,0,0)` : "translate3d(-100%,0,0)"),
-          transition: "transform 0.3s ease-out",
+          transition: SIDEBAR_EASE,
           willChange: "transform",
           backfaceVisibility: "hidden",
           WebkitBackfaceVisibility: "hidden",
@@ -6802,16 +6800,14 @@ export default function App() {
 
       <div
         ref={topBarWrapperRef}
-        className={`fixed top-0 z-[60] px-3 sm:px-4 pb-0 ${!isDesktop && sidebar ? "hidden" : ""}`}
+        className="fixed top-0 z-[60] px-3 sm:px-4 pb-0"
         style={{
           left: 0,
-          width: isDesktop ? (sidebar ? `calc(100% - ${sidebarPush}px)` : "100%") : "100%",
+          width: "100%",
+          boxSizing: "border-box",
+          paddingLeft: isDesktop && sidebar ? sidebarPush : 0,
           paddingTop: SAFE_TOP,
-          transform: isDesktop && sidebar ? `translate3d(${sidebarPush}px,0,0)` : "translate3d(0,0,0)",
-          transition: "transform 0.3s ease-out",
-          willChange: "transform",
-          backfaceVisibility: "hidden",
-          WebkitBackfaceVisibility: "hidden",
+          transition: LAYOUT_EASE,
         }}
       >
         {topBar}
@@ -6834,13 +6830,11 @@ export default function App() {
       <main
         className="flex-none relative z-30"
         style={{
-          width: isDesktop ? (sidebar ? `calc(100% - ${sidebarPush}px)` : "100%") : "100%",
+          width: "100%",
           minWidth: 0,
-          transform: isDesktop && sidebar ? `translate3d(${sidebarPush}px,0,0)` : "translate3d(0,0,0)",
-          transition: "transform 0.3s ease-out",
-          willChange: "transform",
-          backfaceVisibility: "hidden",
-          WebkitBackfaceVisibility: "hidden",
+          boxSizing: "border-box",
+          paddingLeft: isDesktop && sidebar ? sidebarPush : 0,
+          transition: LAYOUT_EASE,
         }}
       >
         <div aria-hidden="true" style={{ height: topBarHeight || 96 }} />
