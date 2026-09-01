@@ -31,6 +31,7 @@ def main() -> int:
     from patch_show_results_now import patch_show_results_now
     from patch_fix_stuck_analyze import patch_fix_stuck_analyze
     from patch_unblock_analyze_ui import patch_unblock_analyze_ui
+    from patch_clinic_card_and_drive import patch_clinic_card_and_drive
     from patch_uv_csv_restore import patch_uv_csv_restore
 
     videos_rc = patch_videos()
@@ -60,6 +61,9 @@ def main() -> int:
     stuck_rc = patch_fix_stuck_analyze(root)
     if stuck_rc != 0:
         return stuck_rc
+    card_rc = patch_clinic_card_and_drive(root)
+    if card_rc != 0:
+        return card_rc
     for rel in ("main.py", "analyze_job_runner.py"):
         path = root / rel
         if not path.is_file():
@@ -67,6 +71,7 @@ def main() -> int:
         text = path.read_text(encoding="utf-8")
         updated = text
         for old in (
+            'DEPLOY_VERSION = "29.60"',
             'DEPLOY_VERSION = "29.59"',
             'DEPLOY_VERSION = "29.58"',
             'DEPLOY_VERSION = "29.57"',
@@ -96,10 +101,10 @@ def main() -> int:
             'DEPLOY_VERSION = "29.33"',
             'DEPLOY_VERSION = "29.32"',
         ):
-            updated = updated.replace(old, 'DEPLOY_VERSION = "29.60"')
+            updated = updated.replace(old, 'DEPLOY_VERSION = "29.61"')
         if updated != text:
             path.write_text(updated, encoding="utf-8")
-            print(f"bumped {rel} to 29.60")
+            print(f"bumped {rel} to 29.61")
     _ensure_weasyprint(root)
     return 0
 

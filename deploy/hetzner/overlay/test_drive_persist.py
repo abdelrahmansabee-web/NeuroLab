@@ -60,6 +60,7 @@ class DrivePersistTests(unittest.TestCase):
         self.assertEqual(clinic_drive_filename("pre_validation_unified.mp4"), "pre_validation.mp4")
         self.assertEqual(clinic_drive_filename("post_validation_unified.mp4"), "post_validation.mp4")
         self.assertEqual(clinic_drive_filename("baseline_validation_unified.mp4"), "healthy_validation.mp4")
+        self.assertEqual(clinic_drive_filename("baseline_validation_unified.webm"), "healthy_validation.mp4")
         self.assertEqual(clinic_drive_filename("healthy_validation.mp4"), "healthy_validation.mp4")
         self.assertIsNone(clinic_drive_filename("pre_validation_original.mp4"))
         self.assertIsNone(clinic_drive_filename("pre_original.mp4"))

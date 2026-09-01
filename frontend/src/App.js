@@ -2882,8 +2882,6 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     peak_elbow_ang_vel_deg_s: "Peak elbow angular velocity during the reach (deg/s).",
   };
 
-  const CARD_PREVIEW_KEYS = ["nvp", "straightness", "pause_time_sec", "number_of_stops"];
-
   const variables = orderedKinematicVars().map((v) => ({
     group: v.tier === "primary" ? "Primary" : v.tier === "secondary" ? "Secondary" : "Exploratory",
     name: v.label,
@@ -3104,68 +3102,6 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                       </GBtn>
                     </div>
                   )}
-
-                  {hasResult && (originalVideoBlobs[ph.k] || data[`${vidKey(ph.k)}_url`]) && (
-                    <video
-                      src={originalVideoBlobs[ph.k] || data[`${vidKey(ph.k)}_url`]}
-                      className="w-full rounded-lg bg-black"
-                      controls
-                      playsInline
-                      muted
-                    />
-                  )}
-
-                  {hasResult && (
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {CARD_PREVIEW_KEYS.map((key) => {
-                          const meta = KINEMATIC_VARS.find((v) => v.key === key);
-                          if (!meta) return null;
-                          return (
-                            <div key={key} className={`rounded-lg border px-2 py-1.5 ${phaseValueCls(ph.c)}`}>
-                              <p className="text-[9px] font-bold text-white/45 leading-tight">{meta.label}</p>
-                              <p className="text-sm font-mono font-extrabold text-white/90 mt-0.5">
-                                {displayMetricValue(ph.k, key)}
-                                <span className="text-[9px] font-normal text-white/35 ml-0.5">{meta.unit}</span>
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {hasResult && kinematicsResults[ph.k]?.velocity_profile && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => toggleResult(ph.k)}
-                          className="w-full text-[11px] text-white/45 hover:text-white/75 py-1.5 font-medium tracking-wide border border-white/[0.06] rounded-lg bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
-                          title={expandedResults[ph.k] ? "Hide chart" : "Show movement chart"}
-                        >
-                          {expandedResults[ph.k] ? "▲ Hide chart" : "▼ Movement chart"}
-                  </button>
-
-                        <AnimatePresence>
-                          {expandedResults[ph.k] && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: "auto", opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.25 }}
-                              className="overflow-hidden"
-                            >
-                              <div className="rounded-xl border border-white/[0.08] bg-black/30 overflow-hidden">
-                                <div
-                                  className="w-full h-[140px] p-2 kin-phase-chart"
-                                  dangerouslySetInnerHTML={{
-                                    __html: buildCombinedVelChart({ [ph.k]: kinematicsResults[ph.k].velocity_profile }, false, true),
-                                  }}
-                                />
-                  </div>
-                            </motion.div>
-                )}
-                        </AnimatePresence>
-                      </>
-                    )}
                   </div>
                 </div>
 

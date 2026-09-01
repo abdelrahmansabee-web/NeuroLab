@@ -925,8 +925,38 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     const video = videoRef.current;
     const recCanvas = recCanvasRef.current;
     const visCanvas = canvasRef.current;
+    const stage = containerRef.current;
     if (!video || !recCanvas || !visCanvas) return;
     const ctx = recCanvas.getContext("2d");
+    if (!ctx) return;
+    const stageRect = stage?.getBoundingClientRect?.();
+    const overlayRect = visCanvas.getBoundingClientRect?.();
+    if (stageRect && overlayRect && stageRect.width > 2 && overlayRect.width > 1) {
+      const nativeW = video.videoWidth || 640;
+      const scale = nativeW / overlayRect.width;
+      let rw = Math.round(stageRect.width * scale);
+      let rh = Math.round(stageRect.height * scale);
+      const cap = Math.min(1, 1920 / Math.max(rw, rh, 1));
+      rw = Math.max(2, Math.round(rw * cap));
+      rh = Math.max(2, Math.round(rh * cap));
+      if (recCanvas.width !== rw || recCanvas.height !== rh) {
+        recCanvas.width = rw;
+        recCanvas.height = rh;
+      }
+      const sx = recCanvas.width / stageRect.width;
+      const sy = recCanvas.height / stageRect.height;
+      ctx.fillStyle = "#141821";
+      ctx.fillRect(0, 0, recCanvas.width, recCanvas.height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      const dx = (overlayRect.left - stageRect.left) * sx;
+      const dy = (overlayRect.top - stageRect.top) * sy;
+      const dw = overlayRect.width * sx;
+      const dh = overlayRect.height * sy;
+      ctx.drawImage(video, dx, dy, dw, dh);
+      ctx.drawImage(visCanvas, dx, dy, dw, dh);
+      return;
+    }
     if (recCanvas.width !== video.videoWidth || recCanvas.height !== video.videoHeight) {
       recCanvas.width = video.videoWidth || 640;
       recCanvas.height = video.videoHeight || 480;
@@ -936,7 +966,7 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
   }, []);
 
   const getSupportedMimeType = () => {
-    const types = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+    const types = ["video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
     return types.find((t) => MediaRecorder.isTypeSupported(t)) || "video/webm";
   };
 
@@ -947,7 +977,12 @@ export function ValidationOverlayPlayer({ videoUrl, overlayData, phaseLabel, aut
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") return;
     const stream = recCanvas.captureStream(30);
     const mimeType = getSupportedMimeType();
-    const recorder = new MediaRecorder(stream, { mimeType });
+    let recorder;
+    try {
+      recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 10000000 });
+    } catch (_) {
+      recorder = new MediaRecorder(stream, { mimeType });
+    }
     mediaRecorderRef.current = recorder;
     recordedChunksRef.current = [];
     recorder.ondataavailable = (e) => {

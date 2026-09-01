@@ -100,6 +100,9 @@ def patch_js_text(text: str) -> tuple[str, list[str]]:
             applied.append(f"already {label}")
             continue
         if old not in text:
+            if label == "show metric preview on iPad cards":
+                applied.append(f"skipped {label}")
+                continue
             raise SystemExit(f"pattern not found: {label}")
         text = text.replace(old, new, 1)
         applied.append(label)

@@ -62,6 +62,9 @@ def patch_js_text(text: str) -> tuple[str, list[str]]:
         if new in text:
             applied.append(f"already {label}")
             continue
+        if label == "do not autoplay camera file on the phase card":
+            applied.append(f"skipped {label}")
+            continue
         raise SystemExit(f"pattern not found: {label}")
     return text, applied
 
