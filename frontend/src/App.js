@@ -6286,7 +6286,7 @@ export default function App() {
           <User className="w-4 h-4" />
         </motion.button>
         {open && (
-          <div className="gselect-menu absolute right-0 top-full mt-2 z-[99999] overflow-hidden rounded-xl py-1 min-w-[180px]">
+          <div className="gselect-menu absolute right-0 top-full mt-2 z-[99999] overflow-hidden rounded-xl py-1 min-w-[240px]">
             {items.filter((i) => !i.admin || user?.is_admin).map((item) => (
               <button
                 key={item.label}
