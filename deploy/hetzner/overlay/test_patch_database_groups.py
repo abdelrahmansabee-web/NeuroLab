@@ -62,6 +62,7 @@ class DatabaseGroupsPatchTests(unittest.TestCase):
         self.assertIn("aria-label", text)
         self.assertIn("Confirm reorder 1", text)
         self.assertIn("Date.parse", text)
+        self.assertIn('children:[(0,Un.jsx)("option"', text)
         self.assertNotIn('H("Archive"', text)
 
     def test_helpers_and_dashboard_on_sample(self) -> None:
