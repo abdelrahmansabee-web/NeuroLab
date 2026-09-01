@@ -76,7 +76,7 @@ def main() -> int:
         updated = text
         for old in (
             'DEPLOY_VERSION = "29.61"',
-            'DEPLOY_VERSION = "29.60"',
+            'DEPLOY_VERSION = "29.62"',
             'DEPLOY_VERSION = "29.59"',
             'DEPLOY_VERSION = "29.58"',
             'DEPLOY_VERSION = "29.57"',
