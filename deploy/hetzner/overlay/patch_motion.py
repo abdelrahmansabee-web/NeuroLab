@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""GPU-only sidebar push and a short opacity dissolve between sections.
+"""GPU-only sidebar push and the real KS opacity dissolve between sections.
 
 Padding/width/margin animations reflow every frame. A snappy ease-out still
 looks like a cut because most of the travel happens in the first 100ms.
 Slide the sidebar, topbar, and main together with translate3d and a slow
-ease-in-out. Section changes fade only — no bounce or slide.
+ease. Section changes use the existing exit/enter state machine (opacity
+only) instead of an instant swap or a DOM fade-to-black.
 """
 from __future__ import annotations
 
@@ -15,12 +16,39 @@ from pathlib import Path
 
 JS_NAME = "main.0626212c.js"
 CSS_NAME = "main.17fa781b.css"
-KIN = "16"
-NL_VERSION = "31.88"
-START_URL = "./?v=29.67-pwa"
-DEPLOY_VERSION = "29.67"
+KIN = "17"
+NL_VERSION = "31.89"
+START_URL = "./?v=29.68-pwa"
+DEPLOY_VERSION = "29.68"
 
-PANEL_EASE = "transform 700ms cubic-bezier(0.45, 0, 0.55, 1)"
+PANEL_EASE = "transform 820ms cubic-bezier(0.33, 0, 0.2, 1)"
+TOPBAR_STYLE = (
+    'at={left:0,width:it,paddingTop:Bw,transform:rt?"translate3d(".concat(X,"px,0,0)")'
+    ':"translate3d(0,0,0)",transition:$w,willChange:"transform",backfaceVisibility:"hidden",'
+    'WebkitBackfaceVisibility:"hidden"}'
+)
+MAIN_STYLE = (
+    'style:{width:it,minWidth:0,transform:rt?"translate3d(".concat(X,"px,0,0)")'
+    ':"translate3d(0,0,0)",transition:$w,willChange:"transform",backfaceVisibility:"hidden",'
+    'WebkitBackfaceVisibility:"hidden"}'
+)
+NAV_SWAP = (
+    "h(t),E.current=null,L(),F.current=t,N.current=!1,C.current=!1,"
+    'T.current=t,_(!0),g("exiting"),S.current=setTimeout(R,280)):E.current=t)}'
+)
+NAV_SWAP_29_66 = (
+    "h(t),E.current=null,L(),g(\"idle\"),N.current=!1,C.current=!1,"
+    "T.current=t,_(!1),(0,e.startTransition)(()=>l(t))):E.current=t)}"
+)
+NAV_SWAP_29_67 = (
+    "h(t),E.current=null,L(),g(\"idle\"),N.current=!1,C.current=!1,"
+    "T.current=t,_(!1),(0,e.startTransition)(()=>{var n=document.querySelector("
+    '".section-nav-motion");n&&(n.style.transition="opacity 240ms cubic-bezier(0.45, 0, 0.55, 1)"'
+    ',n.style.opacity="0"),setTimeout(function(){l(t);requestAnimationFrame(function(){'
+    'var n=document.querySelector(".section-nav-motion");n&&(n.style.opacity="1")})},240)}))'
+    ":E.current=t)}"
+)
+NAV_SWAP_SHORT = "T.current=t,_(!1),(0,e.startTransition)(()=>l(t))):E.current=t)}"
 
 JS_PATCHES = (
     (
@@ -28,6 +56,7 @@ JS_PATCHES = (
         (
             'const $w="padding-left 520ms cubic-bezier(0.22, 1, 0.36, 1)"',
             'const $w="transform 600ms cubic-bezier(0.16, 1, 0.3, 1)"',
+            'const $w="transform 700ms cubic-bezier(0.45, 0, 0.55, 1)"',
         ),
         f'const $w="{PANEL_EASE}"',
     ),
@@ -37,7 +66,7 @@ JS_PATCHES = (
             'at={left:0,width:it,paddingLeft:rt?X:0,paddingTop:Bw,boxSizing:"border-box",transition:$w}',
             'at={left:0,width:it,paddingTop:Bw,transform:rt?"translate3d(".concat(X,"px,0,0)"):"translate3d(0,0,0)",transition:$w,backfaceVisibility:"hidden",WebkitBackfaceVisibility:"hidden"}',
         ),
-        'at={left:0,width:it,paddingTop:Bw,transform:rt?"translate3d(".concat(X,"px,0,0)"):"translate3d(0,0,0)",transition:$w,backfaceVisibility:"hidden",WebkitBackfaceVisibility:"hidden"}',
+        TOPBAR_STYLE,
     ),
     (
         "main slides with translate3d",
@@ -45,15 +74,16 @@ JS_PATCHES = (
             'style:{width:it,marginLeft:0,paddingLeft:rt?X:0,minWidth:0,boxSizing:"border-box",transition:$w}',
             'style:{width:it,minWidth:0,transform:rt?"translate3d(".concat(X,"px,0,0)"):"translate3d(0,0,0)",transition:$w,backfaceVisibility:"hidden",WebkitBackfaceVisibility:"hidden"}',
         ),
-        'style:{width:it,minWidth:0,transform:rt?"translate3d(".concat(X,"px,0,0)"):"translate3d(0,0,0)",transition:$w,backfaceVisibility:"hidden",WebkitBackfaceVisibility:"hidden"}',
+        MAIN_STYLE,
     ),
     (
         "sidebar uses the same transform ease",
         (
-            'transition:"transform 520ms cubic-bezier(0.22, 1, 0.36, 1)"',
-            'transition:"transform 600ms cubic-bezier(0.16, 1, 0.3, 1)"',
+            'transition:"transform 520ms cubic-bezier(0.22, 1, 0.36, 1)",backfaceVisibility:"hidden"',
+            'transition:"transform 600ms cubic-bezier(0.16, 1, 0.3, 1)",backfaceVisibility:"hidden"',
+            'transition:"transform 700ms cubic-bezier(0.45, 0, 0.55, 1)",backfaceVisibility:"hidden"',
         ),
-        f'transition:"{PANEL_EASE}"',
+        f'transition:"{PANEL_EASE}",willChange:"transform",backfaceVisibility:"hidden"',
     ),
     (
         "do not skip section fades for reduced-motion",
@@ -63,11 +93,21 @@ JS_PATCHES = (
         'const d=!1,u="exiting"===i&&!d',
     ),
     (
-        "fade the current section before swapping content",
+        "play the real section exit/enter fade",
         (
-            "T.current=t,_(!1),(0,e.startTransition)(()=>l(t))):E.current=t)}",
+            NAV_SWAP_29_66,
+            NAV_SWAP_29_67,
+            NAV_SWAP_SHORT,
         ),
-        "T.current=t,_(!1),(0,e.startTransition)(()=>{var n=document.querySelector(\".section-nav-motion\");n&&(n.style.transition=\"opacity 240ms cubic-bezier(0.45, 0, 0.55, 1)\",n.style.opacity=\"0\"),setTimeout(function(){l(t);requestAnimationFrame(function(){var n=document.querySelector(\".section-nav-motion\");n&&(n.style.opacity=\"1\")})},240)})):E.current=t)}",
+        NAV_SWAP,
+    ),
+    (
+        "keep enter-fade fallback in sync with CSS",
+        (
+            "A.current=setTimeout(()=>{j()},320)",
+            "A.current=setTimeout(()=>{j()},420)",
+        ),
+        "A.current=setTimeout(()=>{j()},420)",
     ),
 )
 
@@ -78,8 +118,9 @@ CSS_PATCHES = (
             "--section-bounce-out-ms:280ms;--section-bounce-in-ms:420ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
             "--section-bounce-out-ms:140ms;--section-bounce-in-ms:220ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
             "--section-bounce-out-ms:200ms;--section-bounce-in-ms:280ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
+            "--section-bounce-out-ms:240ms;--section-bounce-in-ms:320ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
         ),
-        "--section-bounce-out-ms:240ms;--section-bounce-in-ms:320ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
+        "--section-bounce-out-ms:200ms;--section-bounce-in-ms:360ms;--section-bounce-out-ease:cubic-bezier(0.4,0,0.2,1);--section-bounce-in-ease:cubic-bezier(0.33,0,0.2,1)",
     ),
     (
         "mobile fade timing",
@@ -87,8 +128,9 @@ CSS_PATCHES = (
             "--mobile-fade-out-ms:240ms;--mobile-fade-in-ms:360ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
             "--mobile-fade-out-ms:140ms;--mobile-fade-in-ms:220ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
             "--mobile-fade-out-ms:200ms;--mobile-fade-in-ms:280ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
+            "--mobile-fade-out-ms:240ms;--mobile-fade-in-ms:320ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
         ),
-        "--mobile-fade-out-ms:240ms;--mobile-fade-in-ms:320ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
+        "--mobile-fade-out-ms:200ms;--mobile-fade-in-ms:360ms;--mobile-fade-ease:cubic-bezier(0.33,0,0.2,1)",
     ),
     (
         "mobile fade mount opacity",
@@ -181,7 +223,7 @@ def patch_pwa_reload(root: Path) -> list[str]:
         )
         updated = re.sub(
             r"main\.17fa781b\.css(?:\?[^\"']*)?",
-            f"main.17fa781b.css?m=4",
+            f"main.17fa781b.css?m=5",
             updated,
         )
         updated = re.sub(
@@ -192,7 +234,7 @@ def patch_pwa_reload(root: Path) -> list[str]:
         )
         if updated != html:
             idx.write_text(updated, encoding="utf-8")
-            notes.append(f"index kin={KIN} css?m=4 nl-version {NL_VERSION}")
+            notes.append(f"index kin={KIN} css?m=5 nl-version {NL_VERSION}")
     manifest = root / "frontend" / "build" / "manifest.json"
     if manifest.is_file():
         try:
@@ -216,6 +258,8 @@ def patch_deploy_version(root: Path) -> list[str]:
         text = path.read_text(encoding="utf-8")
         updated = text
         for old in (
+            'DEPLOY_VERSION = "29.68"',
+            'DEPLOY_VERSION = "29.67"',
             'DEPLOY_VERSION = "29.66"',
             'DEPLOY_VERSION = "29.65"',
             'DEPLOY_VERSION = "29.64"',
