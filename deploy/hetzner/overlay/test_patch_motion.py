@@ -53,6 +53,8 @@ class MotionPatchTests(unittest.TestCase):
         self.assertIn("html,body,#root{overflow-x:hidden}", out)
         self.assertNotIn("translate3d(0,12px,0)", out)
         self.assertNotIn("cubic-bezier(0.4,0,1,1)", out)
+        self.assertIn("@media (prefers-reduced-motion:reduce){.nl-motion-layer{transition:none!important}}", out)
+        self.assertNotIn(".section-nav-motion.section-bounce-out{animation:none!important", out)
 
     def test_idempotent(self) -> None:
         once, _ = patch_js_text(JS_SAMPLE)
@@ -85,16 +87,16 @@ class MotionPatchTests(unittest.TestCase):
             (js_dir / "main.0626212c.js").write_text(JS_SAMPLE, encoding="utf-8")
             (css_dir / "main.17fa781b.css").write_text(CSS_SAMPLE, encoding="utf-8")
             (root / "frontend" / "build" / "index.html").write_text(
-                '<meta name="nl-version" content="31.88"/>'
-                '<script src="/static/js/main.0626212c.js?kin=16"></script>'
-                '<link href="/static/css/main.17fa781b.css?m=4" rel="stylesheet">',
+                '<meta name="nl-version" content="31.89"/>'
+                '<script src="/static/js/main.0626212c.js?kin=17"></script>'
+                '<link href="/static/css/main.17fa781b.css?m=5" rel="stylesheet">',
                 encoding="utf-8",
             )
             (root / "frontend" / "build" / "manifest.json").write_text(
-                json.dumps({"start_url": "./?v=29.67-pwa"}),
+                json.dumps({"start_url": "./?v=29.68-pwa"}),
                 encoding="utf-8",
             )
-            (root / "main.py").write_text('DEPLOY_VERSION = "29.67"\n', encoding="utf-8")
+            (root / "main.py").write_text('DEPLOY_VERSION = "29.68"\n', encoding="utf-8")
             self.assertEqual(patch_motion(root), 0)
             js = (js_dir / "main.0626212c.js").read_text(encoding="utf-8")
             html = (root / "frontend" / "build" / "index.html").read_text(encoding="utf-8")
@@ -102,11 +104,11 @@ class MotionPatchTests(unittest.TestCase):
                 (root / "frontend" / "build" / "manifest.json").read_text(encoding="utf-8")
             )
             self.assertIn(PANEL_EASE, js)
-            self.assertIn("kin=17", html)
-            self.assertIn("css/main.17fa781b.css?m=5", html)
-            self.assertIn("31.89", html)
-            self.assertEqual(manifest["start_url"], "./?v=29.68-pwa")
-            self.assertIn('DEPLOY_VERSION = "29.68"', (root / "main.py").read_text(encoding="utf-8"))
+            self.assertIn("kin=18", html)
+            self.assertIn("css/main.17fa781b.css?m=6", html)
+            self.assertIn("31.90", html)
+            self.assertEqual(manifest["start_url"], "./?v=29.69-pwa")
+            self.assertIn('DEPLOY_VERSION = "29.69"', (root / "main.py").read_text(encoding="utf-8"))
 
     def test_applies_to_live_clinic_bundle(self) -> None:
         bundle = Path("/tmp/hf-neurolab/frontend/build/static/js/main.0626212c.js")
@@ -123,6 +125,7 @@ class MotionPatchTests(unittest.TestCase):
         self.assertNotIn('querySelector(".section-nav-motion")', js_out)
         self.assertIn("@keyframes nl-bounce-out{0%{opacity:1}to{opacity:0}}", css_out)
         self.assertIn("cubic-bezier(0.4,0,0.2,1)", css_out)
+        self.assertNotIn(".section-nav-motion.section-bounce-out{animation:none!important", css_out)
         self.assertNotIn("translate3d(0,12px,0)", css_out)
 
 

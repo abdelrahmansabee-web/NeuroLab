@@ -16,10 +16,10 @@ from pathlib import Path
 
 JS_NAME = "main.0626212c.js"
 CSS_NAME = "main.17fa781b.css"
-KIN = "17"
-NL_VERSION = "31.89"
-START_URL = "./?v=29.68-pwa"
-DEPLOY_VERSION = "29.68"
+KIN = "18"
+NL_VERSION = "31.90"
+START_URL = "./?v=29.69-pwa"
+DEPLOY_VERSION = "29.69"
 
 PANEL_EASE = "transform 820ms cubic-bezier(0.33, 0, 0.2, 1)"
 TOPBAR_STYLE = (
@@ -180,6 +180,13 @@ CSS_PATCHES = (
         ),
         "html,body,#root{overflow-x:hidden}.section-pane{overflow:visible}",
     ),
+    (
+        "do not let OS reduce-motion kill the section fade",
+        (
+            "@media (prefers-reduced-motion:reduce){.nl-motion-layer,.section-nav-motion.section-bounce-in,.section-nav-motion.section-bounce-out,.section-nav-motion.section-fade-in,.section-nav-motion.section-fade-out,.section-pane{animation:none!important;transition:none!important}}",
+        ),
+        "@media (prefers-reduced-motion:reduce){.nl-motion-layer{transition:none!important}}",
+    ),
 )
 
 
@@ -223,7 +230,7 @@ def patch_pwa_reload(root: Path) -> list[str]:
         )
         updated = re.sub(
             r"main\.17fa781b\.css(?:\?[^\"']*)?",
-            f"main.17fa781b.css?m=5",
+            f"main.17fa781b.css?m=6",
             updated,
         )
         updated = re.sub(
@@ -234,7 +241,7 @@ def patch_pwa_reload(root: Path) -> list[str]:
         )
         if updated != html:
             idx.write_text(updated, encoding="utf-8")
-            notes.append(f"index kin={KIN} css?m=5 nl-version {NL_VERSION}")
+            notes.append(f"index kin={KIN} css?m=6 nl-version {NL_VERSION}")
     manifest = root / "frontend" / "build" / "manifest.json"
     if manifest.is_file():
         try:
@@ -258,6 +265,7 @@ def patch_deploy_version(root: Path) -> list[str]:
         text = path.read_text(encoding="utf-8")
         updated = text
         for old in (
+            'DEPLOY_VERSION = "29.69"',
             'DEPLOY_VERSION = "29.68"',
             'DEPLOY_VERSION = "29.67"',
             'DEPLOY_VERSION = "29.66"',
