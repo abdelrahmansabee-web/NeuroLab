@@ -34,13 +34,13 @@ class MotionPatchTests(unittest.TestCase):
         self.assertIn('transform:rt?"translate3d(".concat(X,"px,0,0)")', out)
         self.assertNotIn("padding-left 520ms", out)
         self.assertNotIn("paddingLeft:rt?X:0", out)
-        self.assertNotIn("0.16, 1, 0.3, 1", out)
+        self.assertIn("const d=!1,u=\"exiting\"===i&&!d", out)
 
     def test_css_is_opacity_only(self) -> None:
         out, applied = patch_css_text(CSS_SAMPLE)
         self.assertEqual(len(applied), len(CSS_PATCHES))
-        self.assertIn("--section-bounce-out-ms:200ms", out)
-        self.assertIn("--section-bounce-in-ms:280ms", out)
+        self.assertIn("--section-bounce-out-ms:240ms", out)
+        self.assertIn("--section-bounce-in-ms:320ms", out)
         self.assertIn("@keyframes nl-bounce-out{0%{opacity:1}to{opacity:0}}", out)
         self.assertIn("will-change:opacity", out)
         self.assertIn("html,body,#root{overflow-x:hidden}", out)
@@ -92,9 +92,9 @@ class MotionPatchTests(unittest.TestCase):
                 (root / "frontend" / "build" / "manifest.json").read_text(encoding="utf-8")
             )
             self.assertIn("transform 700ms cubic-bezier(0.45, 0, 0.55, 1)", js)
-            self.assertIn("kin=14", html)
-            self.assertIn("css/main.17fa781b.css?m=3", html)
-            self.assertIn("31.86", html)
+            self.assertIn("kin=15", html)
+            self.assertIn("css/main.17fa781b.css?m=4", html)
+            self.assertIn("31.87", html)
             self.assertEqual(manifest["start_url"], "./?v=29.67-pwa")
 
     def test_applies_to_live_clinic_bundle(self) -> None:

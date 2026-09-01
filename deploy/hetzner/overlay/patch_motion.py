@@ -15,8 +15,8 @@ from pathlib import Path
 
 JS_NAME = "main.0626212c.js"
 CSS_NAME = "main.17fa781b.css"
-KIN = "14"
-NL_VERSION = "31.86"
+KIN = "15"
+NL_VERSION = "31.87"
 START_URL = "./?v=29.67-pwa"
 DEPLOY_VERSION = "29.67"
 
@@ -55,6 +55,13 @@ JS_PATCHES = (
         ),
         f'transition:"{PANEL_EASE}"',
     ),
+    (
+        "do not skip section fades for reduced-motion",
+        (
+            'const d=h(),u="exiting"===i&&!d',
+        ),
+        'const d=!1,u="exiting"===i&&!d',
+    ),
 )
 
 CSS_PATCHES = (
@@ -63,16 +70,18 @@ CSS_PATCHES = (
         (
             "--section-bounce-out-ms:280ms;--section-bounce-in-ms:420ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
             "--section-bounce-out-ms:140ms;--section-bounce-in-ms:220ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
+            "--section-bounce-out-ms:200ms;--section-bounce-in-ms:280ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
         ),
-        "--section-bounce-out-ms:200ms;--section-bounce-in-ms:280ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
+        "--section-bounce-out-ms:240ms;--section-bounce-in-ms:320ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
     ),
     (
         "mobile fade timing",
         (
             "--mobile-fade-out-ms:240ms;--mobile-fade-in-ms:360ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
             "--mobile-fade-out-ms:140ms;--mobile-fade-in-ms:220ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
+            "--mobile-fade-out-ms:200ms;--mobile-fade-in-ms:280ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
         ),
-        "--mobile-fade-out-ms:200ms;--mobile-fade-in-ms:280ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
+        "--mobile-fade-out-ms:240ms;--mobile-fade-in-ms:320ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
     ),
     (
         "mobile fade mount opacity",
@@ -165,7 +174,7 @@ def patch_pwa_reload(root: Path) -> list[str]:
         )
         updated = re.sub(
             r"main\.17fa781b\.css(?:\?[^\"']*)?",
-            f"main.17fa781b.css?m=3",
+            f"main.17fa781b.css?m=4",
             updated,
         )
         updated = re.sub(
@@ -176,7 +185,7 @@ def patch_pwa_reload(root: Path) -> list[str]:
         )
         if updated != html:
             idx.write_text(updated, encoding="utf-8")
-            notes.append(f"index kin={KIN} css?m=3 nl-version {NL_VERSION}")
+            notes.append(f"index kin={KIN} css?m=4 nl-version {NL_VERSION}")
     manifest = root / "frontend" / "build" / "manifest.json"
     if manifest.is_file():
         try:
