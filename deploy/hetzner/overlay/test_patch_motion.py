@@ -34,7 +34,8 @@ class MotionPatchTests(unittest.TestCase):
         self.assertIn('transform:rt?"translate3d(".concat(X,"px,0,0)")', out)
         self.assertNotIn("padding-left 520ms", out)
         self.assertNotIn("paddingLeft:rt?X:0", out)
-        self.assertIn("const d=!1,u=\"exiting\"===i&&!d", out)
+        self.assertIn("querySelector(\".section-nav-motion\")", out)
+        self.assertIn('opacity="0"', out)
 
     def test_css_is_opacity_only(self) -> None:
         out, applied = patch_css_text(CSS_SAMPLE)
@@ -92,9 +93,9 @@ class MotionPatchTests(unittest.TestCase):
                 (root / "frontend" / "build" / "manifest.json").read_text(encoding="utf-8")
             )
             self.assertIn("transform 700ms cubic-bezier(0.45, 0, 0.55, 1)", js)
-            self.assertIn("kin=15", html)
+            self.assertIn("kin=16", html)
             self.assertIn("css/main.17fa781b.css?m=4", html)
-            self.assertIn("31.87", html)
+            self.assertIn("31.88", html)
             self.assertEqual(manifest["start_url"], "./?v=29.67-pwa")
 
     def test_applies_to_live_clinic_bundle(self) -> None:

@@ -15,8 +15,8 @@ from pathlib import Path
 
 JS_NAME = "main.0626212c.js"
 CSS_NAME = "main.17fa781b.css"
-KIN = "15"
-NL_VERSION = "31.87"
+KIN = "16"
+NL_VERSION = "31.88"
 START_URL = "./?v=29.67-pwa"
 DEPLOY_VERSION = "29.67"
 
@@ -61,6 +61,13 @@ JS_PATCHES = (
             'const d=h(),u="exiting"===i&&!d',
         ),
         'const d=!1,u="exiting"===i&&!d',
+    ),
+    (
+        "fade the current section before swapping content",
+        (
+            "T.current=t,_(!1),(0,e.startTransition)(()=>l(t))):E.current=t)}",
+        ),
+        "T.current=t,_(!1),(0,e.startTransition)(()=>{var n=document.querySelector(\".section-nav-motion\");n&&(n.style.transition=\"opacity 240ms cubic-bezier(0.45, 0, 0.55, 1)\",n.style.opacity=\"0\"),setTimeout(function(){l(t);requestAnimationFrame(function(){var n=document.querySelector(\".section-nav-motion\");n&&(n.style.opacity=\"1\")})},240)})):E.current=t)}",
     ),
 )
 
