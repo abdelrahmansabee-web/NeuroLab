@@ -26,7 +26,7 @@ MK_NEW = MK_OLD + (
     "i=parseInt(null===n.demographics||void 0===n.demographics?void 0:n.demographics.participantId,10),"
     "a=isNaN(r)?1e9:r,s=isNaN(i)?1e9:i;return a!==s?a-s:String(e._savedAt||\"\").localeCompare(String(n._savedAt||\"\"))});"
     "return t.map(function(e,n){const r=Object.assign({},e),i=Object.assign({},e.demographics||{});"
-    "return i.participantId=String(101+n),r.demographics=i,r}).concat(n)}"
+    "return i.participantId=String(n+1),r.demographics=i,r}).concat(n)}"
 )
 
 GX_OLD = "const o=e.map(e=>mx(e,t,n,r)).filter(Boolean);"
@@ -56,6 +56,13 @@ BACKUP_NEW = (
     '{type:"application/json"}),"neuro_backup_'
 )
 
+ID_OLD = "i.participantId=String(101+n)"
+ID_NEW = "i.participantId=String(n+1)"
+MS_ZERO_OLD = "function mS(){const e=nlB();let t=100;"
+MS_ZERO_NEW = "function mS(){const e=nlB();let t=0;"
+MIN_OLD = 'min:"101"'
+MIN_NEW = 'min:"1"'
+
 ZS_START = "zS=t=>{let r=t.fd,i=t.setFd,s=t.onLoadSession"
 ZS_END = "const US=e=>{"
 
@@ -81,6 +88,9 @@ PATCHES = (
     ("JSON study export skips archive", JSON_OLD, JSON_NEW),
     ("SPSS syntax rows skip archive", SPS_OLD, SPS_NEW),
     ("dashboard JSON backup skips archive", BACKUP_OLD, BACKUP_NEW),
+    ("reorder Study IDs from 1", ID_OLD, ID_NEW),
+    ("next Study ID from 1", MS_ZERO_OLD, MS_ZERO_NEW),
+    ("Study ID input min 1", MIN_OLD, MIN_NEW),
 )
 
 
@@ -99,6 +109,9 @@ def patch_js_text(text: str) -> tuple[str, list[str]]:
             applied.append(label)
             continue
         if new in text:
+            applied.append(f"already {label}")
+            continue
+        if label == "loadPatients helpers for archive/active" and "function nlA(e)" in text:
             applied.append(f"already {label}")
             continue
         raise SystemExit(f"pattern not found: {label}")
@@ -143,28 +156,28 @@ def patch_pwa_reload(root: Path) -> list[str]:
         html = idx.read_text(encoding="utf-8")
         updated = re.sub(
             r"main\.0626212c\.js(?:\?[^\"']*)?",
-            "main.0626212c.js?kin=9",
+            "main.0626212c.js?kin=10",
             html,
         )
         updated = re.sub(
             r'(meta name="nl-version" content=")[^"]+',
-            r"\g<1>31.81",
+            r"\g<1>31.82",
             updated,
             count=1,
         )
         if updated != html:
             idx.write_text(updated, encoding="utf-8")
-            notes.append("index kin=9 nl-version 31.81")
+            notes.append("index kin=10 nl-version 31.82")
     manifest = root / "frontend" / "build" / "manifest.json"
     if manifest.is_file():
         try:
             data = json.loads(manifest.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             return notes
-        if data.get("start_url") != "./?v=29.63-pwa":
-            data["start_url"] = "./?v=29.63-pwa"
+        if data.get("start_url") != "./?v=29.64-pwa":
+            data["start_url"] = "./?v=29.64-pwa"
             manifest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-            notes.append("manifest start_url 29.63-pwa")
+            notes.append("manifest start_url 29.64-pwa")
     return notes
 
 

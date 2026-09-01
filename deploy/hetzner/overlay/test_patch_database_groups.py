@@ -20,7 +20,7 @@ from patch_database_groups import (
 
 
 class PatientGroupTests(unittest.TestCase):
-    def test_reorder_skips_archived_and_starts_at_101(self) -> None:
+    def test_reorder_skips_archived_and_starts_at_1(self) -> None:
         patients = [
             {"_id": "b", "demographics": {"participantId": "220", "group": "2"}, "_savedAt": "2026-01-02"},
             {"_id": "a", "demographics": {"participantId": "109", "group": "1"}, "_savedAt": "2026-01-01"},
@@ -28,8 +28,8 @@ class PatientGroupTests(unittest.TestCase):
         ]
         out = reorder_study_ids(patients)
         self.assertEqual([p["_id"] for p in out], ["a", "b", "z"])
-        self.assertEqual(out[0]["demographics"]["participantId"], "101")
-        self.assertEqual(out[1]["demographics"]["participantId"], "102")
+        self.assertEqual(out[0]["demographics"]["participantId"], "1")
+        self.assertEqual(out[1]["demographics"]["participantId"], "2")
         self.assertEqual(out[2]["demographics"]["participantId"], "999")
         self.assertTrue(is_archived_patient(out[2]))
         self.assertEqual(len(active_patients(out)), 2)
@@ -58,7 +58,10 @@ class DatabaseGroupsPatchTests(unittest.TestCase):
         self.assertIn("Intervention / AOMI", text)
         self.assertIn("Reorder Study IDs", text)
         self.assertIn("Moved to Archive", text)
-        self.assertIn(ZS_START, text)
+        self.assertIn("grid-cols-2", text)
+        self.assertIn("aria-label", text)
+        self.assertIn("Confirm reorder 1", text)
+        self.assertNotIn('H("Archive"', text)
 
     def test_helpers_and_dashboard_on_sample(self) -> None:
         sample = (
@@ -71,6 +74,7 @@ class DatabaseGroupsPatchTests(unittest.TestCase):
             "onClick:()=>{const e=mk();if(0===e.length)return;const t=e.map(e=>e)}"
             "const e=gx(mk(),ak,rk,tk);"
             'onClick:()=>{const e=mk();fS(new Blob([JSON.stringify(e,null,2)],{type:"application/json"}),"neuro_backup_'
+            'i.participantId=String(101+n)min:"101"'
             "zS=t=>{let r=t.fd,i=t.setFd,s=t.onLoadSession,o=t.showToast,l=t.isActive;return null};const US=e=>{"
         )
         out, applied = patch_js_text(sample)
@@ -81,23 +85,25 @@ class DatabaseGroupsPatchTests(unittest.TestCase):
         self.assertIn("function nlB(", out)
         self.assertIn("e&&!e._archived", out)
         self.assertIn("Intervention / AOMI", out)
-        self.assertNotIn("zS=t=>{let r=t.fd,i=t.setFd,s=t.onLoadSession,o=t.showToast,l=t.isActive;return null}", out)
+        self.assertIn("grid-cols-2", out)
+        self.assertIn("String(n+1)", out)
+        self.assertIn("let t=0;", out)
 
     def test_applies_to_live_clinic_bundle(self) -> None:
         bundle = Path("/tmp/hf-neurolab/frontend/build/static/js/main.0626212c.js")
         if not bundle.is_file():
             self.skipTest("clinic bundle missing")
         original = bundle.read_text(encoding="utf-8", errors="replace")
-        if "Reorder Study IDs" in original and "function nlB(" in original:
-            self.assertIn("Intervention / AOMI", original)
-            return
         out, applied = patch_js_text(original)
         self.assertGreaterEqual(len(applied), 8)
         self.assertIn("function nlB(", out)
         self.assertIn("F=nlB(),N=F.length", out)
         self.assertIn("Intervention / AOMI", out)
         self.assertIn("Reorder Study IDs", out)
+        self.assertIn("grid-cols-2", out)
         self.assertIn("const US=e=>{", out)
+        self.assertIn("function mS(){const e=nlB();let t=0;", out)
+        self.assertNotIn('H("Archive"', out)
 
     def test_writes_bundle_and_pwa_reload(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -114,6 +120,7 @@ class DatabaseGroupsPatchTests(unittest.TestCase):
                 "onClick:()=>{const e=mk();if(0===e.length)return;const t=e.map(e=>e)}"
                 "const e=gx(mk(),ak,rk,tk);"
                 'onClick:()=>{const e=mk();fS(new Blob([JSON.stringify(e,null,2)],{type:"application/json"}),"neuro_backup_'
+                'i.participantId=String(101+n)min:"101"'
                 "zS=t=>{let r=t.fd,i=t.setFd,s=t.onLoadSession,o=t.showToast,l=t.isActive;return null};const US=e=>{"
             )
             (js_dir / "main.0626212c.js").write_text(sample, encoding="utf-8")
@@ -137,8 +144,8 @@ class DatabaseGroupsPatchTests(unittest.TestCase):
             js = (js_dir / "main.0626212c.js").read_text(encoding="utf-8")
             self.assertIn("Reorder Study IDs", js)
             html = (root / "frontend" / "build" / "index.html").read_text(encoding="utf-8")
-            self.assertIn("kin=9", html)
-            self.assertIn("31.81", html)
+            self.assertIn("kin=10", html)
+            self.assertIn("31.82", html)
             auth = (root / "auth.py").read_text(encoding="utf-8")
             self.assertIn('p.get("_archived")', auth)
 

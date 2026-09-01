@@ -20,7 +20,7 @@ def study_id_number(patient: Dict[str, Any]) -> int:
         return 10**9
 
 
-def reorder_study_ids(patients: List[Any] | None, start: int = 101) -> List[Dict[str, Any]]:
+def reorder_study_ids(patients: List[Any] | None, start: int = 1) -> List[Dict[str, Any]]:
     src = [p for p in (patients or []) if isinstance(p, dict)]
     active = [p for p in src if not is_archived_patient(p)]
     archived = [p for p in src if is_archived_patient(p)]

@@ -225,7 +225,7 @@ function studyIdNumber(p) {
   const n = parseInt(p?.demographics?.participantId, 10);
   return Number.isFinite(n) ? n : 1e9;
 }
-function reorderStudyIds(list, start = 101) {
+function reorderStudyIds(list, start = 1) {
   const src = Array.isArray(list) ? list : [];
   const active = src.filter((p) => p && typeof p === "object" && !isArchivedPatient(p));
   const archived = src.filter((p) => p && typeof p === "object" && isArchivedPatient(p));
@@ -1246,7 +1246,7 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
         <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Identification / Kimlik</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           <GI en="Full Name" tr="Ad Soyad" value={data.name} onChange={(e) => s("name", e.target.value)} />
-          <GI en="Study ID" tr="Çalışma Kimliği" type="number" min="101" value={data.participantId} onChange={(e) => s("participantId", e.target.value)} placeholder="Auto" />
+          <GI en="Study ID" tr="Çalışma Kimliği" type="number" min="1" value={data.participantId} onChange={(e) => s("participantId", e.target.value)} placeholder="Auto" />
           <GSelect en="Group" tr="Grup" value={data.group} onChange={(e) => s("group", e.target.value)} options={[{ value:"1",label:"1 = AOMI (Intervention)" },{ value:"2",label:"2 = Control" }]} />
           <GI en="Age (years)" tr="Yaş (yıl)" type="number" min="40" max="80" value={data.age} onChange={(e) => s("age", e.target.value)} placeholder="40–80" />
           <GSelect en="Gender" tr="Cinsiyet" value={data.sex} onChange={(e) => s("sex", e.target.value)} options={[{ value:"1",label:"1 = Male / Erkek" },{ value:"2",label:"2 = Female / Kadın" }]} />
@@ -1832,7 +1832,7 @@ function downloadBlob(blob, filename) {
 
 function nextStudyId() {
   const patients = activePatients();
-  let maxId = 100;
+  let maxId = 0;
   patients.forEach((p) => {
     const id = parseInt(p.demographics?.participantId);
     if (!isNaN(id) && id > maxId) maxId = id;
@@ -3526,6 +3526,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
   const [search, setSearch] = useState("");
   const [confirm, setConfirm] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   const refreshPatients = useCallback(() => setPatients(loadPatients()), []);
 
@@ -3592,7 +3593,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
 
   const applyReorder = () => {
     const updated = reorderStudyIds(patients);
-    persistList(updated, "Study IDs reordered from 101");
+    persistList(updated, "Study IDs reordered from 1");
     const curId = fd._loadedId;
     if (curId) {
       const cur = updated.find((p) => p._id === curId);
@@ -3700,7 +3701,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
   };
 
   const section = (title, items, mode, emptyHint) => (
-    <div className="space-y-3">
+    <div className="space-y-3 min-w-0">
       <div className="flex items-center gap-2 px-1">
         <p className={`text-xs font-extrabold uppercase tracking-widest ${
           mode === "control" ? "text-rose-300" : mode === "archive" ? "text-white/45" : "text-teal-300"
@@ -3715,7 +3716,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
 
   return (
     <div className="space-y-5">
-      <SH icon={Database} en="Patient Database" tr="Hasta Veritabanı" badge={`${activeCount} active · ${patients.filter(isArchivedPatient).length} archived`} />
+      <SH icon={Database} en={archiveOpen ? "Archive" : "Patient Database"} tr={archiveOpen ? "Arşiv" : "Hasta Veritabanı"} badge={archiveOpen ? `${archived.length}` : `${activeCount} Records`} />
 
       <Glass className="p-4">
         <div className="flex items-center gap-3 flex-wrap">
@@ -3771,7 +3772,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
           {confirm === "reorder" ? (
             <div className="flex items-center gap-1.5">
               <GBtn variant="sky" onClick={applyReorder} className="text-xs px-3 py-2">
-                <Check className="w-3.5 h-3.5" /> Confirm reorder 101…
+                <Check className="w-3.5 h-3.5" /> Confirm reorder 1…
               </GBtn>
               <GBtn variant="default" onClick={() => setConfirm(null)} className="text-xs px-3 py-2">
                 <X className="w-3.5 h-3.5" />
@@ -3782,10 +3783,35 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
               Reorder Study IDs
             </GBtn>
           )}
+          <button
+            type="button"
+            onClick={() => setArchiveOpen((v) => !v)}
+            className={`relative w-11 h-11 rounded-xl border flex items-center justify-center flex-shrink-0 ${
+              archiveOpen ? "bg-amber-400/20 border-amber-300/40" : "bg-white/[0.09] border-white/[0.08]"
+            }`}
+            aria-label="Archive"
+          >
+            <Archive className={`w-5 h-5 ${archiveOpen ? "text-amber-200" : "text-white/70"}`} />
+            {patients.filter(isArchivedPatient).length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber-400 text-[9px] font-extrabold text-slate-900 flex items-center justify-center">
+                {patients.filter(isArchivedPatient).length}
+              </span>
+            )}
+          </button>
         </div>
       </Glass>
 
-      {filtered.length === 0 ? (
+      {archiveOpen ? (
+        <div className="space-y-3">
+          {archived.length === 0 ? (
+            <Glass className="p-12 text-center">
+              <Archive className="w-16 h-16 text-white/10 mx-auto mb-4" />
+              <p className="text-white/50 font-semibold text-lg mb-2">No archived sessions</p>
+              <p className="text-white/25 text-sm">Archive a session from the database to keep it without counting it in the study.</p>
+            </Glass>
+          ) : archived.map((p) => renderCard(p, "archive"))}
+        </div>
+      ) : filtered.filter((p) => !isArchivedPatient(p)).length === 0 ? (
         <Glass className="p-12 text-center">
           <Database className="w-16 h-16 text-white/10 mx-auto mb-4" />
           <p className="text-white/50 font-semibold text-lg mb-2">
@@ -3794,11 +3820,12 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
           <p className="text-white/25 text-sm">Save a session from any assessment tab, then tap Sync to share across devices.</p>
         </Glass>
       ) : (
-        <div className="space-y-6">
-          {section("Intervention / AOMI", intervention, "intervention", "No intervention sessions")}
-          {section("Control", control, "control", "No control sessions")}
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 items-start">
+            {section("Intervention / AOMI", intervention, "intervention", "No intervention sessions")}
+            {section("Control", control, "control", "No control sessions")}
+          </div>
           {ungrouped.length > 0 && section("Ungrouped", ungrouped, "ungrouped", "")}
-          {section("Archive", archived, "archive", "No archived sessions")}
         </div>
       )}
     </div>
