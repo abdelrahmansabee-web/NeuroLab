@@ -2500,10 +2500,14 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   }, [kinematicsResults, loadOriginalVideoBlob]);
 
   const analyzeVideo = async (phase) => {
-    const file = data[`${vidKey(phase)}_file`];
-    if (!file) {
-      showToast("Please select a file first", "error");
+    let file = data[`${vidKey(phase)}_file`];
+    if (!(file instanceof Blob) || !file.size) {
+      showToast("Tap the video card and choose the file again", "error");
+      onChange({ ...data, [statusKey(phase)]: "uploaded" });
       return;
+    }
+    if (!file.name) {
+      file = new File([file], data[vidKey(phase)] || "video.mp4", { type: file.type || "video/mp4" });
     }
 
     const controller = new AbortController();
@@ -3108,7 +3112,6 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                       controls
                       playsInline
                       muted
-                      autoPlay
                     />
                   )}
 
@@ -5939,7 +5942,15 @@ export default function App() {
   const [fd, setFd] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(FD_LS_KEY));
-      if (saved && typeof saved === "object") return saved;
+      if (saved && typeof saved === "object") {
+        const kin = saved.kinematics && typeof saved.kinematics === "object" ? saved.kinematics : saved;
+        ["pre", "post", "baseline"].forEach((phase) => {
+          const key = `status_${phase}`;
+          if (kin[key] === "analyzing") kin[key] = "uploaded";
+          if (saved[key] === "analyzing") saved[key] = "uploaded";
+        });
+        return saved;
+      }
     } catch {}
     return {
       demographics: { participantId: String(nextStudyId()) },
