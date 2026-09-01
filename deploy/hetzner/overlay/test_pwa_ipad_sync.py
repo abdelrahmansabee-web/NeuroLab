@@ -29,8 +29,10 @@ class PwaIpadSyncTests(unittest.TestCase):
         self.assertNotIn("لو الجدول ظاهر اضغطي UV", self.js)
         self.assertNotIn("CSV not found", self.js)
         self.assertNotIn("فيديوهات الفاليديشن متزامنة مع ملفات المرضى", self.js)
-        self.assertIn("z-index:20", self.js)
-        self.assertNotIn("z-index:2147483000", self.js)
+        self.assertNotIn("z-index:20", self.js)
+        self.assertNotIn("nl-pwa-sync-btn", self.js)
+        self.assertNotIn("ربط الدرايف", self.js)
+        self.assertNotIn("رفع الفاليديشن للدرايف", self.js)
 
     def test_does_not_fight_analysis(self) -> None:
         self.assertIn("isClinicJob", self.js)
@@ -46,11 +48,12 @@ class PwaIpadSyncTests(unittest.TestCase):
         self.assertIn("nl_pwa_drive_ok_v1", self.js)
 
     def test_maps_to_drive_patient_files_from_home_screen(self) -> None:
-        self.assertIn("رفع الفاليديشن للدرايف", self.js)
-        self.assertIn("/connect-drive", self.js)
+        self.assertIn("nl-upload-validation", self.js)
+        self.assertIn("__nlSyncVideos", self.js)
         self.assertIn("syncVideos(true)", self.js)
         self.assertIn("syncVideos(false)", self.js)
         self.assertIn("/api/ipad-localstorage", self.js)
+        self.assertIn("Uploaded ", self.js)
 
 
 if __name__ == "__main__":

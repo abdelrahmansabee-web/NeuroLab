@@ -11,13 +11,26 @@ CSS_VER = "1"
 CSS_NAME = "clinic_touch.css"
 LINK = f'<link rel="stylesheet" href="/{CSS_NAME}?v={CSS_VER}"/>'
 PWA_SYNC_JS = "pwa_ipad_sync.js"
-PWA_SYNC_TAG = f'<script src="/{PWA_SYNC_JS}?v=8"></script>'
+PWA_SYNC_TAG = f'<script src="/{PWA_SYNC_JS}?v=9"></script>'
 HREF_RE = re.compile(rf'href="/{re.escape(CSS_NAME)}(?:\?v=\d+)?"')
 WHILE_TAP_RE = re.compile(r"whileTap:(?:x\?void 0:)?Yw\([^)]+\)")
 PTR_MOVE_OLD = 'addEventListener("touchmove",r,{passive:!1})'
 PTR_MOVE_NEW = 'addEventListener("touchmove",r,{passive:!0})'
 PTR_PREVENT_OLD = "n>18&&t.cancelable&&t.preventDefault()"
 PTR_PREVENT_NEW = "0"
+
+DRIVE_MENU_OLD = (
+    '{onClick:()=>{O("database"),V||q(!1)},icon:(0,Un.jsx)(Jl,{}),label:"Database"},'
+    "...null!==ce&&void 0!==ce&&ce.is_admin?[{onClick:()=>{O(\"users\"),V||q(!1)},icon:(0,Un.jsx)(Dl,{}),label:\"Users\",colorClass:\"hover:text-violet-300\"}]:[],"
+    '{onClick:Ue,icon:(0,Un.jsx)(ic,{}),label:"Sign out",colorClass:"hover:text-rose-300"}'
+)
+DRIVE_MENU_NEW = (
+    '{onClick:()=>{O("database"),V||q(!1)},icon:(0,Un.jsx)(Jl,{}),label:"Database"},'
+    '{onClick:()=>{window.location.href="/connect-drive"},icon:(0,Un.jsx)(rc,{}),label:"Connect Drive"},'
+    '{onClick:()=>{window.dispatchEvent(new CustomEvent("nl-upload-validation"));window.__nlSyncVideos&&window.__nlSyncVideos(!0)},icon:(0,Un.jsx)(rc,{}),label:"Upload validation to Drive"},'
+    "...null!==ce&&void 0!==ce&&ce.is_admin?[{onClick:()=>{O(\"users\"),V||q(!1)},icon:(0,Un.jsx)(Dl,{}),label:\"Users\",colorClass:\"hover:text-violet-300\"}]:[],"
+    '{onClick:Ue,icon:(0,Un.jsx)(ic,{}),label:"Sign out",colorClass:"hover:text-rose-300"}'
+)
 
 
 def patch_touch_js(text: str) -> tuple[str, int]:
@@ -33,6 +46,9 @@ def patch_touch_js(text: str) -> tuple[str, int]:
         hits += 1
     if "#f5f0eb" in text:
         text = text.replace("#f5f0eb", "#ffffff")
+        hits += 1
+    if "label:\"Connect Drive\"" not in text and DRIVE_MENU_OLD in text:
+        text = text.replace(DRIVE_MENU_OLD, DRIVE_MENU_NEW, 1)
         hits += 1
     return text, hits
 

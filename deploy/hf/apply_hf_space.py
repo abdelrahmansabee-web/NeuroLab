@@ -81,8 +81,9 @@ def main() -> int:
         for old in (
             'DEPLOY_VERSION = "29.61"',
             'DEPLOY_VERSION = "29.62"',
-            'DEPLOY_VERSION = "29.63"',
             'DEPLOY_VERSION = "29.64"',
+            'DEPLOY_VERSION = "29.63"',
+            'DEPLOY_VERSION = "29.65"',
             'DEPLOY_VERSION = "29.59"',
             'DEPLOY_VERSION = "29.58"',
             'DEPLOY_VERSION = "29.57"',
@@ -112,10 +113,10 @@ def main() -> int:
             'DEPLOY_VERSION = "29.33"',
             'DEPLOY_VERSION = "29.32"',
         ):
-            updated = updated.replace(old, 'DEPLOY_VERSION = "29.64"')
+            updated = updated.replace(old, 'DEPLOY_VERSION = "29.65"')
         if updated != text:
             path.write_text(updated, encoding="utf-8")
-            print(f"bumped {rel} to 29.64")
+            print(f"bumped {rel} to 29.65")
     _ensure_weasyprint(root)
     return 0
 

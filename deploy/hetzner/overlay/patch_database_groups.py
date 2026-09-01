@@ -156,28 +156,28 @@ def patch_pwa_reload(root: Path) -> list[str]:
         html = idx.read_text(encoding="utf-8")
         updated = re.sub(
             r"main\.0626212c\.js(?:\?[^\"']*)?",
-            "main.0626212c.js?kin=10",
+            "main.0626212c.js?kin=11",
             html,
         )
         updated = re.sub(
             r'(meta name="nl-version" content=")[^"]+',
-            r"\g<1>31.82",
+            r"\g<1>31.83",
             updated,
             count=1,
         )
         if updated != html:
             idx.write_text(updated, encoding="utf-8")
-            notes.append("index kin=10 nl-version 31.82")
+            notes.append("index kin=11 nl-version 31.83")
     manifest = root / "frontend" / "build" / "manifest.json"
     if manifest.is_file():
         try:
             data = json.loads(manifest.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             return notes
-        if data.get("start_url") != "./?v=29.64-pwa":
-            data["start_url"] = "./?v=29.64-pwa"
+        if data.get("start_url") != "./?v=29.65-pwa":
+            data["start_url"] = "./?v=29.65-pwa"
             manifest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-            notes.append("manifest start_url 29.64-pwa")
+            notes.append("manifest start_url 29.65-pwa")
     return notes
 
 

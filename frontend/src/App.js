@@ -12,7 +12,7 @@ import {
   Info, Save, BarChart3, Stethoscope, Brain, Image as ImageIcon,
   RefreshCw, FileSpreadsheet, Upload, FileUp,
   Database, Search, Edit3, Trash2, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles, Users, LogOut, MoreHorizontal,
-  Archive,
+  Archive, Cloud,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -217,6 +217,18 @@ function savePatients(list) {
 }
 function isArchivedPatient(p) {
   return !!(p && p._archived);
+}
+function formatSavedAt(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
+}
+function uploadValidationToDrive() {
+  if (typeof window.__nlSyncVideos === "function") {
+    window.__nlSyncVideos(true);
+    return;
+  }
+  window.dispatchEvent(new CustomEvent("nl-upload-validation"));
 }
 function activePatients(list) {
   return (list || loadPatients()).filter((p) => !isArchivedPatient(p));
@@ -3649,7 +3661,9 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
               }`}>
                 {hasPost ? "✓ Post-Assessment" : "○ Post missing"}
               </span>
-              <span className="text-[9px] text-white/25 ml-auto">Saved: {new Date(p._savedAt).toLocaleString()}</span>
+              {formatSavedAt(p._savedAt) ? (
+                <span className="text-[9px] text-white/25 ml-auto">Saved: {formatSavedAt(p._savedAt)}</span>
+              ) : null}
             </div>
 
             {mode !== "archive" && (
@@ -6252,6 +6266,8 @@ export default function App() {
     const items = [
       { icon: <Save />, label: "Save Session", onClick: () => { saveSession(); } },
       { icon: <Database />, label: "Database", onClick: () => setActive("database") },
+      { icon: <Cloud />, label: "Connect Drive", onClick: () => { window.location.href = "/connect-drive"; } },
+      { icon: <FileUp />, label: "Upload validation to Drive", onClick: uploadValidationToDrive },
       { icon: <Users />, label: "Users", onClick: () => setActive("users"), admin: true },
       { icon: <LogOut />, label: "Sign out", onClick: logout },
     ];
@@ -6318,6 +6334,8 @@ export default function App() {
           <Action onClick={() => importRef.current?.click()} icon={<FileUp />} label="Import patient" colorClass="hover:text-emerald-300" />
           <Action onClick={() => bgRef.current?.click()} icon={<ImageIcon />} label="Background" />
           <Action onClick={() => { setActive("database"); if (!isDesktop) setSidebar(false); }} icon={<Database />} label="Database" />
+          <Action onClick={() => { window.location.href = "/connect-drive"; }} icon={<Cloud />} label="Connect Drive" />
+          <Action onClick={uploadValidationToDrive} icon={<FileUp />} label="Upload validation to Drive" />
           <Action onClick={logout} icon={<LogOut />} label="Sign out" colorClass="hover:text-rose-300" />
         </>
       );

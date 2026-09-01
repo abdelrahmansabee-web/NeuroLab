@@ -136,14 +136,35 @@
   }
 
   function statusEl() {
-    return document.getElementById("nl-pwa-sync-status");
+    var el = document.getElementById("nl-pwa-sync-status");
+    if (el) return el;
+    el = document.createElement("div");
+    el.id = "nl-pwa-sync-status";
+    el.setAttribute("role", "status");
+    el.style.cssText =
+      "position:fixed;z-index:80;left:50%;bottom:24px;transform:translateX(-50%);" +
+      "max-width:min(92vw,22rem);padding:8px 12px;border-radius:12px;" +
+      "background:rgba(12,16,22,.88);color:#fff;font:13px/1.35 system-ui,sans-serif;" +
+      "text-align:center;pointer-events:none;display:none;";
+    document.body.appendChild(el);
+    return el;
   }
 
   function setStatus(text, kind) {
+    if (!document.body) return;
     var el = statusEl();
-    if (!el) return;
+    if (!text) {
+      el.style.display = "none";
+      el.textContent = "";
+      return;
+    }
     el.textContent = text;
     el.style.color = kind === "err" ? "#ffb4b4" : kind === "ok" ? "#8ee0b5" : "#fff";
+    el.style.display = "block";
+    clearTimeout(el._hide);
+    el._hide = setTimeout(function () {
+      el.style.display = "none";
+    }, 4000);
   }
 
   function driveOk(body) {
@@ -305,13 +326,14 @@
           return;
         }
         if (stats.failed && force) {
-          setStatus("السيرفر مشغول. الرفع بعد ما التحليل يخلص.", "err");
+          setStatus("Server is busy. Upload after analysis finishes.", "err");
         } else if (stats.driveFail && force) {
-          setStatus("الأوفرلاي وصل السيرفر ومقدرش يكتب الدرايف: " + (stats.lastDrive || "خطأ"), "err");
-        } else if (stats.uploaded) {
-          setStatus("اترفع " + stats.uploaded + " فيديو فاليديشن على الدرايف", "ok");
-        } else {
-          setStatus("", "");
+          setStatus("Overlay reached the server, but Drive did not save: " + (stats.lastDrive || "error"), "err");
+        } else if (stats.uploaded && force) {
+          setStatus(
+            "Uploaded " + stats.uploaded + " validation video" + (stats.uploaded === 1 ? "" : "s") + " to Drive",
+            "ok"
+          );
         }
       })
       .catch(function () {
@@ -320,7 +342,7 @@
           return;
         }
         if (force) {
-          setStatus("السيرفر مشغول أو الشبكة قطعت.", "err");
+          setStatus("Server is busy or the network dropped.", "err");
         }
       })
       .then(function () {
@@ -328,49 +350,16 @@
       });
   }
 
-  function link(href, text) {
-    var a = document.createElement("a");
-    a.href = href;
-    a.textContent = text;
-    a.setAttribute("dir", "rtl");
-    a.style.cssText =
-      "display:inline-block;padding:8px 12px;border-radius:10px;" +
-      "background:rgba(0,0,0,.5);color:#fff;font:15px/1.3 system-ui,sans-serif;" +
-      "text-decoration:none;";
-    return a;
-  }
-
-  function mount() {
-    if (document.getElementById("nl-pwa-sync")) return;
-    var wrap = document.createElement("div");
-    wrap.id = "nl-pwa-sync";
-    wrap.setAttribute("dir", "rtl");
-    wrap.style.cssText =
-      "position:fixed;z-index:20;bottom:12px;right:12px;display:flex;" +
-      "flex-direction:column;gap:8px;align-items:flex-end;";
-    wrap.appendChild(link("/connect-drive", "ربط الدرايف"));
-    var btn = document.createElement("button");
-    btn.type = "button";
-    btn.id = "nl-pwa-sync-btn";
-    btn.textContent = "رفع الفاليديشن للدرايف";
-    btn.setAttribute("dir", "rtl");
-    btn.style.cssText =
-      "display:inline-block;padding:8px 12px;border-radius:10px;border:0;" +
-      "background:rgba(0,0,0,.5);color:#fff;font:15px/1.3 system-ui,sans-serif;";
-    btn.addEventListener("click", function () {
+  function bindMenu() {
+    window.__nlSyncVideos = function (force) {
+      return syncVideos(!!force);
+    };
+    window.addEventListener("nl-upload-validation", function () {
       syncVideos(true);
     });
-    wrap.appendChild(btn);
-    var status = document.createElement("div");
-    status.id = "nl-pwa-sync-status";
-    status.setAttribute("dir", "rtl");
-    status.style.cssText = "max-width:260px;font:12px/1.35 system-ui,sans-serif;color:#fff;text-align:right;";
-    wrap.appendChild(status);
-    document.body.appendChild(wrap);
   }
 
-  if (document.body) mount();
-  else document.addEventListener("DOMContentLoaded", mount);
+  bindMenu();
 
   function start() {
     setTimeout(function () {

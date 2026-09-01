@@ -7,6 +7,8 @@ from pathlib import Path
 
 from patch_ipad_touch import (
     CSS_NAME,
+    DRIVE_MENU_NEW,
+    DRIVE_MENU_OLD,
     PTR_MOVE_NEW,
     PTR_MOVE_OLD,
     PTR_PREVENT_OLD,
@@ -70,7 +72,7 @@ class IpadTouchTests(unittest.TestCase):
         out = wire_index_html(html)
         self.assertIn(f"{CSS_NAME}?v=1", out)
         self.assertIn("main.0626212c.js?touch=3", out)
-        self.assertIn("pwa_ipad_sync.js?v=8", out)
+        self.assertIn("pwa_ipad_sync.js?v=9", out)
         self.assertNotIn("clinic_smooth", out)
         self.assertNotIn("clinic_ipad_paint", out)
 
@@ -107,9 +109,22 @@ class IpadTouchTests(unittest.TestCase):
             self.assertIn("/api/validation-cache", js_sync)
             self.assertIn("unifiedVideo", js_sync)
             self.assertNotIn('fd.append("originalVideo"', js_sync)
-            self.assertIn("/connect-drive", js_sync)
-            self.assertIn("ربط الدرايف", js_sync)
-            self.assertIn("رفع الفاليديشن للدرايف", js_sync)
+            self.assertIn("nl-upload-validation", js_sync)
+            self.assertIn("__nlSyncVideos", js_sync)
+            self.assertNotIn("ربط الدرايف", js_sync)
+            self.assertNotIn("رفع الفاليديشن للدرايف", js_sync)
+
+    def test_adds_drive_actions_to_app_menu(self) -> None:
+        out, hits = patch_touch_js(DRIVE_MENU_OLD)
+        self.assertGreaterEqual(hits, 1)
+        self.assertIn("Connect Drive", out)
+        self.assertIn("Upload validation to Drive", out)
+        self.assertIn("/connect-drive", out)
+        self.assertIn("nl-upload-validation", out)
+        twice, extra = patch_touch_js(out)
+        self.assertEqual(out, twice)
+        self.assertEqual(extra, 0)
+        self.assertEqual(DRIVE_MENU_NEW.count("Connect Drive"), 1)
 
 
 if __name__ == "__main__":

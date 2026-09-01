@@ -61,6 +61,7 @@ class DatabaseGroupsPatchTests(unittest.TestCase):
         self.assertIn("grid-cols-2", text)
         self.assertIn("aria-label", text)
         self.assertIn("Confirm reorder 1", text)
+        self.assertIn("Date.parse", text)
         self.assertNotIn('H("Archive"', text)
 
     def test_helpers_and_dashboard_on_sample(self) -> None:
@@ -144,8 +145,8 @@ class DatabaseGroupsPatchTests(unittest.TestCase):
             js = (js_dir / "main.0626212c.js").read_text(encoding="utf-8")
             self.assertIn("Reorder Study IDs", js)
             html = (root / "frontend" / "build" / "index.html").read_text(encoding="utf-8")
-            self.assertIn("kin=10", html)
-            self.assertIn("31.82", html)
+            self.assertIn("kin=11", html)
+            self.assertIn("31.83", html)
             auth = (root / "auth.py").read_text(encoding="utf-8")
             self.assertIn('p.get("_archived")', auth)
 

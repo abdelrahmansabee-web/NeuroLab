@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-  <title>NeuroLab — ربط Google Drive</title>
+  <title>NeuroLab — Connect Google Drive</title>
   <style>
     body { margin:0; background:#121820; color:#e8eef6; font-family: Inter, system-ui, sans-serif; }
     .wrap { max-width: 32rem; margin: 8vh auto; padding: 0 1.25rem 3rem; }
@@ -19,39 +19,39 @@
     .btn[disabled] { opacity: .45; cursor: not-allowed; }
     [hidden] { display: none !important; }
     a { color: #7dd3fc; }
-    ol { padding-right: 1.2rem; }
+    ol { padding-left: 1.2rem; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>ربط Google Drive</h1>
-      <p id="status">جاري التحقق…</p>
+      <h1>Connect Google Drive</h1>
+      <p id="status">Checking…</p>
       <div id="setup" hidden>
-        <p>محتاجين مفتاح جوجل مرة واحدة (Client ID + Secret). من غيرهم الزر مش هيشتغل.</p>
+        <p>Google OAuth keys are needed once (Client ID + Secret). The button will not work without them.</p>
         <ol>
-          <li>افتحي <a href="https://console.cloud.google.com/apis/credentials?project=neurolab-502305" target="_blank" rel="noopener">Google Cloud → Credentials</a></li>
+          <li>Open <a href="https://console.cloud.google.com/apis/credentials?project=neurolab-502305" target="_blank" rel="noopener">Google Cloud → Credentials</a></li>
           <li>Create credentials → OAuth client ID → Web application</li>
           <li>Authorized redirect URI:
             <br/><code id="redir"></code></li>
-          <li>في Hugging Face Space → Settings → Variables and secrets، أضيفي:
+          <li>In Hugging Face Space → Settings → Variables and secrets, add:
             <br/><code>GOOGLE_OAUTH_CLIENT_ID</code>
             <br/><code>GOOGLE_OAUTH_CLIENT_SECRET</code></li>
-          <li>Restart للـ Space، وبعدين ارجعي للصفحة دي.</li>
+          <li>Restart the Space, then come back to this page.</li>
         </ol>
       </div>
       <p id="folder"></p>
       <p id="detail"></p>
-      <button class="btn" id="connect" type="button" hidden>ربط درايفك</button>
+      <button class="btn" id="connect" type="button" hidden>Connect Drive</button>
       <p style="margin-top:1.2rem;font-size:.85rem;color:rgba(255,255,255,.55)">
-        افتحي الصفحة دي من أيقونة الشاشة الرئيسية، مش من سفاري.
-        جوّه مجلد المريض: تقرير الكلينيكال PDF، وفيديوهات الفاليديشن لو موجودة:
+        Open this page from the Home Screen icon, not from Safari.
+        Inside each patient folder: the clinic PDF, and validation videos when they exist:
         <code>pre_validation.mp4</code>
         <code>post_validation.mp4</code>
         <code>healthy_validation.mp4</code>
-        متدخليش فولدر اسمه <code>videos</code>. لو مفيش فيديو للمرحلة، الفولدر من غير فيديو عادي.
+        Do not use a folder named <code>videos</code>. If a phase has no video, an empty folder is fine.
       </p>
-      <p style="margin-top:1.2rem"><a href="/">رجوع للبرنامج</a></p>
+      <p style="margin-top:1.2rem"><a href="/">Back to NeuroLab</a></p>
     </div>
   </div>
   <script>
@@ -65,17 +65,17 @@
     const params = new URLSearchParams(location.search);
     if (params.get("ok") === "1") {
       statusEl.className = "ok";
-      statusEl.textContent = "الدرايف اتربط. استني ثواني وهيتكتب ملف في الفولدر.";
+      statusEl.textContent = "Drive is connected. Wait a few seconds for a file to appear in the folder.";
     }
     if (params.get("error")) {
       statusEl.className = "warn";
-      statusEl.textContent = "الربط فشل: " + params.get("error");
+      statusEl.textContent = "Connect failed: " + params.get("error");
     }
     const token = (() => { try { return localStorage.getItem("neurolab_token") || ""; } catch (e) { return ""; } })();
     const headers = token ? { Authorization: "Bearer " + token } : {};
     function showFolder(inv) {
       if (!inv || inv.error && !inv.folderName) {
-        folderEl.textContent = "مقدرناش نعد الملفات في فولدر الدرايف دلوقتي.";
+        folderEl.textContent = "Could not list Drive folder files right now.";
         return;
       }
       const name = inv.folderName || "NeuroLab_Backups";
@@ -87,15 +87,15 @@
       if (inv.empty || files === 0) {
         folderEl.className = "warn";
         folderEl.textContent =
-          "الفولدر «" + name + "» فاضي: " + files + " ملف، " + videos + " فيديو، " + pdfs + " PDF.";
+          "Folder \u201c" + name + "\u201d is empty: " + files + " files, " + videos + " videos, " + pdfs + " PDFs.";
       } else {
         folderEl.className = jsons > 0 ? "warn" : "ok";
-        const folders = (inv.patientFolders || []).slice(0, 8).join("، ");
+        const folders = (inv.patientFolders || []).slice(0, 8).join(", ");
         folderEl.textContent =
-          "الفولدر «" + name + "»: " + patients + " مريض، " + files + " ملف، " + videos + " فيديو فاليديشن، " + pdfs + " PDF، " + jsons + " JSON."
-          + (folders ? " الفولدرات: " + folders : "")
-          + (jsons > 0 ? " لسه فيه JSON — محتاج إعادة بناء." : "")
-          + (videos === 0 ? " مفيش فيديوهات فاليديشن لسه." : "");
+          "Folder \u201c" + name + "\u201d: " + patients + " patients, " + files + " files, " + videos + " validation videos, " + pdfs + " PDFs, " + jsons + " JSON."
+          + (folders ? " Folders: " + folders : "")
+          + (jsons > 0 ? " JSON is still present \u2014 rebuild needed." : "")
+          + (videos === 0 ? " No validation videos yet." : "");
       }
     }
     Promise.all([
@@ -106,23 +106,23 @@
         showFolder(inv);
         if (d.ready) {
           statusEl.className = "ok";
-          statusEl.textContent = "الدرايف مربوط" + (d.email ? " (" + d.email + ")" : "") + ".";
-          if (d.folderName) detailEl.textContent = "الفولدر: " + d.folderName;
+          statusEl.textContent = "Drive is connected" + (d.email ? " (" + d.email + ")" : "") + ".";
+          if (d.folderName) detailEl.textContent = "Folder: " + d.folderName;
           return;
         }
         if (!d.clientConfigured) {
           statusEl.className = "warn";
-          statusEl.textContent = "لسه محتاجين مفاتيح جوجل في إعدادات الـ Space.";
+          statusEl.textContent = "Google keys are still missing from Space settings.";
           setupEl.hidden = false;
           return;
         }
         if (!token) {
           statusEl.className = "warn";
-          statusEl.textContent = "سجّلي دخول البرنامج من أيقونة الشاشة الرئيسية أول، بعدين افتحي الصفحة دي تاني.";
+          statusEl.textContent = "Sign in to NeuroLab from the Home Screen icon first, then open this page again.";
           return;
         }
         statusEl.className = "warn";
-        statusEl.textContent = "الدرايف مش مربوط. عشان كده الفولدر فاضي. اضغطي الزر وسجّلي بالجيميل اللي فيه الـ 5 تيرا.";
+        statusEl.textContent = "Drive is not connected, so the folder is empty. Tap the button and sign in with the Gmail that has the 5 TB.";
         btn.hidden = false;
         btn.onclick = async () => {
           btn.disabled = true;
@@ -133,7 +133,7 @@
           });
           if (!r.ok) {
             statusEl.className = "warn";
-            statusEl.textContent = "سجّلي دخول البرنامج أول.";
+            statusEl.textContent = "Sign in to NeuroLab first.";
             btn.disabled = false;
             return;
           }
@@ -142,7 +142,7 @@
       })
       .catch(() => {
         statusEl.className = "warn";
-        statusEl.textContent = "البرنامج لسه بيصحى. استني دقيقة وارفريشي.";
+        statusEl.textContent = "The app is still waking up. Wait a minute and refresh.";
       });
   </script>
 </body>
