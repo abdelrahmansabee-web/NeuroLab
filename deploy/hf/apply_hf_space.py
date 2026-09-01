@@ -33,6 +33,7 @@ def main() -> int:
     from patch_unblock_analyze_ui import patch_unblock_analyze_ui
     from patch_clinic_card_and_drive import patch_clinic_card_and_drive
     from patch_ptr_hang import patch_ptr_hang
+    from patch_database_groups import patch_database_groups
     from patch_uv_csv_restore import patch_uv_csv_restore
 
     videos_rc = patch_videos()
@@ -68,6 +69,9 @@ def main() -> int:
     ptr_rc = patch_ptr_hang(root)
     if ptr_rc != 0:
         return ptr_rc
+    db_rc = patch_database_groups(root)
+    if db_rc != 0:
+        return db_rc
     for rel in ("main.py", "analyze_job_runner.py"):
         path = root / rel
         if not path.is_file():
@@ -77,6 +81,7 @@ def main() -> int:
         for old in (
             'DEPLOY_VERSION = "29.61"',
             'DEPLOY_VERSION = "29.62"',
+            'DEPLOY_VERSION = "29.63"',
             'DEPLOY_VERSION = "29.59"',
             'DEPLOY_VERSION = "29.58"',
             'DEPLOY_VERSION = "29.57"',
@@ -106,10 +111,10 @@ def main() -> int:
             'DEPLOY_VERSION = "29.33"',
             'DEPLOY_VERSION = "29.32"',
         ):
-            updated = updated.replace(old, 'DEPLOY_VERSION = "29.62"')
+            updated = updated.replace(old, 'DEPLOY_VERSION = "29.63"')
         if updated != text:
             path.write_text(updated, encoding="utf-8")
-            print(f"bumped {rel} to 29.62")
+            print(f"bumped {rel} to 29.63")
     _ensure_weasyprint(root)
     return 0
 

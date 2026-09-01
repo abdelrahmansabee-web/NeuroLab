@@ -181,6 +181,8 @@ def archive_patients(patients: Iterable[Any], *, user_id: int = 1) -> Dict[str, 
         for patient in patients:
             if not isinstance(patient, dict):
                 continue
+            if patient.get("_archived"):
+                continue
             key = patient_drive_key(patient)
             named = []
             for name, content, sub in files_for_patient(patient):

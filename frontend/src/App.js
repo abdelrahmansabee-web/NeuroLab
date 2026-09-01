@@ -12,6 +12,7 @@ import {
   Info, Save, BarChart3, Stethoscope, Brain, Image as ImageIcon,
   RefreshCw, FileSpreadsheet, Upload, FileUp,
   Database, Search, Edit3, Trash2, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles, Users, LogOut, MoreHorizontal,
+  Archive,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -213,6 +214,32 @@ function loadPatients() {
 }
 function savePatients(list) {
   localStorage.setItem(LS_KEY, JSON.stringify(list));
+}
+function isArchivedPatient(p) {
+  return !!(p && p._archived);
+}
+function activePatients(list) {
+  return (list || loadPatients()).filter((p) => !isArchivedPatient(p));
+}
+function studyIdNumber(p) {
+  const n = parseInt(p?.demographics?.participantId, 10);
+  return Number.isFinite(n) ? n : 1e9;
+}
+function reorderStudyIds(list, start = 101) {
+  const src = Array.isArray(list) ? list : [];
+  const active = src.filter((p) => p && typeof p === "object" && !isArchivedPatient(p));
+  const archived = src.filter((p) => p && typeof p === "object" && isArchivedPatient(p));
+  active.sort((a, b) => {
+    const ia = studyIdNumber(a);
+    const ib = studyIdNumber(b);
+    if (ia !== ib) return ia - ib;
+    return String(a._savedAt || "").localeCompare(String(b._savedAt || ""));
+  });
+  const renumbered = active.map((p, i) => ({
+    ...p,
+    demographics: { ...(p.demographics || {}), participantId: String(start + i) },
+  }));
+  return [...renumbered, ...archived];
 }
 
 /** Drop heavy kinematic arrays before server sync (keep summary metrics). */
@@ -1804,7 +1831,7 @@ function downloadBlob(blob, filename) {
 }
 
 function nextStudyId() {
-  const patients = loadPatients();
+  const patients = activePatients();
   let maxId = 100;
   patients.forEach((p) => {
     const id = parseInt(p.demographics?.participantId);
@@ -3516,6 +3543,15 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
     return () => window.removeEventListener(PATIENTS_SYNC_EVENT, onSynced);
   }, [refreshPatients]);
 
+  const persistList = useCallback((updated, message) => {
+    savePatients(updated);
+    setPatients(updated);
+    setConfirm(null);
+    if (message) showToast(message);
+    postPatientsSync(updated).catch(() => {});
+    backupToDrive(updated);
+  }, [showToast]);
+
   const filtered = patients.filter((p) => {
     const q = search.toLowerCase();
     return (
@@ -3523,19 +3559,163 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
       (p.demographics?.participantId || "").toLowerCase().includes(q)
     );
   });
+  const intervention = filtered.filter((p) => !isArchivedPatient(p) && p.demographics?.group === "1");
+  const control = filtered.filter((p) => !isArchivedPatient(p) && p.demographics?.group === "2");
+  const ungrouped = filtered.filter((p) => !isArchivedPatient(p) && p.demographics?.group !== "1" && p.demographics?.group !== "2");
+  const archived = filtered.filter(isArchivedPatient);
+  const activeCount = patients.filter((p) => !isArchivedPatient(p)).length;
 
   const deletePatient = (id) => {
-    const updated = patients.filter((p) => p._id !== id);
-    savePatients(updated);
-    setPatients(updated);
-    setConfirm(null);
-    showToast("Patient record deleted");
-    postPatientsSync(updated).catch(() => {});
+    persistList(patients.filter((p) => p._id !== id), "Patient record deleted");
   };
+
+  const setArchived = (id, archivedFlag) => {
+    persistList(
+      patients.map((p) => (
+        p._id === id
+          ? { ...p, _archived: archivedFlag, _archivedAt: archivedFlag ? new Date().toISOString() : undefined }
+          : p
+      )),
+      archivedFlag ? "Moved to Archive" : "Restored from Archive"
+    );
+  };
+
+  const setGroup = (id, group) => {
+    const updated = patients.map((p) => (
+      p._id === id ? { ...p, demographics: { ...(p.demographics || {}), group } } : p
+    ));
+    persistList(updated, group === "1" ? "Moved to Intervention" : "Moved to Control");
+    if (fd._loadedId === id) {
+      setFd((prev) => ({ ...prev, demographics: { ...(prev.demographics || {}), group } }));
+    }
+  };
+
+  const applyReorder = () => {
+    const updated = reorderStudyIds(patients);
+    persistList(updated, "Study IDs reordered from 101");
+    const curId = fd._loadedId;
+    if (curId) {
+      const cur = updated.find((p) => p._id === curId);
+      if (cur?.demographics?.participantId) {
+        setFd((prev) => ({
+          ...prev,
+          demographics: { ...(prev.demographics || {}), participantId: cur.demographics.participantId },
+        }));
+      }
+    }
+  };
+
+  const renderCard = (p, mode) => {
+    const d = p.demographics || {};
+    const hasPre = !!p._hasPre;
+    const hasPost = !!p._hasPost;
+    return (
+      <Glass key={p._id} className="p-4">
+        <div className="flex items-start gap-4 flex-wrap">
+          <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${
+            mode === "archive"
+              ? "bg-white/[0.06] border-white/[0.08]"
+              : mode === "control"
+                ? "bg-rose-500/20 border-rose-400/20"
+                : "bg-teal-500/20 border-teal-400/20"
+          }`}>
+            {mode === "archive" ? <Archive className="w-5 h-5 text-white/50" /> : <User className="w-5 h-5 text-white/80" />}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <p className="font-extrabold text-white text-sm">{d.name || "Unnamed Patient"}</p>
+              <span className="text-xs font-mono text-white/40 bg-white/[0.06] px-2 py-0.5 rounded-lg border border-white/[0.04] truncate">
+                {d.participantId || "No ID"}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2 text-[10px] text-white/40 mb-2">
+              {d.age && <span>Age: {d.age}</span>}
+              {d.sex && <span>· {d.sex === "1" ? "Male" : "Female"}</span>}
+              {d.strokeType && <span>· {d.strokeType === "1" ? "Ischemic" : "Hemorrhagic"}</span>}
+              {d.side && <span>· {d.side === "1" ? "Left" : "Right"} side</span>}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
+                hasPre ? "bg-sky-500/20 border-sky-400/30 text-sky-300" : "bg-white/[0.05] border-white/[0.04] text-white/25"
+              }`}>
+                {hasPre ? "✓ Pre-Assessment" : "○ Pre missing"}
+              </span>
+              <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
+                hasPost ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-300" : "bg-white/[0.05] border-white/[0.04] text-white/25"
+              }`}>
+                {hasPost ? "✓ Post-Assessment" : "○ Post missing"}
+              </span>
+              <span className="text-[9px] text-white/25 ml-auto">Saved: {new Date(p._savedAt).toLocaleString()}</span>
+            </div>
+
+            {mode !== "archive" && (
+              <div className="mt-2">
+                <select
+                  value={d.group === "1" || d.group === "2" ? d.group : ""}
+                  onChange={(e) => e.target.value && setGroup(p._id, e.target.value)}
+                  className="text-[11px] px-2 py-1.5 rounded-lg bg-white/[0.09] border border-white/[0.08] text-white/80"
+                >
+                  <option value="">Set group…</option>
+                  <option value="1">Intervention / AOMI</option>
+                  <option value="2">Control</option>
+                </select>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap mt-3">
+              <GBtn variant="sky" onClick={() => onLoadSession(p)} className="text-xs px-3 py-2">
+                <Edit3 className="w-3.5 h-3.5" /> Load / Edit
+              </GBtn>
+              {mode === "archive" ? (
+                <GBtn variant="default" onClick={() => setArchived(p._id, false)} className="text-xs px-3 py-2">
+                  <RotateCcw className="w-3.5 h-3.5" /> Restore
+                </GBtn>
+              ) : (
+                <GBtn variant="default" onClick={() => setArchived(p._id, true)} className="text-xs px-3 py-2">
+                  <Archive className="w-3.5 h-3.5" /> Archive
+                </GBtn>
+              )}
+              {confirm === p._id ? (
+                <div className="flex items-center gap-1.5">
+                  <GBtn variant="rose" onClick={() => deletePatient(p._id)} className="text-xs px-3 py-2">
+                    <Check className="w-3.5 h-3.5" /> Confirm Delete
+                  </GBtn>
+                  <GBtn variant="default" onClick={() => setConfirm(null)} className="text-xs px-3 py-2">
+                    <X className="w-3.5 h-3.5" />
+                  </GBtn>
+                </div>
+              ) : (
+                <GBtn variant="default" onClick={() => setConfirm(p._id)} className="text-xs px-3 py-2">
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                </GBtn>
+              )}
+            </div>
+          </div>
+        </div>
+      </Glass>
+    );
+  };
+
+  const section = (title, items, mode, emptyHint) => (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 px-1">
+        <p className={`text-xs font-extrabold uppercase tracking-widest ${
+          mode === "control" ? "text-rose-300" : mode === "archive" ? "text-white/45" : "text-teal-300"
+        }`}>{title}</p>
+        <span className="text-[10px] font-bold text-white/35">{items.length}</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-[11px] text-white/25 px-1">{emptyHint}</p>
+      ) : items.map((p) => renderCard(p, mode))}
+    </div>
+  );
 
   return (
     <div className="space-y-5">
-      <SH icon={Database} en="Patient Database" tr="Hasta Veritabanı" badge={`${patients.length} Records`} />
+      <SH icon={Database} en="Patient Database" tr="Hasta Veritabanı" badge={`${activeCount} active · ${patients.filter(isArchivedPatient).length} archived`} />
 
       <Glass className="p-4">
         <div className="flex items-center gap-3 flex-wrap">
@@ -3588,6 +3768,20 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
           }}>
             <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} /> {syncing ? "Syncing..." : "Sync"}
           </GBtn>
+          {confirm === "reorder" ? (
+            <div className="flex items-center gap-1.5">
+              <GBtn variant="sky" onClick={applyReorder} className="text-xs px-3 py-2">
+                <Check className="w-3.5 h-3.5" /> Confirm reorder 101…
+              </GBtn>
+              <GBtn variant="default" onClick={() => setConfirm(null)} className="text-xs px-3 py-2">
+                <X className="w-3.5 h-3.5" />
+              </GBtn>
+            </div>
+          ) : (
+            <GBtn variant="default" disabled={activeCount === 0} onClick={() => setConfirm("reorder")}>
+              Reorder Study IDs
+            </GBtn>
+          )}
         </div>
       </Glass>
 
@@ -3600,75 +3794,11 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
           <p className="text-white/25 text-sm">Save a session from any assessment tab, then tap Sync to share across devices.</p>
         </Glass>
       ) : (
-        <div className="space-y-3">
-          {filtered.map((p) => {
-            const d = p.demographics || {};
-            const hasPre = !!p._hasPre;
-            const hasPost = !!p._hasPost;
-
-            return (
-              <Glass key={p._id} className="p-4">
-                <div className="flex items-start gap-4 flex-wrap">
-                  <div className="w-10 h-10 rounded-xl bg-violet-500/20 border border-violet-400/20 flex items-center justify-center flex-shrink-0">
-                    <User className="w-5 h-5 text-violet-300" />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <p className="font-extrabold text-white text-sm">{d.name || "Unnamed Patient"}</p>
-                      <span className="text-xs font-mono text-white/40 bg-white/[0.06] px-2 py-0.5 rounded-lg border border-white/[0.04] truncate">
-                        {d.participantId || "No ID"}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 text-[10px] text-white/40 mb-2">
-                      {d.age && <span>Age: {d.age}</span>}
-                      {d.sex && <span>· {d.sex === "1" ? "Male" : "Female"}</span>}
-                      {d.strokeType && <span>· {d.strokeType === "1" ? "Ischemic" : "Hemorrhagic"}</span>}
-                      {d.side && <span>· {d.side === "1" ? "Left" : "Right"} side</span>}
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
-                        hasPre ? "bg-sky-500/20 border-sky-400/30 text-sky-300" : "bg-white/[0.05] border-white/[0.04] text-white/25"
-                      }`}>
-                        {hasPre ? "✓ Pre-Assessment" : "○ Pre missing"}
-                      </span>
-
-                      <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
-                        hasPost ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-300" : "bg-white/[0.05] border-white/[0.04] text-white/25"
-                      }`}>
-                        {hasPost ? "✓ Post-Assessment" : "○ Post missing"}
-                      </span>
-
-                      <span className="text-[9px] text-white/25 ml-auto">Saved: {new Date(p._savedAt).toLocaleString()}</span>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap mt-3">
-                      <GBtn variant="sky" onClick={() => onLoadSession(p)} className="text-xs px-3 py-2">
-                        <Edit3 className="w-3.5 h-3.5" /> Load / Edit
-                      </GBtn>
-
-                      {confirm === p._id ? (
-                        <div className="flex items-center gap-1.5">
-                          <GBtn variant="rose" onClick={() => deletePatient(p._id)} className="text-xs px-3 py-2">
-                            <Check className="w-3.5 h-3.5" /> Confirm Delete
-                          </GBtn>
-                          <GBtn variant="default" onClick={() => setConfirm(null)} className="text-xs px-3 py-2">
-                            <X className="w-3.5 h-3.5" />
-                          </GBtn>
-                        </div>
-                      ) : (
-                        <GBtn variant="default" onClick={() => setConfirm(p._id)} className="text-xs px-3 py-2">
-                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                        </GBtn>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </Glass>
-            );
-          })}
+        <div className="space-y-6">
+          {section("Intervention / AOMI", intervention, "intervention", "No intervention sessions")}
+          {section("Control", control, "control", "No control sessions")}
+          {ungrouped.length > 0 && section("Ungrouped", ungrouped, "ungrouped", "")}
+          {section("Archive", archived, "archive", "No archived sessions")}
         </div>
       )}
     </div>
@@ -4662,7 +4792,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
   // ── SPSS Export (all patients, split by group + demo/assess/full) ──
   const exportSPSS = () => {
-    const allPts = loadPatients();
+    const allPts = activePatients();
     if (allPts.length === 0) { showToast("No patients to export", "error"); return; }
 
     const masterRows = buildMasterDataset(allPts, WMFT_ITEMS, KGIA_MOVEMENTS, IPAQ_ACTS);
@@ -4697,7 +4827,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
   // ── JSON Export (all patients) ──
   const exportJSON = () => {
-    const allPts = loadPatients();
+    const allPts = activePatients();
     if (allPts.length === 0) { return; }
     const clean = allPts.map(({ _id, _savedAt, _hasPre, _hasPost, ...rest }) => rest);
     const blob = new Blob([JSON.stringify(clean, null, 2)], { type: "application/json" });
@@ -5343,7 +5473,7 @@ const AnalysisDashboard = () => {
     });
   };
 
-  const pts = loadPatients();
+  const pts = activePatients();
   const n = pts.length;
   const aomi = pts.filter((p) => p.demographics?.group === "1");
   const ctrl = pts.filter((p) => p.demographics?.group === "2");
@@ -5687,7 +5817,7 @@ const AnalysisDashboard = () => {
               ⬇ neuro_study_analysis.sps
             </button>
             <button type="button" onClick={() => {
-            const allPts = loadPatients();
+            const allPts = activePatients();
               downloadBlob(new Blob([JSON.stringify(allPts, null, 2)], { type: "application/json" }), `neuro_backup_${allPts.length}pts.json`);
             }} className="px-5 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-extrabold">
               ⬇ JSON backup

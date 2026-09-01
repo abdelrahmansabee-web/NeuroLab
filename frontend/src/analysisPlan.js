@@ -392,7 +392,8 @@ export function buildMasterRow(patient, wmftItems, kgiaMovements, ipaqActs) {
 }
 
 export function buildMasterDataset(patients, wmftItems, kgiaMovements, ipaqActs, { locf = false } = {}) {
-  const rows = patients
+  const rows = (patients || [])
+    .filter((p) => p && !p._archived)
     .map((p) => buildMasterRow(p, wmftItems, kgiaMovements, ipaqActs))
     .filter(Boolean);
   return locf ? applyLOCF(rows) : rows;
