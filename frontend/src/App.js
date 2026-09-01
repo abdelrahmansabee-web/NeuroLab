@@ -68,7 +68,7 @@ const SIDEBAR_W = 255;
 const SIDEBAR_X_HIDDEN = -280;
 const MOBILE_SIDEBAR_W = "75%";
 const SIDEBAR_SPRING = { type: "spring", stiffness: 180, damping: 26, mass: 1.1 };
-const PANEL_EASE = "transform 600ms cubic-bezier(0.16, 1, 0.3, 1)";
+const PANEL_EASE = "transform 700ms cubic-bezier(0.45, 0, 0.55, 1)";
 
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
@@ -5898,7 +5898,7 @@ const SectionTransition = React.memo(function SectionTransition({ active, active
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.22, ease: [0.45, 0, 0.55, 1] }}
         >
           {activeSection}
         </motion.div>

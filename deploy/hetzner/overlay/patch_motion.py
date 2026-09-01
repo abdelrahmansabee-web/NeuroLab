@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """GPU-only sidebar push and a short opacity dissolve between sections.
 
-Padding/width/margin animations reflow every frame and still look like a cut,
-especially on iPad. Keep width at 100% and slide the sidebar, topbar, and main
-pane with the same translate3d. Section changes fade only — no bounce or slide.
+Padding/width/margin animations reflow every frame. A snappy ease-out still
+looks like a cut because most of the travel happens in the first 100ms.
+Slide the sidebar, topbar, and main together with translate3d and a slow
+ease-in-out. Section changes fade only — no bounce or slide.
 """
 from __future__ import annotations
 
@@ -14,32 +15,44 @@ from pathlib import Path
 
 JS_NAME = "main.0626212c.js"
 CSS_NAME = "main.17fa781b.css"
-KIN = "13"
-NL_VERSION = "31.85"
+KIN = "14"
+NL_VERSION = "31.86"
 START_URL = "./?v=29.67-pwa"
 DEPLOY_VERSION = "29.67"
 
-PANEL_EASE = "transform 600ms cubic-bezier(0.16, 1, 0.3, 1)"
+PANEL_EASE = "transform 700ms cubic-bezier(0.45, 0, 0.55, 1)"
 
 JS_PATCHES = (
     (
-        "panel motion uses transform not padding",
-        'const $w="padding-left 520ms cubic-bezier(0.22, 1, 0.36, 1)"',
+        "panel motion uses a slow transform ease",
+        (
+            'const $w="padding-left 520ms cubic-bezier(0.22, 1, 0.36, 1)"',
+            'const $w="transform 600ms cubic-bezier(0.16, 1, 0.3, 1)"',
+        ),
         f'const $w="{PANEL_EASE}"',
     ),
     (
         "topbar slides with translate3d",
-        'at={left:0,width:it,paddingLeft:rt?X:0,paddingTop:Bw,boxSizing:"border-box",transition:$w}',
+        (
+            'at={left:0,width:it,paddingLeft:rt?X:0,paddingTop:Bw,boxSizing:"border-box",transition:$w}',
+            'at={left:0,width:it,paddingTop:Bw,transform:rt?"translate3d(".concat(X,"px,0,0)"):"translate3d(0,0,0)",transition:$w,backfaceVisibility:"hidden",WebkitBackfaceVisibility:"hidden"}',
+        ),
         'at={left:0,width:it,paddingTop:Bw,transform:rt?"translate3d(".concat(X,"px,0,0)"):"translate3d(0,0,0)",transition:$w,backfaceVisibility:"hidden",WebkitBackfaceVisibility:"hidden"}',
     ),
     (
         "main slides with translate3d",
-        'style:{width:it,marginLeft:0,paddingLeft:rt?X:0,minWidth:0,boxSizing:"border-box",transition:$w}',
+        (
+            'style:{width:it,marginLeft:0,paddingLeft:rt?X:0,minWidth:0,boxSizing:"border-box",transition:$w}',
+            'style:{width:it,minWidth:0,transform:rt?"translate3d(".concat(X,"px,0,0)"):"translate3d(0,0,0)",transition:$w,backfaceVisibility:"hidden",WebkitBackfaceVisibility:"hidden"}',
+        ),
         'style:{width:it,minWidth:0,transform:rt?"translate3d(".concat(X,"px,0,0)"):"translate3d(0,0,0)",transition:$w,backfaceVisibility:"hidden",WebkitBackfaceVisibility:"hidden"}',
     ),
     (
         "sidebar uses the same transform ease",
-        'transition:"transform 520ms cubic-bezier(0.22, 1, 0.36, 1)"',
+        (
+            'transition:"transform 520ms cubic-bezier(0.22, 1, 0.36, 1)"',
+            'transition:"transform 600ms cubic-bezier(0.16, 1, 0.3, 1)"',
+        ),
         f'transition:"{PANEL_EASE}"',
     ),
 )
@@ -47,58 +60,88 @@ JS_PATCHES = (
 CSS_PATCHES = (
     (
         "section timing",
-        "--section-bounce-out-ms:280ms;--section-bounce-in-ms:420ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
-        "--section-bounce-out-ms:140ms;--section-bounce-in-ms:220ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
+        (
+            "--section-bounce-out-ms:280ms;--section-bounce-in-ms:420ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
+            "--section-bounce-out-ms:140ms;--section-bounce-in-ms:220ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
+        ),
+        "--section-bounce-out-ms:200ms;--section-bounce-in-ms:280ms;--section-bounce-out-ease:cubic-bezier(0.4,0,1,1);--section-bounce-in-ease:cubic-bezier(0.22,1,0.36,1)",
     ),
     (
         "mobile fade timing",
-        "--mobile-fade-out-ms:240ms;--mobile-fade-in-ms:360ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
-        "--mobile-fade-out-ms:140ms;--mobile-fade-in-ms:220ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
+        (
+            "--mobile-fade-out-ms:240ms;--mobile-fade-in-ms:360ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
+            "--mobile-fade-out-ms:140ms;--mobile-fade-in-ms:220ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
+        ),
+        "--mobile-fade-out-ms:200ms;--mobile-fade-in-ms:280ms;--mobile-fade-ease:cubic-bezier(0.22,1,0.36,1)",
     ),
     (
         "mobile fade mount opacity",
-        ".section-transition-host-mobile .section-fade-mount{opacity:0;transform:translate3d(0,10px,0);pointer-events:none}",
+        (
+            ".section-transition-host-mobile .section-fade-mount{opacity:0;transform:translate3d(0,10px,0);pointer-events:none}",
+            ".section-transition-host-mobile .section-fade-mount{opacity:0;pointer-events:none}",
+        ),
         ".section-transition-host-mobile .section-fade-mount{opacity:0;pointer-events:none}",
     ),
     (
         "mobile fade keyframes",
-        "@keyframes nl-mobile-fade-out{0%{opacity:1;transform:translateZ(0)}to{opacity:0;transform:translate3d(0,-8px,0)}}@keyframes nl-mobile-fade-in{0%{opacity:0;transform:translate3d(0,10px,0)}to{opacity:1;transform:translateZ(0)}}",
+        (
+            "@keyframes nl-mobile-fade-out{0%{opacity:1;transform:translateZ(0)}to{opacity:0;transform:translate3d(0,-8px,0)}}@keyframes nl-mobile-fade-in{0%{opacity:0;transform:translate3d(0,10px,0)}to{opacity:1;transform:translateZ(0)}}",
+            "@keyframes nl-mobile-fade-out{0%{opacity:1}to{opacity:0}}@keyframes nl-mobile-fade-in{0%{opacity:0}to{opacity:1}}",
+        ),
         "@keyframes nl-mobile-fade-out{0%{opacity:1}to{opacity:0}}@keyframes nl-mobile-fade-in{0%{opacity:0}to{opacity:1}}",
     ),
     (
         "desktop bounce mount",
-        ".section-nav-motion.section-bounce-mount:not(.section-bounce-in){pointer-events:none;opacity:0;transform:translate3d(0,12px,0)}",
+        (
+            ".section-nav-motion.section-bounce-mount:not(.section-bounce-in){pointer-events:none;opacity:0;transform:translate3d(0,12px,0)}",
+            ".section-nav-motion.section-bounce-mount:not(.section-bounce-in){pointer-events:none;opacity:0}",
+        ),
         ".section-nav-motion.section-bounce-mount:not(.section-bounce-in){pointer-events:none;opacity:0}",
     ),
     (
         "desktop bounce keyframes",
-        "@keyframes nl-bounce-out{0%{opacity:1;transform:translateZ(0)}to{opacity:0;transform:translate3d(0,-10px,0)}}@keyframes nl-bounce-in{0%{opacity:0;transform:translate3d(0,12px,0)}to{opacity:1;transform:translateZ(0)}}",
+        (
+            "@keyframes nl-bounce-out{0%{opacity:1;transform:translateZ(0)}to{opacity:0;transform:translate3d(0,-10px,0)}}@keyframes nl-bounce-in{0%{opacity:0;transform:translate3d(0,12px,0)}to{opacity:1;transform:translateZ(0)}}",
+            "@keyframes nl-bounce-out{0%{opacity:1}to{opacity:0}}@keyframes nl-bounce-in{0%{opacity:0}to{opacity:1}}",
+        ),
         "@keyframes nl-bounce-out{0%{opacity:1}to{opacity:0}}@keyframes nl-bounce-in{0%{opacity:0}to{opacity:1}}",
     ),
     (
         "section will-change opacity",
-        ".section-transition-host:not(.section-transition-host-mobile).section-transition-animating .section-nav-motion{will-change:transform}",
+        (
+            ".section-transition-host:not(.section-transition-host-mobile).section-transition-animating .section-nav-motion{will-change:transform}",
+            ".section-transition-host:not(.section-transition-host-mobile).section-transition-animating .section-nav-motion{will-change:opacity}",
+        ),
         ".section-transition-host:not(.section-transition-host-mobile).section-transition-animating .section-nav-motion{will-change:opacity}",
     ),
     (
         "clip horizontal overflow while panels slide",
-        ".section-pane{overflow:visible}",
+        (
+            ".section-pane{overflow:visible}",
+            "html,body,#root{overflow-x:hidden}.section-pane{overflow:visible}",
+        ),
         "html,body,#root{overflow-x:hidden}.section-pane{overflow:visible}",
     ),
 )
 
 
-def _apply_pairs(text: str, pairs: tuple[tuple[str, str, str], ...]) -> tuple[str, list[str]]:
+def _apply_pairs(
+    text: str, pairs: tuple[tuple[str, str | tuple[str, ...], str], ...]
+) -> tuple[str, list[str]]:
     applied: list[str] = []
-    for label, old, new in pairs:
+    for label, olds, new in pairs:
+        if isinstance(olds, str):
+            olds = (olds,)
         if new in text:
             applied.append(f"already {label}")
             continue
-        if old in text:
-            text = text.replace(old, new, 1)
-            applied.append(label)
-            continue
-        raise SystemExit(f"pattern not found: {label}")
+        for old in olds:
+            if old in text:
+                text = text.replace(old, new, 1)
+                applied.append(label)
+                break
+        else:
+            raise SystemExit(f"pattern not found: {label}")
     return text, applied
 
 
@@ -122,7 +165,7 @@ def patch_pwa_reload(root: Path) -> list[str]:
         )
         updated = re.sub(
             r"main\.17fa781b\.css(?:\?[^\"']*)?",
-            f"main.17fa781b.css?m=2",
+            f"main.17fa781b.css?m=3",
             updated,
         )
         updated = re.sub(
@@ -133,7 +176,7 @@ def patch_pwa_reload(root: Path) -> list[str]:
         )
         if updated != html:
             idx.write_text(updated, encoding="utf-8")
-            notes.append(f"index kin={KIN} css?m=2 nl-version {NL_VERSION}")
+            notes.append(f"index kin={KIN} css?m=3 nl-version {NL_VERSION}")
     manifest = root / "frontend" / "build" / "manifest.json"
     if manifest.is_file():
         try:
