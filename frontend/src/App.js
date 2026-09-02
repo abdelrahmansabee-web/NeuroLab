@@ -68,7 +68,8 @@ const SIDEBAR_W = 255;
 const SIDEBAR_X_HIDDEN = -280;
 const MOBILE_SIDEBAR_W = "75%";
 const SIDEBAR_SPRING = { type: "spring", stiffness: 180, damping: 26, mass: 1.1 };
-const PANEL_EASE = "transform 820ms cubic-bezier(0.33, 0, 0.2, 1)";
+const SIDEBAR_EASE = "transform 480ms cubic-bezier(0.33, 0, 0.2, 1)";
+const PAD_EASE = "padding-left 480ms cubic-bezier(0.33, 0, 0.2, 1)";
 
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
@@ -5891,18 +5892,9 @@ const getTodayDate = () => new Date().toISOString().split("T")[0];
 const SectionTransition = React.memo(function SectionTransition({ active, activeSection }) {
   return (
     <div className="section-transition-host min-h-[420px]">
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={active}
-          className="section-pane w-full"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.32, ease: [0.33, 0, 0.2, 1] }}
-        >
-          {activeSection}
-        </motion.div>
-      </AnimatePresence>
+      <div key={active} className="section-pane w-full">
+        {activeSection}
+      </div>
     </div>
   );
 });
@@ -6726,7 +6718,7 @@ export default function App() {
           width: isDesktop ? sidebarPush : MOBILE_SIDEBAR_W,
           paddingTop: SAFE_TOP,
           transform: sidebar ? "translate3d(0,0,0)" : (isDesktop ? `translate3d(-${sidebarPush}px,0,0)` : "translate3d(-100%,0,0)"),
-          transition: PANEL_EASE,
+          transition: SIDEBAR_EASE,
           willChange: "transform",
           backfaceVisibility: "hidden",
           WebkitBackfaceVisibility: "hidden",
@@ -6803,12 +6795,10 @@ export default function App() {
         style={{
           left: 0,
           width: "100%",
+          paddingLeft: isDesktop && sidebar ? sidebarPush : 0,
           paddingTop: SAFE_TOP,
-          transform: isDesktop && sidebar ? `translate3d(${sidebarPush}px,0,0)` : "translate3d(0,0,0)",
-          transition: PANEL_EASE,
-          willChange: "transform",
-          backfaceVisibility: "hidden",
-          WebkitBackfaceVisibility: "hidden",
+          boxSizing: "border-box",
+          transition: PAD_EASE,
         }}
       >
         {topBar}
@@ -6833,11 +6823,10 @@ export default function App() {
         style={{
           width: "100%",
           minWidth: 0,
-          transform: isDesktop && sidebar ? `translate3d(${sidebarPush}px,0,0)` : "translate3d(0,0,0)",
-          transition: PANEL_EASE,
-          willChange: "transform",
-          backfaceVisibility: "hidden",
-          WebkitBackfaceVisibility: "hidden",
+          marginLeft: 0,
+          paddingLeft: isDesktop && sidebar ? sidebarPush : 0,
+          boxSizing: "border-box",
+          transition: PAD_EASE,
         }}
       >
         <div aria-hidden="true" style={{ height: topBarHeight || 96 }} />
