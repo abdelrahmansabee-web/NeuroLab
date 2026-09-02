@@ -68,8 +68,8 @@ const SIDEBAR_W = 255;
 const SIDEBAR_X_HIDDEN = -280;
 const MOBILE_SIDEBAR_W = "75%";
 const SIDEBAR_SPRING = { type: "spring", stiffness: 180, damping: 26, mass: 1.1 };
-const SIDEBAR_EASE = "transform 480ms cubic-bezier(0.33, 0, 0.2, 1)";
-const PAD_EASE = "padding-left 480ms cubic-bezier(0.33, 0, 0.2, 1)";
+const SIDEBAR_EASE = "transform 600ms cubic-bezier(0.33, 0, 0.2, 1)";
+const PAD_EASE = "left 600ms cubic-bezier(0.33, 0, 0.2, 1),margin-left 600ms cubic-bezier(0.33, 0, 0.2, 1)";
 
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
@@ -5892,9 +5892,18 @@ const getTodayDate = () => new Date().toISOString().split("T")[0];
 const SectionTransition = React.memo(function SectionTransition({ active, activeSection }) {
   return (
     <div className="section-transition-host min-h-[420px]">
-      <div key={active} className="section-pane w-full">
-        {activeSection}
-      </div>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={active}
+          className="section-pane w-full"
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.38, ease: [0.34, 1.4, 0.64, 1] }}
+        >
+          {activeSection}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 });
@@ -6793,9 +6802,9 @@ export default function App() {
         ref={topBarWrapperRef}
         className="fixed top-0 z-[60] px-3 sm:px-4 pb-0"
         style={{
-          left: 0,
-          width: "100%",
-          paddingLeft: isDesktop && sidebar ? sidebarPush : 0,
+          left: isDesktop && sidebar ? sidebarPush : 0,
+          right: 0,
+          width: "auto",
           paddingTop: SAFE_TOP,
           boxSizing: "border-box",
           transition: PAD_EASE,
@@ -6821,10 +6830,9 @@ export default function App() {
       <main
         className="flex-none relative z-30"
         style={{
-          width: "100%",
+          width: "auto",
           minWidth: 0,
-          marginLeft: 0,
-          paddingLeft: isDesktop && sidebar ? sidebarPush : 0,
+          marginLeft: isDesktop && sidebar ? sidebarPush : 0,
           boxSizing: "border-box",
           transition: PAD_EASE,
         }}

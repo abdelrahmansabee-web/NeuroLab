@@ -29,22 +29,26 @@ CSS_SAMPLE = _first_olds(CSS_PATCHES)
 
 
 class MotionPatchTests(unittest.TestCase):
-    def test_js_restores_padding_layout_and_instant_sections(self) -> None:
+    def test_js_pins_layout_and_plays_bounce(self) -> None:
         out, applied = patch_js_text(JS_SAMPLE)
         self.assertEqual(len(applied), len(JS_PATCHES))
         self.assertIn(PAD_EASE, out)
         self.assertIn(SIDEBAR_EASE, out)
-        self.assertIn("paddingLeft:rt?X:0", out)
-        self.assertNotIn('g("exiting")', out)
-        self.assertIn("(0,e.startTransition)(()=>l(t))", out)
-        self.assertIn('const d=h(),u="exiting"===i&&!d', out)
+        self.assertIn("left:rt?X:0,right:0", out)
+        self.assertIn("marginLeft:rt?X:0", out)
+        self.assertNotIn("paddingLeft:rt?X:0", out)
+        self.assertIn('g("exiting")', out)
+        self.assertIn('const d=!1,u="exiting"===i&&!d', out)
+        self.assertNotIn("(0,e.startTransition)(()=>l(t))", out)
 
-    def test_css_does_not_clip_the_page(self) -> None:
+    def test_css_has_simple_bounce(self) -> None:
         out, applied = patch_css_text(CSS_SAMPLE)
         self.assertEqual(len(applied), len(CSS_PATCHES))
-        self.assertNotIn("html,body,#root{overflow-x:hidden}", out)
-        self.assertIn(".section-pane{overflow:visible}", out)
-        self.assertIn("animation:none!important", out)
+        self.assertIn("--section-bounce-in-ease:cubic-bezier(0.34,1.4,0.64,1)", out)
+        self.assertIn("translate3d(0,14px,0)", out)
+        self.assertIn("translate3d(0,-8px,0)", out)
+        self.assertIn("@media (prefers-reduced-motion:reduce){.nl-motion-layer{transition:none!important}}", out)
+        self.assertNotIn(".section-nav-motion.section-bounce-out{animation:none!important", out)
 
     def test_idempotent(self) -> None:
         once, _ = patch_js_text(JS_SAMPLE)
@@ -66,29 +70,28 @@ class MotionPatchTests(unittest.TestCase):
             (js_dir / "main.0626212c.js").write_text(JS_SAMPLE, encoding="utf-8")
             (css_dir / "main.17fa781b.css").write_text(CSS_SAMPLE, encoding="utf-8")
             (root / "frontend" / "build" / "index.html").write_text(
-                '<meta name="nl-version" content="31.90"/>'
-                '<script src="/static/js/main.0626212c.js?kin=18"></script>'
-                '<link href="/static/css/main.17fa781b.css?m=6" rel="stylesheet">',
+                '<meta name="nl-version" content="31.91"/>'
+                '<script src="/static/js/main.0626212c.js?kin=19"></script>'
+                '<link href="/static/css/main.17fa781b.css?m=7" rel="stylesheet">',
                 encoding="utf-8",
             )
             (root / "frontend" / "build" / "manifest.json").write_text(
-                json.dumps({"start_url": "./?v=29.69-pwa"}),
+                json.dumps({"start_url": "./?v=29.70-pwa"}),
                 encoding="utf-8",
             )
-            (root / "main.py").write_text('DEPLOY_VERSION = "29.69"\n', encoding="utf-8")
+            (root / "main.py").write_text('DEPLOY_VERSION = "29.70"\n', encoding="utf-8")
             self.assertEqual(patch_motion(root), 0)
             js = (js_dir / "main.0626212c.js").read_text(encoding="utf-8")
             html = (root / "frontend" / "build" / "index.html").read_text(encoding="utf-8")
             manifest = json.loads(
                 (root / "frontend" / "build" / "manifest.json").read_text(encoding="utf-8")
             )
-            self.assertIn(PAD_EASE, js)
-            self.assertIn("paddingLeft:rt?X:0", js)
-            self.assertIn("kin=19", html)
-            self.assertIn("css/main.17fa781b.css?m=7", html)
-            self.assertIn("31.91", html)
-            self.assertEqual(manifest["start_url"], "./?v=29.70-pwa")
-            self.assertIn('DEPLOY_VERSION = "29.70"', (root / "main.py").read_text(encoding="utf-8"))
+            self.assertIn('g("exiting")', js)
+            self.assertIn("kin=20", html)
+            self.assertIn("css/main.17fa781b.css?m=8", html)
+            self.assertIn("31.92", html)
+            self.assertEqual(manifest["start_url"], "./?v=29.71-pwa")
+            self.assertIn('DEPLOY_VERSION = "29.71"', (root / "main.py").read_text(encoding="utf-8"))
 
     def test_applies_to_live_clinic_bundle(self) -> None:
         bundle = Path("/tmp/hf-neurolab/frontend/build/static/js/main.0626212c.js")
@@ -99,11 +102,11 @@ class MotionPatchTests(unittest.TestCase):
         css_out, css_applied = patch_css_text(css.read_text(encoding="utf-8", errors="replace"))
         self.assertEqual(len(js_applied), len(JS_PATCHES))
         self.assertEqual(len(css_applied), len(CSS_PATCHES))
-        self.assertIn("paddingLeft:rt?X:0", js_out)
-        self.assertIn(SIDEBAR_EASE, js_out)
-        self.assertNotIn('g("exiting")', js_out)
-        self.assertIn("(0,e.startTransition)(()=>l(t))", js_out)
-        self.assertNotIn("html,body,#root{overflow-x:hidden}", css_out)
+        self.assertIn("left:rt?X:0,right:0", js_out)
+        self.assertIn("marginLeft:rt?X:0", js_out)
+        self.assertIn('g("exiting")', js_out)
+        self.assertIn("translate3d(0,14px,0)", css_out)
+        self.assertIn("cubic-bezier(0.34,1.4,0.64,1)", css_out)
 
 
 if __name__ == "__main__":
