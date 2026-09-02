@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Restore the original padded topbar. Soften section bounce a lot.
+"""Stop sidebar show/hide cutting.
 
-Do not pin the topbar with left/right. Keep padding-left + GPU sidebar.
-Section changes keep a light bounce, but much slower and smaller.
+Padding-left on the topbar/main is a layout animation. It fights the GPU
+sidebar slide and looks like a cut. Keep the original padded topbar, but do
+not animate padding. Only the sidebar slides, on the GPU.
+
+Do not translate a 100% wide topbar/main (clips New/Save/More).
+Do not pin the topbar with left/right (changes the chrome).
+Section bounce stays the soft 29.72 motion.
 """
 from __future__ import annotations
 
@@ -13,13 +18,14 @@ from pathlib import Path
 
 JS_NAME = "main.0626212c.js"
 CSS_NAME = "main.17fa781b.css"
-KIN = "21"
-NL_VERSION = "31.93"
-START_URL = "./?v=29.72-pwa"
-DEPLOY_VERSION = "29.72"
+KIN = "22"
+NL_VERSION = "31.94"
+CSS_Q = "10"
+START_URL = "./?v=29.73-pwa"
+DEPLOY_VERSION = "29.73"
 
-PAD_EASE = "padding-left 600ms cubic-bezier(0.33, 0, 0.2, 1)"
-SIDEBAR_EASE = "transform 600ms cubic-bezier(0.33, 0, 0.2, 1)"
+PAD_EASE = "none"
+SIDEBAR_EASE = "transform 1100ms cubic-bezier(0.45, 0, 0.55, 1)"
 PANEL_EASE = PAD_EASE
 
 TOPBAR_PAD = (
@@ -67,8 +73,9 @@ NAV_INSTANT = (
 
 JS_PATCHES = (
     (
-        "topbar and main ease padding-left like before",
+        "do not animate padding with the GPU sidebar",
         (
+            'const $w="padding-left 600ms cubic-bezier(0.33, 0, 0.2, 1)"',
             'const $w="left 600ms cubic-bezier(0.33, 0, 0.2, 1),margin-left 600ms cubic-bezier(0.33, 0, 0.2, 1)"',
             'const $w="padding-left 480ms cubic-bezier(0.33, 0, 0.2, 1)"',
             'const $w="padding-left 520ms cubic-bezier(0.22, 1, 0.36, 1)"',
@@ -94,7 +101,7 @@ JS_PATCHES = (
         MAIN_PAD,
     ),
     (
-        "sidebar keeps a GPU slide",
+        "sidebar GPU slide only, slow ease-in-out",
         (
             'transition:"transform 600ms cubic-bezier(0.33, 0, 0.2, 1)",willChange:"transform",backfaceVisibility:"hidden"',
             'transition:"transform 480ms cubic-bezier(0.33, 0, 0.2, 1)",willChange:"transform",backfaceVisibility:"hidden"',
@@ -283,7 +290,7 @@ def patch_pwa_reload(root: Path) -> list[str]:
         )
         updated = re.sub(
             r"main\.17fa781b\.css(?:\?[^\"']*)?",
-            f"main.17fa781b.css?m=9",
+            f"main.17fa781b.css?m={CSS_Q}",
             updated,
         )
         updated = re.sub(
@@ -294,7 +301,7 @@ def patch_pwa_reload(root: Path) -> list[str]:
         )
         if updated != html:
             idx.write_text(updated, encoding="utf-8")
-            notes.append(f"index kin={KIN} css?m=9 nl-version {NL_VERSION}")
+            notes.append(f"index kin={KIN} css?m={CSS_Q} nl-version {NL_VERSION}")
     manifest = root / "frontend" / "build" / "manifest.json"
     if manifest.is_file():
         try:
@@ -318,6 +325,7 @@ def patch_deploy_version(root: Path) -> list[str]:
         text = path.read_text(encoding="utf-8")
         updated = text
         for old in (
+            'DEPLOY_VERSION = "29.73"',
             'DEPLOY_VERSION = "29.72"',
             'DEPLOY_VERSION = "29.71"',
             'DEPLOY_VERSION = "29.70"',

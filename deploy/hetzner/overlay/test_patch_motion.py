@@ -29,12 +29,14 @@ CSS_SAMPLE = _first_olds(CSS_PATCHES)
 
 
 class MotionPatchTests(unittest.TestCase):
-    def test_js_restores_padded_topbar_and_soft_bounce(self) -> None:
+    def test_js_stops_padding_cut_and_keeps_gpu_sidebar(self) -> None:
         out, applied = patch_js_text(JS_SAMPLE)
         self.assertEqual(len(applied), len(JS_PATCHES))
+        self.assertIn('const $w="none"', out)
         self.assertIn(PAD_EASE, out)
         self.assertIn(SIDEBAR_EASE, out)
         self.assertIn("paddingLeft:rt?X:0", out)
+        self.assertNotIn("padding-left 600ms", out)
         self.assertNotIn("left:rt?X:0,right:0", out)
         self.assertIn('g("exiting")', out)
         self.assertIn("setTimeout(R,320)", out)
@@ -70,26 +72,26 @@ class MotionPatchTests(unittest.TestCase):
             (js_dir / "main.0626212c.js").write_text(JS_SAMPLE, encoding="utf-8")
             (css_dir / "main.17fa781b.css").write_text(CSS_SAMPLE, encoding="utf-8")
             (root / "frontend" / "build" / "index.html").write_text(
-                '<meta name="nl-version" content="31.92"/>'
-                '<script src="/static/js/main.0626212c.js?kin=20"></script>'
-                '<link href="/static/css/main.17fa781b.css?m=8" rel="stylesheet">',
+                '<meta name="nl-version" content="31.93"/>'
+                '<script src="/static/js/main.0626212c.js?kin=21"></script>'
+                '<link href="/static/css/main.17fa781b.css?m=9" rel="stylesheet">',
                 encoding="utf-8",
             )
             (root / "frontend" / "build" / "manifest.json").write_text(
-                json.dumps({"start_url": "./?v=29.71-pwa"}),
+                json.dumps({"start_url": "./?v=29.72-pwa"}),
                 encoding="utf-8",
             )
-            (root / "main.py").write_text('DEPLOY_VERSION = "29.71"\n', encoding="utf-8")
+            (root / "main.py").write_text('DEPLOY_VERSION = "29.72"\n', encoding="utf-8")
             self.assertEqual(patch_motion(root), 0)
             html = (root / "frontend" / "build" / "index.html").read_text(encoding="utf-8")
             manifest = json.loads(
                 (root / "frontend" / "build" / "manifest.json").read_text(encoding="utf-8")
             )
-            self.assertIn("kin=21", html)
-            self.assertIn("css/main.17fa781b.css?m=9", html)
-            self.assertIn("31.93", html)
-            self.assertEqual(manifest["start_url"], "./?v=29.72-pwa")
-            self.assertIn('DEPLOY_VERSION = "29.72"', (root / "main.py").read_text(encoding="utf-8"))
+            self.assertIn("kin=22", html)
+            self.assertIn("css/main.17fa781b.css?m=10", html)
+            self.assertIn("31.94", html)
+            self.assertEqual(manifest["start_url"], "./?v=29.73-pwa")
+            self.assertIn('DEPLOY_VERSION = "29.73"', (root / "main.py").read_text(encoding="utf-8"))
 
     def test_applies_to_live_clinic_bundle(self) -> None:
         bundle = Path("/tmp/hf-neurolab/frontend/build/static/js/main.0626212c.js")
@@ -100,7 +102,10 @@ class MotionPatchTests(unittest.TestCase):
         css_out, css_applied = patch_css_text(css.read_text(encoding="utf-8", errors="replace"))
         self.assertEqual(len(js_applied), len(JS_PATCHES))
         self.assertEqual(len(css_applied), len(CSS_PATCHES))
+        self.assertIn('const $w="none"', js_out)
+        self.assertIn("transform 1100ms cubic-bezier(0.45, 0, 0.55, 1)", js_out)
         self.assertIn("paddingLeft:rt?X:0", js_out)
+        self.assertNotIn("padding-left 600ms", js_out)
         self.assertNotIn("left:rt?X:0,right:0", js_out)
         self.assertIn("setTimeout(R,320)", js_out)
         self.assertIn("--section-bounce-in-ms:700ms", css_out)

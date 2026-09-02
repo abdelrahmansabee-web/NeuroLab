@@ -68,8 +68,8 @@ const SIDEBAR_W = 255;
 const SIDEBAR_X_HIDDEN = -280;
 const MOBILE_SIDEBAR_W = "75%";
 const SIDEBAR_SPRING = { type: "spring", stiffness: 180, damping: 26, mass: 1.1 };
-const SIDEBAR_EASE = "transform 600ms cubic-bezier(0.33, 0, 0.2, 1)";
-const PAD_EASE = "padding-left 600ms cubic-bezier(0.33, 0, 0.2, 1)";
+const SIDEBAR_EASE = "transform 1100ms cubic-bezier(0.45, 0, 0.55, 1)";
+const PAD_EASE = "none";
 
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
