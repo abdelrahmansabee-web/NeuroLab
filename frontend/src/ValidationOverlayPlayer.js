@@ -1641,9 +1641,13 @@ export function ValidationOverlayPlayer({
       });
       return n >= 3 && far >= Math.ceil(n * 0.6);
     })();
-    if (hlOffHand) {
-      Object.keys(fingerStickyRef.current).forEach((k) => { delete fingerStickyRef.current[k]; });
-    }
+    const snapHlToPose = (cpt) => {
+      if (!hlOffHand || !cpt || !poseWristPt || !hlWristPt) return cpt;
+      return [
+        cpt[0] - hlWristPt[0] + poseWristPt[0],
+        cpt[1] - hlWristPt[1] + poseWristPt[1],
+      ];
+    };
 
     const smoothStore = fingerSmoothRef.current;
     const smoothAlpha = 0.42;
@@ -1685,7 +1689,7 @@ export function ValidationOverlayPlayer({
       }
     };
 
-    if (fingerJoints && !hlOffHand) {
+    if (fingerJoints) {
       HAND_FINGER_ORDER.forEach((fid) => {
         const fj = fingerJoints[fid];
         if (!fj) return;
@@ -1694,6 +1698,7 @@ export function ValidationOverlayPlayer({
           let cpt = jointToCanvas(fj[jname], fjNext?.[jname]);
           if (!cpt && jname === "tip") cpt = pt(fid);
           cpt = undoReanchor(cpt);
+          cpt = snapHlToPose(cpt);
           const coordsOk = Boolean(cpt)
             && cpt[0] > 2 && cpt[1] > 2
             && cpt[0] < cw - 2 && cpt[1] < ch - 2;
