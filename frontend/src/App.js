@@ -4129,7 +4129,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   }, [fetchOverlayData]);
 
   const loadOriginalVideoBlob = useCallback(async (phase, filename, options = {}) => {
-    const { force = false, skipCache = false } = options;
+    const { force = false } = options;
     if (!filename) return;
     if (!force && originalVideoBlobsRef.current[phase]) return;
     if (force) {
@@ -4146,7 +4146,6 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     const phaseResult = kinematicsResults[phase];
 
     const applyCachedOriginal = async () => {
-      if (skipCache) return false;
       if (!patientCacheKey) return false;
       const cached = await loadValidationSessionArtifact(patientCacheKey, phase);
       if (!validationCacheMatchesResult(cached, phaseResult)) return false;
@@ -4183,10 +4182,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       }
       if (!loaded) {
         if (await applyCachedOriginal()) return;
-        if (!skipCache) {
-          const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
-          if (validationCacheMatchesResult(cloud, phaseResult) && cloud?.originalVideoBlob?.size) return;
-        }
+        const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
+        if (validationCacheMatchesResult(cloud, phaseResult) && cloud?.originalVideoBlob?.size) return;
         showToast("Original video expired on server ? please re-upload", "error");
         return;
       }
@@ -4310,18 +4307,47 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   // The player loaded a clip that does not match the analysis (usually a cached baked
   // composite). Pull the analyzed original straight from the server once; if that fails,
   // play the baked video plainly instead of drawing chalk on the wrong frames.
-  const handleOverlaySourceMismatch = useCallback((phase) => {
+  const handleOverlaySourceMismatch = useCallback(async (phase) => {
     const tries = overlaySourceRetryRef.current[phase] || 0;
     const name = overlayData[phase]?.overlay_video_filename
       || kinematicsResults[phase]?.video_filename;
-    if (tries >= 1 || !name) {
+    const giveUp = () => {
       setOverlaySourceBad((prev) => (prev[phase] ? prev : { ...prev, [phase]: true }));
+    };
+    if (tries >= 1 || !name) {
+      giveUp();
       return;
     }
     overlaySourceRetryRef.current[phase] = tries + 1;
-    showToast("Reloading the analyzed video for the overlay", "info");
-    loadOriginalVideoBlob(phase, name, { force: true, skipCache: true });
-  }, [overlayData, kinematicsResults, loadOriginalVideoBlob, showToast]);
+    // Fetch before swapping: a failed refetch must not drop the clip we already play.
+    let fresh = null;
+    try {
+      const res = await fetch(`${API_BASE}/video/${encodeURIComponent(name)}`);
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size > 0) fresh = blob;
+      }
+    } catch (err) {
+      console.warn("overlay source refetch failed:", err);
+    }
+    if (!fresh) {
+      giveUp();
+      return;
+    }
+    const objectUrl = URL.createObjectURL(fresh);
+    setOriginalVideoBlobs((prev) => {
+      if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+      const next = { ...prev, [phase]: objectUrl };
+      originalVideoBlobsRef.current = next;
+      return next;
+    });
+    persistValidationPhase(phase, {
+      csvFilename: kinematicsResults[phase]?.csv_filename,
+      videoFilename: name,
+      originalVideoBlob: fresh,
+      kinematicsSnapshot: kinematicsResults[phase],
+    });
+  }, [overlayData, kinematicsResults, persistValidationPhase]);
 
   // A freshly loaded clip gets a new verdict from the player.
   useEffect(() => {

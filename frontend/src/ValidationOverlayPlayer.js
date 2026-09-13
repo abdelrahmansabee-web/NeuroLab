@@ -1085,8 +1085,11 @@ export function ValidationOverlayPlayer({
 
     let shapeBad = false;
     if (!remapped && vw > 0 && vh > 0 && overlayW > 0 && overlayH > 0) {
-      const ratio = (vw / vh) / (overlayW / overlayH);
-      shapeBad = ratio > 1.12 || ratio < 0.89;
+      const videoAr = vw / vh;
+      const overlayAr = overlayW / overlayH;
+      const near = (a, b) => Math.abs(a / b - 1) <= 0.12;
+      // A rotated original reports swapped dimensions; that is still the same clip.
+      shapeBad = !near(videoAr, overlayAr) && !near(videoAr, 1 / overlayAr);
     }
     const durBad = overlayDur > 0.5
       && Number.isFinite(vDuration)
