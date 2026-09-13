@@ -28,6 +28,7 @@ import {
   buildSmoothedTracks,
   hlTipsOffPoseHand,
   interpPair,
+  overlayPalmIsTrusted,
   resolveHandDrawSource,
   shouldDrawHlFingers,
 } from "./overlayHandTrack";
@@ -1707,12 +1708,15 @@ export function ValidationOverlayPlayer({
       return Math.hypot(a[0] - b[0], a[1] - b[1]);
     };
     const hlTipsCanvas = [];
+    const hlMcpsCanvas = [];
     if (fingerJoints) {
       HAND_FINGER_ORDER.forEach((fid) => {
         const fj = fingerJoints[fid];
         if (!fj) return;
         const tip = undoReanchor(jointToCanvas(fj.tip, fNext?.finger_joints?.[fid]?.tip));
         if (tip) hlTipsCanvas.push(tip);
+        const mcp = undoReanchor(jointToCanvas(fj.mcp, fNext?.finger_joints?.[fid]?.mcp));
+        if (mcp) hlMcpsCanvas.push(mcp);
       });
     } else {
       HAND_FINGER_ORDER.forEach((fid) => {
@@ -1726,6 +1730,7 @@ export function ValidationOverlayPlayer({
       poseWrist: poseWristPt,
       hlWrist: hlWristPt,
       tips: hlTipsCanvas,
+      mcps: hlMcpsCanvas,
       forearmPx,
       palmReachPx,
       handSpan,
@@ -1739,8 +1744,9 @@ export function ValidationOverlayPlayer({
       fingerStickyRef.current = {};
     }
 
+    const restPalm = overlayPalmIsTrusted(palmReachPx, forearmPx, handSpan) ? palm : null;
     const restJoints = !drawHl
-      ? (buildPoseRestHand(poseWristPt, palm, elbowPt, trunk)?.joints || null)
+      ? (buildPoseRestHand(poseWristPt, restPalm, elbowPt, trunk)?.joints || null)
       : null;
 
     const smoothStore = fingerSmoothRef.current;

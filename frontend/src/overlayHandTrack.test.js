@@ -4,6 +4,7 @@ import {
   hlTipsOffPoseHand,
   interpPair,
   isHlOverlayKey,
+  overlayPalmIsTrusted,
   resolveHandDrawSource,
   shouldDrawHlFingers,
 } from "./overlayHandTrack";
@@ -146,5 +147,122 @@ describe("overlayHandTrack onset handoff", () => {
   test("interpPair blends overlay samples", () => {
     expect(interpPair([0, 0], [10, 10], 0.5)).toEqual([5, 5]);
     expect(interpPair([3, 4], null, 0.9)).toEqual([3, 4]);
+  });
+
+  test("overlay palm is trusted only at pose-knuckle distance, not cup distance", () => {
+    expect(overlayPalmIsTrusted(16, 80, 640)).toBe(true);
+    expect(overlayPalmIsTrusted(30, 80, 640)).toBe(true);
+    expect(overlayPalmIsTrusted(90, 80, 640)).toBe(false);
+    expect(overlayPalmIsTrusted(2, 80, 640)).toBe(false);
+  });
+
+  test("POST: cup-distance overlay palm must not hide an off-hand latch", () => {
+    const poseWrist = [100, 200];
+    const forearmPx = Math.hypot(80, 10);
+    const cup = [220, 185];
+    const cupTips = [
+      [218, 180],
+      [225, 176],
+      [212, 178],
+      [208, 186],
+      [230, 172],
+    ];
+    const cupMcps = cupTips.map(([x, y]) => [x - 4, y + 3]);
+    const palmReachPx = Math.hypot(cup[0] - poseWrist[0], cup[1] - poseWrist[1]);
+    expect(overlayPalmIsTrusted(palmReachPx, forearmPx, 640)).toBe(false);
+    // Server often stores kinematic palm as hl_wrist when HL WRIST is missing,
+    // while INDEX / finger_joints stay on the cup.
+    expect(hlTipsOffPoseHand({
+      poseWrist,
+      hlWrist: [113, 204],
+      tips: cupTips,
+      mcps: cupMcps,
+      forearmPx,
+      palmReachPx,
+      handSpan: 640,
+    })).toBe(true);
+  });
+
+  test("PRE: on-finger overlay palm and MCPs stay on-hand", () => {
+    const poseWrist = [100, 200];
+    const forearmPx = 90;
+    const onHandTips = [
+      [128, 201],
+      [130, 205],
+      [126, 208],
+      [122, 210],
+      [118, 206],
+    ];
+    const onHandMcps = [
+      [118, 201],
+      [119, 204],
+      [117, 206],
+      [115, 207],
+      [113, 204],
+    ];
+    const palmReachPx = Math.hypot(20, 4);
+    expect(hlTipsOffPoseHand({
+      poseWrist,
+      hlWrist: [102, 201],
+      tips: onHandTips,
+      mcps: onHandMcps,
+      forearmPx,
+      palmReachPx,
+      handSpan: 640,
+    })).toBe(false);
+  });
+
+  test("PRE reach: extended tips stay on-hand when MCPs remain at the wrist", () => {
+    const poseWrist = [100, 200];
+    const forearmPx = 90;
+    const reachTips = [
+      [100 + forearmPx * 0.88, 200],
+      [100 + forearmPx * 0.90, 204],
+      [100 + forearmPx * 0.86, 208],
+      [100 + forearmPx * 0.80, 210],
+      [100 + forearmPx * 0.72, 206],
+    ];
+    const reachMcps = [
+      [128, 201],
+      [129, 204],
+      [127, 206],
+      [125, 207],
+      [123, 204],
+    ];
+    expect(hlTipsOffPoseHand({
+      poseWrist,
+      hlWrist: [104, 201],
+      tips: reachTips,
+      mcps: reachMcps,
+      forearmPx,
+      palmReachPx: forearmPx * 0.88,
+      handSpan: 640,
+    })).toBe(false);
+  });
+
+  test("cup overlay palm does not aim the rest hand at the cup", () => {
+    const wrist = [400, 390];
+    const elbow = [320, 380];
+    const trunk = [330, 300];
+    const posePalm = [413, 393];
+    const cup = [520, 370];
+    const fromPose = buildPoseRestHand(wrist, posePalm, elbow, trunk);
+    const fromCup = buildPoseRestHand(wrist, cup, elbow, trunk);
+    expect(fromCup).toBeTruthy();
+    const forearm = [wrist[0] - elbow[0], wrist[1] - elbow[1]];
+    const toCup = [cup[0] - wrist[0], cup[1] - wrist[1]];
+    const toTip = [
+      fromCup.joints.index.tip[0] - wrist[0],
+      fromCup.joints.index.tip[1] - wrist[1],
+    ];
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+    const align = (a, b) => dot(a, b) / (Math.hypot(a[0], a[1]) * Math.hypot(b[0], b[1]));
+    expect(align(toTip, forearm)).toBeGreaterThan(0.95);
+    expect(align(toTip, toCup)).toBeLessThan(align(toTip, forearm));
+    const poseMcp = [2 * posePalm[0] - wrist[0], 2 * posePalm[1] - wrist[1]];
+    expect(Math.hypot(
+      fromPose.joints.index.mcp[0] - poseMcp[0],
+      fromPose.joints.index.mcp[1] - poseMcp[1],
+    )).toBeLessThan(0.05);
   });
 });

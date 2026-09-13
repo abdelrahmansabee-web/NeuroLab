@@ -1,21 +1,24 @@
 /**
  * Overlay hand tracking helpers.
  *
- * The persistent miss at movement *onset* is not a drawing-style issue. It is a
- * source-handoff bug:
+ * PRE vs POST use the same player. PRE looks locked because Hand Landmarker
+ * sits on the real fingers. POST looks wrong because the server stores HL
+ * INDEX as overlay `palm` / `index` — and on POST that INDEX is the cup.
  *
- *   1. Before the reach, Hand Landmarker latches the cup. Those joints are not
- *      on the patient's fingers.
- *   2. The player used to replace them with an *open-hand* anatomy fan scaled
- *      from the forearm (~2.1× the pose index knuckle). A resting, foreshortened
- *      hand is much shorter, so the chalk overshot the nails.
- *   3. A causal EMA then blended that fake hand into the first on-hand HL
- *      frames, so the start of the movement stayed detached.
+ * Two POST-only failure modes from that one data lie:
  *
- * Fix: when HL is off the pose hand, draw a *resting* pose-palm hand (index
- * knuckle = 2*palm - wrist). Do not lerp across the cup→hand switch. Smooth only
- * the pose skeleton (zero-lag), never HL finger tracks that jump from cup to
- * fingers.
+ *   1. Off-hand detection used palmReach*2 as the hand size. Wrist→cup then
+ *      becomes a "giant hand", so cup tips look on-hand and the chalk is
+ *      drawn on the cup (PRE never hits this: its INDEX is on the fingers).
+ *   2. The pose-rest fallback did 2*palm - wrist. If palm is the cup, that
+ *      reconstructed knuckle is on/past the cup, so even "don't draw HL"
+ *      still puts sticks on the cup.
+ *
+ * Fix: size the pose hand from the forearm, not from overlay palm, unless
+ * that palm is close enough to be a real pose knuckle. If HL MCPs sit far
+ * from the pose wrist they are a cup cluster, not a hand. Pose-rest ignores
+ * a cup-distance palm and falls back to the forearm axis. Never lerp across
+ * the cup→hand switch. Smooth only the pose skeleton.
  */
 
 export const HL_OVERLAY_KEYS = new Set([
@@ -106,23 +109,38 @@ export function buildSmoothedTracks(frames, fps) {
 }
 
 /**
- * Resting / adducted hand from pose. Overlay `palm` is always pose-based
- * (midpoint of pose wrist and pose INDEX knuckle) even when HL has latched
- * the cup, so 2*palm - wrist recovers the knuckle that sits on the real hand.
+ * Overlay `palm` is the affected INDEX after HL overwrite, not the kinematic
+ * midpoint. Trust it only when it sits on the pose hand (PRE). A cup-distance
+ * value (POST rest) must not define the hand size or the rest-hand axis.
+ */
+export function overlayPalmIsTrusted(palmReachPx, forearmPx, handSpan = 1) {
+  if (!(palmReachPx > 3)) return false;
+  if (forearmPx > 8) return palmReachPx <= forearmPx * 0.48;
+  return palmReachPx <= Math.max(24, handSpan * 0.08);
+}
+
+/**
+ * Resting / adducted hand from pose.
  *
- * Units are wrist → index-MCP. Tips stay ~1.5× that span (foreshortened rest),
- * not the ~2.17× open-hand length that overshoots the nails at onset.
+ * When overlay palm is a real pose knuckle / midpoint, 2*palm - wrist recovers
+ * the index MCP. When overlay palm is the cup, ignore it and aim along the
+ * forearm. Tips stay ~1.5× MCP (foreshortened rest), not the ~2.17× open-hand
+ * length that overshoots the nails at onset.
  */
 export function buildPoseRestHand(wrist, palm, elbow, trunk) {
   if (!wrist) return null;
-  const poseIndex = palm
+  const forearm = elbow
+    ? Math.hypot(wrist[0] - elbow[0], wrist[1] - elbow[1])
+    : 0;
+  const palmReach = palm
+    ? Math.hypot(palm[0] - wrist[0], palm[1] - wrist[1])
+    : 0;
+  const palmOk = overlayPalmIsTrusted(palmReach, forearm, 640);
+  const poseIndex = palmOk && palm
     ? [2 * palm[0] - wrist[0], 2 * palm[1] - wrist[1]]
     : null;
   const mcpLen = poseIndex
     ? Math.hypot(poseIndex[0] - wrist[0], poseIndex[1] - wrist[1])
-    : 0;
-  const forearm = elbow
-    ? Math.hypot(wrist[0] - elbow[0], wrist[1] - elbow[1])
     : 0;
   let ux;
   let uy;
@@ -181,6 +199,7 @@ export function hlTipsOffPoseHand({
   poseWrist,
   hlWrist,
   tips = [],
+  mcps = [],
   forearmPx = 0,
   palmReachPx = 0,
   handSpan = 1,
@@ -189,11 +208,21 @@ export function hlTipsOffPoseHand({
     if (!a || !b) return null;
     return Math.hypot(a[0] - b[0], a[1] - b[1]);
   };
-  const poseMcp = palmReachPx > 3 ? palmReachPx * 2 : 0;
-  const handPx = poseMcp > 0 ? poseMcp * 1.65 : (forearmPx > 8 ? forearmPx * 0.64 : Math.max(1, handSpan) * 0.10);
-  const wristDrift = (hypot(poseWrist, hlWrist) || 0) > Math.max(handPx * 0.85, handSpan * 0.08)
-    || (forearmPx > 8 && (hypot(poseWrist, hlWrist) || 0) > forearmPx * 0.28);
-  const farLimit = handPx * 1.20;
+  // Do not let a cup-distance overlay palm inflate the hand. PRE overlay palm
+  // is on the fingers (trusted or not, tips stay near the pose wrist). POST
+  // overlay palm is the cup: sizing from it makes the cup look on-hand.
+  const palmOk = overlayPalmIsTrusted(palmReachPx, forearmPx, handSpan);
+  const mcpFromPalm = palmOk ? palmReachPx * 2 : 0;
+  const mcpFromForearm = forearmPx > 8 ? forearmPx * 0.32 : 0;
+  const poseMcp = mcpFromPalm >= 3 ? mcpFromPalm : mcpFromForearm;
+  const handPx = poseMcp > 0
+    ? poseMcp * 1.65
+    : Math.max(1, handSpan) * 0.10;
+  const wristDrift = (hypot(poseWrist, hlWrist) || 0) > Math.max(
+    (forearmPx > 8 ? forearmPx * 0.28 : handPx * 0.85),
+    handSpan * 0.08,
+  );
+  const farLimit = Math.max(handPx * 1.20, forearmPx > 8 ? forearmPx * 1.05 : 0);
   let n = 0;
   let far = 0;
   let maxD = 0;
@@ -204,8 +233,19 @@ export function hlTipsOffPoseHand({
     if (d > farLimit) far += 1;
   });
   const tipsMajorityFar = n >= 2 && far >= Math.ceil(n * 0.5);
-  const tipsStretched = handPx > 0 && maxD > Math.max(handPx * 1.35, forearmPx * 0.50);
-  return Boolean(wristDrift || tipsMajorityFar || tipsStretched || n === 0);
+  const tipsStretched = handPx > 0 && maxD > Math.max(handPx * 1.35, forearmPx * 1.15);
+  // Cup latch: every HL knuckle sits on the cup, far from the pose wrist.
+  // A real reaching hand still has MCPs next to the wrist.
+  const mcpLimit = forearmPx > 8 ? forearmPx * 0.55 : Math.max(1, handSpan) * 0.10;
+  let mcpN = 0;
+  let mcpFar = 0;
+  mcps.forEach((mcp) => {
+    const d = hypot(poseWrist, mcp) || 0;
+    mcpN += 1;
+    if (d > mcpLimit) mcpFar += 1;
+  });
+  const mcpsMajorityFar = mcpN >= 2 && mcpFar >= Math.ceil(mcpN * 0.5);
+  return Boolean(wristDrift || tipsMajorityFar || tipsStretched || mcpsMajorityFar || n === 0);
 }
 
 /** HL joints are drawn only after they sit on the pose hand. Never draw the cup. */
