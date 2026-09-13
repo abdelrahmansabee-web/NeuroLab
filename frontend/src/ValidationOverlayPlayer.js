@@ -1614,6 +1614,7 @@ export function ValidationOverlayPlayer({
     const needUndoReanchor = overlayVer > 0 && overlayVer < 37 && !absHl;
     const poseWristPt = pt("wrist");
     const hlWristPt = pt("hl_wrist");
+    const elbowPt = pt("elbow");
     const undoReanchor = (cpt) => {
       if (!needUndoReanchor || !cpt || !poseWristPt || !hlWristPt) return cpt;
       return [
@@ -1621,32 +1622,130 @@ export function ValidationOverlayPlayer({
         cpt[1] - poseWristPt[1] + hlWristPt[1],
       ];
     };
-    // Drop HL when it latches a static object (cup) far from the pose wrist.
+    // When Hand Landmarker latches the cup, wrist can stay near the pose wrist while
+    // tips stretch to the object — translate-only snap leaves sticks pointing at the cup.
+    // Lock those frames onto the real hand: rotate to the forearm axis and scale to hand length.
     const handSpan = Math.max(1, Math.min(cw, ch));
-    const distNorm = (a, b) => {
+    const hypotPt = (a, b) => {
       if (!a || !b) return null;
-      return Math.hypot(a[0] - b[0], a[1] - b[1]) / handSpan;
+      return Math.hypot(a[0] - b[0], a[1] - b[1]);
     };
-    const hlOffHand = (() => {
-      const dHl = distNorm(poseWristPt, hlWristPt);
-      if (dHl != null && dHl > 0.16) return true;
-      if (!fingerJoints || !poseWristPt) return false;
-      let n = 0;
-      let far = 0;
+    const distNorm = (a, b) => {
+      const d = hypotPt(a, b);
+      return d == null ? null : d / handSpan;
+    };
+    const hlTipsCanvas = [];
+    const hlMcpsCanvas = [];
+    if (fingerJoints) {
       HAND_FINGER_ORDER.forEach((fid) => {
-        const tip = fingerJoints[fid]?.tip;
-        if (!tip || tip[0] == null || tip[1] == null) return;
-        n += 1;
-        if (distNorm(poseWristPt, [tip[0] * cw, tip[1] * ch]) > 0.22) far += 1;
+        const fj = fingerJoints[fid];
+        if (!fj) return;
+        const tip = undoReanchor(jointToCanvas(fj.tip, fNext?.finger_joints?.[fid]?.tip));
+        const mcp = undoReanchor(jointToCanvas(fj.mcp, fNext?.finger_joints?.[fid]?.mcp));
+        if (tip) hlTipsCanvas.push(tip);
+        if (mcp) hlMcpsCanvas.push(mcp);
       });
-      return n >= 3 && far >= Math.ceil(n * 0.6);
+    } else {
+      HAND_FINGER_ORDER.forEach((fid) => {
+        const tip = undoReanchor(pt(fid));
+        if (tip) hlTipsCanvas.push(tip);
+      });
+    }
+    const srcOrigin = hlWristPt || poseWristPt;
+    let maxTipFromOrigin = 0;
+    let maxTipFromPose = 0;
+    hlTipsCanvas.forEach((tip) => {
+      const d0 = hypotPt(tip, srcOrigin);
+      const d1 = hypotPt(tip, poseWristPt);
+      if (d0 != null) maxTipFromOrigin = Math.max(maxTipFromOrigin, d0);
+      if (d1 != null) maxTipFromPose = Math.max(maxTipFromPose, d1);
+    });
+    const forearmPx = hypotPt(elbowPt, poseWristPt) || 0;
+    const expectedHandPx = forearmPx > 8 ? forearmPx * 0.50 : handSpan * 0.10;
+    const stretchLimitPx = forearmPx > 8
+      ? Math.max(forearmPx * 0.72, handSpan * 0.14)
+      : handSpan * 0.16;
+    const wristDrift = (distNorm(poseWristPt, hlWristPt) || 0) > 0.14;
+    let tipN = 0;
+    let tipFar = 0;
+    hlTipsCanvas.forEach((tip) => {
+      tipN += 1;
+      if ((distNorm(poseWristPt, tip) || 0) > 0.15) tipFar += 1;
+    });
+    const tipsMajorityFar = tipN >= 3 && tipFar >= Math.ceil(tipN * 0.6);
+    const tipsStretched = maxTipFromPose > stretchLimitPx;
+    const hlOffHand = wristDrift || tipsMajorityFar || tipsStretched;
+    const mcpCenter = hlMcpsCanvas.length
+      ? [
+        hlMcpsCanvas.reduce((s, p) => s + p[0], 0) / hlMcpsCanvas.length,
+        hlMcpsCanvas.reduce((s, p) => s + p[1], 0) / hlMcpsCanvas.length,
+      ]
+      : (hlTipsCanvas.length
+        ? [
+          hlTipsCanvas.reduce((s, p) => s + p[0], 0) / hlTipsCanvas.length,
+          hlTipsCanvas.reduce((s, p) => s + p[1], 0) / hlTipsCanvas.length,
+        ]
+        : null);
+    let lockRot = 0;
+    if (hlOffHand && elbowPt && poseWristPt && srcOrigin && mcpCenter) {
+      const fromX = mcpCenter[0] - srcOrigin[0];
+      const fromY = mcpCenter[1] - srcOrigin[1];
+      const toX = poseWristPt[0] - elbowPt[0];
+      const toY = poseWristPt[1] - elbowPt[1];
+      if (Math.hypot(fromX, fromY) > 4 && Math.hypot(toX, toY) > 4) {
+        let ang = Math.atan2(toY, toX) - Math.atan2(fromY, fromX);
+        while (ang > Math.PI) ang -= Math.PI * 2;
+        while (ang < -Math.PI) ang += Math.PI * 2;
+        if (wristDrift || Math.abs(ang) > (32 * Math.PI) / 180) lockRot = ang;
+      }
+    }
+    let lockScale = 1;
+    if (hlOffHand && maxTipFromOrigin > 1e-3 && expectedHandPx > 0) {
+      lockScale = Math.min(2.1, Math.max(0.20, expectedHandPx / maxTipFromOrigin));
+    }
+    const useAnatomyHand = Boolean(hlOffHand && wristDrift && elbowPt && poseWristPt && forearmPx > 8);
+    const anatomyJoints = (() => {
+      if (!useAnatomyHand) return null;
+      const ux = (poseWristPt[0] - elbowPt[0]) / forearmPx;
+      const uy = (poseWristPt[1] - elbowPt[1]) / forearmPx;
+      const px = -uy;
+      const py = ux;
+      const specs = {
+        thumb: { ang: -0.70, mcp: 0.32, ip: 0.58, tip: 0.84 },
+        index: { ang: -0.20, mcp: 0.36, ip: 0.66, tip: 0.98 },
+        middle: { ang: 0.00, mcp: 0.38, ip: 0.68, tip: 1.02 },
+        ring: { ang: 0.18, mcp: 0.36, ip: 0.64, tip: 0.94 },
+        pinky: { ang: 0.36, mcp: 0.32, ip: 0.56, tip: 0.80 },
+      };
+      const out = {};
+      Object.keys(specs).forEach((fid) => {
+        const spec = specs[fid];
+        const c = Math.cos(spec.ang);
+        const s = Math.sin(spec.ang);
+        const dx = ux * c - uy * s;
+        const dy = ux * s + uy * c;
+        const along = (t) => [
+          poseWristPt[0] + dx * expectedHandPx * t + px * spec.ang * expectedHandPx * 0.08,
+          poseWristPt[1] + dy * expectedHandPx * t + py * spec.ang * expectedHandPx * 0.08,
+        ];
+        out[fid] = { mcp: along(spec.mcp), ip: along(spec.ip), tip: along(spec.tip) };
+      });
+      return out;
     })();
-    const snapHlToPose = (cpt) => {
-      if (!hlOffHand || !cpt || !poseWristPt || !hlWristPt) return cpt;
-      return [
-        cpt[0] - hlWristPt[0] + poseWristPt[0],
-        cpt[1] - hlWristPt[1] + poseWristPt[1],
-      ];
+    const lockFingerToHand = (cpt) => {
+      if (!hlOffHand || !cpt || !poseWristPt) return cpt;
+      const origin = srcOrigin || poseWristPt;
+      let x = cpt[0] - origin[0];
+      let y = cpt[1] - origin[1];
+      if (lockRot !== 0) {
+        const c = Math.cos(lockRot);
+        const s = Math.sin(lockRot);
+        const rx = x * c - y * s;
+        const ry = x * s + y * c;
+        x = rx;
+        y = ry;
+      }
+      return [poseWristPt[0] + x * lockScale, poseWristPt[1] + y * lockScale];
     };
 
     const smoothStore = fingerSmoothRef.current;
@@ -1689,7 +1788,15 @@ export function ValidationOverlayPlayer({
       }
     };
 
-    if (fingerJoints) {
+    if (anatomyJoints) {
+      HAND_FINGER_ORDER.forEach((fid) => {
+        const aj = anatomyJoints[fid];
+        if (!aj) return;
+        JOINT_ORDER.forEach((jname) => {
+          pushFingerDot(fid, jname, aj[jname], JOINT_DOT[jname], true);
+        });
+      });
+    } else if (fingerJoints) {
       HAND_FINGER_ORDER.forEach((fid) => {
         const fj = fingerJoints[fid];
         if (!fj) return;
@@ -1697,8 +1804,7 @@ export function ValidationOverlayPlayer({
           const fjNext = fNext?.finger_joints?.[fid];
           let cpt = jointToCanvas(fj[jname], fjNext?.[jname]);
           if (!cpt && jname === "tip") cpt = pt(fid);
-          cpt = undoReanchor(cpt);
-          cpt = snapHlToPose(cpt);
+          cpt = lockFingerToHand(undoReanchor(cpt));
           const coordsOk = Boolean(cpt)
             && cpt[0] > 2 && cpt[1] > 2
             && cpt[0] < cw - 2 && cpt[1] < ch - 2;
@@ -1712,7 +1818,7 @@ export function ValidationOverlayPlayer({
       });
     } else {
       HAND_FINGER_ORDER.forEach((id) => {
-        const tipPt = pt(id);
+        const tipPt = lockFingerToHand(undoReanchor(pt(id)));
         const visOk = fingerVis ? fingerVis[id] !== false : true;
         if (tipPt) pushFingerDot(id, "tip", tipPt, JOINT_DOT.tip, visOk || true);
         else pushFingerDot(id, "tip", tipPt, JOINT_DOT.tip, false);
