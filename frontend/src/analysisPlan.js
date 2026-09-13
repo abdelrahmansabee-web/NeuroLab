@@ -154,6 +154,21 @@ export function calcGap(post, healthy, direction) {
   return postN - healthyN;
 }
 
+/** Absolute Pre→Post delta when relative % is undefined (Pre ≈ 0). */
+export function formatKinPrePostAbsDelta(pre, post) {
+  const preN = Number(pre);
+  const postN = Number(post);
+  if (Number.isNaN(preN) || Number.isNaN(postN)) return null;
+  const d = postN - preN;
+  if (!Number.isFinite(d)) return null;
+  const a = Math.abs(d);
+  if (a < 1e-12) return "0%";
+  if (a >= 100) return `Δ ${a.toFixed(0)}`;
+  if (a >= 10) return `Δ ${a.toFixed(1)}`;
+  if (a >= 1) return `Δ ${a.toFixed(2)}`;
+  return `Δ ${a.toFixed(3)}`;
+}
+
 export function formatKinPrePostPct(pct) {
   if (pct == null || Number.isNaN(pct)) return null;
   return `${Math.abs(pct).toFixed(0)}%`;
