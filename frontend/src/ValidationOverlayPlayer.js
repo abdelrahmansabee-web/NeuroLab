@@ -1661,19 +1661,18 @@ export function ValidationOverlayPlayer({
       if (d1 != null) maxTipFromPose = Math.max(maxTipFromPose, d1);
     });
     const forearmPx = hypotPt(elbowPt, poseWristPt) || 0;
-    const expectedHandPx = forearmPx > 8 ? forearmPx * 0.50 : handSpan * 0.10;
-    const stretchLimitPx = forearmPx > 8
-      ? Math.max(forearmPx * 0.72, handSpan * 0.14)
-      : handSpan * 0.16;
-    const wristDrift = (distNorm(poseWristPt, hlWristPt) || 0) > 0.14;
+    const expectedHandPx = forearmPx > 8 ? forearmPx * 0.46 : handSpan * 0.10;
+    const wristDrift = (distNorm(poseWristPt, hlWristPt) || 0) > 0.12
+      || (forearmPx > 8 && (hypotPt(poseWristPt, hlWristPt) || 0) > forearmPx * 0.35);
+    const tipFarLimit = expectedHandPx > 0 ? expectedHandPx * 1.50 : handSpan * 0.12;
     let tipN = 0;
     let tipFar = 0;
     hlTipsCanvas.forEach((tip) => {
       tipN += 1;
-      if ((distNorm(poseWristPt, tip) || 0) > 0.15) tipFar += 1;
+      if ((hypotPt(poseWristPt, tip) || 0) > tipFarLimit) tipFar += 1;
     });
     const tipsMajorityFar = tipN >= 3 && tipFar >= Math.ceil(tipN * 0.6);
-    const tipsStretched = maxTipFromPose > stretchLimitPx;
+    const tipsStretched = expectedHandPx > 0 && maxTipFromPose > Math.max(expectedHandPx * 1.70, forearmPx * 0.85);
     const hlOffHand = wristDrift || tipsMajorityFar || tipsStretched;
     const mcpCenter = hlMcpsCanvas.length
       ? [
@@ -1703,11 +1702,32 @@ export function ValidationOverlayPlayer({
     if (hlOffHand && maxTipFromOrigin > 1e-3 && expectedHandPx > 0) {
       lockScale = Math.min(2.1, Math.max(0.20, expectedHandPx / maxTipFromOrigin));
     }
-    const useAnatomyHand = Boolean(hlOffHand && wristDrift && elbowPt && poseWristPt && forearmPx > 8);
+    // Cup-stretch keeps a fan toward the object even after scale. Rebuild fingers on the
+    // pose wrist whenever HL has left the hand. Aim along on-hand MCPs when present.
+    const useAnatomyHand = Boolean(hlOffHand && poseWristPt && (forearmPx > 8 || hlMcpsCanvas.length >= 2));
     const anatomyJoints = (() => {
       if (!useAnatomyHand) return null;
-      const ux = (poseWristPt[0] - elbowPt[0]) / forearmPx;
-      const uy = (poseWristPt[1] - elbowPt[1]) / forearmPx;
+      let ux;
+      let uy;
+      const goodMcps = hlMcpsCanvas.filter((p) => {
+        const d = hypotPt(p, poseWristPt);
+        return d != null && d > expectedHandPx * 0.12 && d < expectedHandPx * 0.70;
+      });
+      if (goodMcps.length >= 1) {
+        const mx = goodMcps.reduce((s, p) => s + p[0], 0) / goodMcps.length;
+        const my = goodMcps.reduce((s, p) => s + p[1], 0) / goodMcps.length;
+        ux = mx - poseWristPt[0];
+        uy = my - poseWristPt[1];
+      } else if (elbowPt && forearmPx > 8) {
+        ux = poseWristPt[0] - elbowPt[0];
+        uy = poseWristPt[1] - elbowPt[1];
+      } else {
+        return null;
+      }
+      const ul = Math.hypot(ux, uy);
+      if (ul < 1e-3) return null;
+      ux /= ul;
+      uy /= ul;
       const px = -uy;
       const py = ux;
       const specs = {
