@@ -1661,7 +1661,7 @@ export function ValidationOverlayPlayer({
       if (d1 != null) maxTipFromPose = Math.max(maxTipFromPose, d1);
     });
     const forearmPx = hypotPt(elbowPt, poseWristPt) || 0;
-    const expectedHandPx = forearmPx > 8 ? forearmPx * 0.46 : handSpan * 0.10;
+    const expectedHandPx = forearmPx > 8 ? forearmPx * 0.64 : handSpan * 0.10;
     const wristDrift = (distNorm(poseWristPt, hlWristPt) || 0) > 0.12
       || (forearmPx > 8 && (hypotPt(poseWristPt, hlWristPt) || 0) > forearmPx * 0.35);
     const tipFarLimit = expectedHandPx > 0 ? expectedHandPx * 1.50 : handSpan * 0.12;
@@ -1731,7 +1731,7 @@ export function ValidationOverlayPlayer({
       const px = -uy;
       const py = ux;
       const specs = {
-        thumb: { ang: -0.70, mcp: 0.32, ip: 0.58, tip: 0.84 },
+        thumb: { ang: -0.48, mcp: 0.32, ip: 0.58, tip: 0.84 },
         index: { ang: -0.20, mcp: 0.36, ip: 0.66, tip: 0.98 },
         middle: { ang: 0.00, mcp: 0.38, ip: 0.68, tip: 1.02 },
         ring: { ang: 0.18, mcp: 0.36, ip: 0.64, tip: 0.94 },
