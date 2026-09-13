@@ -64,6 +64,11 @@ export function orderedKinematicVars() {
   return KINEMATIC_DISPLAY_ORDER.map((k) => byKey[k]).filter(Boolean);
 }
 
+export function orderedKinematicResultsTableVars(opts = {}) {
+  void opts;
+  return orderedKinematicVars();
+}
+
 export const CLINICAL_VARS = [
   { pre: "WMFT_Rating_Pre", post: "WMFT_Rating_Post", label: "WMFT-4 rating sum", dir: "higher", test: "mixed", tier: "secondary" },
   { pre: "WMFT_Time_Pre", post: "WMFT_Time_Post", label: "WMFT-4 time sum (s)", dir: "lower", test: "mixed", tier: "secondary" },
@@ -154,6 +159,21 @@ export function calcGap(post, healthy, direction) {
   return postN - healthyN;
 }
 
+/** Absolute Pre→Post delta when relative % is undefined (Pre ≈ 0). */
+export function formatKinPrePostAbsDelta(pre, post) {
+  const preN = Number(pre);
+  const postN = Number(post);
+  if (Number.isNaN(preN) || Number.isNaN(postN)) return null;
+  const d = postN - preN;
+  if (!Number.isFinite(d)) return null;
+  const a = Math.abs(d);
+  if (a < 1e-12) return "0%";
+  if (a >= 100) return `Δ ${a.toFixed(0)}`;
+  if (a >= 10) return `Δ ${a.toFixed(1)}`;
+  if (a >= 1) return `Δ ${a.toFixed(2)}`;
+  return `Δ ${a.toFixed(3)}`;
+}
+
 export function formatKinPrePostPct(pct) {
   if (pct == null || Number.isNaN(pct)) return null;
   return `${Math.abs(pct).toFixed(0)}%`;
@@ -227,6 +247,11 @@ export function kinCrossPhaseComparable(kinematicsResults, metricKey, armForPhas
   }
 
   return true;
+}
+
+export function kinCrossPhaseDeltaStatus(kinematicsResults, metricKey, armForPhase = null) {
+  const comparable = kinCrossPhaseComparable(kinematicsResults, metricKey, armForPhase);
+  return { comparable, reason: comparable ? null : "n/c" };
 }
 
 /** Key metrics for per-patient recovery summary. */

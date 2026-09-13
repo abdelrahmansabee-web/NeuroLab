@@ -23,6 +23,14 @@ import {
   HAND_FINGER_ORDER,
   SKELETON_PALETTE,
 } from "./clinicalSkeleton";
+import {
+  buildPoseRestHand,
+  buildSmoothedTracks,
+  hlTipsOffPoseHand,
+  interpPair,
+  resolveHandDrawSource,
+  shouldDrawHlFingers,
+} from "./overlayHandTrack";
 
 /** Same background treatment as App.js shell (bg.jpg + blur/dim). */
 const APP_BG_URL = "/bg.jpg";
@@ -1005,10 +1013,12 @@ export function ValidationOverlayPlayer({
   const tremorLiveCacheRef = useRef({ idx: -1, data: null });
   const progressRafRef = useRef(0);
   const paintPendingRef = useRef(false);
-  /** Keep last good finger dots briefly so they don't vanish on 1?2 missing frames. */
+  /** Keep last good finger dots briefly so they don't vanish on 1–2 missing frames. */
   const fingerStickyRef = useRef({});
-  /** EMA-smoothed finger canvas points for softer tracking. */
+  /** Light same-source EMA only. Cleared on cup↔hand model switch. */
   const fingerSmoothRef = useRef({});
+  /** Hysteresis for pose-rest vs HL fingers (must not flicker at movement onset). */
+  const handSourceRef = useRef({ src: "pose", offStreak: 0, onStreak: 0 });
 
   const phaseColor = useMemo(() => {
     const p = (phaseLabel || "").toLowerCase();
@@ -1021,6 +1031,10 @@ export function ValidationOverlayPlayer({
 
   const frames = overlayData?.frames || [];
   const fps = overlayData?.fps || 60;
+  const smoothTracks = useMemo(
+    () => buildSmoothedTracks(overlayData?.frames, overlayData?.fps || 60),
+    [overlayData?.frames, overlayData?.fps],
+  );
   const metrics = overlayData?.metrics || {};
   const win = overlayData?.movement_window || { start_idx: 0, end_idx: frames.length - 1 };
   const startPalm = overlayData?.start_palm;
@@ -1209,19 +1223,29 @@ export function ValidationOverlayPlayer({
 
     const color = phaseColor;
 
+    const idxNext = Math.min(idx + 1, frames.length - 1);
+    const trackPair = (key) => {
+      const p = smoothTracks?.at(key, idx) || null;
+      if (!p) return null;
+      const pn = alpha > 0 ? smoothTracks.at(key, idxNext) : null;
+      if (!pn || alpha <= 0) return p;
+      return [p[0] + (pn[0] - p[0]) * alpha, p[1] + (pn[1] - p[1]) * alpha];
+    };
+    const ptCache = new Map();
+
     function pt(name) {
-      const p = f[name];
-      const pn = alpha > 0 ? fNext?.[name] : null;
-      if (!p || p[0] == null || p[1] == null) return null;
-      let nx = p[0];
-      let ny = p[1];
-      if (pn && pn[0] != null && pn[1] != null && alpha > 0) {
-        nx = p[0] + (pn[0] - p[0]) * alpha;
-        ny = p[1] + (pn[1] - p[1]) * alpha;
+      if (ptCache.has(name)) return ptCache.get(name);
+      const sm = trackPair(name);
+      const raw = interpPair(f[name], fNext?.[name], alpha);
+      const p = sm || raw;
+      let out = null;
+      if (p) {
+        const isHandLm = /^(index|thumb|pinky|middle|ring|hl_wrist)$/.test(name);
+        const edge = p[0] <= 0.0002 || p[0] >= 0.9998 || p[1] <= 0.0002 || p[1] >= 0.9998;
+        if (!isHandLm || !edge) out = [p[0] * cw, p[1] * ch];
       }
-      const isHandLm = /^(index|thumb|pinky|middle|ring|hl_wrist)$/.test(name);
-      if (isHandLm && (nx <= 0.0002 || nx >= 0.9998 || ny <= 0.0002 || ny >= 0.9998)) return null;
-      return [nx * cw, ny * ch];
+      ptCache.set(name, out);
+      return out;
     }
 
     function toCanvas(p) {
@@ -1656,14 +1680,8 @@ export function ValidationOverlayPlayer({
     const JOINT_ORDER = ["mcp", "ip", "tip"];
 
     function jointToCanvas(pair, pairNext) {
-      if (!pair || pair[0] == null || pair[1] == null) return null;
-      let nx = pair[0];
-      let ny = pair[1];
-      if (pairNext && pairNext[0] != null && pairNext[1] != null && alpha > 0) {
-        nx = pair[0] + (pairNext[0] - pair[0]) * alpha;
-        ny = pair[1] + (pairNext[1] - pair[1]) * alpha;
-      }
-      return [nx * cw, ny * ch];
+      const p = interpPair(pair, pairNext, alpha);
+      return p ? [p[0] * cw, p[1] * ch] : null;
     }
 
     // Pre-v37 overlays re-anchored HL tips onto pose wrist (floated off fingers).
@@ -1681,28 +1699,20 @@ export function ValidationOverlayPlayer({
         cpt[1] - poseWristPt[1] + hlWristPt[1],
       ];
     };
-    // When Hand Landmarker latches the cup, wrist can stay near the pose wrist while
-    // tips stretch to the object — translate-only snap leaves sticks pointing at the cup.
-    // Lock those frames onto the real hand: rotate to the forearm axis and scale to hand length.
+    // When Hand Landmarker latches the cup at rest / movement onset, ignore those
+    // joints and draw a resting pose-palm hand. Never rotate/scale the cup fan.
     const handSpan = Math.max(1, Math.min(cw, ch));
     const hypotPt = (a, b) => {
       if (!a || !b) return null;
       return Math.hypot(a[0] - b[0], a[1] - b[1]);
     };
-    const distNorm = (a, b) => {
-      const d = hypotPt(a, b);
-      return d == null ? null : d / handSpan;
-    };
     const hlTipsCanvas = [];
-    const hlMcpsCanvas = [];
     if (fingerJoints) {
       HAND_FINGER_ORDER.forEach((fid) => {
         const fj = fingerJoints[fid];
         if (!fj) return;
         const tip = undoReanchor(jointToCanvas(fj.tip, fNext?.finger_joints?.[fid]?.tip));
-        const mcp = undoReanchor(jointToCanvas(fj.mcp, fNext?.finger_joints?.[fid]?.mcp));
         if (tip) hlTipsCanvas.push(tip);
-        if (mcp) hlMcpsCanvas.push(mcp);
       });
     } else {
       HAND_FINGER_ORDER.forEach((fid) => {
@@ -1710,125 +1720,30 @@ export function ValidationOverlayPlayer({
         if (tip) hlTipsCanvas.push(tip);
       });
     }
-    const srcOrigin = hlWristPt || poseWristPt;
-    let maxTipFromOrigin = 0;
-    let maxTipFromPose = 0;
-    hlTipsCanvas.forEach((tip) => {
-      const d0 = hypotPt(tip, srcOrigin);
-      const d1 = hypotPt(tip, poseWristPt);
-      if (d0 != null) maxTipFromOrigin = Math.max(maxTipFromOrigin, d0);
-      if (d1 != null) maxTipFromPose = Math.max(maxTipFromPose, d1);
-    });
     const forearmPx = hypotPt(elbowPt, poseWristPt) || 0;
-    const expectedHandPx = forearmPx > 8 ? forearmPx * 0.64 : handSpan * 0.10;
-    const wristDrift = (distNorm(poseWristPt, hlWristPt) || 0) > 0.12
-      || (forearmPx > 8 && (hypotPt(poseWristPt, hlWristPt) || 0) > forearmPx * 0.35);
-    const tipFarLimit = expectedHandPx > 0 ? expectedHandPx * 1.50 : handSpan * 0.12;
-    let tipN = 0;
-    let tipFar = 0;
-    hlTipsCanvas.forEach((tip) => {
-      tipN += 1;
-      if ((hypotPt(poseWristPt, tip) || 0) > tipFarLimit) tipFar += 1;
+    const palmReachPx = hypotPt(palm, poseWristPt) || 0;
+    const hlOffHand = hlTipsOffPoseHand({
+      poseWrist: poseWristPt,
+      hlWrist: hlWristPt,
+      tips: hlTipsCanvas,
+      forearmPx,
+      palmReachPx,
+      handSpan,
     });
-    const tipsMajorityFar = tipN >= 3 && tipFar >= Math.ceil(tipN * 0.6);
-    const tipsStretched = expectedHandPx > 0 && maxTipFromPose > Math.max(expectedHandPx * 1.70, forearmPx * 0.85);
-    const hlOffHand = wristDrift || tipsMajorityFar || tipsStretched;
-    const mcpCenter = hlMcpsCanvas.length
-      ? [
-        hlMcpsCanvas.reduce((s, p) => s + p[0], 0) / hlMcpsCanvas.length,
-        hlMcpsCanvas.reduce((s, p) => s + p[1], 0) / hlMcpsCanvas.length,
-      ]
-      : (hlTipsCanvas.length
-        ? [
-          hlTipsCanvas.reduce((s, p) => s + p[0], 0) / hlTipsCanvas.length,
-          hlTipsCanvas.reduce((s, p) => s + p[1], 0) / hlTipsCanvas.length,
-        ]
-        : null);
-    let lockRot = 0;
-    if (hlOffHand && elbowPt && poseWristPt && srcOrigin && mcpCenter) {
-      const fromX = mcpCenter[0] - srcOrigin[0];
-      const fromY = mcpCenter[1] - srcOrigin[1];
-      const toX = poseWristPt[0] - elbowPt[0];
-      const toY = poseWristPt[1] - elbowPt[1];
-      if (Math.hypot(fromX, fromY) > 4 && Math.hypot(toX, toY) > 4) {
-        let ang = Math.atan2(toY, toX) - Math.atan2(fromY, fromX);
-        while (ang > Math.PI) ang -= Math.PI * 2;
-        while (ang < -Math.PI) ang += Math.PI * 2;
-        if (wristDrift || Math.abs(ang) > (32 * Math.PI) / 180) lockRot = ang;
-      }
+
+    const sourceState = resolveHandDrawSource(handSourceRef.current, hlOffHand);
+    handSourceRef.current = sourceState;
+    const drawHl = shouldDrawHlFingers(hlOffHand, sourceState.src);
+    if (sourceState.switched) {
+      fingerSmoothRef.current = {};
+      fingerStickyRef.current = {};
     }
-    let lockScale = 1;
-    if (hlOffHand && maxTipFromOrigin > 1e-3 && expectedHandPx > 0) {
-      lockScale = Math.min(2.1, Math.max(0.20, expectedHandPx / maxTipFromOrigin));
-    }
-    // Cup-stretch keeps a fan toward the object even after scale. Rebuild fingers on the
-    // pose wrist whenever HL has left the hand. Aim along on-hand MCPs when present.
-    const useAnatomyHand = Boolean(hlOffHand && poseWristPt && (forearmPx > 8 || hlMcpsCanvas.length >= 2));
-    const anatomyJoints = (() => {
-      if (!useAnatomyHand) return null;
-      let ux;
-      let uy;
-      const goodMcps = hlMcpsCanvas.filter((p) => {
-        const d = hypotPt(p, poseWristPt);
-        return d != null && d > expectedHandPx * 0.12 && d < expectedHandPx * 0.70;
-      });
-      if (goodMcps.length >= 1) {
-        const mx = goodMcps.reduce((s, p) => s + p[0], 0) / goodMcps.length;
-        const my = goodMcps.reduce((s, p) => s + p[1], 0) / goodMcps.length;
-        ux = mx - poseWristPt[0];
-        uy = my - poseWristPt[1];
-      } else if (elbowPt && forearmPx > 8) {
-        ux = poseWristPt[0] - elbowPt[0];
-        uy = poseWristPt[1] - elbowPt[1];
-      } else {
-        return null;
-      }
-      const ul = Math.hypot(ux, uy);
-      if (ul < 1e-3) return null;
-      ux /= ul;
-      uy /= ul;
-      const px = -uy;
-      const py = ux;
-      const specs = {
-        thumb: { ang: -0.48, mcp: 0.32, ip: 0.58, tip: 0.84 },
-        index: { ang: -0.20, mcp: 0.36, ip: 0.66, tip: 0.98 },
-        middle: { ang: 0.00, mcp: 0.38, ip: 0.68, tip: 1.02 },
-        ring: { ang: 0.18, mcp: 0.36, ip: 0.64, tip: 0.94 },
-        pinky: { ang: 0.36, mcp: 0.32, ip: 0.56, tip: 0.80 },
-      };
-      const out = {};
-      Object.keys(specs).forEach((fid) => {
-        const spec = specs[fid];
-        const c = Math.cos(spec.ang);
-        const s = Math.sin(spec.ang);
-        const dx = ux * c - uy * s;
-        const dy = ux * s + uy * c;
-        const along = (t) => [
-          poseWristPt[0] + dx * expectedHandPx * t + px * spec.ang * expectedHandPx * 0.08,
-          poseWristPt[1] + dy * expectedHandPx * t + py * spec.ang * expectedHandPx * 0.08,
-        ];
-        out[fid] = { mcp: along(spec.mcp), ip: along(spec.ip), tip: along(spec.tip) };
-      });
-      return out;
-    })();
-    const lockFingerToHand = (cpt) => {
-      if (!hlOffHand || !cpt || !poseWristPt) return cpt;
-      const origin = srcOrigin || poseWristPt;
-      let x = cpt[0] - origin[0];
-      let y = cpt[1] - origin[1];
-      if (lockRot !== 0) {
-        const c = Math.cos(lockRot);
-        const s = Math.sin(lockRot);
-        const rx = x * c - y * s;
-        const ry = x * s + y * c;
-        x = rx;
-        y = ry;
-      }
-      return [poseWristPt[0] + x * lockScale, poseWristPt[1] + y * lockScale];
-    };
+
+    const restJoints = !drawHl
+      ? (buildPoseRestHand(poseWristPt, palm, elbowPt, trunk)?.joints || null)
+      : null;
 
     const smoothStore = fingerSmoothRef.current;
-    const smoothAlpha = 0.42;
     const smoothFinger = (key, cpt, live) => {
       if (!cpt) return null;
       if (!live) return cpt;
@@ -1838,19 +1753,19 @@ export function ValidationOverlayPlayer({
       smoothStore._idx = idx;
       const prev = smoothStore[key];
       if (!prev) {
-        smoothStore[key] = [...cpt];
+        smoothStore[key] = [cpt[0], cpt[1]];
         return cpt;
       }
-      const out = [
-        prev[0] + (cpt[0] - prev[0]) * smoothAlpha,
-        prev[1] + (cpt[1] - prev[1]) * smoothAlpha,
-      ];
+      // Same-source only, high gain: damps 1px tracker sparkle without trailing
+      // the reach and without blending the cup model into the first moving frames.
+      const a = 0.78;
+      const out = [prev[0] + (cpt[0] - prev[0]) * a, prev[1] + (cpt[1] - prev[1]) * a];
       smoothStore[key] = out;
       return out;
     };
 
     const jointDots = [];
-    const stickyHoldFrames = Math.max(10, Math.round(fps * 0.4));
+    const stickyHoldFrames = Math.max(3, Math.round(fps * 0.06));
     const stickyStore = fingerStickyRef.current;
     const pushFingerDot = (fid, jname, cpt, style, live) => {
       if (!cpt) return;
@@ -1867,23 +1782,22 @@ export function ValidationOverlayPlayer({
       }
     };
 
-    if (anatomyJoints) {
+    if (restJoints) {
       HAND_FINGER_ORDER.forEach((fid) => {
-        const aj = anatomyJoints[fid];
+        const aj = restJoints[fid];
         if (!aj) return;
         JOINT_ORDER.forEach((jname) => {
           pushFingerDot(fid, jname, aj[jname], JOINT_DOT[jname], true);
         });
       });
-    } else if (fingerJoints) {
+    } else if (drawHl && fingerJoints) {
       HAND_FINGER_ORDER.forEach((fid) => {
         const fj = fingerJoints[fid];
         if (!fj) return;
         JOINT_ORDER.forEach((jname) => {
-          const fjNext = fNext?.finger_joints?.[fid];
-          let cpt = jointToCanvas(fj[jname], fjNext?.[jname]);
+          let cpt = jointToCanvas(fj[jname], fNext?.finger_joints?.[fid]?.[jname]);
           if (!cpt && jname === "tip") cpt = pt(fid);
-          cpt = lockFingerToHand(undoReanchor(cpt));
+          cpt = undoReanchor(cpt);
           const coordsOk = Boolean(cpt)
             && cpt[0] > 2 && cpt[1] > 2
             && cpt[0] < cw - 2 && cpt[1] < ch - 2;
@@ -1895,9 +1809,9 @@ export function ValidationOverlayPlayer({
           pushFingerDot(fid, jname, cpt, JOINT_DOT[jname], visOk || Boolean(fj[jname]) || jname === "tip");
         });
       });
-    } else {
+    } else if (drawHl) {
       HAND_FINGER_ORDER.forEach((id) => {
-        const tipPt = lockFingerToHand(undoReanchor(pt(id)));
+        const tipPt = undoReanchor(pt(id));
         const visOk = fingerVis ? fingerVis[id] !== false : true;
         if (tipPt) pushFingerDot(id, "tip", tipPt, JOINT_DOT.tip, visOk || true);
         else pushFingerDot(id, "tip", tipPt, JOINT_DOT.tip, false);
@@ -2404,7 +2318,7 @@ export function ValidationOverlayPlayer({
     ctx.fillText(`Speed ${Math.round(speed)} ?/s`, gx, gy - 4);
     }
 
-  }, [frames, fps, win, peakV, handPeakV, startPalm, endPalm, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, isExpanded, overlayStyle]);
+  }, [frames, fps, win, peakV, handPeakV, startPalm, endPalm, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, isExpanded, overlayStyle, smoothTracks]);
 
   const renderBakeOverlayNative = useCallback(() => {
     if (!bakeOverlayCanvasRef.current) {
@@ -2497,6 +2411,7 @@ export function ValidationOverlayPlayer({
     recordingRef.current = true;
     fingerStickyRef.current = {};
     fingerSmoothRef.current = {};
+    handSourceRef.current = { src: "pose", offStreak: 0, onStreak: 0 };
     // Keep the live overlay in display space. Baking used to switch the visible
     // canvas to native pixels, which threw chalk off the hand for the first plays.
     drawOverlay();
@@ -2523,6 +2438,7 @@ export function ValidationOverlayPlayer({
       recordingRef.current = false;
       fingerStickyRef.current = {};
       fingerSmoothRef.current = {};
+      handSourceRef.current = { src: "pose", offStreak: 0, onStreak: 0 };
       if (video) video.playbackRate = playbackRate || 1;
       const blob = new Blob(recordedChunksRef.current, { type: mimeType.includes("mp4") ? "video/mp4" : "video/webm" });
       const url = URL.createObjectURL(blob);
@@ -2808,6 +2724,7 @@ export function ValidationOverlayPlayer({
     lastPaintMediaTimeRef.current = -1;
     fingerStickyRef.current = {};
     fingerSmoothRef.current = {};
+    handSourceRef.current = { src: "pose", offStreak: 0, onStreak: 0 };
     drawOverlay();
   };
 
@@ -2895,6 +2812,7 @@ export function ValidationOverlayPlayer({
     lastPaintMediaTimeRef.current = -1;
     fingerStickyRef.current = {};
     fingerSmoothRef.current = {};
+    handSourceRef.current = { src: "pose", offStreak: 0, onStreak: 0 };
     drawOverlay();
   };
 
