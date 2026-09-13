@@ -1,49 +1,89 @@
 // ============================================================
-// Stroke Rehabilitation Platform — Frontend v6.5
+// Stroke Rehabilitation Platform ? Frontend v6.5
 // ============================================================
 /* eslint-disable no-undef */
 
-import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from "react";
+import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo, startTransition } from "react";
 import ReactDOM from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, animate, useMotionValue, useReducedMotion } from "framer-motion";
+import {
+  NL_SPRING_TOAST,
+  NL_TWEEN_MENU,
+} from "./motionPresets";
 import {
   User, Activity, Sliders, TrendingUp, Heart, Timer, Cpu, FileText,
   Menu, X, ChevronRight, Play, Square, RotateCcw, Copy, Check,
-  Info, Save, BarChart3, Stethoscope, Brain, Image as ImageIcon,
+  Info, Save, BarChart3, Brain, Image as ImageIcon,
   RefreshCw, FileSpreadsheet, Upload, FileUp,
-  Database, Search, Edit3, Trash2, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles, Users, LogOut, MoreHorizontal,
-  Archive, Cloud,
+  Database, Search, Edit3, Trash2, Archive, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles, Users, LogOut, MoreHorizontal, Download, HardDrive,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
-  STUDY_DESIGN, SPSS_WORKFLOW, KINEMATIC_VARS, orderedKinematicVars, CLINICAL_VARS,
+  STUDY_DESIGN, SPSS_WORKFLOW, KINEMATIC_VARS, orderedKinematicVars, orderedKinematicResultsTableVars, CLINICAL_VARS,
   buildMasterDataset, buildMasterRow, generateStudySPSSSyntax, analyzeAllOutcomes,
+  DEMO_SPSS_KEYS, exportDemographicsForSpss,
   fmtP, sigStars,   getPatientKinPhase, pickKinField,
-  calcImprovement, calcGap, formatKinPrePostPct, formatKinPostHealthyPct, formatKinValue,
-  kinCrossPhaseComparable,
+  calcImprovement, calcGap, formatKinPrePostPct, formatKinPrePostAbsDelta, formatKinPostHealthyPct, formatKinValue,
+  kinCrossPhaseComparable, kinCrossPhaseDeltaStatus,
 } from "./analysisPlan";
 import {
   PROGRAM_GAPS, generateLiteratureReviewMarkdown, generateConsortSapMarkdown,
 } from "./thesisDocs";
 import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
-import AuthGate, { authHeaders, clearAuthToken } from "./AuthGate";
+import PtrIosSpinner from "./PtrIosSpinner";
+import AuthGate, { authHeaders, clearAuthToken, rememberLoginEmail } from "./AuthGate";
+import { downloadBlob as downloadBlobUtil, blobToBase64 } from "./downloadUtils";
+import {
+  loadValidationSessionArtifact,
+  saveValidationSessionArtifact,
+  validationCacheMatchesResult,
+} from "./validationSessionCache";
+import {
+  backupValidationArtifactsToDrive,
+  restoreValidationArtifactsFromDrive,
+  validationUnifiedDriveName,
+} from "./validationDriveSync";
+import {
+  resolveKinMetricValue,
+  loadLiveKinResults,
+  KIN_RESULTS_LS_KEY,
+} from "./kinMetrics";
+import { inferWmftFromKinematics, applyWmftInference } from "./wmftInference";
+import { MOVEMENT_PROFILE_FIELDS, MOVEMENT_PROFILE_GROUP_LABELS, MOVEMENT_PROFILE_GROUP_ORDER, resolveProfileMetric, formatProfileValue, getMovementProfile } from "./movementProfile";
+import {
+  CLINICAL_MOVEMENT_TASKS,
+  CLINICAL_DOMAIN_LABELS,
+  TASK_PHASE_METRIC_KEYS,
+  TASK_PHASE_NOTES,
+  clinicalTaskById,
+  clinicalTaskDomain,
+  clinicalTasksForDomain,
+} from "./clinicalTasks";
+import { describeCompletionMismatch } from "./taskCompletion";
+import {
+  buildAllTaskExcelFiles,
+  patientTaskKinSheetRows,
+} from "./clinicExcelExport";
 
-const APP_VERSION = "28.62";
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
 const BG = "/bg.jpg";
 
-/* ── Uniform liquid glass — sidebar and all panels share the same near-clear token ── */
+/* ?? Uniform liquid glass ? sidebar and all panels share the same near-clear token ?? */
 const GLASS_CLS = "bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
+const GLASS_PANEL_CLS = "bg-white/[0.028] backdrop-blur-lg backdrop-saturate-[1.85] border border-white/[0.05]";
 const SIDEBAR_CLS = "bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
 const INPUT_CLS = "bg-[rgba(220,235,255,0.04)] border border-white/[0.03]";
 
 const GSELECT_MENU_BOX = {
   borderRadius: "12px",
 };
+
+/** Same class stack as DesktopUnifiedTopBar / app top chrome */
+const GLASS_TOPBAR_SHELL = `relative overflow-hidden app-topbar-glass glass-float ${GLASS_CLS}`;
 
 const BG_FILTER = "blur(24px) brightness(0.55) saturate(0.80)";
 const BG_SCALE = "scale(1.08)";
@@ -54,23 +94,36 @@ function isIOSDevice() {
     || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
-function tapMotion(scale) {
-  if (typeof window !== "undefined" && isIOSDevice()) return undefined;
-  return { scale };
-}
-
 function isStandalonePWA() {
   return window.matchMedia("(display-mode: standalone)").matches
     || window.navigator.standalone === true;
 }
 
+/** iPad / iPhone / coarse pointer ? lighter glass & no Framer tap springs. */
+function isTouchUi() {
+  if (typeof window === "undefined") return false;
+  if (isIOSDevice() || isStandalonePWA()) return true;
+  try {
+    return window.matchMedia("(pointer: coarse)").matches;
+  } catch {
+    return false;
+  }
+}
+
+function nlMotionTap(scale = 0.97) {
+  return isTouchUi() ? undefined : { scale };
+}
+
+function nlMotionHover(scale = 1.02) {
+  return isTouchUi() ? undefined : { scale };
+}
+
 const SIDEBAR_W = 255;
 const SIDEBAR_X_HIDDEN = -280;
 const MOBILE_SIDEBAR_W = "75%";
-const SIDEBAR_SPRING = { type: "spring", stiffness: 180, damping: 26, mass: 1.1 };
-const SIDEBAR_EASE = "transform 1100ms cubic-bezier(0.45, 0, 0.55, 1)";
-const PAD_EASE = "none";
-
+/** Sidebar aside slide (transform); main/top bar use width + inset for centered content. */
+const SIDEBAR_SHELL_TRANSITION = "transform 320ms cubic-bezier(0.32, 0.72, 0, 1)";
+const SIDEBAR_LAYOUT_TRANSITION = "left 320ms cubic-bezier(0.32, 0.72, 0, 1), width 320ms cubic-bezier(0.32, 0.72, 0, 1), margin-left 320ms cubic-bezier(0.32, 0.72, 0, 1)";
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
   if (window.matchMedia("(min-width: 768px)").matches) return SIDEBAR_W;
@@ -83,6 +136,50 @@ const PTR_MAX_PULL = 118;
 
 const FLOAT_L = "0 36px 90px -40px rgba(0,0,0,0.20)";
 const FLOAT_M = "0 24px 60px -30px rgba(0,0,0,0.18)";
+
+const TOPBAR_ROW_H = 52;
+const TOPBAR_FILLET_R = 18;
+const TOPBAR_CORNER_R = 12;
+
+/** L-shaped outline; menuLeft = px from shell left to right column. */
+function buildTopBarClipPath(w, rowH, menuLeft, menuExtraH, maxFillet = TOPBAR_FILLET_R, stretching = false) {
+  const r = TOPBAR_CORNER_R;
+  if (!w || w <= 0) return "none";
+  if (!stretching && menuExtraH <= 0) {
+    return `path('M ${r} 0 H ${w - r} Q ${w} 0 ${w} ${r} V ${rowH - r} Q ${w} ${rowH} ${w - r} ${rowH} H ${r} Q 0 ${rowH} 0 ${rowH - r} V ${r} Q 0 0 ${r} 0 Z')`;
+  }
+
+  const h = Math.max(menuExtraH, 0);
+  const totalH = rowH + h;
+  const ml = Math.min(Math.max(menuLeft, r + 1), w - r - 1);
+  const filletR = Math.min(maxFillet, maxFillet * Math.min(1, h / maxFillet));
+  const bl = Math.min(TOPBAR_CORNER_R, Math.max(0, h * 0.5));
+  const parts = [
+    `M ${r} 0`,
+    `H ${w - r}`,
+    `Q ${w} 0 ${w} ${r}`,
+    `V ${totalH - r}`,
+    `Q ${w} ${totalH} ${w - r} ${totalH}`,
+    `H ${ml + bl}`,
+  ];
+
+  if (bl > 0.5) {
+    parts.push(`Q ${ml} ${totalH} ${ml} ${totalH - bl}`);
+  } else {
+    parts.push(`V ${totalH}`, `H ${ml}`);
+  }
+
+  parts.push(`V ${rowH + filletR}`);
+
+  if (filletR > 0.5) {
+    parts.push(`A ${filletR} ${filletR} 0 0 0 ${ml - filletR} ${rowH}`);
+  } else {
+    parts.push(`V ${rowH}`, `H ${ml}`);
+  }
+
+  parts.push(`H ${r}`, `Q 0 ${rowH} 0 ${rowH - r}`, `V ${r}`, `Q 0 0 ${r} 0`, "Z");
+  return `path('${parts.join(" ")}')`;
+}
 
 const GLASS_FIELD = {
   backgroundColor: "rgba(220,235,255,0.04)",
@@ -117,23 +214,17 @@ const MOTOR_ITEMS = [
 
 
 const KGIA_MOVEMENTS = [
-  { en:"Neck forward–backward flexion", tr:"Boynu öne-arkaya eğme", ue:false },
-  { en:"Shoulder elevation (shrug)", tr:"Omuz elevasyonu (silkme)", ue:true },
-  { en:"Forward arm raise", tr:"Öne kol kaldırma (omuz fleksiyonu)", ue:true },
+  { en:"Neck flexion/extension", tr:"Boyun fleksiyonu/ekstansiyonu", ue:false },
+  { en:"Shoulder shrugging", tr:"Omuz silkme", ue:true },
+  { en:"Forward shoulder flexion", tr:"Öne omuz fleksiyonu", ue:true },
   { en:"Elbow flexion", tr:"Dirsek fleksiyonu", ue:true },
-  { en:"Thumb-to-finger opposition", tr:"Başparmak-parmak karşıtlığı", ue:true },
-  { en:"Forward trunk lean", tr:"Öne gövde eğilmesi", ue:false },
-  { en:"Knee extension", tr:"Diz ekstansiyonu", ue:false },
-  { en:"Hip abduction", tr:"Kalça abduksiyonu", ue:false },
-  { en:"Foot tapping", tr:"Ayak vurma", ue:false },
-  { en:"Foot external rotation", tr:"Ayak dış rotasyonu", ue:false },
+  { en:"Thumb to finger tips", tr:"Başparmak ile parmak uçlarına dokunma", ue:true },
 ];
 
 const KGIA_TYPES = [
   {
     key:"gorsel", en:"Visual", tr:"Görsel",
-    qEN:"How clearly do you see this movement in your mind?",
-    qTR:"Bu hareketi zihninizde ne kadar net görüyorsunuz?",
+    qEN:"How clearly do you see this movement in your mind?", qTR:"Bu hareketi zihninizde ne kadar net görüyorsunuz?",
     labels:[
       { val:1, en:"No image at all", tr:"Hiç görüntü yok" },
       { val:2, en:"Blurry & incomplete", tr:"Bulanık ve eksik" },
@@ -144,8 +235,7 @@ const KGIA_TYPES = [
   },
   {
     key:"kinestetik", en:"Kinesthetic", tr:"Kinestetik",
-    qEN:"How strongly do you feel as if you are performing this movement?",
-    qTR:"Bu hareketi yapıyormuş gibi ne kadar hissediyorsunuz?",
+    qEN:"How strongly do you feel as if you are performing this movement?", qTR:"Bu hareketi yapıyormuş gibi ne kadar hissediyorsunuz?",
     labels:[
       { val:1, en:"No sensation", tr:"Hiç his yok" },
       { val:2, en:"Vague sensation", tr:"Belirsiz his" },
@@ -157,41 +247,44 @@ const KGIA_TYPES = [
 ];
 
 const WMFT_ITEMS = [
-  // WMFT-4: 4-item short form (Kim et al., 2026) — R=0.98 with full WMFT
+  // WMFT-4: 4-item short form (Kim et al., 2026) ? R=0.98 with full WMFT
   { id:1, en:"Hand to Table (front)", tr:"Eli masaya koyma (ön)" },
   { id:2, en:"Hand to Box (front)", tr:"Eli kutuya koyma (ön)" },
   { id:3, en:"Extend Elbow (no weight)", tr:"Dirsek uzatma (ağırlıksız)" },
   { id:4, en:"Lift Can (front)", tr:"Kutu kaldırma (ön)" },
 ];
 
+/** Standard BBT administration time (Mathiowetz et al., 1985). */
+const BBT_TEST_SECONDS = 60;
+
 const COMORBIDITIES = [
   { value:"hypertension", label:"Hypertension / Hipertansiyon" },
   { value:"hypotension", label:"Hypotension / Hipotansiyon" },
   { value:"diabetes", label:"Diabetes / Diyabet" },
-  { value:"cardiovascular", label:"Cardiovascular / Kardiyovasküler" },
+  { value:"cardiovascular", label:"Cardiovascular / Kardiyovask?ler" },
   { value:"copd", label:"COPD / KOAH" },
   { value:"arthritis", label:"Arthritis / Artrit" },
   { value:"osteoporosis", label:"Osteoporosis / Osteoporoz" },
   { value:"depression", label:"Depression / Depresyon" },
-  { value:"other", label:"Other / Diğer" },
+  { value:"other", label:"Other / Di?er" },
 ];
 
 const VAS_FACES = [
-  { val:0, emoji:"😊", en:"No hurt", tr:"Acı yok" },
-  { val:2, emoji:"🙂", en:"Hurts little bit", tr:"Biraz acıyor" },
-  { val:4, emoji:"😐", en:"Hurts little more", tr:"Biraz daha acıyor" },
-  { val:6, emoji:"😟", en:"Hurts even more", tr:"Daha çok acıyor" },
-  { val:8, emoji:"😢", en:"Hurts whole lot", tr:"Çok acıyor" },
-  { val:10, emoji:"😭", en:"Hurts worst", tr:"En kötü acı" },
+  { val:0, emoji:"??", en:"No hurt", tr:"Acı yok" },
+  { val:2, emoji:"??", en:"Hurts little bit", tr:"Biraz acıyor" },
+  { val:4, emoji:"??", en:"Hurts little more", tr:"Biraz daha acıyor" },
+  { val:6, emoji:"??", en:"Hurts even more", tr:"Daha çok acıyor" },
+  { val:8, emoji:"??", en:"Hurts whole lot", tr:"Çok acıyor" },
+  { val:10, emoji:"??", en:"Hurts worst", tr:"En kötü acı" },
 ];
 
 const VAMS_FACES = [
-  { val:0, emoji:"😐", en:"Neutral", tr:"Nötr" },
-  { val:2, emoji:"🙂", en:"A little", tr:"Biraz" },
-  { val:4, emoji:"😊", en:"Somewhat", tr:"Oldukça" },
-  { val:6, emoji:"😃", en:"Moderately", tr:"Orta" },
-  { val:8, emoji:"😄", en:"Very", tr:"Çok" },
-  { val:10, emoji:"🤩", en:"Extremely", tr:"Aşırı" },
+  { val:0, emoji:"??", en:"Neutral", tr:"Nötr" },
+  { val:2, emoji:"??", en:"A little", tr:"Biraz" },
+  { val:4, emoji:"??", en:"Somewhat", tr:"Oldukça" },
+  { val:6, emoji:"??", en:"Moderately", tr:"Orta" },
+  { val:8, emoji:"??", en:"Very", tr:"Çok" },
+  { val:10, emoji:"??", en:"Extremely", tr:"Aşırı" },
 ];
 
 const NAV_ITEMS = [
@@ -201,7 +294,7 @@ const NAV_ITEMS = [
   { id:"vams", icon:Heart, en:"Mood (VAMS-4)", tr:"Ruh Hali (VAMS-4)" },
   { id:"motorchange", icon:TrendingUp, en:"Muscle Control Scale", tr:"Kas Kontrol Ölçeği" },
 
-  { id:"kgia", icon:Brain, en:"Imagery Questionnaire", tr:"Motor İmgeleme (KVIQ)" },
+  { id:"kgia", icon:Brain, en:"Imagery Questionnaire", tr:"Motor ?mgeleme (KVIQ)" },
   { id:"wmft", icon:Timer, en:"Wolf Motor Function", tr:"Motor Fonksiyon (WMFT)" },
   { id:"kinematics", icon:Cpu, en:"Kinematics AI Lab", tr:"Kinematik AI Laboratuvarı" },
   { id:"report", icon:FileText, en:"Export Report", tr:"Rapor Dışa Aktarma" },
@@ -209,28 +302,35 @@ const NAV_ITEMS = [
   { id:"users", icon:Users, en:"Users", tr:"Kullanıcılar", adminOnly:true, topBarOnly:true },
 ];
 
+const ACTIVE_SECTION_LS_KEY = "neurolab_active_section";
+const ACTIVE_SECTION_IDS = new Set([...NAV_ITEMS.map((n) => n.id), "database"]);
+
+function loadStoredActiveSection() {
+  try {
+    const id = localStorage.getItem(ACTIVE_SECTION_LS_KEY);
+    if (id && ACTIVE_SECTION_IDS.has(id)) return id;
+  } catch {}
+  return "demographics";
+}
+
 const LS_KEY = "stroke_rehab_patients_v6";
 
 function loadPatients() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch { return []; }
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    return Array.isArray(raw) ? dedupePatientList(raw) : [];
+  } catch {
+    return [];
+  }
 }
 function savePatients(list) {
-  localStorage.setItem(LS_KEY, JSON.stringify(list));
+  const cleaned = dedupePatientList(Array.isArray(list) ? list : []);
+  localStorage.setItem(LS_KEY, JSON.stringify(cleaned));
+  return cleaned;
 }
+
 function isArchivedPatient(p) {
   return !!(p && p._archived);
-}
-function formatSavedAt(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
-}
-function uploadValidationToDrive() {
-  if (typeof window.__nlSyncVideos === "function") {
-    window.__nlSyncVideos(true);
-    return;
-  }
-  window.dispatchEvent(new CustomEvent("nl-upload-validation"));
 }
 function activePatients(list) {
   return (list || loadPatients()).filter((p) => !isArchivedPatient(p));
@@ -239,7 +339,7 @@ function studyIdNumber(p) {
   const n = parseInt(p?.demographics?.participantId, 10);
   return Number.isFinite(n) ? n : 1e9;
 }
-function reorderStudyIds(list, start = 1) {
+function reorderStudyIds(list, start = 101) {
   const src = Array.isArray(list) ? list : [];
   const active = src.filter((p) => p && typeof p === "object" && !isArchivedPatient(p));
   const archived = src.filter((p) => p && typeof p === "object" && isArchivedPatient(p));
@@ -256,17 +356,43 @@ function reorderStudyIds(list, start = 1) {
   return [...renumbered, ...archived];
 }
 
+
 /** Drop heavy kinematic arrays before server sync (keep summary metrics). */
 function stripKinPhaseForSync(phase) {
   if (!phase || typeof phase !== "object") return phase;
-  const { velocity_profile, phases, ...rest } = phase;
-  return rest;
+  const { velocity_profile, phases, movement_profile, intermediate_files, ...rest } = phase;
+  let mp = movement_profile;
+  if (mp && typeof mp === "object") {
+    const {
+      elbow_angle_series,
+      shoulder_flexion_series,
+      trunk_x_series,
+      hand_speed_series,
+      ...mpLight
+    } = mp;
+    mp = mpLight;
+  }
+  return { ...rest, ...(mp ? { movement_profile: mp } : {}) };
 }
 function stripKinResultsForSync(kin) {
   if (!kin || typeof kin !== "object") return kin;
   return Object.fromEntries(
     Object.entries(kin).map(([k, v]) => [k, stripKinPhaseForSync(v)])
   );
+}
+const stripKinResultsForStorage = stripKinResultsForSync;
+/** Prefer server overlay metrics; compute client-side only when needed. */
+function resolveOverlayMetrics(overlay) {
+  if (!overlay) return null;
+  const server = overlay.metrics;
+  if (server && server.nvp != null && server.straightness != null) return server;
+  if (!overlay.frames?.length) return server || null;
+  try {
+    return computeOverlayMetrics(overlay) || server || null;
+  } catch (e) {
+    console.warn("computeOverlayMetrics failed:", e);
+    return server || null;
+  }
 }
 function patientsForServerSync(list) {
   return list.map((p) => {
@@ -291,15 +417,320 @@ async function postPatientsSync(patients) {
 
 async function backupToDrive(patients) {
   try {
-    return await fetch("/auth/backup", {
+    const r = await fetch("/auth/backup", {
       method: "POST",
       credentials: "same-origin",
       headers: authHeaders(),
       body: JSON.stringify({ patients: patientsForServerSync(patients) }),
     });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const detail = typeof data.detail === "string" ? data.detail : `HTTP ${r.status}`;
+      console.warn("Drive backup failed:", detail);
+      return { ok: false, detail };
+    }
+    return { ok: true, ...data };
   } catch (e) {
     console.warn("Drive backup failed:", e);
-    return { ok: false };
+    return { ok: false, detail: String(e?.message || e) };
+  }
+}
+
+/** Slim patient rows for Drive rebuild (keys + program sections; drop heavy kin series). */
+function patientsForDriveRebuild(list) {
+  return (Array.isArray(list) ? list : []).map((p) => {
+    if (!p || typeof p !== "object") return p;
+    const row = {
+      _id: p._id,
+      _archived: p._archived,
+      _savedAt: p._savedAt,
+      _hasPre: p._hasPre,
+      _hasPost: p._hasPost,
+      demographics: p.demographics || {},
+    };
+    for (const key of ["ipaq", "vas", "vams", "motorchange", "kgia", "wmft"]) {
+      if (p[key] != null) row[key] = p[key];
+    }
+    if (p.kinematics && typeof p.kinematics === "object") {
+      row.kinematics = {
+        ...p.kinematics,
+        analysisResults: p.kinematics.analysisResults
+          ? stripKinResultsForSync(p.kinematics.analysisResults)
+          : p.kinematics.analysisResults,
+      };
+    }
+    return row;
+  });
+}
+
+function driveRebuildErrorText(payload) {
+  if (!payload || typeof payload !== "object") return "unknown error";
+  const detail = payload.detail;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
+  if (payload.error) return String(payload.error);
+  if (payload.reason === "drive_unset") {
+    return "Drive not connected - open Connect Drive, then retry Rebuild";
+  }
+  if (payload.reason === "drive_init_failed") {
+    return "Drive OAuth token invalid - reconnect Drive, then retry Rebuild";
+  }
+  if (payload.reason) return String(payload.reason);
+  return "unknown error";
+}
+
+/** Authoritative Drive rebuild: one folder per canonical patient; merge alias folders safely. */
+async function rebuildDriveFromDatabase(patients, { showToast, waitMs = 180000 } = {}) {
+  try {
+    const oauth = await fetch("/auth/drive/oauth-status", {
+      credentials: "same-origin",
+      headers: authHeaders(),
+    })
+      .then((r) => r.json())
+      .catch(() => ({}));
+    if (oauth?.clientConfigured && (!oauth.ready || oauth.staleTokenHint || oauth.needsReconnect)) {
+      // Soft warn only - server probe is authoritative; stale env token may still work.
+      if (!oauth.ready) {
+        showToast?.(
+          "Drive not connected - open Connect Drive, sign in with clinic Gmail, then retry Rebuild",
+          "error"
+        );
+        return { ok: false, detail: "drive_not_connected" };
+      }
+    }
+
+    const start = await fetch("/auth/drive/reconcile", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: authHeaders(),
+      body: JSON.stringify({ patients: patientsForDriveRebuild(patients) }),
+    });
+    const startData = await start.json().catch(() => ({}));
+    if (!start.ok) {
+      const detail = driveRebuildErrorText(startData) || `HTTP ${start.status}`;
+      showToast?.(`Drive rebuild failed ? ${detail}`, "error");
+      return { ok: false, detail };
+    }
+    const jobId = startData.jobId || null;
+    showToast?.("Rebuilding Drive folders from database?", "info");
+    const deadline = Date.now() + Math.max(15000, waitMs);
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 2500));
+      const st = await fetch("/auth/drive/reconcile-status", {
+        credentials: "same-origin",
+        headers: authHeaders(),
+      });
+      if (!st.ok) {
+        // Auth blip ? keep polling until deadline.
+        continue;
+      }
+      const status = await st.json().catch(() => ({}));
+      if (jobId && status.jobId && status.jobId !== jobId) {
+        continue;
+      }
+      if (!status.running && status.started) {
+        const result = status.result || {};
+        if (status.error || result.ok === false) {
+          const err = driveRebuildErrorText({ ...result, error: status.error || result.error });
+          showToast?.(`Drive rebuild error ? ${err}`, "warning");
+          return { ok: false, ...status };
+        }
+        const before = result.beforeCount ?? "?";
+        const after = result.afterCount ?? "?";
+        const trashed = Array.isArray(result.trashedAliases) ? result.trashedAliases.length : 0;
+        const merged = Array.isArray(result.mergedAliases) ? result.mergedAliases.length : 0;
+        showToast?.(
+          `? Drive rebuilt ? folders ${before}?${after}, merged ${merged}, trashed aliases ${trashed}`,
+          "success"
+        );
+        // Refresh per-task Excel under RAED_AI_Backups/Excel/ (active patients only).
+        syncTaskExcelsToDrive(patients).then((ex) => {
+          if (ex?.count) {
+            showToast?.(
+              `? Excel synced ? ${ex.uploaded}/${ex.count} task file(s) ? Drive/Excel`,
+              "success"
+            );
+          }
+        }).catch(() => {});
+        return { ok: true, ...result, status };
+      }
+    }
+    showToast?.("Drive rebuild still running in background ? check Drive in a few minutes", "info");
+    return { ok: true, running: true, ...startData };
+  } catch (e) {
+    console.warn("Drive reconcile failed:", e);
+    showToast?.(`Drive rebuild failed ? ${e?.message || e}`, "error");
+    return { ok: false, detail: String(e?.message || e) };
+  }
+}
+
+const DRIVE_FILE_MAX_BYTES = 32 * 1024 * 1024;
+const KIN_ANALYZE_ACTIVE_KEY = "neuro_kin_analyze_active";
+
+function setKinAnalyzeActive(active) {
+  try {
+    if (active) sessionStorage.setItem(KIN_ANALYZE_ACTIVE_KEY, "1");
+    else sessionStorage.removeItem(KIN_ANALYZE_ACTIVE_KEY);
+  } catch { /* ignore */ }
+}
+
+function isKinAnalyzeActive() {
+  try {
+    return sessionStorage.getItem(KIN_ANALYZE_ACTIVE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+const driveFileBackupDone = new Set();
+const driveFileBackupQueue = [];
+let driveFileBackupRunning = false;
+
+function driveBackupDedupeKey(name, opts = {}) {
+  return `${opts.patientKey || "_"}|${opts.subfolder || "_"}|${name}`;
+}
+
+function pumpDriveFileBackupQueue() {
+  if (driveFileBackupRunning) return;
+  driveFileBackupRunning = true;
+  const run = async () => {
+    while (driveFileBackupQueue.length) {
+      if (isKinAnalyzeActive()) {
+        await new Promise((r) => setTimeout(r, 2500));
+        continue;
+      }
+      const job = driveFileBackupQueue.shift();
+      try {
+        await backupFileToDrive(job.name, job.blob, job.opts);
+      } catch {
+        driveFileBackupDone.delete(job.key);
+      }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    driveFileBackupRunning = false;
+  };
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(() => { run(); }, { timeout: 8000 });
+  } else {
+    setTimeout(run, 50);
+  }
+}
+
+function scheduleDriveFileBackup(name, blob, opts = {}) {
+  if (!blob || !(blob instanceof Blob)) return;
+  if (blob.size > DRIVE_FILE_MAX_BYTES) {
+    console.warn("Drive backup skipped (file too large):", name, blob.size);
+    return;
+  }
+  const key = driveBackupDedupeKey(name, opts);
+  if (opts.force) driveFileBackupDone.delete(key);
+  if (driveFileBackupDone.has(key)) return;
+  driveFileBackupDone.add(key);
+  driveFileBackupQueue.push({ name, blob, opts, key });
+  pumpDriveFileBackupQueue();
+}
+
+function patientDriveKeyFromDemographics(demographics, fallbackId) {
+  const d = demographics || {};
+  const id = String(d.participantId || fallbackId || "").trim();
+  const name = String(d.name || d.fullName || "").trim();
+  if (!id && !name) return "";
+  const slug = (s) => String(s).replace(/[^\w.\-]/g, "_").slice(0, 100);
+  if (id && name) return slug(`${id}_${name}`);
+  return slug(id || name);
+}
+
+function patientDriveKeyFromRecord(p) {
+  return patientDriveKeyFromDemographics(p?.demographics, p?._id);
+}
+
+async function backupPatientVideoToDrive(demographics, phase, blobOrFile, filename) {
+  const patientKey = patientDriveKeyFromDemographics(demographics);
+  if (!patientKey || !blobOrFile) return false;
+  const blob = blobOrFile instanceof Blob ? blobOrFile : blobOrFile;
+  const base = filename || `${phase}_video`;
+  const safeName = String(base).replace(/[^\w.\-]/g, "_").slice(0, 160);
+  scheduleDriveFileBackup(safeName, blob, { patientKey, subfolder: "videos" });
+  return true;
+}
+
+function backupSessionKinematicsVideosToDrive(kinematicsData, demographics) {
+  if (!kinematicsData || typeof kinematicsData !== "object") return;
+  ["pre", "post", "baseline"].forEach((phase) => {
+    const file = kinematicsData[`video_${phase}_file`];
+    if (!(file instanceof Blob)) return;
+    const name = kinematicsData[`video_${phase}`] || file.name || `${phase}_original.mp4`;
+    backupPatientVideoToDrive(demographics, phase, file, name);
+  });
+}
+
+async function backupFileToDrive(name, blob, opts = {}) {
+  try {
+    const contentBase64 = await blobToBase64(blob);
+    const { patientKey, subfolder, scope } = opts;
+    const r = await fetch("/auth/backup-file", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        contentBase64,
+        mimeType: blob.type || "application/octet-stream",
+        patientKey: patientKey || undefined,
+        subfolder: subfolder || undefined,
+        scope: scope || undefined,
+      }),
+    });
+    return r.ok;
+  } catch (e) {
+    console.warn("Drive file backup failed:", e);
+    return false;
+  }
+}
+
+/** Upload one Excel workbook per clinical task to RAED_AI_Backups/Excel/. */
+async function syncTaskExcelsToDrive(patients, { showToast, downloadLocal = false } = {}) {
+  const files = buildAllTaskExcelFiles(patients);
+  if (!files.length) {
+    if (downloadLocal) showToast?.("No active task data for Excel export", "error");
+    return { ok: false, count: 0 };
+  }
+  let uploaded = 0;
+  for (let i = 0; i < files.length; i += 1) {
+    const f = files[i];
+    if (downloadLocal) {
+      setTimeout(() => downloadBlobUtil(f.blob, f.fileName), i * 350);
+    }
+    const ok = await backupFileToDrive(f.fileName, f.blob, {
+      subfolder: "excel",
+      scope: "clinic_excel",
+    });
+    if (ok) uploaded += 1;
+  }
+  return { ok: uploaded > 0, count: files.length, uploaded, files };
+}
+
+async function restoreFromDrive() {
+  try {
+    // Folder/PDF/Excel rebuild can take a while on a cold Space.
+    const r = await fetchWithTimeout("/auth/restore", {}, 240000);
+    if (!r.ok) return [];
+    const data = await r.json();
+    const pts = Array.isArray(data.patients) ? data.patients : [];
+    // Stash restore diagnostics for the explicit Restore button toast.
+    try {
+      window.__nlLastDriveRestoreMeta = {
+        source: data.source || "",
+        folderCount: data.folderCount,
+        pdfParsed: data.pdfParsed,
+        jsonSnapshots: data.jsonSnapshots,
+        excelPatients: data.excelPatients,
+        count: pts.length,
+      };
+    } catch {}
+    return pts;
+  } catch {
+    return [];
   }
 }
 
@@ -312,76 +743,398 @@ async function fetchWithTimeout(url, options = {}, ms = SYNC_FETCH_MS) {
   try {
     return await fetch(url, {
       credentials: "same-origin",
-      headers: authHeaders(),
-      ...options,
       signal: ctrl.signal,
+      ...options,
+      headers: { ...authHeaders(), ...(options.headers || {}) },
     });
   } finally {
     clearTimeout(timer);
   }
 }
 
-function mergePatientLists(serverPts, localPts) {
-  const merged = Array.isArray(serverPts) ? [...serverPts] : [];
-  localPts.forEach((lp) => {
-    const id = lp._id || lp.demographics?.participantId;
-    if (id && !merged.some((sp) => (sp._id || sp.demographics?.participantId) === id)) {
-      merged.push(lp);
-    }
-  });
-  return merged;
+/** Canonical in-app identity: Study ID. _id alone caused duplicate rows for the same person. */
+function patientStudyId(p) {
+  const raw = p?.demographics?.participantId;
+  if (raw == null || raw === "") return "";
+  const n = parseInt(String(raw).trim(), 10);
+  if (Number.isFinite(n) && String(n) === String(raw).trim()) return String(n);
+  return String(raw).trim();
 }
 
-/** Push local patients to server, pull merge, persist to localStorage. */
-async function syncPatientsWithServer({ showToast, silent = false } = {}) {
-  const localPts = loadPatients();
+function patientMergeKey(p) {
+  return patientStudyId(p) || String(p?._id || "").trim();
+}
+
+/** Normalize display name for soft duplicate detection (not a hard identity key). */
+function normalizePatientName(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function patientDisplayName(p) {
+  const d = p?.demographics || {};
+  return String(d.name || d.fullName || "").trim();
+}
+
+function findActiveByNormalizedName(list, name, { excludeStudyId = "" } = {}) {
+  const needle = normalizePatientName(name);
+  if (!needle) return [];
+  const ex = String(excludeStudyId || "").trim();
+  return (list || []).filter((p) => {
+    if (!p || isArchivedPatient(p)) return false;
+    if (normalizePatientName(patientDisplayName(p)) !== needle) return false;
+    if (ex && patientStudyId(p) === ex) return false;
+    return true;
+  });
+}
+
+/** Prefer clinic 101+ Study IDs, then richer/newer record. */
+function preferNameMergeTarget(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const ia = studyIdNumber(a);
+  const ib = studyIdNumber(b);
+  const a101 = Number.isFinite(ia) && ia >= 101 && ia < 1e8;
+  const b101 = Number.isFinite(ib) && ib >= 101 && ib < 1e8;
+  if (a101 !== b101) return a101 ? a : b;
+  if (a101 && b101 && ia !== ib) return ia <= ib ? a : b;
+  return patientRecordScore(a) >= patientRecordScore(b) ? a : b;
+}
+
+/** Collapse same-name active rows into one Study ID (keeps preferred ID + richer sections). */
+function mergeSameNameDuplicates(list) {
+  const src = Array.isArray(list) ? list : [];
+  const archived = src.filter((p) => p && isArchivedPatient(p));
+  const active = src.filter((p) => p && !isArchivedPatient(p));
+  const groups = new Map();
+  const noName = [];
+  for (const p of active) {
+    const key = normalizePatientName(patientDisplayName(p));
+    if (!key) {
+      noName.push(p);
+      continue;
+    }
+    const arr = groups.get(key) || [];
+    arr.push(p);
+    groups.set(key, arr);
+  }
+  const out = [...noName];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      out.push(group[0]);
+      continue;
+    }
+    let keep = group[0];
+    for (let i = 1; i < group.length; i++) keep = preferNameMergeTarget(keep, group[i]);
+    let merged = keep;
+    for (const other of group) {
+      if (other === keep) continue;
+      merged = mergeTwoPatientRecords(merged, other);
+    }
+    const keepSid = patientStudyId(keep);
+    merged = {
+      ...merged,
+      _id: keep._id || merged._id,
+      demographics: {
+        ...(merged.demographics || {}),
+        ...(keepSid ? { participantId: keepSid } : {}),
+        ...(patientDisplayName(keep) ? { name: patientDisplayName(keep) } : {}),
+      },
+    };
+    out.push(merged);
+  }
+  return [...out, ...archived];
+}
+
+function nameDuplicateGroups(list) {
+  const groups = new Map();
+  for (const p of list || []) {
+    if (!p || isArchivedPatient(p)) continue;
+    const key = normalizePatientName(patientDisplayName(p));
+    if (!key) continue;
+    const arr = groups.get(key) || [];
+    arr.push(p);
+    groups.set(key, arr);
+  }
+  return Array.from(groups.entries())
+    .filter(([, arr]) => arr.length > 1)
+    .map(([key, arr]) => ({
+      key,
+      name: patientDisplayName(arr[0]) || key,
+      ids: arr.map((p) => patientStudyId(p) || "?").sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b))),
+      count: arr.length,
+    }));
+}
+
+function readNlVersion() {
   try {
-    const push = await fetchWithTimeout("/api/patients", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ patients: patientsForServerSync(localPts) }),
-    });
+    return document.querySelector('meta[name="nl-version"]')?.content || "";
+  } catch {
+    return "";
+  }
+}
+
+const PATIENT_MERGE_SECTIONS = [
+  "demographics",
+  "ipaq",
+  "vas",
+  "vams",
+  "motorchange",
+  "kgia",
+  "wmft",
+  "bbt",
+  "kinematics",
+];
+
+function sectionFilled(obj) {
+  return !!(obj && typeof obj === "object" && Object.keys(obj).length > 0);
+}
+
+function patientRecordScore(p) {
+  if (!p || typeof p !== "object") return 0;
+  const ts = Date.parse(p._savedAt || 0) || 0;
+  let filled = 0;
+  for (const key of PATIENT_MERGE_SECTIONS) {
+    if (sectionFilled(p[key])) filled += 1;
+  }
+  if (p._hasPre) filled += 0.25;
+  if (p._hasPost) filled += 0.25;
+  return filled * 1e13 + ts;
+}
+
+function mergeTwoPatientRecords(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const keep = patientRecordScore(a) >= patientRecordScore(b) ? a : b;
+  const other = keep === a ? b : a;
+  const out = { ...other, ...keep };
+  out.demographics = { ...(other.demographics || {}), ...(keep.demographics || {}) };
+  for (const key of PATIENT_MERGE_SECTIONS) {
+    if (key === "demographics") continue;
+    if (key === "kinematics") {
+      out.kinematics = mergeKinematicsSections(keep.kinematics, other.kinematics);
+      continue;
+    }
+    const kSec = keep[key];
+    const oSec = other[key];
+    if (sectionFilled(kSec)) out[key] = kSec;
+    else if (sectionFilled(oSec)) out[key] = oSec;
+  }
+  out._id = keep._id || other._id;
+  const keepTs = Date.parse(keep._savedAt || 0) || 0;
+  const otherTs = Date.parse(other._savedAt || 0) || 0;
+  if (keepTs || otherTs) {
+    out._savedAt = keepTs >= otherTs ? keep._savedAt : other._savedAt;
+  } else {
+    out._savedAt = keep._savedAt || other._savedAt || new Date().toISOString();
+  }
+  out._hasPre = !!(keep._hasPre || other._hasPre || patientHasPhaseData(out, "pre"));
+  out._hasPost = !!(keep._hasPost || other._hasPost || patientHasPhaseData(out, "post"));
+  if (keep._driveArtifacts || other._driveArtifacts) {
+    out._driveArtifacts = { ...(other._driveArtifacts || {}), ...(keep._driveArtifacts || {}) };
+  }
+  if (keep._archived || other._archived) out._archived = !!(keep._archived && other._archived);
+  return out;
+}
+
+function mergeKinematicsSections(a, b) {
+  const ka = a && typeof a === "object" ? a : {};
+  const kb = b && typeof b === "object" ? b : {};
+  const out = { ...kb, ...ka };
+  const arA = ka.analysisResults && typeof ka.analysisResults === "object" ? ka.analysisResults : {};
+  const arB = kb.analysisResults && typeof kb.analysisResults === "object" ? kb.analysisResults : {};
+  const phases = new Set([...Object.keys(arA), ...Object.keys(arB)]);
+  if (phases.size) {
+    const merged = {};
+    for (const phase of phases) {
+      const pa = arA[phase] && typeof arA[phase] === "object" ? arA[phase] : {};
+      const pb = arB[phase] && typeof arB[phase] === "object" ? arB[phase] : {};
+      merged[phase] = Object.keys(pa).length >= Object.keys(pb).length ? { ...pb, ...pa } : { ...pa, ...pb };
+    }
+    out.analysisResults = merged;
+  }
+  return out;
+}
+
+function patientHasPhaseData(p, phase) {
+  if (!p) return false;
+  if (phase === "pre") {
+    if (p._hasPre) return true;
+    if (p.vas?.rest?.pre || p.motorchange?.control || p.vams?.happy?.pre) return true;
+  }
+  if (phase === "post") {
+    if (p._hasPost) return true;
+    if (p.vas?.rest?.post || p.motorchange?.difference || p.vams?.happy?.post) return true;
+  }
+  try {
+    return !!getPatientKinPhase(p, phase);
+  } catch {
+    const kin = p.kinematics || {};
+    return !!(kin.analysisResults?.[phase] || kin[`result_${phase}`]);
+  }
+}
+
+function formatPatientSavedAt(raw) {
+  const ts = Date.parse(raw || "");
+  if (!Number.isFinite(ts) || ts <= 0) return "?";
+  try {
+    return new Date(ts).toLocaleString();
+  } catch {
+    return "?";
+  }
+}
+
+function mergePatientLists(...lists) {
+  const byId = new Map();
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const p of list) {
+      if (!p || typeof p !== "object") continue;
+      const id = patientMergeKey(p);
+      if (!id) continue;
+      const existing = byId.get(id);
+      byId.set(id, existing ? mergeTwoPatientRecords(existing, p) : p);
+    }
+  }
+  return Array.from(byId.values());
+}
+
+function dedupePatientList(list) {
+  return mergePatientLists(list);
+}
+
+let patientsSyncPromise = null;
+let lastSilentDriveRestoreAt = 0;
+const SILENT_DRIVE_RESTORE_MS = 10 * 60 * 1000;
+
+/** Push local patients to server, pull merge, persist to localStorage. */
+async function syncPatientsWithServer({ showToast, silent = false, skipDrive = false } = {}) {
+  if (patientsSyncPromise) {
+    return patientsSyncPromise;
+  }
+  patientsSyncPromise = syncPatientsWithServerInner({ showToast, silent, skipDrive }).finally(() => {
+    patientsSyncPromise = null;
+  });
+  return patientsSyncPromise;
+}
+
+async function syncPatientsWithServerInner({ showToast, silent = false, skipDrive = false } = {}) {
+  const localPts = loadPatients();
+  if (isKinAnalyzeActive()) {
+    console.log("Patient/Drive sync deferred ? video analysis in progress");
+    return { ok: false, patients: localPts, skipped: true, reason: "analyze" };
+  }
+  try {
+    const now = Date.now();
+    const localEmpty = !Array.isArray(localPts) || localPts.length === 0;
+    // Silent boot skips Drive for speed ? EXCEPT when this origin has no patients
+    // (Space rename / new Home Screen): then Drive folder+PDF restore is required.
+    const skipDriveRestore =
+      !localEmpty &&
+      (skipDrive || silent || now - lastSilentDriveRestoreAt < SILENT_DRIVE_RESTORE_MS);
+    const driveRestoreP = skipDriveRestore
+      ? Promise.resolve([])
+      : restoreFromDrive().then((pts) => {
+          lastSilentDriveRestoreAt = Date.now();
+          return pts;
+        });
+    const [drivePts, serverPullR] = await Promise.all([
+      driveRestoreP,
+      fetchWithTimeout("/api/patients", {}, silent && !localEmpty ? 20000 : SYNC_FETCH_MS),
+    ]);
+    const serverPull = serverPullR.ok ? await serverPullR.json() : [];
+    const preMerged = mergePatientLists(serverPull, drivePts, localPts);
+
+    // Never push an empty list over a non-empty server (rename race).
+    if (preMerged.length === 0 && Array.isArray(serverPull) && serverPull.length > 0) {
+      savePatients(serverPull);
+      return { ok: true, patients: serverPull, pushed: false, preservedServer: true };
+    }
+
+    const push = await fetchWithTimeout(
+      "/api/patients",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patients: patientsForServerSync(preMerged) }),
+      },
+      silent && !localEmpty ? 20000 : SYNC_FETCH_MS
+    );
     if (!push.ok) {
       const detail = await push.text().catch(() => "");
       if (!silent) showToast?.(`Server save failed (${push.status})`, "error");
       console.warn("Patient push sync failed:", push.status, detail);
+      if (preMerged.length > 0) {
+        savePatients(preMerged);
+        return { ok: true, patients: preMerged, pushed: false };
+      }
       return { ok: false, patients: localPts, pushed: false };
     }
 
-    const r = await fetchWithTimeout("/api/patients");
+    const r = await fetchWithTimeout("/api/patients", {}, silent ? 20000 : SYNC_FETCH_MS);
     if (!r.ok) {
       if (!silent) showToast?.(`Could not load server records (${r.status})`, "error");
       return { ok: false, patients: localPts, pushed: true };
     }
 
-    const serverPts = await r.json();
-    const merged = mergePatientLists(serverPts, localPts);
+    const serverPts = r.ok ? await r.json() : preMerged;
+    const merged = mergePatientLists(serverPts, preMerged);
     savePatients(merged);
     window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: merged.length } }));
 
-    backupToDrive(merged).then((backupR) => {
-      if (backupR?.ok) {
-        console.log("Drive backup OK");
-      } else {
-        console.warn("Drive backup skipped or failed");
+    // Explicit Sync: await full JSON ? Drive + iPad localStorage snapshot before rebuild.
+    // Silent boot/PTR stays snappy (no Drive wait).
+    let driveBackupOk = false;
+    if (!silent && !isKinAnalyzeActive()) {
+      try {
+        if (typeof window.__nlForceIpadPatientsUpload === "function") {
+          await window.__nlForceIpadPatientsUpload();
+        }
+      } catch (e) {
+        console.warn("iPad localStorage upload skipped:", e);
       }
-    });
+      const backupR = await backupToDrive(merged);
+      driveBackupOk = !!backupR?.ok;
+      if (backupR?.ok) {
+        console.log("Drive backup OK", backupR?.fileName || "");
+      } else {
+        console.warn("Drive backup skipped or failed", backupR?.detail);
+        if (backupR?.detail) {
+          showToast?.(`Drive backup failed ? ${backupR.detail}`, "warning");
+        }
+      }
+      // Rebuild folders after JSON snapshot is on Drive (non-blocking).
+      setTimeout(() => {
+        if (isKinAnalyzeActive()) return;
+        rebuildDriveFromDatabase(merged, { showToast, waitMs: 120000 }).catch(() => {});
+      }, 500);
+    }
 
     if (!silent) {
       if (merged.length === 0) {
-        showToast?.("Sync OK — no records yet. Save a session first.", "info");
+        showToast?.("Sync OK ? no records yet. Save a session first.", "info");
+      } else if (driveBackupOk) {
+        showToast?.(
+          `? Synced ? ${merged.length} record(s) ? neurolab_patients JSON on Drive`,
+          "success"
+        );
       } else {
-        showToast?.(`✓ Synced — ${merged.length} record(s)`, "success");
+        showToast?.(
+          `? Synced ? ${merged.length} record(s) on server ? Connect Drive then Sync again`,
+          "success"
+        );
       }
     }
-    return { ok: true, patients: merged, pushed: true };
+    return { ok: true, patients: merged, pushed: true, driveBackupOk };
   } catch (err) {
     const timedOut = err?.name === "AbortError";
     if (!silent) {
       showToast?.(
         timedOut
-          ? "Sync timed out — server may be waking up. Wait ~1 min and retry."
-          : "Sync failed — data kept on this device only",
+          ? "Sync timed out ? server may be waking up. Wait ~1 min and retry."
+          : "Sync failed ? data kept on this device only",
         "error"
       );
     }
@@ -390,11 +1143,137 @@ async function syncPatientsWithServer({ showToast, silent = false } = {}) {
   }
 }
 
-// ─── Shared UI ────────────────────────────────────────────────────────────────
+const RAED_ORIGIN_RESTORE_DONE_KEY = "raed_origin_restore_v1";
+const RAED_ORIGIN_RESTORE_PENDING_KEY = "raed_origin_restore_pending";
+
+/** Pull Home Screen / iPad localStorage backup into this origin (merge, never wipe). */
+async function applyIpadLocalStorageBackup() {
+  try {
+    const r = await fetchWithTimeout("/api/ipad-localstorage", {}, 45000);
+    if (!r.ok) return { ok: false, applied: false, patients: loadPatients() };
+    const data = await r.json().catch(() => ({}));
+    const storage = data?.storage && typeof data.storage === "object" ? data.storage : {};
+    let applied = false;
+
+    const parseMaybeJson = (raw) => {
+      if (raw == null || raw === "") return null;
+      if (typeof raw === "object") return raw;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    };
+
+    const remotePatients = parseMaybeJson(storage.stroke_rehab_patients_v6);
+    if (Array.isArray(remotePatients) && remotePatients.length > 0) {
+      const merged = mergePatientLists(loadPatients(), remotePatients);
+      savePatients(merged);
+      applied = true;
+    }
+
+    const localKin = (() => {
+      try {
+        const v = localStorage.getItem("neuro_kin_results");
+        return v && v !== "{}" && v !== "null";
+      } catch {
+        return true;
+      }
+    })();
+    if (!localKin && storage.neuro_kin_results) {
+      try {
+        localStorage.setItem("neuro_kin_results", String(storage.neuro_kin_results));
+        applied = true;
+      } catch {}
+    }
+
+    const localFd = (() => {
+      try {
+        const v = localStorage.getItem("neuro_fd_data");
+        return v && v !== "{}" && v !== "null";
+      } catch {
+        return true;
+      }
+    })();
+    if (!localFd && storage.neuro_fd_data) {
+      try {
+        localStorage.setItem("neuro_fd_data", String(storage.neuro_fd_data));
+        applied = true;
+      } catch {}
+    }
+
+    return { ok: true, applied, patients: loadPatients() };
+  } catch (err) {
+    console.warn("iPad localStorage restore failed:", err);
+    return { ok: false, applied: false, patients: loadPatients() };
+  }
+}
+
+/** One-time strong restore after Space rename / empty new-origin PWA. */
+async function restoreStudyDataFromServer({ showToast } = {}) {
+  await applyIpadLocalStorageBackup();
+  // Prefer server + Drive merge; empty local must not wipe server records.
+  const result = await syncPatientsWithServer({ showToast, silent: false, skipDrive: false });
+  return result;
+}
+
+/** Explicit Database action: pull Drive folders/PDFs/Excel into app + server. */
+async function restorePatientsFromDriveNow({ showToast } = {}) {
+  try {
+    showToast?.("Restoring from Drive JSON snapshot (not PDF)?", "info");
+    const drivePts = await restoreFromDrive();
+    if (!drivePts.length) {
+      showToast?.(
+        "Drive restore found no patient folders/PDFs. Open Connect Drive, then retry.",
+        "warning"
+      );
+      return { ok: false, patients: loadPatients() };
+    }
+    // Prefer non-empty local kinematics/assessments over empty Drive shells.
+    const merged = mergePatientLists(loadPatients(), drivePts).map((p) => {
+      const next = { ...p };
+      if (!Date.parse(next._savedAt || "")) next._savedAt = new Date().toISOString();
+      next._hasPre = !!(next._hasPre || patientHasPhaseData(next, "pre"));
+      next._hasPost = !!(next._hasPost || patientHasPhaseData(next, "post"));
+      return next;
+    });
+    savePatients(merged);
+    const push = await fetchWithTimeout(
+      "/api/patients",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patients: patientsForServerSync(merged) }),
+      },
+      SYNC_FETCH_MS
+    );
+    const meta = window.__nlLastDriveRestoreMeta || {};
+    const detailBits = [
+      meta.pdfParsed != null ? `${meta.pdfParsed} PDF` : null,
+      meta.excelPatients != null && meta.excelPatients > 0 ? `${meta.excelPatients} Excel` : null,
+      meta.jsonSnapshots ? "JSON snapshot" : null,
+    ].filter(Boolean);
+    const detail = detailBits.length ? ` (${detailBits.join(", ")})` : "";
+    if (!push.ok) {
+      showToast?.(`Restored ${merged.length} on device${detail} ? server save failed (${push.status})`, "warning");
+      window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: merged.length } }));
+      return { ok: true, patients: merged, pushed: false };
+    }
+    showToast?.(`? Restored ${merged.length} patient(s) from Drive${detail}`, "success");
+    window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: merged.length } }));
+    return { ok: true, patients: merged, pushed: true };
+  } catch (err) {
+    console.warn("Restore from Drive failed:", err);
+    showToast?.("Drive restore failed ? check Connect Drive / Space awake", "error");
+    return { ok: false, patients: loadPatients() };
+  }
+}
+
+// ??? Shared UI ????????????????????????????????????????????????????????????????
 
 const Glass = ({ children, className = "", style = {}, soft = false, ...r }) => (
   <div
-    className={`glass-float rounded-2xl ${GLASS_CLS} ${className}`}
+    className={`glass-float content-panel-glass rounded-2xl ${GLASS_PANEL_CLS} ${className}`}
     style={{ overflow: "visible", boxShadow: soft ? FLOAT_M : FLOAT_M, ...style }}
     {...r}
   >
@@ -444,8 +1323,30 @@ const GI = ({ en, tr, type = "text", value, onChange, placeholder = "", classNam
 
 const GSelect = ({ en, tr, value, onChange, options, className = "" }) => {
   const [open, setOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState(null);
   const ref = useRef(null);
   const btnRef = useRef(null);
+  const reduceMotion = useReducedMotion();
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuAnchor(null);
+      return undefined;
+    }
+    const btn = btnRef.current;
+    if (!btn) return undefined;
+    const sync = () => {
+      const r = btn.getBoundingClientRect();
+      setMenuAnchor({
+        top: r.bottom + 4,
+        left: r.left,
+        width: r.width,
+      });
+    };
+    sync();
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
+  }, [open]);
 
   useEffect(() => {
     const h = (e) => {
@@ -482,33 +1383,42 @@ const GSelect = ({ en, tr, value, onChange, options, className = "" }) => {
           ref={btnRef}
           type="button"
           onClick={() => setOpen((p) => !p)}
-          className={`w-full px-3 py-2.5 rounded-xl text-white text-sm font-light text-left flex items-center justify-between gap-2 gselect-trigger ${INPUT_CLS}`}
-          style={GLASS_FIELD}
+          aria-expanded={open}
+          className={`gselect-trigger-shell w-full px-3 py-2.5 rounded-xl text-white text-sm font-light text-left flex items-center justify-between gap-2 ${GLASS_TOPBAR_SHELL}`}
+          style={{ ...GLASS_FIELD, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.02), 0 4px 14px rgba(0,0,0,0.08)" }}
         >
           <span className={`truncate ${sel ? "text-white" : "text-white/30"}`}>
             {sel ? sel.label : "Select\u2026"}
           </span>
           <span className="text-white/40 flex-shrink-0 flex items-center justify-center w-4 h-4">
-            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}>
-              <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <span className={`gselect-chevron flex items-center justify-center ${open ? "gselect-chevron-open" : ""}`}>
+              <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
+                <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
           </span>
         </button>
 
-        {open && btnRef.current && ReactDOM.createPortal(
+        {typeof document !== "undefined" && open && menuAnchor && ReactDOM.createPortal(
           <div
             data-gselect-portal="true"
-            className="gselect-menu-anim"
+            className={`gselect-menu-portal ${GLASS_TOPBAR_SHELL}`}
             style={{
               position: "fixed",
-              top: btnRef.current.getBoundingClientRect().bottom + 4,
-              left: btnRef.current.getBoundingClientRect().left,
-              width: btnRef.current.getBoundingClientRect().width,
+              top: menuAnchor.top,
+              left: menuAnchor.left,
+              width: menuAnchor.width,
               zIndex: 999999,
-              transformOrigin: "top center",
+              borderRadius: GSELECT_MENU_BOX.borderRadius,
+              boxShadow: FLOAT_M,
+              transform: "translateZ(0)",
+              WebkitTransform: "translateZ(0)",
+              isolation: "isolate",
             }}
           >
-            <div className="gselect-menu overflow-hidden py-1" style={GSELECT_MENU_BOX}>
+            <div
+              className={`gselect-menu-body relative z-[1] py-1 overflow-hidden${reduceMotion ? "" : " gselect-menu-body--animate"}`}
+            >
               {options.map((o) => {
                 const selected = value === o.value;
                 const optStyle = {
@@ -561,8 +1471,8 @@ const GBtn = ({ children, onClick, disabled, className = "", variant = "default"
 
   return (
     <motion.button
-      whileHover={{ scale: 1.02 }}
-      whileTap={tapMotion(0.97)}
+      whileHover={nlMotionHover(1.02)}
+      whileTap={nlMotionTap(0.97)}
       onClick={onClick}
       disabled={disabled}
       className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed ${v[variant]} ${className}`}
@@ -572,82 +1482,189 @@ const GBtn = ({ children, onClick, disabled, className = "", variant = "default"
   );
 };
 
-const PullToRefresh = ({ scrollRef }) => {
+function TopBarSessionCapsule({ onNew, onSave, dirty }) {
+  return (
+    <div
+      className="flex items-stretch rounded-xl overflow-hidden border border-white/[0.06] bg-white/[0.04] backdrop-blur-sm flex-shrink-0"
+      style={GLASS_FIELD}
+      role="group"
+      aria-label="Session actions"
+    >
+      <motion.button
+        type="button"
+        whileTap={nlMotionTap(0.98)}
+        onClick={onNew}
+        className="flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px] min-w-[36px] text-teal-300/90 hover:bg-white/[0.06] active:bg-white/[0.08] transition-colors border-r border-white/[0.06]"
+        title="New Session"
+        aria-label="New Session"
+      >
+        <PlusCircle className="w-4 h-4 text-teal-300/85 flex-shrink-0" />
+        <span className="hidden sm:inline text-xs font-semibold text-white/75">New</span>
+      </motion.button>
+      <motion.button
+        type="button"
+        whileTap={nlMotionTap(0.98)}
+        onClick={onSave}
+        className={`flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px] min-w-[36px] transition-colors hover:bg-white/[0.06] active:bg-white/[0.08] ${
+          dirty
+            ? "text-sky-200/95 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.32)]"
+            : "text-white/70"
+        }`}
+        title={dirty ? "Save Session (unsaved changes)" : "Save Session"}
+        aria-label="Save Session"
+      >
+        <Save className={`w-4 h-4 flex-shrink-0 ${dirty ? "text-sky-300/90" : "text-white/55"}`} />
+        <span className={`hidden sm:inline text-xs font-semibold ${dirty ? "text-sky-100/90" : "text-white/75"}`}>
+          Save
+        </span>
+      </motion.button>
+    </div>
+  );
+}
+
+const PullToRefresh = ({ scrollRef, spinnerAnchorRef, onRefresh, disabled = false }) => {
   const pullRef = useRef(0);
   const tracking = useRef(false);
   const refreshingRef = useRef(false);
   const startY = useRef(0);
+  const startX = useRef(0);
+  const pullIntent = useRef(false);
+  const rafRef = useRef(0);
+  const pendingYRef = useRef(0);
+  const nodesRef = useRef({ inner: null, content: null });
   const enabled = isIOSDevice() || isStandalonePWA();
+
+  const resolveNodes = useCallback((el) => {
+    if (!el) return nodesRef.current;
+    const inner = el.querySelector(".ptr-inner");
+    if (!inner) return nodesRef.current;
+    if (nodesRef.current.inner !== inner) {
+      nodesRef.current = {
+        inner,
+        content: inner.querySelector(".ptr-pull-content"),
+      };
+    }
+    return nodesRef.current;
+  }, []);
 
   const paint = useCallback((el, y, state) => {
     pullRef.current = y;
-    const inner = el.querySelector(".ptr-inner");
-    const spinner = inner?.querySelector(".ptr-spinner-anchor");
-    if (inner) {
-      if (y > 0 || state === "refreshing") {
-        inner.style.paddingTop = `${y}px`;
-        inner.style.transform = "";
-      } else {
-        inner.style.paddingTop = "0px";
-        inner.style.transform = "";
-      }
-      inner.style.transition = state === "idle"
-        ? "padding-top 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+    const { content } = resolveNodes(el);
+    const ty = y > 0 || state === "refreshing" ? y : 0;
+
+    if (content) {
+      content.style.transform = ty ? `translate3d(0, ${ty}px, 0)` : "";
+      content.style.transition = state === "idle"
+        ? "transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
         : "none";
+      content.style.willChange = ty ? "transform" : "auto";
     }
-    if (!spinner) return;
-    const show = y >= 10 || state === "refreshing";
-    spinner.style.opacity = show
-      ? String(state === "refreshing" ? 1 : Math.min((y - 10) / 14, 1))
-      : "0";
-    const ring = spinner.querySelector(".ptr-ring");
-    if (ring) {
-      if (state === "refreshing") {
-        ring.classList.add("ptr-ring-active");
-        ring.style.transform = "";
-      } else {
-        ring.classList.remove("ptr-ring-active");
-        const p = Math.min(y / PTR_THRESHOLD, 1);
-        ring.style.transform = `rotate(${-90 + p * 360}deg) scale(${0.45 + p * 0.55})`;
-      }
+
+    const spinner = spinnerAnchorRef?.current;
+    const ios = spinner?.querySelector(".ptr-ios-spinner");
+    if (!spinner || !ios) return;
+    const show = y >= 4 || state === "refreshing";
+    const fade = state === "refreshing" ? 1 : Math.min((y - 2) / 14, 1);
+    spinner.style.opacity = show ? String(Math.max(fade, 0.2)) : "0";
+    const spinSize = ios.offsetHeight || 22;
+    const slotY = ty > 0 ? Math.max(0, ty * 0.5 - spinSize * 0.5) : 0;
+    spinner.style.transform = slotY ? `translate3d(0, ${slotY}px, 0)` : "";
+
+    if (state === "refreshing") {
+      ios.classList.add("ptr-spinning");
+      ios.style.setProperty("--ptr-scale", "1");
+    } else if (y > 0) {
+      const p = Math.min(y / PTR_THRESHOLD, 1);
+      if (y >= 10) ios.classList.add("ptr-spinning");
+      else ios.classList.remove("ptr-spinning");
+      ios.style.setProperty("--ptr-scale", String(0.45 + p * 0.55));
+    } else {
+      ios.classList.remove("ptr-spinning");
+      ios.style.setProperty("--ptr-scale", "0.45");
     }
-  }, []);
+  }, [resolveNodes, spinnerAnchorRef]);
+
+  const schedulePaint = useCallback((el, y, state) => {
+    pendingYRef.current = y;
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      paint(el, pendingYRef.current, state);
+    });
+  }, [paint]);
 
   useEffect(() => {
     if (!enabled) return;
     const el = scrollRef?.current;
     if (!el) return;
+    resolveNodes(el);
 
     const onStart = (e) => {
-      if (refreshingRef.current || el.scrollTop > 1) return;
+      if (disabled || refreshingRef.current) return;
+      if (el.scrollTop > 8) return;
+      if (!e.touches?.length) return;
       startY.current = e.touches[0].clientY;
+      startX.current = e.touches[0].clientX;
+      pullIntent.current = false;
       tracking.current = true;
     };
 
     const onMove = (e) => {
-      if (!tracking.current || refreshingRef.current) return;
+      if (disabled || !tracking.current || refreshingRef.current) return;
+      if (!e.touches?.length) return;
       const dy = e.touches[0].clientY - startY.current;
-      if (el.scrollTop <= 0 && dy > 0) {
-        paint(el, Math.min(dy * 0.52, PTR_MAX_PULL), "pulling");
-      } else if (dy <= 0 && el.scrollTop <= 0) {
-        paint(el, 0, "idle");
+      const dx = e.touches[0].clientX - startX.current;
+
+      if (el.scrollTop > 8) {
+        tracking.current = false;
+        schedulePaint(el, 0, "idle");
+        return;
       }
+
+      if (Math.abs(dx) > Math.abs(dy) + 6) {
+        tracking.current = false;
+        schedulePaint(el, 0, "idle");
+        return;
+      }
+
+      if (dy > 0) {
+        pullIntent.current = true;
+        const y = Math.min(dy * 0.78, PTR_MAX_PULL);
+        schedulePaint(el, y, "pulling");
+        if (y > 18 && e.cancelable) e.preventDefault();
+        return;
+      }
+
+      if (!pullIntent.current) {
+        tracking.current = false;
+      }
+      schedulePaint(el, 0, "idle");
     };
 
     const finish = () => {
+      pullIntent.current = false;
       if (!tracking.current) return;
       tracking.current = false;
       if (pullRef.current >= PTR_THRESHOLD && !refreshingRef.current) {
         refreshingRef.current = true;
-        paint(el, 48, "refreshing");
-        window.location.reload();
+        paint(el, 52, "refreshing");
+        // Never leave the iPad spinner stuck on Drive/server cold-start.
+        Promise.race([
+          Promise.resolve(typeof onRefresh === "function" ? onRefresh() : undefined),
+          new Promise((resolve) => setTimeout(resolve, 6000)),
+        ])
+          .catch(() => {})
+          .finally(() => {
+            refreshingRef.current = false;
+            paint(el, 0, "idle");
+          });
       } else {
         paint(el, 0, "idle");
       }
     };
 
     el.addEventListener("touchstart", onStart, { passive: true });
-    el.addEventListener("touchmove", onMove, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
     el.addEventListener("touchend", finish, { passive: true });
     el.addEventListener("touchcancel", finish, { passive: true });
     return () => {
@@ -655,19 +1672,48 @@ const PullToRefresh = ({ scrollRef }) => {
       el.removeEventListener("touchmove", onMove);
       el.removeEventListener("touchend", finish);
       el.removeEventListener("touchcancel", finish);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+      nodesRef.current = { inner: null, content: null };
     };
-  }, [enabled, scrollRef, paint]);
+  }, [enabled, scrollRef, paint, schedulePaint, resolveNodes, onRefresh, disabled, spinnerAnchorRef]);
+
+  useEffect(() => {
+    if (!disabled) return;
+    const el = scrollRef?.current;
+    if (!el) return;
+    tracking.current = false;
+    paint(el, 0, "idle");
+  }, [disabled, scrollRef, paint]);
 
   return null;
 };
+
+/** Never pass DOM MediaError / Error objects into React text (React #31). */
+function formatUserMessage(msg) {
+  if (msg == null || msg === "") return "";
+  if (typeof msg === "string") return msg;
+  if (typeof msg === "number" || typeof msg === "boolean") return String(msg);
+  if (msg instanceof Error) return msg.message || msg.name || "Error";
+  if (typeof msg === "object") {
+    const code = msg.code;
+    if (code != null && typeof code === "number") {
+      const labels = { 1: "aborted", 2: "network", 3: "decode", 4: "format not supported" };
+      return `Video error (${labels[code] || code})`;
+    }
+    if (typeof msg.message === "string" && msg.message) return msg.message;
+  }
+  return "Something went wrong";
+}
 
 const Toast = ({ msg, visible, variant = "success" }) => (
   <AnimatePresence>
     {visible && (
       <motion.div
-        initial={{ opacity: 0, y: 24, scale: 0.94 }}
+        initial={{ opacity: 0, y: 16, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -10 }}
+        exit={{ opacity: 0, y: -8, scale: 0.98 }}
+        transition={NL_SPRING_TOAST}
         className={`fixed bottom-8 right-8 z-[99999] flex items-center gap-2.5 px-5 py-3 rounded-2xl backdrop-blur-2xl border text-sm font-semibold shadow-2xl ${
           variant === "success"
             ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
@@ -676,7 +1722,7 @@ const Toast = ({ msg, visible, variant = "success" }) => (
             : "bg-rose-500/20 border-rose-400/30 text-rose-200"
         }`}
       >
-        <Check className="w-4 h-4" /> {msg}
+        <Check className="w-4 h-4" /> {formatUserMessage(msg)}
       </motion.div>
     )}
   </AnimatePresence>
@@ -712,22 +1758,67 @@ const calculateClinicalDelta = (pre, post, direction) => {
 
 const kinPrePostBadge = (pre, post, direction) => {
   const pct = calcImprovement(pre, post, direction);
-  const text = formatKinPrePostPct(pct, direction);
+  let text = formatKinPrePostPct(pct);
+  let improved = pct != null && Number.isFinite(pct) ? pct > 0 : null;
+  let stable = pct === 0;
+
+  // Pre ? 0 ? show absolute ? instead of Infinity%
+  if (text == null) {
+    const preN = Number(pre);
+    const postN = Number(post);
+    if (!Number.isNaN(preN) && !Number.isNaN(postN) && Math.abs(preN) < 1e-12) {
+      text = formatKinPrePostAbsDelta(pre, post);
+      if (text) {
+        if (direction === "higher") improved = postN > preN;
+        else if (direction === "lower") improved = postN < preN;
+        else improved = null;
+        stable = Math.abs(postN - preN) < 1e-12;
+      }
+    }
+  }
   if (!text) return null;
 
-  // pct is positive when the change is clinically desirable:
-  //   lower-is-better: preN - postN > 0  =>  improvement
-  //   higher-is-better: postN - preN > 0 =>  improvement
-  const improved = pct > 0;
-  const stable = pct === 0;
+  if (direction === "none" && !stable) {
+    return {
+      text,
+      colorClass: "text-white/70 bg-white/[0.06] border-white/[0.12]",
+    };
+  }
+
   return {
     text,
     colorClass: stable
       ? "text-white/60 bg-white/[0.06] border-white/[0.12]"
       : improved
         ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20"
-        : "text-rose-400 bg-rose-400/10 border-rose-400/20",
+        : improved === false
+          ? "text-rose-400 bg-rose-400/10 border-rose-400/20"
+          : "text-white/60 bg-white/[0.06] border-white/[0.12]",
   };
+};
+
+const kinNcBadge = (reason) => ({
+  text: reason || "n/c",
+  colorClass: "text-amber-200/80 bg-amber-400/10 border-amber-400/25",
+  nc: true,
+});
+
+/** Resolve Pre?Post cell: % / ? / n/c reason / empty dash only when values missing. */
+const resolveKinPrePostCell = (preVal, postVal, direction, metricKey, kinematicsResults, armForPhase) => {
+  if (metricKey === "pause_stops_panel") {
+    return kinNcBadge("n/c ? compound row");
+  }
+  if (preVal === "?" || postVal === "?" || preVal == null || postVal == null) {
+    return null; // true missing data
+  }
+  if (typeof preVal === "string" || typeof postVal === "string") {
+    return kinNcBadge("n/c ? non-numeric");
+  }
+  const status = kinCrossPhaseDeltaStatus(kinematicsResults, metricKey, armForPhase);
+  if (!status.comparable) {
+    return kinNcBadge(status.reason || "n/c");
+  }
+  return kinPrePostBadge(preVal, postVal, direction);
 };
 
 const kinPostHealthyBadge = (pre, post, healthy, direction) => {
@@ -909,7 +2000,7 @@ const VASSlider = ({ value, onChange, color = "sky" }) => {
     <div className="flex flex-col gap-3">
       <div className="flex justify-between items-end px-1">
         {VAS_FACES.map((face) => {
-          const active = Math.abs(face.val - n) < 1.5;
+          const active = face.val === closestFace.val;
           return (
             <motion.div
               key={face.val}
@@ -944,7 +2035,7 @@ const VASSlider = ({ value, onChange, color = "sky" }) => {
           const face = VAS_FACES.reduce((prev, curr) =>
             Math.abs(curr.val - v) < Math.abs(prev.val - v) ? curr : prev
           );
-          return `${v.toFixed(1)} / 10 — ${face.en} / ${face.tr}`;
+          return `${v.toFixed(1)} / 10 ? ${face.en} / ${face.tr}`;
         }}
       />
     </div>
@@ -963,7 +2054,7 @@ const VAMSSlider = ({ value, onChange, color = "sky" }) => {
     <div className="flex flex-col gap-3">
       <div className="flex justify-between items-end px-1">
         {VAMS_FACES.map((face) => {
-          const active = Math.abs(face.val - n) < 1.5;
+          const active = face.val === closestFace.val;
           return (
             <motion.div
               key={face.val}
@@ -998,7 +2089,7 @@ const VAMSSlider = ({ value, onChange, color = "sky" }) => {
           const face = VAMS_FACES.reduce((prev, curr) =>
             Math.abs(curr.val - v) < Math.abs(prev.val - v) ? curr : prev
           );
-          return `${v.toFixed(1)} / 10 — ${face.en} / ${face.tr}`;
+          return `${v.toFixed(1)} / 10 ? ${face.en} / ${face.tr}`;
         }}
       />
     </div>
@@ -1010,10 +2101,10 @@ const MotorSlider = ({ value, onChange, color = "sky" }) => {
 
   const getLabel = (v) => {
     if (v === 0) return "No control / Kontrol yok";
-    if (v <= 2) return "Very limited / Çok sınırlı";
-    if (v <= 4) return "Limited / Sınırlı";
+    if (v <= 2) return "Very limited / ?ok s?n?rl?";
+    if (v <= 4) return "Limited / S?n?rl?";
     if (v <= 6) return "Moderate / Orta";
-    if (v <= 8) return "Good / İyi";
+    if (v <= 8) return "Good / ?yi";
     return "Full control / Tam kontrol";
   };
 
@@ -1030,7 +2121,7 @@ const MotorSlider = ({ value, onChange, color = "sky" }) => {
         step={0.5}
         color={color}
         onChange={onChange}
-        formatLabel={(v) => `${v.toFixed(1)} / 10 — ${getLabel(v)}`}
+        formatLabel={(v) => `${v.toFixed(1)} / 10 ? ${getLabel(v)}`}
       />
     </div>
   );
@@ -1070,7 +2161,7 @@ const KVIQSlider = ({ value, onChange, labels, color = "cyan" }) => {
         onChange={onChange}
         formatLabel={(v) => {
           const item = labels.find((l) => l.val === v);
-          return item ? `${v} — ${item.en} / ${item.tr}` : "Select / Seçin";
+          return item ? `${v} ? ${item.en} / ${item.tr}` : "Select / Se?in";
         }}
       />
     </div>
@@ -1125,7 +2216,7 @@ function useSW() {
   return { ms, running, start, stop, reset, fmt };
 }
 
-const SWBlock = ({ phase, taskData, onUpdate }) => {
+const SWBlock = ({ phase, taskData, onUpdate, showInferenceBadge = true }) => {
   const sw = useSW();
   const [copied, setCopied] = useState(false);
   const isPost = phase === "post";
@@ -1154,6 +2245,19 @@ const SWBlock = ({ phase, taskData, onUpdate }) => {
       <p className={`text-[10px] font-extrabold uppercase tracking-widest mb-3 ${isPost ? "text-emerald-300" : "text-sky-300"}`}>
         {isPost ? "Post" : "Pre"}
       </p>
+
+      {showInferenceBadge && taskData?._inferred && (
+        <div className="mb-3 px-2.5 py-2 rounded-lg bg-amber-500/10 border border-amber-400/20">
+          <p className="text-[9px] font-bold text-amber-200/90 leading-snug">
+            vWMFT ? {Math.round((taskData._confidence ?? 0) * 100)}% confidence
+            {taskData._timeEstimated ? " ? time estimated" : ""}
+            {taskData._capped ? " ? capped" : ""}
+          </p>
+          {taskData._source && (
+            <p className="text-[9px] text-amber-100/45 mt-0.5 leading-snug">{taskData._source}</p>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-2 mb-3">
         <div className="flex-1 text-center py-2 rounded-xl bg-black/30 border border-white/[0.08]">
@@ -1186,7 +2290,7 @@ const SWBlock = ({ phase, taskData, onUpdate }) => {
           ].map(({ Icon, fn, dis, cls, disCls }, i) => (
             <motion.button
               key={i}
-              whileTap={tapMotion(0.88)}
+              whileTap={nlMotionTap(0.88)}
               onClick={fn}
               disabled={dis}
               className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all ${dis ? `${disCls} cursor-not-allowed` : cls}`}
@@ -1196,7 +2300,7 @@ const SWBlock = ({ phase, taskData, onUpdate }) => {
           ))}
 
           <motion.button
-            whileTap={tapMotion(0.88)}
+            whileTap={nlMotionTap(0.88)}
             onClick={copyTime}
             className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all ${
               copied
@@ -1213,7 +2317,7 @@ const SWBlock = ({ phase, taskData, onUpdate }) => {
 
       <div className="mt-3">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-[10px] font-extrabold uppercase tracking-widest text-white/40">Ability Rating (0–5)</p>
+          <p className="text-[10px] font-extrabold uppercase tracking-widest text-white/40">Ability Rating (0?5)</p>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${isPost ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-300" : "bg-sky-500/20 border-sky-400/30 text-sky-300"}`}>
             {rv}/5
           </span>
@@ -1226,14 +2330,14 @@ const SWBlock = ({ phase, taskData, onUpdate }) => {
           step={1}
           color={isPost ? "emerald" : "sky"}
           onChange={(v) => onUpdate("rating", v)}
-          formatLabel={(v) => `${v} — ${ratingLabels[v]}`}
+          formatLabel={(v) => `${v} ? ${ratingLabels[v]}`}
         />
       </div>
     </div>
   );
 };
 
-// ─── Demographics ─────────────────────────────────────────────────────────────
+// ??? Demographics ?????????????????????????????????????????????????????????????
 
 const DemoSection = ({ data, onChange, onBulkUpdate }) => {
   const s = (k, v) => onChange({ ...data, [k]: v });
@@ -1242,7 +2346,7 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
     const errs = [];
     if (!data.participantId) errs.push("Study ID required");
     if (data.group !== "1" && data.group !== "2") errs.push("Group must be 1 (AOMI) or 2 (Control)");
-    if (data.age) { const a = parseInt(data.age); if (a < 40 || a > 80) errs.push("Age must be 40–80"); }
+    if (data.age) { const a = parseInt(data.age); if (a < 40 || a > 80) errs.push("Age must be 40?80"); }
     if (data.sex !== "1" && data.sex !== "2") errs.push("Gender must be 1 (Male) or 2 (Female)");
     if (data.strokeType !== "1" && data.strokeType !== "2") errs.push("Stroke type must be 1 (Ischemic) or 2 (Hemorrhagic)");
     if (data.side !== "1" && data.side !== "2") errs.push("Affected side must be 1 (Left) or 2 (Right)");
@@ -1260,11 +2364,11 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
         <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Identification / Kimlik</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           <GI en="Full Name" tr="Ad Soyad" value={data.name} onChange={(e) => s("name", e.target.value)} />
-          <GI en="Study ID" tr="Çalışma Kimliği" type="number" min="1" value={data.participantId} onChange={(e) => s("participantId", e.target.value)} placeholder="Auto" />
+          <GI en="Study ID" tr="?al??ma Kimli?i" type="number" min="101" value={data.participantId} onChange={(e) => s("participantId", e.target.value)} placeholder="Auto" />
           <GSelect en="Group" tr="Grup" value={data.group} onChange={(e) => s("group", e.target.value)} options={[{ value:"1",label:"1 = AOMI (Intervention)" },{ value:"2",label:"2 = Control" }]} />
-          <GI en="Age (years)" tr="Yaş (yıl)" type="number" min="40" max="80" value={data.age} onChange={(e) => s("age", e.target.value)} placeholder="40–80" />
-          <GSelect en="Gender" tr="Cinsiyet" value={data.sex} onChange={(e) => s("sex", e.target.value)} options={[{ value:"1",label:"1 = Male / Erkek" },{ value:"2",label:"2 = Female / Kadın" }]} />
-          <GI en="Time Since Stroke (months)" tr="İnme Üzerinden Geçen Süre (ay)" type="number" min="1" value={data.timeSinceStroke} onChange={(e) => s("timeSinceStroke", e.target.value)} placeholder="months" />
+          <GI en="Age (years)" tr="Ya? (y?l)" type="number" min="40" max="80" value={data.age} onChange={(e) => s("age", e.target.value)} placeholder="40?80" />
+          <GSelect en="Gender" tr="Cinsiyet" value={data.sex} onChange={(e) => s("sex", e.target.value)} options={[{ value:"1",label:"1 = Male / Erkek" },{ value:"2",label:"2 = Female / Kad?n" }]} />
+          <GI en="Time Since Stroke (months)" tr="?nme ?zerinden Ge?en S?re (ay)" type="number" min="1" value={data.timeSinceStroke} onChange={(e) => s("timeSinceStroke", e.target.value)} placeholder="months" />
         </div>
       </Glass>
 
@@ -1273,60 +2377,64 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
 
         <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-3">Side &amp; Hemisphere / Taraf &amp; Hemisfer</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <GSelect en="Dominant Hand" tr="Dominant El" value={data.dominantHand} onChange={(e) => s("dominantHand", e.target.value)} options={[{ value:"right",label:"Right / Sağ" },{ value:"left",label:"Left / Sol" },{ value:"both",label:"Both / İki El" }]} />
-          <GSelect en="Affected Hemisphere" tr="Etkilenen Hemisfer" value={data.hemisphere} onChange={(e) => s("hemisphere", e.target.value)} options={[{ value:"left",label:"Left / Sol" },{ value:"right",label:"Right / Sağ" },{ value:"bilateral",label:"Bilateral" }]} />
-          <GSelect en="Stroke Type" tr="İnme Tipi" value={data.strokeType} onChange={(e) => s("strokeType", e.target.value)} options={[{ value:"1",label:"1 = Ischemic / İskemik" },{ value:"2",label:"2 = Hemorrhagic / Hemorajik" }]} />
-          <GSelect en="Affected Side" tr="Etkilenen Taraf" value={data.side} onChange={(e) => s("side", e.target.value)} options={[{ value:"1",label:"1 = Left / Sol" },{ value:"2",label:"2 = Right / Sağ" }]} />
+          <GSelect en="Dominant Hand" tr="Dominant El" value={data.dominantHand} onChange={(e) => s("dominantHand", e.target.value)} options={[{ value:"right",label:"Right / Sa?" },{ value:"left",label:"Left / Sol" },{ value:"both",label:"Both / ?ki El" }]} />
+          <GSelect en="Affected Hemisphere" tr="Etkilenen Hemisfer" value={data.hemisphere} onChange={(e) => s("hemisphere", e.target.value)} options={[{ value:"left",label:"Left / Sol" },{ value:"right",label:"Right / Sa?" },{ value:"bilateral",label:"Bilateral" }]} />
+          <GSelect en="Stroke Type" tr="?nme Tipi" value={data.strokeType} onChange={(e) => s("strokeType", e.target.value)} options={[{ value:"1",label:"1 = Ischemic / ?skemik" },{ value:"2",label:"2 = Hemorrhagic / Hemorajik" }]} />
+          <GSelect en="Affected Side" tr="Etkilenen Taraf" value={data.side} onChange={(e) => s("side", e.target.value)} options={[{ value:"1",label:"1 = Left / Sol" },{ value:"2",label:"2 = Right / Sa?" }]} />
         </div>
 
         <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-3">Anthropometrics / Antropometri</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           <GI en="Height (cm)" tr="Boy (cm)" type="number" value={data.height} onChange={(e) => s("height", e.target.value)} placeholder="170" />
           <GI en="Weight (kg)" tr="Kilo (kg)" type="number" value={data.weight} onChange={(e) => s("weight", e.target.value)} placeholder="70" />
           <div className="flex flex-col gap-1.5">
-            <BL en="BMI (auto)" tr="VKİ (otomatik)" />
+            <BL en="BMI (auto)" tr="VK? (otomatik)" />
             <div className={`w-full px-3 py-2.5 rounded-xl border text-sm font-extrabold text-center ${(() => { const h=parseFloat(data.height), w=parseFloat(data.weight); if(!h||!w) return "bg-white/[0.05] border-white/[0.04] text-white/25"; const b=(w/((h/100)**2)).toFixed(1); if(b<18.5) return "bg-sky-400/10 border-sky-400/20 text-sky-300"; if(b<25) return "bg-emerald-400/10 border-emerald-400/20 text-emerald-300"; if(b<30) return "bg-amber-400/10 border-amber-400/20 text-amber-300"; return "bg-rose-400/10 border-rose-400/20 text-rose-300"; })()}`}>
-              {(() => { const h=parseFloat(data.height), w=parseFloat(data.weight); return h&&w ? `${(w/((h/100)**2)).toFixed(1)} kg/m²` : "—"; })()}
+              {(() => { const h=parseFloat(data.height), w=parseFloat(data.weight); return h&&w ? `${(w/((h/100)**2)).toFixed(1)} kg/m?` : "?"; })()}
             </div>
           </div>
-          <GI en="Shoulder Width (cm)" tr="Omuz Genişliği (cm)" type="number" step="0.1" value={data.shoulderWidth || ""} onChange={(e) => s("shoulderWidth", e.target.value)} placeholder={(() => { const h=parseFloat(data.height); return h ? `~${(0.23*h).toFixed(1)}` : "~39"; })()} />
         </div>
 
         <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-3">Dates / Tarihler</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <GI en="Assessment Date" tr="Değerlendirme Tarihi" type="date" value={data.assessDate} onChange={(e) => s("assessDate", e.target.value)} />
-          <GI en="Stroke Date" tr="İnme Tarihi" type="date" value={data.strokeDate} onChange={(e) => s("strokeDate", e.target.value)} />
+          <GI en="Assessment Date" tr="De?erlendirme Tarihi" type="date" value={data.assessDate} onChange={(e) => s("assessDate", e.target.value)} />
+          <GI en="Stroke Date" tr="?nme Tarihi" type="date" value={data.strokeDate} onChange={(e) => s("strokeDate", e.target.value)} />
         </div>
 
-        <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-3">Clinical Assessment / Klinik Değerlendirme</p>
+        <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-3">Clinical Assessment / Klinik De?erlendirme</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
-          <GSelect en="MAS (Modified Ashworth)" tr="MAS" value={data.mas} onChange={(e) => s("mas", e.target.value)} options={[{ value:"0",label:"0 — No increase" },{ value:"1",label:"1 — Slight catch" },{ value:"1+",label:"1+ — Catch + minimal resistance" },{ value:"2",label:"2 — More marked" },{ value:"3",label:"3 — Considerable" },{ value:"4",label:"4 — Rigid" }]} />
-          <GSelect en="MRC Muscle Strength" tr="MRC Kas Gücü" value={data.mrc} onChange={(e) => s("mrc", e.target.value)} options={[{ value:"2",label:"2 — Active, gravity eliminated" },{ value:"3",label:"3 — Against gravity" },{ value:"4",label:"4 — Against some resistance" },{ value:"5",label:"5 — Normal power" }]} />
+          <GSelect en="MAS (Modified Ashworth)" tr="MAS" value={data.mas} onChange={(e) => s("mas", e.target.value)} options={[{ value:"0",label:"0 ? No increase" },{ value:"1",label:"1 ? Slight catch" },{ value:"1+",label:"1+ ? Catch + minimal resistance" },{ value:"2",label:"2 ? More marked" },{ value:"3",label:"3 ? Considerable" },{ value:"4",label:"4 ? Rigid" }]} />
+          <GSelect en="MRC Muscle Strength" tr="MRC Kas G?c?" value={data.mrc} onChange={(e) => s("mrc", e.target.value)} options={[{ value:"2",label:"2 ? Active, gravity eliminated" },{ value:"3",label:"3 ? Against gravity" },{ value:"4",label:"4 ? Against some resistance" },{ value:"5",label:"5 ? Normal power" }]} />
         </div>
       </Glass>
 
       <Glass className="p-5">
-        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Medical History / Tıbbi Geçmiş</p>
+        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Medical History / T?bbi Ge?mi?</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          <GSelect en="Disease Stage" tr="Hastalık Evresi" value={data.diseaseStage} onChange={(e) => s("diseaseStage", e.target.value)} options={[{ value:"acute",label:"Acute (<1 month) / Akut" },{ value:"subacute",label:"Subacute (1-6 months) / Subakut" },{ value:"chronic",label:"Chronic (>6 months) / Kronik" }]} />
+          <GSelect en="Disease Stage" tr="Hastal?k Evresi" value={data.diseaseStage} onChange={(e) => s("diseaseStage", e.target.value)} options={[{ value:"acute",label:"Acute (<1 month) / Akut" },{ value:"subacute",label:"Subacute (1-6 months) / Subakut" },{ value:"chronic",label:"Chronic (>6 months) / Kronik" }]} />
           <div className="flex flex-col gap-1.5">
-            <BL en="Treatment Duration" tr="Tedavi Süresi" />
+            <BL en="Treatment Duration" tr="Tedavi S?resi" />
             <div className="flex gap-2">
               <input type="number" value={data.treatValue ?? ""} onChange={(e) => s("treatValue", e.target.value)} placeholder="0" className="flex-1 min-w-0 px-3 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light focus:outline-none transition-all" />
-              <select value={data.treatUnit ?? "week"} onChange={(e) => s("treatUnit", e.target.value)} className="w-24 flex-shrink-0 px-2 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light focus:outline-none transition-all appearance-none" style={{ colorScheme:"dark" }}>{["day","week","month","year"].map((u) => <option key={u} value={u} className="bg-[#0e1120]">{u}</option>)}</select>
+              <GSelect
+                value={data.treatUnit ?? "week"}
+                onChange={(e) => s("treatUnit", e.target.value)}
+                options={["day", "week", "month", "year"].map((u) => ({ value: u, label: u }))}
+                className="w-28 flex-shrink-0"
+              />
             </div>
           </div>
         </div>
       </Glass>
 
       <Glass className="p-5">
-        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-1">Comorbidities / Eşlik Eden Hastalıklar</p>
-        <p className="text-xs text-white/30 mb-4">Select all that apply / Geçerli tüm seçenekleri işaretleyin</p>
+        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-1">Comorbidities / E?lik Eden Hastal?klar</p>
+        <p className="text-xs text-white/30 mb-4">Select all that apply / Ge?erli t?m se?enekleri i?aretleyin</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
           {COMORBIDITIES.map((opt) => {
             const active = (data.comorbidities || []).includes(opt.value);
             return (
-              <motion.button key={opt.value} whileTap={tapMotion(0.95)} onClick={() => { const cur = data.comorbidities || []; s("comorbidities", cur.includes(opt.value) ? cur.filter((c) => c !== opt.value) : [...cur, opt.value]); }}
+              <motion.button key={opt.value} whileTap={nlMotionTap(0.95)} onClick={() => { const cur = data.comorbidities || []; s("comorbidities", cur.includes(opt.value) ? cur.filter((c) => c !== opt.value) : [...cur, opt.value]); }}
                 className={`text-left px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all ${active ? "bg-violet-500/25 border-violet-400/40 text-violet-200" : "bg-white/[0.05] border-white/[0.04] text-white/50 hover:bg-white/[0.08]"}`}>
                 <div className="flex items-center gap-2 min-w-0">
                   <div className={`w-3.5 h-3.5 rounded-sm border flex-shrink-0 flex items-center justify-center ${active ? "bg-violet-500 border-violet-400" : "border-white/20"}`}>{active && <Check className="w-2.5 h-2.5 text-white" />}</div>
@@ -1338,7 +2446,7 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
         </div>
         {(data.comorbidities || []).includes("other") && (
           <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }} className="mt-3">
-            <GI en="Specify other" tr="Diğerini belirtin" value={data.otherComorbidity} onChange={(e) => s("otherComorbidity", e.target.value)} placeholder="Other conditions…" />
+            <GI en="Specify other" tr="Di?erini belirtin" value={data.otherComorbidity} onChange={(e) => s("otherComorbidity", e.target.value)} placeholder="Other conditions?" />
           </motion.div>
         )}
       </Glass>
@@ -1346,10 +2454,10 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
       <Glass className="p-5">
         <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Clinical Notes / Klinik Notlar</p>
         <div className="flex flex-col gap-3">
-          <textarea rows={2} value={data.notes ?? ""} onChange={(e) => s("notes", e.target.value)} placeholder="Medical history, comorbidities, assessment context…" className="w-full px-3 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light placeholder-white/15 resize-none focus:outline-none transition-all" />
+          <textarea rows={2} value={data.notes ?? ""} onChange={(e) => s("notes", e.target.value)} placeholder="Medical history, comorbidities, assessment context?" className="w-full px-3 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light placeholder-white/15 resize-none focus:outline-none transition-all" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <textarea rows={2} value={data.antispasticDrugs ?? ""} onChange={(e) => s("antispasticDrugs", e.target.value)} placeholder="Antispastic drugs: Baclofen, Tizanidine…" className="w-full px-3 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light placeholder-white/15 resize-none focus:outline-none transition-all" />
-            <textarea rows={2} value={data.otherDrugs ?? ""} onChange={(e) => s("otherDrugs", e.target.value)} placeholder="Other medications: Aspirin, Warfarin…" className="w-full px-3 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light placeholder-white/15 resize-none focus:outline-none transition-all" />
+            <textarea rows={2} value={data.antispasticDrugs ?? ""} onChange={(e) => s("antispasticDrugs", e.target.value)} placeholder="Antispastic drugs: Baclofen, Tizanidine?" className="w-full px-3 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light placeholder-white/15 resize-none focus:outline-none transition-all" />
+            <textarea rows={2} value={data.otherDrugs ?? ""} onChange={(e) => s("otherDrugs", e.target.value)} placeholder="Other medications: Aspirin, Warfarin?" className="w-full px-3 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light placeholder-white/15 resize-none focus:outline-none transition-all" />
           </div>
         </div>
       </Glass>
@@ -1357,7 +2465,7 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
   );
 };
 
-// ─── IPAQ Section ─────────────────────────────────────────────────────────────
+// ??? IPAQ Section ?????????????????????????????????????????????????????????????
 
 const IPAQSection = ({ data, onChange }) => {
   const sv = (id, f, v) => onChange({ ...data, [id]: { ...(data[id] || {}), [f]: v } });
@@ -1374,13 +2482,13 @@ const IPAQSection = ({ data, onChange }) => {
     const light = parseFloat(tot("light")) || 0;
 
     if (highDays >= 3 && totalMET >= 1500) {
-      return { level:"High", color:"emerald", text:"Vigorous activity ≥3 days & ≥1500 MET-min/week" };
+      return { level:"High", color:"emerald", text:"Vigorous activity ?3 days & ?1500 MET-min/week" };
     }
     if ((medDays + lightDays) >= 7 && totalMET >= 3000) {
-      return { level:"High", color:"emerald", text:"Mixed activities 7 days & ≥3000 MET-min/week" };
+      return { level:"High", color:"emerald", text:"Mixed activities 7 days & ?3000 MET-min/week" };
     }
     if (totalMET >= 600 || (medDays + lightDays >= 5 && (med + light) >= 150)) {
-      return { level:"Moderate", color:"amber", text:"≥600 MET-min/week or 5+ days moderate/walking" };
+      return { level:"Moderate", color:"amber", text:"?600 MET-min/week or 5+ days moderate/walking" };
     }
     return { level:"Low", color:"rose", text:"Not meeting moderate or high criteria" };
   };
@@ -1389,10 +2497,10 @@ const IPAQSection = ({ data, onChange }) => {
 
   return (
     <div className="space-y-5">
-      <SH icon={Activity} en="International Physical Activity Questionnaire (IPAQ)" tr="Uluslararası Fiziksel Aktivite Anketi" />
+      <SH icon={Activity} en="International Physical Activity Questionnaire (IPAQ)" tr="Uluslararas? Fiziksel Aktivite Anketi" />
 
       <Glass className="p-4 sm:p-5">
-        {/* Mobile — stacked cards (no horizontal squeeze) */}
+        {/* Mobile ? stacked cards (no horizontal squeeze) */}
         <div className="md:hidden space-y-3">
           {IPAQ_ACTS.map((a) => (
             <div key={a.id} className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 space-y-3">
@@ -1402,12 +2510,12 @@ const IPAQSection = ({ data, onChange }) => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-[10px] font-extrabold text-sky-300/90 uppercase mb-1.5">Min/day · Dk/gün</p>
-                  <input type="number" min="0" value={data[a.id]?.sure ?? ""} onChange={(e) => sv(a.id, "sure", e.target.value)} className={ic} placeholder="—" />
+                  <p className="text-[10px] font-extrabold text-sky-300/90 uppercase mb-1.5">Min/day ? Dk/g?n</p>
+                  <input type="number" min="0" value={data[a.id]?.sure ?? ""} onChange={(e) => sv(a.id, "sure", e.target.value)} className={ic} placeholder="?" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-extrabold text-violet-300/90 uppercase mb-1.5">Days/wk · Gün</p>
-                  <input type="number" min="0" max="7" value={data[a.id]?.gun ?? ""} onChange={(e) => sv(a.id, "gun", e.target.value)} className={ic} placeholder="—" />
+                  <p className="text-[10px] font-extrabold text-violet-300/90 uppercase mb-1.5">Days/wk ? G?n</p>
+                  <input type="number" min="0" max="7" value={data[a.id]?.gun ?? ""} onChange={(e) => sv(a.id, "gun", e.target.value)} className={ic} placeholder="?" />
                 </div>
               </div>
               <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
@@ -1418,7 +2526,7 @@ const IPAQSection = ({ data, onChange }) => {
           ))}
         </div>
 
-        {/* Desktop — table */}
+        {/* Desktop ? table */}
         <div className="hidden md:block glass-float overflow-x-auto rounded-xl border border-white/[0.08]">
           <table className="w-full text-sm min-w-[580px]">
             <thead>
@@ -1427,12 +2535,12 @@ const IPAQSection = ({ data, onChange }) => {
                 <th className="text-center px-3 py-3 text-sky-300 text-xs font-extrabold uppercase">
                   Min/day
                   <br />
-                  <span className="font-light text-white/30">Dk/gün</span>
+                  <span className="font-light text-white/30">Dk/g?n</span>
                 </th>
                 <th className="text-center px-3 py-3 text-violet-300 text-xs font-extrabold uppercase">
                   Days/week
                   <br />
-                  <span className="font-light text-white/30">Gün/hafta</span>
+                  <span className="font-light text-white/30">G?n/hafta</span>
                 </th>
                 <th className="text-center px-3 py-3 text-emerald-300 text-xs font-extrabold uppercase">
                   Total min/wk
@@ -1450,10 +2558,10 @@ const IPAQSection = ({ data, onChange }) => {
                     <span className="block text-white/35 text-[10px] italic mt-0.5">{a.tr}</span>
                   </td>
                   <td className="px-2 py-2">
-                    <input type="number" min="0" value={data[a.id]?.sure ?? ""} onChange={(e) => sv(a.id, "sure", e.target.value)} className={ic} placeholder="—" />
+                    <input type="number" min="0" value={data[a.id]?.sure ?? ""} onChange={(e) => sv(a.id, "sure", e.target.value)} className={ic} placeholder="?" />
                   </td>
                   <td className="px-2 py-2">
-                    <input type="number" min="0" max="7" value={data[a.id]?.gun ?? ""} onChange={(e) => sv(a.id, "gun", e.target.value)} className={ic} placeholder="—" />
+                    <input type="number" min="0" max="7" value={data[a.id]?.gun ?? ""} onChange={(e) => sv(a.id, "gun", e.target.value)} className={ic} placeholder="?" />
                   </td>
                   <td className="px-3 py-3 text-center">
                     <div className="px-3 py-1.5 rounded-lg bg-emerald-400/10 border border-emerald-400/20 text-emerald-300 font-extrabold">{tot(a.id)}</div>
@@ -1506,19 +2614,18 @@ const IPAQSection = ({ data, onChange }) => {
   );
 };
 
-// ─── VAS Section ──────────────────────────────────────────────────────────────
+// ??? VAS Section ??????????????????????????????????????????????????????????????
 
 const VASSection = ({ data, onChange }) => {
   const s = (k, ph, v) => onChange({ ...data, [k]: { ...data[k], [ph]: v } });
   const items = [
     { k:"rest", en:"Pain at Rest", tr:"İstirahat Ağrısı" },
     { k:"activity", en:"Pain During Activity", tr:"Aktivite Sırasında Ağrı" },
-    { k:"night", en:"Night Pain", tr:"Gece Ağrısı" },
   ];
 
   return (
     <div className="space-y-5">
-      <SH icon={Sliders} en="Visual Analogue Scale (VAS)" tr="Görsel Analog Skala" badge="0 – 10 with Faces" />
+      <SH icon={Sliders} en="Visual Analogue Scale (VAS)" tr="G?rsel Analog Skala" badge="0 ? 10 with Faces" />
 
       {items.map((item) => (
         <Glass key={item.k} className="p-5">
@@ -1540,7 +2647,7 @@ const VASSection = ({ data, onChange }) => {
       <Glass className="p-5 border-l-2 border-amber-400/40">
         <div className="flex items-center gap-2 mb-3">
           <Edit3 className="w-4 h-4 text-amber-300" />
-          <p className="text-xs font-extrabold text-white/70 uppercase tracking-widest">Session Notes / Seans Notları</p>
+          <p className="text-xs font-extrabold text-white/70 uppercase tracking-widest">Session Notes / Seans Notlar?</p>
         </div>
 
         <div className="flex flex-wrap gap-1.5 mb-3">
@@ -1575,7 +2682,7 @@ const VASSection = ({ data, onChange }) => {
                     : "bg-amber-400/10 border-amber-400/20 text-amber-300 hover:bg-amber-400/20"
                 }`}
               >
-                {exists ? "✕ " : "+ "}{btn.label}
+                {exists ? "? " : "+ "}{btn.label}
               </button>
             );
           })}
@@ -1598,7 +2705,7 @@ const VASSection = ({ data, onChange }) => {
   );
 };
 
-// ─── VAMS-4 Section ──────────────────────────────────────────────────────────────
+// ??? VAMS-4 Section ??????????????????????????????????????????????????????????????
 
 const VAMSSection = ({ data, onChange }) => {
   const s = (k, ph, v) => onChange({ ...data, [k]: { ...data[k], [ph]: v } });
@@ -1611,7 +2718,7 @@ const VAMSSection = ({ data, onChange }) => {
 
   return (
     <div className="space-y-5">
-      <SH icon={Heart} en="Mood Scale (VAMS-4)" tr="Ruh Hali Ölçeği" badge="0 – 10" />
+      <SH icon={Heart} en="Mood Scale (VAMS-4)" tr="Ruh Hali ?l?e?i" badge="0 ? 10" />
 
       <Glass className="p-5 border-l-2 border-violet-400/40">
         <div className="flex gap-3">
@@ -1620,7 +2727,7 @@ const VAMSSection = ({ data, onChange }) => {
             <p className="text-sm font-light text-white/75">
               Rate your current mood from <span className="font-bold text-white">0 (not at all)</span> to <span className="font-bold text-white">10 (extremely)</span>
             </p>
-            <p className="text-xs text-white/50 mt-1">VAMS-4 (Machado et al. 2019) · Validated in stroke (Stern 1999, Barrows 2018)</p>
+            <p className="text-xs text-white/50 mt-1">VAMS-4 (Machado et al. 2019) ? Validated in stroke (Stern 1999, Barrows 2018)</p>
           </div>
         </div>
       </Glass>
@@ -1650,19 +2757,19 @@ const VAMSSection = ({ data, onChange }) => {
   );
 };
 
-// ─── Motor Section ────────────────────────────────────────────────────────────
+// ??? Motor Section ????????????????????????????????????????????????????????????
 
 const MotorSection = ({ data, onChange }) => {
   const s = (k, v) => onChange({ ...data, [k]: v });
 
   return (
     <div className="space-y-5">
-      <SH icon={TrendingUp} en="Patient Perceived Muscle Control Change Scale" tr="Hasta Algılanan Kas Kontrol Değişim Ölçeği" />
+      <SH icon={TrendingUp} en="Patient Perceived Muscle Control Change Scale" tr="Hasta Alg?lanan Kas Kontrol De?i?im ?l?e?i" />
 
       <Glass className="p-5 border-l-2 border-amber-400/40">
         <div className="flex gap-3">
           <Info className="w-5 h-5 text-amber-300 flex-shrink-0 mt-0.5" />
-          <p className="text-sm font-light text-white/75 italic">0 = no control, 10 = full normal control. / 0 = hiç kontrol yok, 10 = tam kontrol.</p>
+          <p className="text-sm font-light text-white/75 italic">0 = no control, 10 = full normal control. / 0 = hi? kontrol yok, 10 = tam kontrol.</p>
         </div>
       </Glass>
 
@@ -1683,7 +2790,7 @@ const MotorSection = ({ data, onChange }) => {
   );
 };
 
-// ─── KVIQ Section ─────────────────────────────────────────────────────────────
+// ??? KVIQ Section ?????????????????????????????????????????????????????????????
 
 const KGIASection = ({ data, onChange }) => {
   const s = (mi, type, f, v) => {
@@ -1693,16 +2800,16 @@ const KGIASection = ({ data, onChange }) => {
 
   return (
     <div className="space-y-5">
-      <SH icon={Brain} en="Kinesthetic & Visual Imagery Questionnaire (KVIQ-10)" tr="Kinestetik ve Görsel İmgeleme Anketi" badge="10 Movements × 2 Types" />
+      <SH icon={Brain} en="Kinesthetic & Visual Imagery Questionnaire (KVIQ-10)" tr="Kinestetik ve G?rsel ?mgeleme Anketi" badge="5 Movements ? 2 Types" />
 
       <div className="flex gap-3 flex-wrap">
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/20">
           <span className="w-3 h-3 rounded-full bg-amber-400 flex-shrink-0" />
-          <span className="text-xs font-bold text-amber-300">Upper Extremity / Üst Ekstremite</span>
+          <span className="text-xs font-bold text-amber-300">Upper Extremity / ?st Ekstremite</span>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.04]">
           <span className="w-3 h-3 rounded-full bg-white/30 flex-shrink-0" />
-          <span className="text-xs font-bold text-white/50">Other / Diğer</span>
+          <span className="text-xs font-bold text-white/50">Other / Di?er</span>
         </div>
       </div>
 
@@ -1752,7 +2859,7 @@ const KGIASection = ({ data, onChange }) => {
                   {["once","sonra"].map((f, fi) => (
                     <div key={f} className={fi === 1 ? "mt-4" : ""}>
                       <p className={`text-[10px] font-extrabold uppercase tracking-widest mb-2 ${fi === 0 ? "text-sky-300" : "text-emerald-300"}`}>
-                        {fi === 0 ? "Pre (1–5) / Önce" : "Post (1–5) / Sonra"}
+                        {fi === 0 ? "Pre (1?5) / ?nce" : "Post (1?5) / Sonra"}
                       </p>
 
                       <KVIQSlider
@@ -1773,15 +2880,222 @@ const KGIASection = ({ data, onChange }) => {
   );
 };
 
-// ─── WMFT Section ─────────────────────────────────────────────────────────────
+// ??? Box & Block Test (BBT) ? separate from Kinematics Lab ???????????????????
 
-const WMFTSection = ({ data, onChange }) => {
-  const up = (id, ph, f, v) =>
-    onChange({ ...data, [id]: { ...data[id], [ph]: { ...(data[id]?.[ph] || {}), [f]: v } } });
+const BBTPhaseBlock = ({ phase, phaseData, onUpdate }) => {
+  const sw = useSW();
+  const isPost = phase === "post";
+  const limitMs = BBT_TEST_SECONDS * 1000;
+
+  useEffect(() => {
+    if (sw.ms >= limitMs && sw.running) sw.stop();
+  }, [sw.ms, sw.running, sw, limitMs]);
+
+  const ic = `glass-field w-full px-3 py-2.5 rounded-xl text-white text-sm font-light placeholder-white/30 focus:outline-none transition-all ${INPUT_CLS}`;
+
+  return (
+    <div className={`p-4 rounded-xl border ${isPost ? "bg-emerald-400/[0.05] border-emerald-400/15" : "bg-sky-400/[0.05] border-sky-400/15"}`}>
+      <p className={`text-[10px] font-extrabold uppercase tracking-widest mb-3 ${isPost ? "text-emerald-300" : "text-sky-300"}`}>
+        {isPost ? "Post / Sonra" : "Pre / ?nce"}
+      </p>
+
+      <p className="text-[10px] text-white/45 mb-2">
+        {BBT_TEST_SECONDS}s timer ? count blocks transferred over the partition (paretic hand primary).
+      </p>
+
+      <div className="flex items-center gap-2 mb-4">
+        <div className={`flex-1 text-center py-2 rounded-xl border ${sw.ms >= limitMs ? "border-amber-400/40 bg-amber-500/10" : "bg-black/30 border-white/[0.08]"}`}>
+          <span className="text-xl font-extrabold text-white font-mono tabular-nums">{sw.fmt(Math.min(sw.ms, limitMs))}</span>
+          <span className="block text-[9px] text-white/35 mt-0.5">/ {BBT_TEST_SECONDS}:00</span>
+        </div>
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={sw.start}
+            disabled={sw.running || sw.ms >= limitMs}
+            className={`w-10 h-10 rounded-lg border flex items-center justify-center transition-all ${sw.running || sw.ms >= limitMs ? "bg-emerald-500/10 border-emerald-400/20 text-emerald-300/40" : "bg-emerald-500/20 border-emerald-400/30 text-emerald-300 hover:bg-emerald-500/30"}`}
+            aria-label="Start timer"
+          >
+            <Play className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={sw.stop}
+            disabled={!sw.running}
+            className={`w-10 h-10 rounded-lg border flex items-center justify-center transition-all ${!sw.running ? "bg-white/[0.04] border-white/[0.04] text-white/20" : "bg-rose-500/20 border-rose-400/30 text-rose-300 hover:bg-rose-500/30"}`}
+            aria-label="Stop timer"
+          >
+            <Square className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={sw.reset}
+            className="w-10 h-10 rounded-lg border bg-white/[0.06] border-white/12 text-white/60 hover:text-white flex items-center justify-center transition-all"
+            aria-label="Reset timer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div className="flex flex-col gap-1.5">
+          <BL en="Paretic hand ? blocks" tr="Etkilenen el ? blok say?s?" />
+          <input
+            type="number"
+            min="0"
+            inputMode="numeric"
+            value={phaseData?.pareticBlocks ?? ""}
+            onChange={(e) => onUpdate("pareticBlocks", e.target.value)}
+            placeholder="0"
+            className={ic}
+            style={GLASS_FIELD}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <BL en="Unaffected hand ? blocks (optional)" tr="Etkilenmeyen el ? opsiyonel" />
+          <input
+            type="number"
+            min="0"
+            inputMode="numeric"
+            value={phaseData?.unaffectedBlocks ?? ""}
+            onChange={(e) => onUpdate("unaffectedBlocks", e.target.value)}
+            placeholder="?"
+            className={ic}
+            style={GLASS_FIELD}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <BL en="Notes" tr="Notlar" />
+        <textarea
+          value={phaseData?.notes ?? ""}
+          onChange={(e) => onUpdate("notes", e.target.value)}
+          rows={2}
+          placeholder="Setup, fatigue, assistance?"
+          className={`${ic} min-h-[72px] resize-y`}
+          style={GLASS_FIELD}
+        />
+      </div>
+    </div>
+  );
+};
+
+const BBTSection = ({ data, onChange, demographics }) => {
+  const up = (ph, f, v) =>
+    onChange({ ...data, [ph]: { ...(data[ph] || {}), [f]: v } });
+
+  const side = demographics?.side === "1" ? "left" : demographics?.side === "2" ? "right" : null;
 
   return (
     <div className="space-y-5">
-      <SH icon={Timer} en="Wolf Motor Function Test (WMFT-4)" tr="Wolf Motor Fonksiyon Testi — Kısa Form" badge="4 Tasks" />
+      <SH
+        icon={Boxes}
+        en="Box and Block Test (BBT)"
+        tr="Kutu ve Blok Testi"
+        badge={`${BBT_TEST_SECONDS}s`}
+      />
+
+      <Glass className="p-4 sm:p-5">
+        <p className="text-xs text-white/60 leading-relaxed">
+          <span className="font-bold text-white/75">Protocol:</span>{" "}
+          Participant sits at a table; transfer as many blocks as possible across the partition in{" "}
+          {BBT_TEST_SECONDS} seconds. Record the <strong className="text-white/80">paretic hand</strong> count for the study outcome
+          {side ? ` (affected side: ${side})` : ""}. Unaffected-hand count is optional for reference norms.
+        </p>
+        <p className="text-[10px] text-white/40 mt-2 italic">
+          Protokol: {BBT_TEST_SECONDS} saniyede m?mk?n oldu?unca ?ok blok aktar?m?; birincil skor etkilenen el.
+        </p>
+      </Glass>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <BBTPhaseBlock phase="pre" phaseData={data?.pre} onUpdate={(f, v) => up("pre", f, v)} />
+        <BBTPhaseBlock phase="post" phaseData={data?.post} onUpdate={(f, v) => up("post", f, v)} />
+      </div>
+    </div>
+  );
+};
+
+// ??? WMFT Section ?????????????????????????????????????????????????????????????
+
+const WMFTSection = ({ data, onChange, kinematics, showToast }) => {
+  const up = (id, ph, f, v) => {
+    const cur = data?.[id]?.[ph] || {};
+    const nextPh = { ...cur, [f]: v };
+    if (f === "time" || f === "rating") {
+      delete nextPh._inferred;
+      delete nextPh._source;
+      delete nextPh._confidence;
+      delete nextPh._itemScore;
+      delete nextPh._capped;
+    }
+    onChange({ ...data, [id]: { ...data[id], [ph]: nextPh } });
+  };
+
+  const kinResultsLive = loadLiveKinResults({ kinematics });
+  const hasKin = !!(kinResultsLive.pre || kinResultsLive.post);
+
+  const runInference = (overwrite) => {
+    const kinResults = kinResultsLive;
+    if (!kinResults.pre && !kinResults.post) {
+      showToast?.("Analyze Pre and/or Post kinematics first", "error");
+      return;
+    }
+    const inference = inferWmftFromKinematics(kinResults);
+    const next = applyWmftInference(data, inference, { overwrite });
+    const applied = next._inferenceMeta?.applied ?? 0;
+    onChange(next);
+    if (applied === 0) {
+      showToast?.("No WMFT fields filled ? check ADL phases or re-analyze", "error");
+    } else {
+      showToast?.(`? vWMFT-4: filled ${applied} field${applied === 1 ? "" : "s"} from kinematics`);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <SH icon={Timer} en="Wolf Motor Function Test (WMFT-4)" tr="Wolf Motor Fonksiyon Testi ? K?sa Form" badge="4 Tasks" />
+
+      <Glass className="p-4 border border-violet-400/15 bg-violet-500/[0.06]">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-extrabold text-violet-200/90">Video-derived WMFT (vWMFT-4)</p>
+            <p className="text-[10px] text-white/40 mt-1 leading-relaxed">
+              Maps analyzed reach / ADL phases to WMFT items. Drink ADL improves items 1 &amp; 4; study reach covers 2 &amp; 3. Manual edits override inference.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 flex-shrink-0">
+            <motion.button
+              type="button"
+              whileTap={nlMotionTap(0.97)}
+              disabled={!hasKin}
+              onClick={() => runInference(false)}
+              className={`px-3 py-2 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 ${
+                hasKin
+                  ? "bg-violet-500/20 border-violet-400/30 text-violet-200 hover:bg-violet-500/28"
+                  : "bg-white/[0.03] border-white/[0.06] text-white/25 cursor-not-allowed"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Fill empty fields
+            </motion.button>
+            <motion.button
+              type="button"
+              whileTap={nlMotionTap(0.97)}
+              disabled={!hasKin}
+              onClick={() => runInference(true)}
+              className={`px-3 py-2 rounded-xl text-[11px] font-bold border ${
+                hasKin
+                  ? "bg-white/[0.06] border-white/[0.08] text-white/55 hover:text-white/80"
+                  : "bg-white/[0.03] border-white/[0.06] text-white/25 cursor-not-allowed"
+              }`}
+            >
+              Overwrite all
+            </motion.button>
+          </div>
+        </div>
+      </Glass>
 
       {WMFT_ITEMS.map((t) => (
         <Glass key={t.id} className="p-5">
@@ -1805,48 +3119,20 @@ const WMFTSection = ({ data, onChange }) => {
   );
 };
 
-// ─── Form data persistence ────────────────────────────────────────────────────
+// ??? Form data persistence ????????????????????????????????????????????????????
 
 const FD_LS_KEY = "neuro_fd_data";
 const NEXT_ID_LS_KEY = "neuro_next_id";
 const API_BASE = "";
 
-// Cross-platform file download — never window.open on iOS PWA (no back button)
+// Cross-platform file download ? never window.open on iOS PWA (no back button)
 function downloadBlob(blob, filename) {
-  const tryShare = async () => {
-    if (!navigator.share) return false;
-    try {
-      const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: filename });
-        return true;
-      }
-    } catch (_) {}
-    return false;
-  };
-
-  const linkDownload = () => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-  };
-
-  if (isIOSDevice()) {
-    tryShare().then((shared) => { if (!shared) linkDownload(); });
-    return;
-  }
-  linkDownload();
+  downloadBlobUtil(blob, filename);
 }
 
 function nextStudyId() {
   const patients = activePatients();
-  let maxId = 0;
+  let maxId = 100;
   patients.forEach((p) => {
     const id = parseInt(p.demographics?.participantId);
     if (!isNaN(id) && id > maxId) maxId = id;
@@ -1963,9 +3249,9 @@ function svgToDataUrl(svg) {
 }
 
 
-// ─── Kinematics AI Lab Section ────────────────────────────────────────────────
+// ??? Kinematics AI Lab Section ????????????????????????????????????????????????
 
-const KIN_LS_KEY = "neuro_kin_results";
+const KIN_LS_KEY = KIN_RESULTS_LS_KEY;
 const KIN_LS_EXP_KEY = "neuro_kin_expanded";
 
 const KIN_PHASE_ACCENT = {
@@ -1988,7 +3274,7 @@ function KinSkeletonJoint({ cx, cy, stroke, r = 0.85 }) {
   return <circle cx={cx} cy={cy} r={r} fill={stroke} opacity="0.88" />;
 }
 
-const KIN_SKELETON_VIEWS = ["front", "posterior", "right", "left"];
+const KIN_SKELETON_VIEWS = ["front", "posterior"];
 
 function KinSkeletonFront({ stroke }) {
   const b = kinBone(stroke);
@@ -2093,7 +3379,8 @@ function KinFilmFrame({ viewIndex, accent = "amber" }) {
 }
 
 function KinFilmStripLoop({ accent = "amber" }) {
-  const frames = [...KIN_SKELETON_VIEWS, ...KIN_SKELETON_VIEWS];
+  // Keep 8 frames (4? front/back pairs) so scroll distance matches the original 4-view strip speed.
+  const frameCount = 8;
   const holes = Array.from({ length: 11 });
 
   return (
@@ -2105,7 +3392,7 @@ function KinFilmStripLoop({ accent = "amber" }) {
       </div>
       <div className="kin-film-strip__body">
         <div className="kin-film-strip__track">
-          {frames.map((_, i) => (
+          {Array.from({ length: frameCount }, (_, i) => (
             <KinFilmFrame key={i} viewIndex={i} accent={accent} />
           ))}
         </div>
@@ -2197,14 +3484,14 @@ function InlineValidationVideo({ src, phaseLabel, autoPlay = false, onEnded, onE
             onClick={togglePlay}
             className="text-white/90 hover:text-white text-xs font-bold px-2 py-1 rounded bg-white/10 hover:bg-white/20"
           >
-            {isPlaying ? "⏸ Pause" : "▶ Play"}
+            {isPlaying ? "? Pause" : "? Play"}
           </button>
           <button
             type="button"
             onClick={requestFullscreen}
             className="text-white/90 hover:text-white text-xs font-bold px-2 py-1 rounded bg-white/10 hover:bg-white/20"
           >
-            ⛶ Full
+            ? Full
           </button>
         </div>
         <div
@@ -2221,31 +3508,84 @@ function InlineValidationVideo({ src, phaseLabel, autoPlay = false, onEnded, onE
   );
 }
 
-function KinPhaseAnalyzingOverlay({ accent = "amber" }) {
-  const blur = {
-    backdropFilter: "blur(80px) saturate(180%)",
-    WebkitBackdropFilter: "blur(80px) saturate(180%)",
-  };
+function KinAnalyzeProgressGlyph({
+  pct,
+  stroke,
+  glow,
+  sizeClass = "w-14 h-14",
+  labelClass = "text-[10px]",
+  indeterminate = false,
+}) {
+  const pctRounded = pct != null && !Number.isNaN(Number(pct)) ? Math.round(Number(pct)) : null;
+  const pctClamped = pctRounded != null ? Math.max(0, Math.min(100, pctRounded)) : null;
+  const ringPct = pctClamped != null ? pctClamped : 0;
+  const r = 15;
+  const circumference = 2 * Math.PI * r;
+  const dash = (ringPct / 100) * circumference;
+
   return (
-    <motion.div
-      key="kin-analyzing"
-      className="kin-analyzing-overlay absolute -inset-2 z-30 flex items-center justify-center rounded-[20px] overflow-hidden"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-    >
-      <div className="absolute inset-0 z-0 rounded-[20px]" style={blur} />
-      <div className="relative z-20 w-full px-3 flex justify-center">
-        <KinFilmStripLoop accent={accent} />
-      </div>
-    </motion.div>
+    <div className={`relative ${sizeClass} flex items-center justify-center shrink-0`}>
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 36 36" aria-hidden>
+        <circle cx="18" cy="18" r={r} fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+        <circle cx="18" cy="18" r={r} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="2.25" />
+        <circle
+          cx="18"
+          cy="18"
+          r={r}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="2.75"
+          strokeLinecap="round"
+          strokeDasharray={`${Math.max(0.5, dash)} ${circumference}`}
+          className={`kin-analyze-glyph-ring transition-[stroke-dasharray] duration-700 ease-out ${
+            indeterminate && pctClamped == null ? "is-indeterminate" : ""
+          }`}
+          style={{ filter: `drop-shadow(0 0 10px ${glow})` }}
+        />
+      </svg>
+      <span className={`relative z-[1] ${labelClass} font-extrabold tabular-nums text-white tracking-tight`}>
+        {pctClamped != null ? `${pctClamped}%` : "?"}
+      </span>
+    </div>
   );
 }
+
+function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyzing video?" }) {
+  const a = KIN_PHASE_ACCENT[accent] || KIN_PHASE_ACCENT.sky;
+  const film = KIN_FILM_ACCENT[accent] || KIN_FILM_ACCENT.sky;
+  const pctRounded = pct != null && !Number.isNaN(Number(pct)) ? Math.round(Number(pct)) : null;
+  const barPct = pctRounded != null ? Math.max(0, Math.min(100, pctRounded)) : 8;
+
+  return (
+    <div className={`w-full rounded-xl kin-analyze-panel px-3 py-2.5 flex items-center gap-2.5 border-t-[2px] ${a.ring}`}>
+      <KinAnalyzeProgressGlyph
+        pct={pct}
+        stroke={film.stroke}
+        glow={film.glow}
+        sizeClass="w-10 h-10 shrink-0"
+        labelClass="text-[9px]"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-semibold text-white/90 truncate">{step}</p>
+        <div className="mt-1.5 kin-analyze-track">
+          <motion.div
+            className={`kin-analyze-track-fill ${a.bar}`}
+            initial={false}
+            animate={{ width: `${Math.max(5, barPct)}%` }}
+            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            style={{ boxShadow: `0 0 10px ${film.glow}` }}
+          />
+        </div>
+        <p className="text-[8px] text-white/35 mt-1">Server processing ? keep tab open</p>
+      </div>
+    </div>
+  );
+}
+
 const kinPhaseCardCls = (c, status, hasResult) => {
   const a = KIN_PHASE_ACCENT[c] || KIN_PHASE_ACCENT.amber;
   const base = `relative flex flex-col rounded-2xl border border-t-[3px] bg-gradient-to-b ${a.top} to-white/[0.02] min-h-[240px] transition-all duration-300 overflow-hidden`;
-  if (status === "analyzing") return `${base} border-amber-400/35 ring-1 ring-amber-400/20 kin-analyzing-ring`;
+  if (status === "analyzing") return `${base} border-white/[0.12] ring-1 ring-white/[0.06]`;
   if (hasResult) return `${base} border-emerald-400/35 ring-1 ring-emerald-400/20`;
   return `${base} border-white/[0.07] hover:border-white/12`;
 };
@@ -2266,17 +3606,47 @@ const kinShortFileName = (name, max = 22) => {
   const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
   const stem = ext ? name.slice(0, name.length - ext.length) : name;
   const keep = Math.max(6, max - ext.length - 1);
-  return `${stem.slice(0, keep)}…${ext}`;
+  return `${stem.slice(0, keep)}?${ext}`;
 };
 
-const armSideLabel = (side) => (side === "left" ? "Left" : side === "right" ? "Right" : "—");
+const armSideLabel = (side) => (side === "left" ? "Left" : side === "right" ? "Right" : "\u2014");
 
 const analyzedArmForPhase = (kinematicsResults, phaseKey) => {
   const s = (kinematicsResults[phaseKey]?.side_analyzed || kinematicsResults[phaseKey]?.side || "").toString().toLowerCase();
   return s === "left" || s === "right" ? s : null;
 };
 
-const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => {
+const KinOverlayErrorBoundary = class extends React.Component {
+  state = { error: null };
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(err, info) {
+    console.error("Validation overlay player:", err, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3 gap-2">
+          <p className="text-[11px] text-rose-200/90 max-w-[90%]">Validation preview could not render (memory or browser limit).</p>
+          <button
+            type="button"
+            onClick={() => this.setState({ error: null })}
+            className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
+          >
+            Retry preview
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+};
+
+const KinSection = React.memo(function KinSection({ data, demographics, onChange, showToast, sessionKey }) {
   const [kinematicsResults, setKinematicsResults] = useState(() => {
     try {
       const ls = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {};
@@ -2293,10 +3663,45 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     cutoffFrequency: 4.0,
     filterOrder: 4,
   });
+  const [clinicalMovementTask, setClinicalMovementTask] = useState(() => {
+    try {
+      const s = localStorage.getItem("neuro_clinical_movement_task");
+      if (s && CLINICAL_MOVEMENT_TASKS.some((t) => t.id === s)) return s;
+    } catch { /* ignore */ }
+    return "study_reach_grasp";
+  });
+  const [kinematicDomain, setKinematicDomain] = useState(() => clinicalTaskDomain(
+    (() => {
+      try {
+        const s = localStorage.getItem("neuro_clinical_movement_task");
+        if (s && CLINICAL_MOVEMENT_TASKS.some((t) => t.id === s)) return s;
+      } catch { /* ignore */ }
+      return "study_reach_grasp";
+    })()
+  ));
+  useEffect(() => {
+    try {
+      localStorage.setItem("neuro_clinical_movement_task", clinicalMovementTask);
+    } catch { /* ignore */ }
+  }, [clinicalMovementTask]);
+  useEffect(() => {
+    const domain = clinicalTaskDomain(clinicalMovementTask);
+    if (domain !== kinematicDomain) setKinematicDomain(domain);
+  }, [clinicalMovementTask]); // eslint-disable-line react-hooks/exhaustive-deps
+  const domainTasks = clinicalTasksForDomain(kinematicDomain);
+  const selectKinematicDomain = (domain) => {
+    const next = String(domain || "ue").toLowerCase() === "le" ? "le" : "ue";
+    setKinematicDomain(next);
+    const list = clinicalTasksForDomain(next);
+    if (!list.some((t) => t.id === clinicalMovementTask)) {
+      setClinicalMovementTask(list[0]?.id || (next === "le" ? "sts_stand" : "study_reach_grasp"));
+    }
+  };
   const [expandedResults, setExpandedResults] = useState(() => {
     try { return JSON.parse(localStorage.getItem(KIN_LS_EXP_KEY)) || {}; } catch { return {}; }
   });
   const [kinResultsTab, setKinResultsTab] = useState("compare");
+  const [showAllKinMetrics, setShowAllKinMetrics] = useState(false);
   const [mediaPreview, setMediaPreview] = useState(null);
   const [analysisStatus, setAnalysisStatus] = useState({});
   const [analysisProgress, setAnalysisProgress] = useState({});
@@ -2305,7 +3710,13 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   const [videoLoading, setVideoLoading] = useState({});
   const [videoAttempts, setVideoAttempts] = useState({});
   const [overlayData, setOverlayData] = useState({});
+  const [overlayMountReady, setOverlayMountReady] = useState({});
   const [originalVideoBlobs, setOriginalVideoBlobs] = useState({});
+  const [driveBakeDone, setDriveBakeDone] = useState({});
+  /** Phases whose loaded clip does not match the overlay analysis (baked composite). */
+  const [overlaySourceBad, setOverlaySourceBad] = useState({});
+  const overlaySourceRetryRef = useRef({});
+  const driveBakeToastRef = useRef({});
   const videoBlobsRef = useRef(videoBlobs);
   const videoLoadingRef = useRef(videoLoading);
   const originalVideoBlobsRef = useRef(originalVideoBlobs);
@@ -2313,10 +3724,129 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
   useEffect(() => { videoLoadingRef.current = videoLoading; }, [videoLoading]);
   useEffect(() => { originalVideoBlobsRef.current = originalVideoBlobs; }, [originalVideoBlobs]);
 
+  const patientCacheKey = useMemo(
+    () => patientDriveKeyFromDemographics(demographics, sessionKey),
+    [demographics, sessionKey],
+  );
+
+  const applyValidationCacheToState = useCallback((phase, cached) => {
+    if (!cached) return false;
+    let applied = false;
+    if (cached.overlay?.frames?.length) {
+      startTransition(() => {
+        setOverlayData((prev) => ({ ...prev, [phase]: cached.overlay }));
+      });
+      applied = true;
+    }
+    if (cached.originalVideoBlob instanceof Blob && cached.originalVideoBlob.size > 0) {
+      const objectUrl = URL.createObjectURL(cached.originalVideoBlob);
+      setOriginalVideoBlobs((prev) => {
+        if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+        const next = { ...prev, [phase]: objectUrl };
+        originalVideoBlobsRef.current = next;
+        return next;
+      });
+      applied = true;
+    }
+    if (cached.unifiedVideoBlob instanceof Blob && cached.unifiedVideoBlob.size > 0) {
+      const objectUrl = URL.createObjectURL(cached.unifiedVideoBlob);
+      setVideoBlobs((prev) => {
+        if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+        const next = { ...prev, [phase]: objectUrl };
+        videoBlobsRef.current = next;
+        return next;
+      });
+      setDriveBakeDone((prev) => ({
+        ...prev,
+        [phase]: Boolean(cached.compositedOverlay) && Number(cached.compositedOverlayQuality || 0) >= 2,
+      }));
+      applied = true;
+    }
+    return applied;
+  }, []);
+
+  const persistValidationPhase = useCallback(async (phase, partial = {}) => {
+    if (!patientCacheKey) return;
+    try {
+      const existing = await loadValidationSessionArtifact(patientCacheKey, phase);
+      const snap = partial.kinematicsSnapshot ?? kinematicsResults[phase];
+      const record = {
+        patientKey: patientCacheKey,
+        phase,
+        csvFilename: partial.csvFilename ?? existing?.csvFilename ?? snap?.csv_filename,
+        videoFilename: partial.videoFilename ?? existing?.videoFilename ?? snap?.video_filename,
+        unifiedVideoFilename:
+          partial.unifiedVideoFilename ?? existing?.unifiedVideoFilename ?? snap?.unified_validation_video,
+        overlay: partial.overlay ?? existing?.overlay,
+        originalVideoBlob: partial.originalVideoBlob ?? existing?.originalVideoBlob,
+        unifiedVideoBlob: partial.unifiedVideoBlob ?? existing?.unifiedVideoBlob,
+        compositedOverlay:
+          partial.compositedOverlay != null
+            ? Boolean(partial.compositedOverlay)
+            : Boolean(existing?.compositedOverlay),
+        compositedOverlayQuality:
+          partial.compositedOverlayQuality != null
+            ? Number(partial.compositedOverlayQuality)
+            : Number(existing?.compositedOverlayQuality || 0),
+        kinematicsSnapshot: snap ? stripKinPhaseForSync(snap) : existing?.kinematicsSnapshot,
+        savedAt: Date.now(),
+      };
+      await saveValidationSessionArtifact(record);
+      backupValidationArtifactsToDrive(patientCacheKey, phase, record).catch((err) => {
+        console.warn("Drive validation backup failed:", err);
+      });
+    } catch (err) {
+      console.warn("persistValidationPhase failed:", err);
+    }
+  }, [patientCacheKey, kinematicsResults]);
+
+  const hydrateValidationFromCloud = useCallback(async (phase, needs = {}) => {
+    if (!patientCacheKey) return null;
+    const phaseResult = kinematicsResults[phase];
+    const existing = await loadValidationSessionArtifact(patientCacheKey, phase);
+    const existingValid = validationCacheMatchesResult(existing, phaseResult) ? existing : null;
+    const wantOverlay = needs.overlay !== false && !existingValid?.overlay?.frames?.length;
+    const wantOriginal = needs.original !== false && !(existingValid?.originalVideoBlob?.size > 0);
+    const wantUnified = needs.unified !== false && !(existingValid?.unifiedVideoBlob?.size > 0);
+    const wantKinematics = needs.kinematics === true && !existingValid?.kinematicsSnapshot;
+    if (!wantOverlay && !wantOriginal && !wantUnified && !wantKinematics) {
+      if (existingValid) applyValidationCacheToState(phase, existingValid);
+      return existingValid;
+    }
+    const fromDrive = await restoreValidationArtifactsFromDrive(patientCacheKey, phase, {
+      overlay: wantOverlay,
+      original: wantOriginal,
+      unified: wantUnified,
+      kinematics: wantKinematics,
+    });
+    if (!fromDrive && !existingValid) return null;
+    const merged = {
+      ...(existingValid || {}),
+      ...fromDrive,
+      patientKey: patientCacheKey,
+      phase,
+      csvFilename: phaseResult?.csv_filename ?? existingValid?.csvFilename,
+      videoFilename: phaseResult?.video_filename ?? existingValid?.videoFilename,
+      unifiedVideoFilename:
+        phaseResult?.unified_validation_video ?? existingValid?.unifiedVideoFilename,
+      savedAt: Date.now(),
+    };
+    const matched = validationCacheMatchesResult(merged, phaseResult);
+    if (!matched && !(needs.kinematics && merged.kinematicsSnapshot)) return existingValid;
+    await saveValidationSessionArtifact(merged);
+    applyValidationCacheToState(phase, merged);
+    return merged;
+  }, [patientCacheKey, kinematicsResults, applyValidationCacheToState]);
+
   const abortRef = useRef({});
+  const overlayVideoSyncedRef = useRef({});
 
   useEffect(() => {
-    localStorage.setItem(KIN_LS_KEY, JSON.stringify(kinematicsResults));
+    try {
+      localStorage.setItem(KIN_LS_KEY, JSON.stringify(stripKinResultsForStorage(kinematicsResults)));
+    } catch (e) {
+      console.warn("Could not persist kinematics to localStorage (quota or size):", e);
+    }
   }, [kinematicsResults]);
 
   // Revoke object URLs for cached validation videos on unmount
@@ -2333,18 +3863,18 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     };
   }, []);
 
-  // Reload kinematics when switching patient session.
-  // Do not wipe in-memory / localStorage results when analysisResults is empty:
-  // first Save remaps sessionKey from participantId to _loadedId and would
-  // otherwise hide a completed analysis while the camera file stays in the picker.
+  // Reload kinematics when switching patient session
   useEffect(() => {
     if (!sessionKey) return;
     const fromFd = data?.analysisResults;
     if (fromFd && typeof fromFd === "object" && Object.keys(fromFd).length > 0) {
       const cleaned = { ...fromFd };
       delete cleaned.during;
-      setKinematicsResults((prev) => ({ ...prev, ...cleaned }));
+      setKinematicsResults(cleaned);
       localStorage.setItem(KIN_LS_KEY, JSON.stringify(cleaned));
+    } else {
+      setKinematicsResults({});
+      localStorage.removeItem(KIN_LS_KEY);
     }
   }, [sessionKey]);
 
@@ -2361,11 +3891,11 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       pauseTimeSec: "pause_time_sec",
       numberOfStops: "number_of_stops",
       trunkRatio: "trunk_ratio",
-      shoulderElevationNorm: "shoulder_elevation_norm",
-      shoulderVertNorm: "shoulder_elevation_norm",
       elbowAngleMeanDeg: "elbow_angle_mean_deg",
       movementTimeSec: "movement_time_sec",
       peakElbowAngVelDegS: "peak_elbow_ang_vel_deg_s",
+      shoulderFlexionMeanDeg: "shoulder_flexion_mean_deg",
+      peakShoulderFlexionVelDegS: "peak_shoulder_flexion_vel_deg_s",
       duration: "movement_time_sec",
     };
     const converted = {};
@@ -2397,12 +3927,34 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     const isVideo = !file.name.toLowerCase().endsWith(".csv");
     let upd;
     if (isVideo) {
-      const videoUrl = URL.createObjectURL(file);
-      setOriginalVideoBlobs((prev) => {
-        if (prev[phase]) URL.revokeObjectURL(prev[phase]);
-        return { ...prev, [phase]: videoUrl };
-      });
-      upd = { ...data, [vidKey(phase)]: file.name, [`${vidKey(phase)}_file`]: file, [`${vidKey(phase)}_url`]: videoUrl, [`${vidKey(phase)}_isVideo`]: true };
+      const lower = file.name.toLowerCase();
+      const browserNativeVideo = lower.endsWith(".mp4") || lower.endsWith(".webm");
+      let videoUrl;
+      if (browserNativeVideo) {
+        videoUrl = URL.createObjectURL(file);
+        setOriginalVideoBlobs((prev) => {
+          if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+          const next = { ...prev, [phase]: videoUrl };
+          originalVideoBlobsRef.current = next;
+          return next;
+        });
+      } else {
+        setOriginalVideoBlobs((prev) => {
+          if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+          const next = { ...prev };
+          delete next[phase];
+          originalVideoBlobsRef.current = next;
+          return next;
+        });
+        setOverlayMountReady((prev) => ({ ...prev, [phase]: false }));
+      }
+      upd = {
+        ...data,
+        [vidKey(phase)]: file.name,
+        [`${vidKey(phase)}_file`]: file,
+        [`${vidKey(phase)}_url`]: videoUrl,
+        [`${vidKey(phase)}_isVideo`]: true,
+      };
     } else {
       upd = { ...data, [vidKey(phase)]: file.name, [`${vidKey(phase)}_file`]: file, [`${vidKey(phase)}_isVideo`]: false };
     }
@@ -2470,6 +4022,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     setKinematicsResults({});
     setExpandedResults({});
     setOverlayData({});
+    setOverlayMountReady({});
     setOriginalVideoBlobs((prev) => {
       Object.values(prev).forEach((url) => URL.revokeObjectURL(url));
       return {};
@@ -2481,50 +4034,243 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     showToast("All kinematics cleared");
   };
 
-  const fetchOverlayData = useCallback(async (phase, csvFilename) => {
-    if (!csvFilename) return;
+  const fetchOverlayData = useCallback(async (phase, csvFilename, { syncResults = true } = {}) => {
+    if (!csvFilename) return null;
+    const phaseResult = kinematicsResults[phase];
+
     try {
-      const res = await fetch(`${API_BASE}/overlay-data/${encodeURIComponent(csvFilename)}`);
+      const res = await fetch(`${API_BASE}/overlay-data/${encodeURIComponent(csvFilename)}?v=${Date.now()}`);
       if (!res.ok) throw new Error(`Failed to load overlay data (${res.status})`);
       const overlay = await res.json();
-      if (overlay.error) throw new Error(overlay.error);
-      setOverlayData((prev) => ({ ...prev, [phase]: overlay }));
-      setKinematicsResults((prev) => {
-        const existing = prev[phase] || {};
-        return {
-          ...prev,
-          [phase]: { ...existing, overlay_metrics: overlay.metrics, validation_summary: overlay.metrics },
-        };
+      console.log("overlay-debug", csvFilename, {
+        affected_side: overlay.affected_side,
+        table_surface_y: overlay.table_surface_y,
+        table_surface_fallback: overlay.table_surface_fallback,
+        shoulder_palm_anchor: overlay.shoulder_palm_anchor,
+        debug_video_path: overlay.debug_video_path,
+        debug_table_edge_found: overlay.debug_table_edge_found,
+        coord_transform: overlay.coord_transform,
+        hl_coord_transform: overlay.hl_coord_transform,
+        overlay_version: overlay.overlay_version,
+        version: overlay.version,
       });
+      if (overlay.error) throw new Error(overlay.error);
+      startTransition(() => {
+        setOverlayData((prev) => ({ ...prev, [phase]: overlay }));
+      });
+      const metrics = resolveOverlayMetrics(overlay);
+      if (syncResults) {
+        setKinematicsResults((prev) => {
+          const existing = prev[phase] || {};
+          const next = {
+            ...prev,
+            [phase]: {
+              ...existing,
+              overlay_metrics: metrics,
+              validation_summary: metrics,
+            },
+          };
+          onChange({ ...data, analysisResults: stripKinResultsForStorage(next) });
+          return next;
+        });
+      }
+      setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
+      persistValidationPhase(phase, { csvFilename, overlay, kinematicsSnapshot: phaseResult });
+      return { overlay, metrics };
     } catch (err) {
+      let cachedOverlay = null;
+      if (patientCacheKey) {
+        const cached = await loadValidationSessionArtifact(patientCacheKey, phase);
+        if (validationCacheMatchesResult(cached, { csv_filename: csvFilename }) && cached?.overlay?.frames?.length) {
+          cachedOverlay = cached.overlay;
+          applyValidationCacheToState(phase, { overlay: cached.overlay });
+        } else {
+          const cloud = await hydrateValidationFromCloud(phase, { overlay: true, original: false, unified: false });
+          if (validationCacheMatchesResult(cloud, { csv_filename: csvFilename }) && cloud?.overlay?.frames?.length) {
+            cachedOverlay = cloud.overlay;
+          }
+        }
+      }
+      if (cachedOverlay?.frames?.length) {
+        const metrics = resolveOverlayMetrics(cachedOverlay);
+        if (syncResults) {
+          setKinematicsResults((prev) => {
+            const existing = prev[phase] || {};
+            const next = {
+              ...prev,
+              [phase]: {
+                ...existing,
+                overlay_metrics: metrics,
+                validation_summary: metrics,
+              },
+            };
+            onChange({ ...data, analysisResults: stripKinResultsForStorage(next) });
+            return next;
+          });
+        }
+        setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Restored from session cache" } }));
+        return { overlay: cachedOverlay, metrics };
+      }
       console.error(`Overlay data error for ${phase}:`, err);
       showToast(`Overlay data failed for ${phase}`, "error");
+      return null;
     }
-  }, [showToast]);
+  }, [showToast, onChange, data, kinematicsResults, patientCacheKey, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud]);
 
-  const loadOriginalVideoBlob = useCallback(async (phase, filename) => {
-    if (!filename || originalVideoBlobsRef.current[phase]) return;
-    try {
-      // Use the /video streaming endpoint so the browser receives the correct
-      // video/mp4 MIME type and can play the blob inline.
-      const url = `${API_BASE}/video/${encodeURIComponent(filename)}`;
-      const res = await fetch(url);
-      if (res.status === 404) {
-        showToast("Original video expired on server — please re-upload", "error");
-        return;
+  const fetchOverlayDataWithRetry = useCallback(async (phase, csvFilename, opts = {}, maxAttempts = 5) => {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const prefetched = await fetchOverlayData(phase, csvFilename, opts);
+      if (prefetched?.overlay?.frames?.length) return prefetched;
+      if (attempt < maxAttempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
       }
-      if (!res.ok) throw new Error(`Failed (${res.status})`);
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
+    }
+    return null;
+  }, [fetchOverlayData]);
+
+  const loadOriginalVideoBlob = useCallback(async (phase, filename, options = {}) => {
+    const { force = false } = options;
+    if (!filename) return;
+    if (!force && originalVideoBlobsRef.current[phase]) return;
+    if (force) {
       setOriginalVideoBlobs((prev) => {
         if (prev[phase]) URL.revokeObjectURL(prev[phase]);
-        return { ...prev, [phase]: objectUrl };
+        const next = { ...prev };
+        delete next[phase];
+        originalVideoBlobsRef.current = next;
+        return next;
+      });
+      setOverlayMountReady((prev) => ({ ...prev, [phase]: false }));
+    }
+
+    const phaseResult = kinematicsResults[phase];
+
+    const applyCachedOriginal = async () => {
+      if (!patientCacheKey) return false;
+      const cached = await loadValidationSessionArtifact(patientCacheKey, phase);
+      if (!validationCacheMatchesResult(cached, phaseResult)) return false;
+      const blob = cached?.originalVideoBlob;
+      if (!(blob instanceof Blob) || blob.size <= 0) return false;
+      applyValidationCacheToState(phase, { originalVideoBlob: blob });
+      return true;
+    };
+
+    try {
+      if (await applyCachedOriginal()) return;
+
+      const candidates = [];
+      const add = (name) => {
+        if (name && !candidates.includes(name)) candidates.push(name);
+      };
+      add(filename);
+      if (filename && !filename.includes("_rotated")) {
+        const m = filename.match(/^(.+)(\.[a-zA-Z0-9]+)$/);
+        if (m) add(`${m[1]}_rotated${m[2]}`);
+      }
+      let loaded = null;
+      let loadedName = null;
+      for (const name of candidates) {
+        const url = `${API_BASE}/video/${encodeURIComponent(name)}`;
+        const res = await fetch(url);
+        if (res.status === 404) continue;
+        if (!res.ok) throw new Error(`Failed (${res.status})`);
+        const blob = await res.blob();
+        if (!blob.size) continue;
+        loaded = blob;
+        loadedName = name;
+        break;
+      }
+      if (!loaded) {
+        if (await applyCachedOriginal()) return;
+        const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
+        if (validationCacheMatchesResult(cloud, phaseResult) && cloud?.originalVideoBlob?.size) return;
+        showToast("Original video expired on server ? please re-upload", "error");
+        return;
+      }
+      const objectUrl = URL.createObjectURL(loaded);
+      setOriginalVideoBlobs((prev) => {
+        if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+        const next = { ...prev, [phase]: objectUrl };
+        originalVideoBlobsRef.current = next;
+        return next;
+      });
+      persistValidationPhase(phase, {
+        csvFilename: phaseResult?.csv_filename,
+        videoFilename: loadedName || filename,
+        originalVideoBlob: loaded,
+        kinematicsSnapshot: phaseResult,
       });
     } catch (err) {
       console.error(`Failed to cache original video for ${phase}:`, err);
+      if (await applyCachedOriginal()) return;
+      const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
+      if (validationCacheMatchesResult(cloud, phaseResult) && cloud?.originalVideoBlob?.size) return;
       showToast("Original video could not be loaded for overlay", "error");
     }
-  }, [showToast]);
+  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud]);
+
+  const ensureOriginalVideoBlob = useCallback(async (phase, file, serverFilename) => {
+    const fileLower = file?.name?.toLowerCase() || "";
+    const fileIsCsv = fileLower.endsWith(".csv");
+    const browserNative = fileLower.endsWith(".mp4") || fileLower.endsWith(".webm");
+
+    // Always play the same file the server analyzed (incl. *_rotated.mp4). Local iPhone
+    // blobs can disagree with Safari rotation vs OpenCV overlay coordinates.
+    if (serverFilename) {
+      await loadOriginalVideoBlob(phase, serverFilename, { force: true });
+      if (originalVideoBlobsRef.current[phase]) return true;
+    }
+    if (originalVideoBlobsRef.current[phase]) return true;
+    if (file && !fileIsCsv && browserNative) {
+      const objectUrl = URL.createObjectURL(file);
+      setOriginalVideoBlobs((prev) => {
+        if (prev[phase]) {
+          URL.revokeObjectURL(objectUrl);
+          return prev;
+        }
+        const next = { ...prev, [phase]: objectUrl };
+        originalVideoBlobsRef.current = next;
+        return next;
+      });
+      return true;
+    }
+    if (serverFilename) {
+      await loadOriginalVideoBlob(phase, serverFilename);
+      return Boolean(originalVideoBlobsRef.current[phase]);
+    }
+    return false;
+  }, [loadOriginalVideoBlob]);
+
+  // Auto-restore program truth (overlay + original + kinematics) and Drive view-copy from cloud/IDB.
+  useEffect(() => {
+    if (!patientCacheKey) return;
+    let cancelled = false;
+    (async () => {
+      for (const ph of phases) {
+        if (cancelled) break;
+        const result = kinematicsResults[ph.k];
+        if (!result) continue;
+        const hasOverlay = Boolean(overlayData[ph.k]?.frames?.length);
+        const hasOriginal = Boolean(originalVideoBlobsRef.current[ph.k]);
+        const hasUnified = Boolean(videoBlobsRef.current[ph.k]);
+        if (hasOverlay && hasOriginal && hasUnified) continue;
+        const merged = await hydrateValidationFromCloud(ph.k, {
+          overlay: !hasOverlay,
+          original: !hasOriginal,
+          unified: !hasUnified,
+          kinematics: !result.csv_filename,
+        });
+        if (cancelled) break;
+        if (merged?.kinematicsSnapshot && !result.csv_filename) {
+          setKinematicsResults((prev) => ({
+            ...prev,
+            [ph.k]: { ...(prev[ph.k] || {}), ...merged.kinematicsSnapshot },
+          }));
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [patientCacheKey, kinematicsResults, overlayData, hydrateValidationFromCloud]);
 
   // Load original video blobs for analyzed phases that don't have one yet.
   // This handles persisted sessions where the object URL was lost on reload.
@@ -2540,41 +4286,145 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     });
   }, [kinematicsResults, loadOriginalVideoBlob]);
 
-  const analyzeVideo = async (phase) => {
-    let file = data[`${vidKey(phase)}_file`];
-    if (!(file instanceof Blob) || !file.size) {
-      showToast("Tap the video card and choose the file again", "error");
-      onChange({ ...data, [statusKey(phase)]: "uploaded" });
+  useEffect(() => {
+    phases.forEach((ph) => {
+      const name = overlayData[ph.k]?.overlay_video_filename;
+      if (!name) return;
+      const prev = overlayVideoSyncedRef.current[ph.k];
+      if (prev === name && originalVideoBlobsRef.current[ph.k]) return;
+      overlayVideoSyncedRef.current[ph.k] = name;
+      loadOriginalVideoBlob(ph.k, name, { force: Boolean(prev && prev !== name) });
+    });
+  }, [overlayData, loadOriginalVideoBlob]);
+
+  useEffect(() => {
+    phases.forEach((ph) => {
+      if (!overlayData[ph.k] || !originalVideoBlobs[ph.k] || overlayMountReady[ph.k]) return;
+      setOverlayMountReady((prev) => (prev[ph.k] ? prev : { ...prev, [ph.k]: true }));
+    });
+  }, [overlayData, originalVideoBlobs]);
+
+  // The player loaded a clip that does not match the analysis (usually a cached baked
+  // composite). Pull the analyzed original straight from the server once; if that fails,
+  // play the baked video plainly instead of drawing chalk on the wrong frames.
+  const handleOverlaySourceMismatch = useCallback(async (phase) => {
+    const tries = overlaySourceRetryRef.current[phase] || 0;
+    const name = overlayData[phase]?.overlay_video_filename
+      || kinematicsResults[phase]?.video_filename;
+    const giveUp = () => {
+      setOverlaySourceBad((prev) => (prev[phase] ? prev : { ...prev, [phase]: true }));
+    };
+    if (tries >= 1 || !name) {
+      giveUp();
       return;
     }
-    if (!file.name) {
-      file = new File([file], data[vidKey(phase)] || "video.mp4", { type: file.type || "video/mp4" });
+    overlaySourceRetryRef.current[phase] = tries + 1;
+    // Fetch before swapping: a failed refetch must not drop the clip we already play.
+    let fresh = null;
+    try {
+      const res = await fetch(`${API_BASE}/video/${encodeURIComponent(name)}`);
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size > 0) fresh = blob;
+      }
+    } catch (err) {
+      console.warn("overlay source refetch failed:", err);
+    }
+    if (!fresh) {
+      giveUp();
+      return;
+    }
+    const objectUrl = URL.createObjectURL(fresh);
+    setOriginalVideoBlobs((prev) => {
+      if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+      const next = { ...prev, [phase]: objectUrl };
+      originalVideoBlobsRef.current = next;
+      return next;
+    });
+    persistValidationPhase(phase, {
+      csvFilename: kinematicsResults[phase]?.csv_filename,
+      videoFilename: name,
+      originalVideoBlob: fresh,
+      kinematicsSnapshot: kinematicsResults[phase],
+    });
+  }, [overlayData, kinematicsResults, persistValidationPhase]);
+
+  // A freshly loaded clip gets a new verdict from the player.
+  useEffect(() => {
+    phases.forEach((ph) => {
+      if (!originalVideoBlobs[ph.k]) return;
+      setOverlaySourceBad((prev) => {
+        if (!prev[ph.k]) return prev;
+        const next = { ...prev };
+        delete next[ph.k];
+        return next;
+      });
+    });
+  }, [originalVideoBlobs]);
+
+  const analyzeVideo = async (phase) => {
+    const file = data[`${vidKey(phase)}_file`];
+    if (!file) {
+      showToast("Please select a file first", "error");
+      return;
     }
 
     const controller = new AbortController();
     abortRef.current[phase] = controller;
+    setKinAnalyzeActive(true);
+    setOverlayMountReady((prev) => ({ ...prev, [phase]: false }));
+    setDriveBakeDone((prev) => ({ ...prev, [phase]: false }));
+    setOverlaySourceBad((prev) => {
+      if (!prev[phase]) return prev;
+      const next = { ...prev };
+      delete next[phase];
+      return next;
+    });
+    overlaySourceRetryRef.current[phase] = 0;
+    driveBakeToastRef.current[phase] = false;
+    driveBakeToastRef.current[`${phase}-nopatient`] = false;
+    setOverlayData((prev) => {
+      if (!prev[phase]) return prev;
+      const next = { ...prev };
+      delete next[phase];
+      return next;
+    });
     onChange({ ...data, [statusKey(phase)]: "analyzing" });
-    setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 5, step: "Uploading…" } }));
+    setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 5, step: "Uploading?" } }));
+    try {
+      sessionStorage.setItem(
+        "neuro_kin_analyze_ui",
+        JSON.stringify({ phase, pct: 5, step: "Uploading?" }),
+      );
+    } catch { /* ignore */ }
+
+    const isCsv = file.name.endsWith(".csv");
+
+    const demoSide = demographics?.side;
+    const strokeSideHint =
+      demoSide === "1" || demoSide === 1 ? "left"
+      : demoSide === "2" || demoSide === 2 ? "right"
+      : "auto";
 
     try {
       const fd = new FormData();
-      const isCsv = file.name.endsWith(".csv");
       fd.append(isCsv ? "csv" : "video", file);
       fd.append("phase", phase);
-      const strokeSideRaw = (demographics?.side || demographics?.affectedSide || demographics?.strokeSide || "auto").toString();
-      const strokeSide = strokeSideRaw === "1" ? "left" : strokeSideRaw === "2" ? "right" : strokeSideRaw.toLowerCase();
-      fd.append("stroke_side", strokeSide.includes("left") ? "left" : strokeSide.includes("right") ? "right" : "auto");
-      fd.append("affected_side", strokeSide.includes("left") ? "left" : strokeSide.includes("right") ? "right" : "auto");
+      // Use demographics paretic side when set; otherwise auto-detect from kinematics.
+      fd.append("stroke_side", strokeSideHint);
+      fd.append("affected_side", strokeSideHint);
       fd.append("cutoff_frequency", settings.cutoffFrequency.toString());
       fd.append("filter_order", settings.filterOrder.toString());
+      fd.append("clinical_task", clinicalMovementTask);
       fd.append("patient_height_cm", demographics?.height || "auto");
-      fd.append("shoulder_width_cm", demographics?.shoulderWidth || "auto");
+      fd.append("save_intermediates", "false");
       const sexRaw = (demographics?.sex || demographics?.gender || "unknown").toString().toLowerCase();
       fd.append("patient_sex", sexRaw.includes("female") || sexRaw === "2" ? "female" : sexRaw.includes("male") || sexRaw === "1" ? "male" : "unknown");
       if (!isCsv) {
         fd.append("arm_type", "paretic");
         fd.append("trial_count", "1");
-        fd.append("best_trial_metric", "nvp");
+        fd.append("best_trial_metric", "nvp_reach");
+        fd.append("clinical_task", clinicalMovementTask);
       }
 
       const endpoint = isCsv ? "/analyze-csv" : "/analyze";
@@ -2585,7 +4435,57 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
         throw new Error(detail);
       }
 
-      const result = await res.json();
+      let result = await res.json();
+
+      if (result.job_id && result.async && !isCsv) {
+        const jobId = result.job_id;
+        const pollMs = 1400;
+        for (;;) {
+          if (controller.signal.aborted) {
+            const abortErr = new Error("Analysis cancelled");
+            abortErr.name = "AbortError";
+            throw abortErr;
+          }
+          const pr = await fetch(`${API_BASE}/analyze-progress/${encodeURIComponent(jobId)}`, {
+            signal: controller.signal,
+          });
+          if (!pr.ok) throw new Error(`Progress poll failed (${pr.status})`);
+          const prog = await pr.json();
+          startTransition(() => {
+            setAnalysisProgress((prev) => ({
+              ...prev,
+              [phase]: {
+                pct: typeof prog.pct === "number" ? prog.pct : 5,
+                step: prog.step || "Analyzing?",
+              },
+            }));
+          });
+          try {
+            sessionStorage.setItem(
+              "neuro_kin_analyze_ui",
+              JSON.stringify({
+                phase,
+                pct: prog.pct,
+                step: prog.step || "Analyzing?",
+              }),
+            );
+          } catch { /* ignore */ }
+          if (prog.done) {
+            if (prog.error) throw new Error(prog.error);
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, pollMs));
+        }
+        const rr = await fetch(`${API_BASE}/analyze-result/${encodeURIComponent(jobId)}`, {
+          signal: controller.signal,
+        });
+        if (!rr.ok) {
+          let detail = `Server error ${rr.status}`;
+          try { const e = await rr.json(); if (e.error) detail += `: ${e.error}`; } catch (_) {}
+          throw new Error(detail);
+        }
+        result = await rr.json();
+      }
 
       if (result.error) {
         showToast(`Analysis error: ${result.error}`, "error");
@@ -2596,45 +4496,50 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
 
       // Strip the huge base64 payload before persisting; keep only the filename.
       const { unified_validation_video_b64: _, ...resultWithoutB64 } = result;
-      const nextResults = { ...kinematicsResults, [phase]: { ...resultWithoutB64, video_filename: result.video_filename || file.name } };
+      const videoFilename = result.video_filename || file.name;
+
+      if (!isCsv && videoFilename) {
+        await ensureOriginalVideoBlob(phase, file, videoFilename);
+      }
+
+      const phasePayload = {
+        ...resultWithoutB64,
+        video_filename: videoFilename,
+      };
+
+      const nextResults = { ...kinematicsResults, [phase]: phasePayload };
       setKinematicsResults(nextResults);
-      setShowResultsTable(true);
       onChange({
         ...data,
-        analysisResults: nextResults,
-        [resultKey(phase)]: resultWithoutB64,
+        analysisResults: stripKinResultsForStorage(nextResults),
+        [resultKey(phase)]: stripKinPhaseForSync(resultWithoutB64),
         [statusKey(phase)]: "completed",
       });
-      showToast(`✓ Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials → mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
+      showToast(`? Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials ? mean)` : ""}${(result.warnings || []).length ? " ? see warnings" : ""}`);
       setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
-      requestAnimationFrame(() => {
-        try {
-          document.getElementById("kin-validation-video")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        } catch (_) { /* ignore */ }
-      });
-      // Fetch overlay JSON in the background. The camera file and kinematic numbers
-      // must already be visible — do not wait for overlay-data or unified video.
-      if (!isCsv) {
-        const loadAndFetchOverlay = async () => {
-          if (!originalVideoBlobs[phase]) {
-            await loadOriginalVideoBlob(phase, result.video_filename || file.name);
-          }
-          await fetchOverlayData(phase, result.csv_filename);
-        };
-        loadAndFetchOverlay();
+      try {
+        sessionStorage.removeItem("neuro_kin_analyze_ui");
+      } catch { /* ignore */ }
+
+      if (!isCsv && result.csv_filename) {
+        setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Loading validation overlay?" } }));
+        fetchOverlayDataWithRetry(phase, result.csv_filename, { syncResults: true }, 8).catch(() => {});
       }
     } catch (err) {
       if (err.name === "AbortError") {
-        showToast(`✕ Analysis cancelled for ${phase}`, "info");
+        showToast(`? Analysis cancelled for ${phase}`, "info");
       } else {
-        const errorMsg = `Backend request failed: ${err.message}`;
+        const errorMsg = err.message || "Analysis failed";
         showToast(errorMsg, "error");
         console.error("ANALYSIS ERROR:", err);
-        alert(errorMsg);
       }
       onChange({ ...data, [statusKey(phase)]: "uploaded" });
     }
     delete abortRef.current[phase];
+    setKinAnalyzeActive(false);
+    try {
+      sessionStorage.removeItem("neuro_kin_analyze_ui");
+    } catch { /* ignore */ }
   };
 
   const downloadFile = async (phase, type) => {
@@ -2643,13 +4548,16 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
 
     let filename = "";
     if (type === "csv") filename = result.csv_filename;
-    if (type === "trc") filename = result.trc_filename;
     if (type === "mot") filename = result.mot_filename;
     if (type === "video") filename = result.validation_video;
     if (type === "unified" || type === "unified-download") filename = result.unified_validation_video;
+    if (type === "trc") {
+      showToast("TRC export removed ? use CSV or MOT", "info");
+      return;
+    }
     if (!filename) {
-      if (type === "video") showToast("Skeleton validation video not available — re-analyze the video file", "error");
-      if (type === "unified" || type === "unified-download") showToast("Unified validation video not available — generate it first", "error");
+      if (type === "video") showToast("Skeleton validation video not available ? re-analyze the video file", "error");
+      if (type === "unified" || type === "unified-download") showToast("Unified validation video not available ? generate it first", "error");
       return;
     }
 
@@ -2664,16 +4572,17 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
           const res = await fetch(blobUrl);
           if (!res.ok) throw new Error(`Blob read failed (${res.status})`);
           const blob = await res.blob();
-          if (isIOSDevice() || isStandalonePWA()) {
-            const objectUrl = URL.createObjectURL(blob);
-            const newTab = window.open(objectUrl, "_blank");
-            if (!newTab) downloadBlob(blob, filename);
-            setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
-            showToast("Video opened — long-press to save", "success");
-          } else {
-            downloadBlob(blob, filename);
-            showToast("Validation video downloaded", "success");
-          }
+          const baseName = filename.includes("/") ? filename.split("/").pop() : filename;
+          const typed =
+            blob.type && blob.type !== "application/octet-stream"
+              ? blob
+              : new Blob([blob], { type: "video/mp4" });
+          await downloadBlob(typed, baseName || "validation.mp4");
+          showToast("Validation video downloaded", "success");
+          scheduleDriveFileBackup(filename, blob, {
+            patientKey: patientDriveKeyFromDemographics(demographics),
+            subfolder: "videos",
+          });
         } catch (err) {
           console.error("Download from blob error:", err);
           showToast("Failed to download validation video", "error");
@@ -2683,26 +4592,22 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       try {
         const res = await fetch(url);
         if (res.status === 404) {
-          showToast("Validation video expired on server — please re-analyze the video", "error");
+          showToast("Validation video expired on server ? please re-analyze the video", "error");
           return;
         }
         if (!res.ok) throw new Error(`Download failed (${res.status})`);
         const blob = await res.blob();
-        // On iOS/PWA, prefer opening the video in a new tab so the user can
-        // long-press to save; blob downloads are often blocked in web clips.
-        if (isIOSDevice() || isStandalonePWA()) {
-          const objectUrl = URL.createObjectURL(blob);
-          const newTab = window.open(objectUrl, "_blank");
-          if (!newTab) {
-            // fallback if popup blocked
-            downloadBlob(blob, filename);
-          }
-          setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
-          showToast("Video opened — long-press to save", "success");
-        } else {
-          downloadBlob(blob, filename);
-          showToast("Validation video downloaded", "success");
-        }
+        const baseName = filename.includes("/") ? filename.split("/").pop() : filename;
+        const typed =
+          blob.type && blob.type !== "application/octet-stream"
+            ? blob
+            : new Blob([blob], { type: "video/mp4" });
+        await downloadBlob(typed, baseName || "validation.mp4");
+        showToast("Validation video downloaded", "success");
+        scheduleDriveFileBackup(filename, blob, {
+          patientKey: patientDriveKeyFromDemographics(demographics),
+          subfolder: "videos",
+        });
       } catch (err) {
         console.error("Download error:", err);
         showToast("Failed to download validation video", "error");
@@ -2710,7 +4615,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       return;
     }
 
-    // Play video inside app — iOS PWA has no back button if we navigate away
+    // Play video inside app ? iOS PWA has no back button if we navigate away
     if (type === "video" || type === "unified") {
       const title = type === "unified" ? "Unified Validation Video" : "Skeleton Video";
       const blobUrl = videoBlobs[phase];
@@ -2718,12 +4623,13 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
         setMediaPreview({
           phase,
           url: blobUrl,
-          title: `${phases.find((p) => p.k === phase)?.l || phase} — ${title}`,
+          title: `${phases.find((p) => p.k === phase)?.l || phase} ? ${title}`,
+          filename,
         });
       } else {
         const uv = kinematicsResults[phase]?.unified_validation_video;
         if (uv) loadVideoBlob(phase, uv);
-        showToast("Loading validation video — try again in a moment", "info");
+        showToast("Loading validation video ? try again in a moment", "info");
       }
       return;
     }
@@ -2744,12 +4650,27 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     if (!filename || videoLoadingRef.current[phase]) return;
     videoLoadingRef.current[phase] = true;
     setVideoLoading((prev) => ({ ...prev, [phase]: true }));
+    const phaseResult = kinematicsResults[phase];
+
+    const applyCachedUnified = async () => {
+      if (!patientCacheKey) return false;
+      const cached = await loadValidationSessionArtifact(patientCacheKey, phase);
+      if (!validationCacheMatchesResult(cached, phaseResult)) return false;
+      const blob = cached?.unifiedVideoBlob;
+      if (!(blob instanceof Blob) || blob.size <= 0) return false;
+      if (cached.unifiedVideoFilename && cached.unifiedVideoFilename !== filename) return false;
+      applyValidationCacheToState(phase, { unifiedVideoBlob: blob });
+      return true;
+    };
+
     try {
-      // Use /video so the browser gets the right video MIME type.
       const url = `${API_BASE}/video/${encodeURIComponent(filename)}`;
       const res = await fetch(url);
       if (res.status === 404) {
-        if (!silent) showToast("Validation video expired on server — please re-analyze", "error");
+        if (await applyCachedUnified()) return;
+        const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
+        if (validationCacheMatchesResult(cloud, phaseResult) && cloud?.unifiedVideoBlob?.size) return;
+        if (!silent) showToast("Validation video expired on server ? please re-analyze", "error");
         setVideoBlobs((prev) => {
           if (prev[phase]) URL.revokeObjectURL(prev[phase]);
           return { ...prev, [phase]: null };
@@ -2763,9 +4684,18 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
         if (prev[phase]) URL.revokeObjectURL(prev[phase]);
         return { ...prev, [phase]: objectUrl };
       });
+      persistValidationPhase(phase, {
+        csvFilename: phaseResult?.csv_filename,
+        unifiedVideoFilename: filename,
+        unifiedVideoBlob: blob,
+        kinematicsSnapshot: phaseResult,
+      });
     } catch (err) {
       console.error("Failed to cache validation video:", err);
-      if (!silent) showToast("Validation video could not be loaded — try expanding it", "error");
+      if (await applyCachedUnified()) return;
+      const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
+      if (validationCacheMatchesResult(cloud, phaseResult) && cloud?.unifiedVideoBlob?.size) return;
+      if (!silent) showToast("Validation video could not be loaded ? try expanding it", "error");
       setVideoBlobs((prev) => {
         if (prev[phase]) URL.revokeObjectURL(prev[phase]);
         return { ...prev, [phase]: null };
@@ -2775,7 +4705,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       setVideoLoading((prev) => ({ ...prev, [phase]: false }));
       setVideoAttempts((prev) => ({ ...prev, [phase]: (prev[phase] || 0) + 1 }));
     }
-  }, [showToast]);
+  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, demographics, sessionKey]);
 
 
   const [uvErrors, setUvErrors] = useState({});
@@ -2801,6 +4731,10 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     }
     setUvErrors((prev) => ({ ...prev, [phase]: null }));
     setAnalysisStatus((prev) => ({ ...prev, [phase]: "generating_unified" }));
+
+    // Hide the results table while any analyzed phase is still waiting for its
+    // unified validation video.
+    setShowResultsTable(false);
 
     try {
       const formData = new FormData();
@@ -2835,7 +4769,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
               }));
               loadVideoBlob(phase, status.unified_validation_video);
               showToast("Unified validation video ready", "success");
-              setShowResultsTable(true);
+              setShowResultsTable(false);
             } else {
               throw new Error(status.error || "Video generation failed");
             }
@@ -2859,12 +4793,19 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     }
   };
 
-  // Show kinematic numbers as soon as analysis finishes. Overlay JSON can arrive
-  // later and refine the same fields; do not hide the table while it loads.
+  // Show the kinematic results table only when every analyzed phase has a ready
+  // client-side overlay. This guarantees the table numbers are always derived from
+  // the actual video frames used by the validation overlay, not from server-side
+  // analysis that may differ from the video.
   useEffect(() => {
     const analyzedPhases = phases.filter((ph) => kinematicsResults[ph.k]);
-    setShowResultsTable(analyzedPhases.length > 0);
-  }, [kinematicsResults]);
+    if (analyzedPhases.length === 0) {
+      setShowResultsTable(false);
+      return;
+    }
+    const anyPending = analyzedPhases.some((ph) => !overlayData[ph.k] && !uvErrors[ph.k]);
+    setShowResultsTable(!anyPending);
+  }, [kinematicsResults, uvErrors, overlayData]);
 
   // Re-fetch overlay data for persisted sessions (page reload, saved report, etc.)
   // where the in-memory overlay state was lost but the backend CSV still exists.
@@ -2882,61 +4823,107 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     setExpandedResults((prev) => ({ ...prev, [phase]: !prev[phase] }));
   };
 
+  const KIN_EMPTY = "\u2014";
+
   const getMetricValue = (phase, key) => {
     const result = kinematicsResults[phase];
-    if (!result) return "—";
-    // The table reads exclusively from the video overlay data. Every displayed
-    // number comes from the same frames used by the validation overlay, so the
-    // table and the video can never disagree.
-    const overlay = overlayData?.[phase];
-    if (overlay?.frames?.length) {
-      const computed = computeOverlayMetrics(overlay);
-      if (computed) {
-        const num = pickKinField(computed, key);
-        if (num !== null) return num;
-      }
+    if (!result) return KIN_EMPTY;
+    if (key === "pause_stops_panel") {
+      const pt = resolveKinMetricValue(result, "pause_time_sec", overlayData?.[phase]);
+      const ns = resolveKinMetricValue(result, "number_of_stops", overlayData?.[phase]);
+      if (pt == null && ns == null) return KIN_EMPTY;
+      const pStr = pt != null ? formatKinValue("pause_time_sec", pt) : KIN_EMPTY;
+      const nStr = ns != null ? formatKinValue("number_of_stops", ns) : KIN_EMPTY;
+      return `${pStr} / ${nStr}`;
     }
-    const fromResult = pickKinField(result, key) ?? pickKinField(result.overlay_metrics, key)
-      ?? pickKinField(result.validation_summary, key);
-    if (fromResult !== null && fromResult !== undefined) return fromResult;
-    if (key === "side_analyzed" || key === "side") {
-      return result.side_analyzed ?? result.side ?? "—";
-    }
-    return "—";
+    const metricKey = key === "peak_velocity_panel" ? "peak_velocity_cm_s" : key;
+    const val = resolveKinMetricValue(result, metricKey, overlayData?.[phase]);
+    if (val === null) return KIN_EMPTY;
+    if (key === "side_analyzed" || key === "side") return val;
+    return val;
   };
 
   const displayMetricValue = (phase, key) => {
+    if (key === "pause_stops_panel") {
+      return getMetricValue(phase, key);
+    }
     const val = getMetricValue(phase, key);
-    return formatKinValue(key, val);
+    if (val === KIN_EMPTY || typeof val === "string") return val;
+    const formatKey = key === "peak_velocity_panel" ? "peak_velocity_cm_s" : key;
+    return formatKinValue(formatKey, val);
   };
 
   const KIN_TIPS = {
-    nvp: "Number of velocity peaks — fewer = smoother, more ballistic movement.",
-    straightness: "Path straightness = straight-line displacement / actual path length. Higher = straighter reach.",
-    pause_time_sec: "Total time the hand is paused (speed below 5% of peak) during the reach.",
-    number_of_stops: "Number of distinct pauses during the reach.",
+    task_complete: "Did the patient finish the expected phases (reach, lift/transport, return)? Higher = completed.",
+    task_completion_ratio: "Share of expected task phases detected. Compare this before full-task smoothness.",
+    nvp_reach: "Velocity peaks during reach & grasp only.",
+    nvp_drink: "Velocity peaks while lifting the cup from the table to the highest point achieved.",
+    nvp_transport: "Velocity peaks during the transport / drink-lift phase (same as NVP drink for drink task).",
+    nvp_return: "Velocity peaks while returning the cup/hand to the table.",
+    nvp_total: "Sum of NVP across reach + drink/transport + return phases.",
+    drink_lift_height_cm: "How high the palm rose during drink (table ? peak), in cm using the 85 cm table width scale. Higher = greater lift.",
+    lift_height_cm: "Peak vertical lift during transport, in cm (85 cm table scale).",
+    drink_lift_height_sw: "Drink lift height in shoulder-width units (secondary / normalized).",
+    lift_height_sw: "Peak vertical lift during transport, in shoulder-width units.",
+    straightness_reach: "Path straightness on the reach window only.",
+    pause_time_sec_reach: "Path pauses during reach only ? excludes grasp fixation and drink sips.",
+    number_of_stops_reach: "Path stops during reach only (sips excluded).",
+    sip_bout_count: "How many times the cup approached the mouth during drink. Descriptive only ? does not make NVP worse.",
+    grasp_dwell_sec: "Terminal low-speed time at the end of reach (cup grasp fixation). Functional ? not counted as path pause.",
+    functional_hold_sec: "Grasp dwell + mouth/face hold during transport. Functional time, not path pause.",
+    pause_time_sec_total: "All low-speed time including grasp/mouth dwell (exploratory).",
+    nvp: "Primary NVP = reach window (extra sips excluded). Same as NVP (reach) after re-analysis.",
+    straightness: "Primary straightness = reach window.",
+    pause_time_sec: "Primary path pause (grasp/mouth dwell and sip holds excluded).",
+    number_of_stops: "Primary path stops (dwell/sips excluded).",
+    nvp_full_task: "NVP on the whole recording including all sip approaches ? exploratory only; do not treat higher values from extra sips as worse movement.",
     trunk_ratio: "Trunk displacement / palm displacement. Lower = less trunk compensation.",
-    shoulder_elevation_norm: "Shoulder elevation normalized to shoulder width. Lower = less compensatory elevation.",
-    shoulder_elevation_table_ratio: "Shoulder elevation relative to the detected table-surface line. Lower = less compensatory elevation.",
+    shoulder_elevation_cm: "How much the affected shoulder rose (rest ? peak), in cm using the 85 cm table scale. Lower = less shoulder hike.",
+    shoulder_elevation_palm_ratio: "Shoulder elevation as a unitless palm-anchor ratio (exploratory).",
     elbow_angle_mean_deg: "Mean elbow flexion angle during the movement window.",
+    shoulder_flexion_mean_deg: "Mean shoulder flexion angle (trunk?shoulder?elbow) during the movement window.",
     movement_time_sec: "Active movement duration (onset to offset).",
+    peak_velocity_cm_s: "Peak hand speed during reach (cm/s), scaled with the 85 cm table width. Higher = faster reach.",
     peak_elbow_ang_vel_deg_s: "Peak elbow angular velocity during the reach (deg/s).",
+    peak_shoulder_flexion_vel_deg_s: "Peak shoulder flexion angular velocity during the reach (deg/s).",
+    peak_velocity_panel: "Peak hand velocity (cm/s) from table calibration.",
+    tremor_8_12hz_power: "Hand-speed power in 8?12 Hz from the validation video overlay (same as Tremor 8?12 Hz on the skeleton). Lower = less tremor. Index/ADL tremor stay under Show all.",
+    fine_motor_quality_index: "Hand / finger quality 0?100 from the validation overlay: index-tip smoothness (fewer peaks/micro-stops, lower speed CV) plus pinch opening when available. Higher = better.",
+    shoulder_abduction_rom_deg: "Shoulder abduction range during the reach (validation overlay).",
+    forearm_pronation_supination_rom_deg: "Forearm pronation/supination ROM (validation overlay).",
+    fine_motor_quality_index: "Fine motor quality index 0?100 (validation overlay).",
+    adl_shoulder_abduction_mean_deg: "Mean shoulder abduction during drink transport (lower = less compensatory lift).",
+    adl_shoulder_abduction_rom_deg: "Shoulder abduction ROM during ADL transport phase (lower = better for drink).",
+    adl_finger_flex_ext_quality_index: "Finger open/close smoothness and ROM during drink (0?100; higher = better).",
+    adl_head_forward_flexion_compensation_index: "Head lean toward cup + neck flexion during drink (0?1; lower = more stable head).",
+    finger_flex_ext_quality_index: "Finger open/close quality index from movement profile (0?100).",
+    head_forward_flexion_compensation_index: "Combined head forward displacement and flexion compensation (0?1; lower = better).",
+    adl_tremor_8_12hz_power: "Tremor 8?12 Hz during ADL phase (relative power).",
+    pause_stops_panel: "Path pause time (s) and stops ? grasp/mouth dwell excluded (same definition as primary pause).",
   };
 
-  const variables = orderedKinematicVars().map((v) => ({
-    group: v.tier === "primary" ? "Primary" : v.tier === "secondary" ? "Secondary" : "Exploratory",
-    name: v.label,
+  const CARD_PREVIEW_KEYS = ["task_complete", "nvp_reach", "nvp_drink", "nvp_total", "drink_lift_height_cm"];
+
+  const variables = orderedKinematicResultsTableVars({
+    includeExtended: showAllKinMetrics,
+    clinicalTask: clinicalMovementTask,
+    kinematicsResults,
+  }).map((v) => ({
+    group: v.group,
+    name: v.name,
     key: v.key,
-    unit: v.unit || "—",
-    direction: v.dir === "lower" ? "lower" : v.dir === "higher" ? "higher" : "none",
+    unit: v.unit || "",
+    direction: v.direction,
     tip: KIN_TIPS[v.key] || "",
   }));
 
   const activeResultPhases = phases.filter((ph) => kinematicsResults[ph.k]);
   const kinViewWarning = (() => {
+    const mismatch = describeCompletionMismatch(kinematicsResults);
+    if (mismatch) return mismatch;
     const lowAmp = activeResultPhases.filter((ph) => kinematicsResults[ph.k]?.sparc_comparable === false);
     if (lowAmp.length) {
-      return `Reach amplitude low in ${lowAmp.map((ph) => ph.label).join(", ")} — kinematic smoothness metrics may be less reliable`;
+      return `Reach amplitude low in ${lowAmp.map((ph) => ph.label).join(", ")} ? kinematic smoothness metrics may be less reliable`;
     }
     return null;
   })();
@@ -2958,8 +4945,8 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     c === "emerald" ? "text-emerald-300" : "text-amber-300";
 
   const kinDirArrow = (dir) => {
-    if (dir === "higher") return { sym: "↑", tip: "↑ higher = better" };
-    if (dir === "lower") return { sym: "↓", tip: "↓ lower = better" };
+    if (dir === "higher") return { sym: "\u2191", tip: "Higher is better" };
+    if (dir === "lower") return { sym: "\u2193", tip: "Lower is better" };
     return null;
   };
 
@@ -2969,9 +4956,10 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
     const postVal = getMetricValue("post", metric.key);
     const baselineVal = getMetricValue("baseline", metric.key);
     const kinComparable = kinCrossPhaseComparable(kinematicsResults, metric.key, analyzedArmForPhase);
-    const deltaPrePost = kinComparable && preVal !== "—" && postVal !== "—"
-      ? kinPrePostBadge(preVal, postVal, metric.direction) : null;
-    const deltaPostHealthy = kinComparable && postVal !== "—" && baselineVal !== "—"
+    const deltaPrePost = resolveKinPrePostCell(
+      preVal, postVal, metric.direction, metric.key, kinematicsResults, analyzedArmForPhase,
+    );
+    const deltaPostHealthy = kinComparable && postVal !== KIN_EMPTY && baselineVal !== KIN_EMPTY
       ? kinPostHealthyBadge(preVal, postVal, baselineVal, metric.direction) : null;
     const arrow = kinDirArrow(metric.direction);
 
@@ -3022,7 +5010,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
               )}
               {deltaPostHealthy && (
                 <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md border ${deltaPostHealthy.colorClass}`}>
-                  Post → Healthy: {deltaPostHealthy.text}
+                  Post ? Healthy: {deltaPostHealthy.text}
                 </span>
               )}
             </div>
@@ -3054,8 +5042,57 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
           )}
         </div>
         <div className="mb-4 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[11px] text-white/55">
-          <span className="font-bold text-white/70">Auto arm:</span>{" "}
-          The more active arm during the reach is detected and analyzed automatically for each video.
+          {kinematicDomain === "le" ? (
+            <>
+              <span className="font-bold text-white/70">Lower extremity:</span>{" "}
+              Full body must stay in frame. Use sit-to-stand, squat, gait, or quiet stance ? UE reach tasks stay under Upper Extremity.
+            </>
+          ) : (
+            <>
+              <span className="font-bold text-white/70">Auto arm:</span>{" "}
+              The more active arm during the reach is detected and analyzed automatically for each video.
+            </>
+          )}
+        </div>
+        <div className="mb-4 max-w-xl mx-auto space-y-3">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-white/40 mb-2 text-center sm:text-left">
+              Extremity / Ekstremite
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {(["ue", "le"]).map((domain) => {
+                const active = kinematicDomain === domain;
+                const meta = CLINICAL_DOMAIN_LABELS[domain];
+                return (
+                  <button
+                    key={domain}
+                    type="button"
+                    onClick={() => selectKinematicDomain(domain)}
+                    className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                      active
+                        ? domain === "ue"
+                          ? "bg-sky-500/20 border-sky-400/40 text-sky-100"
+                          : "bg-violet-500/20 border-violet-400/40 text-violet-100"
+                        : "bg-white/[0.03] border-white/[0.08] text-white/55 hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    <span className="block text-xs font-extrabold tracking-wide">{meta.en}</span>
+                    <span className="block text-[10px] font-light opacity-70 mt-0.5">{meta.tr}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <GSelect
+            en={`${CLINICAL_DOMAIN_LABELS[kinematicDomain].short} movement task`}
+            tr={`${CLINICAL_DOMAIN_LABELS[kinematicDomain].tr} g?rev`}
+            value={clinicalMovementTask}
+            onChange={(e) => setClinicalMovementTask(e.target.value)}
+            options={domainTasks.map((t) => ({ value: t.id, label: t.label }))}
+          />
+          <p className="text-[10px] text-white/40 mt-1.5 text-center sm:text-left">
+            {clinicalTaskById(clinicalMovementTask).hint}
+          </p>
         </div>
         <div className="flex justify-center">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 w-full max-w-3xl">
@@ -3082,13 +5119,8 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                 </div>
 
                 <div className="px-4 py-2 flex flex-col flex-1 min-h-0">
-                  <label htmlFor={`kin-file-${ph.k}`} className={`${kinUploadZoneCls(ph.c, !!data[vidKey(ph.k)])} relative mb-3 min-h-[130px] ${status === "analyzing" ? "overflow-visible pointer-events-none" : "overflow-hidden"} `}>
-                  <AnimatePresence>
-                    {status === "analyzing" && (
-                      <KinPhaseAnalyzingOverlay accent={ph.c} />
-                    )}
-                  </AnimatePresence>
-                  <div className={status === "analyzing" ? "invisible" : "flex flex-col items-center justify-center gap-1.5 w-full"}>
+                  <label htmlFor={`kin-file-${ph.k}`} className={`${kinUploadZoneCls(ph.c, !!data[vidKey(ph.k)])} relative mb-3 min-h-[130px] overflow-hidden ${status === "analyzing" ? "pointer-events-none" : ""}`}>
+                  <div className="flex flex-col items-center justify-center gap-1.5 w-full">
                   <input
                       id={`kin-file-${ph.k}`}
                     type="file"
@@ -3097,6 +5129,17 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                       disabled={status === "analyzing"}
                       className="sr-only"
                     />
+                    {status === "analyzing" ? (
+                      <>
+                        <KinFilmStripLoop accent={ph.c} />
+                        {data[vidKey(ph.k)] && (
+                          <span className="text-[10px] font-medium text-white/55 truncate max-w-full px-1" title={data[vidKey(ph.k)]}>
+                            {kinShortFileName(data[vidKey(ph.k)])}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
                     <Upload className={`w-5 h-5 transition-colors ${data[vidKey(ph.k)] ? "text-white/55" : "text-white/30 group-hover:text-white/50"}`} />
                     {data[vidKey(ph.k)] ? (
                       <>
@@ -3111,38 +5154,93 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                         <span className="text-[9px] text-white/30">Browse files</span>
                       </>
                     )}
+                      </>
+                    )}
                 </div>
                   </label>
 
                   <div className="mt-auto flex flex-col gap-2">
-                    <GBtn variant={ph.c} onClick={() => analyzeVideo(ph.k)} disabled={status === "analyzing" || !data[vidKey(ph.k)]} className="w-full text-xs py-2.5" title="Analyze">
-                      {status === "analyzing" ? (
-                        <span className="font-bold opacity-70">Analyzing…</span>
-                      ) : (
+                    {status === "analyzing" ? (
+                      <KinPhaseAnalyzeProgressBar
+                        accent={ph.c}
+                        pct={analysisProgress[ph.k]?.pct}
+                        step={analysisProgress[ph.k]?.step || "Analyzing video?"}
+                      />
+                    ) : (
+                    <GBtn variant={ph.c} onClick={() => analyzeVideo(ph.k)} disabled={!data[vidKey(ph.k)]} className="w-full text-xs py-2.5" title="Analyze">
                         <Play className="w-4 h-4 mx-auto" />
-                      )}
                   </GBtn>
+                    )}
 
                   {hasResult && (
                       <div className="flex justify-center gap-1">
                         <GBtn variant="default" onClick={() => downloadFile(ph.k, "csv")} className="!py-1.5 !px-2 min-w-[2.25rem] shrink-0" title="CSV data">
                         <FileSpreadsheet className="w-3.5 h-3.5" />
                       </GBtn>
-                        <GBtn variant="default" onClick={() => downloadFile(ph.k, "trc")} className="!py-1.5 !px-2 min-w-[2.25rem] shrink-0" title="OpenSim TRC">
-                        <Database className="w-3.5 h-3.5" />
-                      </GBtn>
                         <GBtn variant="default" onClick={() => downloadFile(ph.k, "mot")} className="!py-1.5 !px-2 min-w-[2.25rem] shrink-0" title="OpenSim MOT (IK)">
                         <Activity className="w-3.5 h-3.5" />
                       </GBtn>
                         <GBtn variant="default" onClick={() => kinematicsResults[ph.k]?.unified_validation_video ? downloadFile(ph.k, "unified") : generateUnifiedValidation(ph.k)} disabled={analysisStatus[ph.k] === "generating_unified"} className="!py-1.5 !px-2 min-w-[2.25rem] shrink-0" title={kinematicsResults[ph.k]?.unified_validation_video ? "Unified Validation Video" : "Generate Unified Validation Video"}>
                           {analysisStatus[ph.k] === "generating_unified" ? (
-                            <span className="text-[10px] font-bold leading-none">…</span>
+                            <span className="text-[10px] font-bold leading-none">?</span>
                           ) : (
                             <span className="text-[10px] font-bold leading-none">UV</span>
                           )}
                       </GBtn>
                     </div>
                   )}
+
+                  {hasResult && (
+                      <div className="sm:hidden grid grid-cols-2 gap-1.5">
+                        {CARD_PREVIEW_KEYS.map((key) => {
+                          const meta = KINEMATIC_VARS.find((v) => v.key === key);
+                          if (!meta) return null;
+                          return (
+                            <div key={key} className={`rounded-lg border px-2 py-1.5 ${phaseValueCls(ph.c)}`}>
+                              <p className="text-[9px] font-bold text-white/45 leading-tight">{meta.label}</p>
+                              <p className="text-sm font-mono font-extrabold text-white/90 mt-0.5">
+                                {displayMetricValue(ph.k, key)}
+                                <span className="text-[9px] font-normal text-white/35 ml-0.5">{meta.unit}</span>
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {hasResult && kinematicsResults[ph.k]?.velocity_profile && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => toggleResult(ph.k)}
+                          className="w-full text-[11px] text-white/45 hover:text-white/75 py-1.5 font-medium tracking-wide border border-white/[0.06] rounded-lg bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
+                          title={expandedResults[ph.k] ? "Hide chart" : "Show movement chart"}
+                        >
+                          {expandedResults[ph.k] ? "Hide chart" : "Movement chart"}
+                  </button>
+
+                        <AnimatePresence>
+                          {expandedResults[ph.k] && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.25 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="rounded-xl border border-white/[0.08] bg-black/30 overflow-hidden">
+                                <div
+                                  className="w-full h-[140px] p-2 kin-phase-chart"
+                                  dangerouslySetInnerHTML={{
+                                    __html: buildCombinedVelChart({ [ph.k]: kinematicsResults[ph.k].velocity_profile }, false, true),
+                                  }}
+                                />
+                  </div>
+                            </motion.div>
+                )}
+                        </AnimatePresence>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -3154,60 +5252,85 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
       </Glass>
 
       {Object.keys(kinematicsResults).length > 0 && (
-        <Glass id="kin-validation-video" className="p-4 sm:p-5">
+        <Glass className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3 gap-2">
             <p className="text-sm font-extrabold text-white/80">Validation Video</p>
+            <p className="text-[10px] text-white/40 hidden sm:block">Re-analyze after overlay v36 deploy</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {phases.filter((ph) => kinematicsResults[ph.k]).map((ph) => (
               <div key={ph.k} className="rounded-xl border border-white/10 bg-black/20 p-3 overflow-hidden">
-                <div className="flex items-center justify-between mb-2">
-                  <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>{ph.l} — Validation</p>
-                  {kinematicsResults[ph.k]?.unified_validation_video && (
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => downloadFile(ph.k, "unified-download")}
-                        className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
-                        title="Download video"
-                      >
-                        ↓ Download
-                      </button>
-                    </div>
-                  )}
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>{`${ph.l} \u00b7 Validation`}</p>
                 </div>
-                {overlayData[ph.k] && (originalVideoBlobs[ph.k] || data[`${vidKey(ph.k)}_url`]) ? (
+                {overlayData[ph.k] && !overlaySourceBad[ph.k] ? (
+                  originalVideoBlobs[ph.k] ? (
+                    overlayMountReady[ph.k] ? (
+                    <KinOverlayErrorBoundary key={`ov-${ph.k}-${overlayData[ph.k]?.version || "v"}`}>
                     <ValidationOverlayPlayer
-                      videoUrl={originalVideoBlobs[ph.k] || data[`${vidKey(ph.k)}_url`]}
+                      videoUrl={originalVideoBlobs[ph.k]}
                       overlayData={overlayData[ph.k]}
+                      clinicalTask={kinematicsResults[ph.k]?.clinical_task || clinicalMovementTask}
                       phaseLabel={ph.l}
-                      autoPlay
-                      autoRender
-                      onError={() => showToast(`${ph.l} overlay player error`, "error")}
+                      autoPlay={false}
+                      autoRender={false}
+                      serverExportFilename={
+                        kinematicsResults[ph.k]?.unified_validation_video || null
+                      }
+                      onRequestServerExport={async () => {
+                        const r = kinematicsResults[ph.k];
+                        if (r?.unified_validation_video) {
+                          await downloadFile(ph.k, "unified-download");
+                          return;
+                        }
+                        showToast("Generating validation video on server?", "info");
+                        await generateUnifiedValidation(ph.k);
+                      }}
+                      onDownloadReady={(_url, blob) => {
+                        if (!blob || !(blob instanceof Blob) || blob.size < 1000) return;
+                        setDriveBakeDone((prev) => ({ ...prev, [ph.k]: true }));
+                        persistValidationPhase(ph.k, {
+                          unifiedVideoBlob: blob,
+                          compositedOverlay: true,
+                          compositedOverlayQuality: 2,
+                          kinematicsSnapshot: kinematicsResults[ph.k],
+                        });
+                        const patientKey = patientDriveKeyFromDemographics(demographics);
+                        if (!patientKey) {
+                          if (!driveBakeToastRef.current[`${ph.k}-nopatient`]) {
+                            driveBakeToastRef.current[`${ph.k}-nopatient`] = true;
+                            showToast("Validation ready ? set patient ID/name to auto-save on Drive", "info");
+                          }
+                          return;
+                        }
+                        // persistValidationPhase already uploads original+overlay+kinematics+view-copy (multipart OK).
+                        if (!driveBakeToastRef.current[ph.k]) {
+                          driveBakeToastRef.current[ph.k] = true;
+                          showToast(`${ph.l}: screen recording saved to patient Drive`, "success");
+                        }
+                      }}
+                      onError={(msg) => showToast(msg || `${ph.l} overlay error`, "error")}
+                      onSourceMismatch={() => handleOverlaySourceMismatch(ph.k)}
                     />
-                ) : overlayData[ph.k] ? (
+                    </KinOverlayErrorBoundary>
+                    ) : (
                     <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3">
-                      <p className="text-[11px] text-white/50 mb-2">Loading original video…</p>
+                      <p className="text-[11px] text-white/50 mb-2">{"Starting validation preview\u2026"}</p>
                       <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
                     </div>
-                ) : (originalVideoBlobs[ph.k] || data[`${vidKey(ph.k)}_url`]) ? (
-                    <div className="rounded-lg overflow-hidden bg-black">
-                      <video
-                        src={originalVideoBlobs[ph.k] || data[`${vidKey(ph.k)}_url`]}
-                        className="w-full rounded-lg bg-black"
-                        controls
-                        autoPlay
-                        muted
-                        playsInline
-                      />
-                      <p className="text-[11px] text-white/50 mt-2 mb-1 text-center">Preparing skeleton overlay…</p>
+                    )
+                  ) : (
+                    <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3">
+                      <p className="text-[11px] text-white/50 mb-2">{"Loading original video\u2026"}</p>
+                      <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
                     </div>
+                  )
                 ) : kinematicsResults[ph.k]?.unified_validation_video ? (
                   videoBlobs[ph.k] ? (
                     <InlineValidationVideo
                       src={videoBlobs[ph.k]}
                       phaseLabel={ph.l}
-                      autoPlay
+                      autoPlay={false}
                       onEnded={() => setShowResultsTable(true)}
                       onError={() => {
                         showToast(`${ph.l} validation video could not be played`, "error");
@@ -3216,7 +5339,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                     />
                   ) : videoLoading[ph.k] ? (
                     <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3">
-                      <p className="text-[11px] text-white/50 mb-2">Loading validation video…</p>
+                      <p className="text-[11px] text-white/50 mb-2">{"Loading validation video\u2026"}</p>
                       <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
                     </div>
                   ) : (
@@ -3245,7 +5368,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                   </div>
                 ) : (
                   <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3">
-                    <p className="text-[11px] text-white/50 mb-2">Preparing validation overlay…</p>
+                    <p className="text-[11px] text-white/50 mb-2">{"Preparing validation overlay\u2026"}</p>
                     <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
                   </div>
                 )}
@@ -3257,12 +5380,31 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
 
       {Object.keys(kinematicsResults).length > 0 && showResultsTable && (
         <Glass className="p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-3 gap-2">
-            <p className="text-sm font-extrabold text-white/80">Kinematic Results</p>
-            <GBtn variant="danger" onClick={clearAllKin} className="text-[10px] py-1.5 px-3 flex-shrink-0" title="Remove all results">
-              <X className="w-3 h-3 mr-1" />
-              Clear All
-            </GBtn>
+          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-sm font-extrabold text-white/80">Kinematic Results</p>
+              <p className="text-[10px] text-white/40 mt-0.5">
+                {showAllKinMetrics ? "All stored metrics" : "Core movement quality (15)"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowAllKinMetrics((v) => !v)}
+                className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all ${
+                  showAllKinMetrics
+                    ? "bg-white/12 border-white/25 text-white"
+                    : "bg-white/[0.04] border-white/[0.1] text-white/60 hover:text-white/85"
+                }`}
+                title={showAllKinMetrics ? "Show core quality metrics only" : "Show every stored metric"}
+              >
+                {showAllKinMetrics ? "Core only" : "Show all"}
+              </button>
+              <GBtn variant="danger" onClick={clearAllKin} className="text-[10px] py-1.5 px-3" title="Remove all results">
+                <X className="w-3 h-3 mr-1" />
+                Clear All
+              </GBtn>
+            </div>
           </div>
           {kinViewWarning && (
             <div className="mb-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2.5 text-[11px] text-amber-100/90">
@@ -3270,7 +5412,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
             </div>
           )}
 
-          {/* Mobile / tablet — tabs + vertical cards (no horizontal swipe) */}
+          {/* Mobile / tablet ? tabs + vertical cards (no horizontal swipe) */}
           <div className="lg:hidden">
             <div className="flex flex-wrap gap-1.5 mb-4">
               <button
@@ -3315,7 +5457,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
             </div>
           </div>
 
-          {/* Desktop — full comparison table */}
+          {/* Desktop ? full comparison table */}
           <div className="hidden lg:block glass-float rounded-xl border border-white/[0.08] overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -3341,12 +5483,12 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                   ))}
                   {kinematicsResults.pre && kinematicsResults.post && (
                     <th className="text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap">
-                      <span className="text-sky-300">Pre</span> <span className="text-white/60">→</span> <span className="text-emerald-300">Post</span>
+                      <span className="text-sky-300">Pre</span> <span className="text-white/60">?</span> <span className="text-emerald-300">Post</span>
                     </th>
                   )}
                   {kinematicsResults.post && kinematicsResults.baseline && (
                     <th className="text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap">
-                      <span className="text-emerald-300">Post</span> <span className="text-white/60">→</span> <span className="text-amber-300">Healthy</span>
+                      <span className="text-emerald-300">Post</span> <span className="text-white/60">?</span> <span className="text-amber-300">Healthy</span>
                     </th>
                   )}
                 </tr>
@@ -3363,11 +5505,11 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                   const baselineVal = getMetricValue("baseline", metric.key);
                   const kinComparable = kinCrossPhaseComparable(kinematicsResults, metric.key, analyzedArmForPhase);
 
-                  const deltaPrePost = kinComparable && preVal !== "—" && postVal !== "—"
-                    ? kinPrePostBadge(preVal, postVal, metric.direction)
-                    : null;
+                  const deltaPrePost = resolveKinPrePostCell(
+                    preVal, postVal, metric.direction, metric.key, kinematicsResults, analyzedArmForPhase,
+                  );
 
-                  const deltaPostHealthy = kinComparable && postVal !== "—" && baselineVal !== "—"
+                  const deltaPostHealthy = kinComparable && postVal !== KIN_EMPTY && baselineVal !== KIN_EMPTY
                     ? kinPostHealthyBadge(preVal, postVal, baselineVal, metric.direction)
                     : null;
 
@@ -3408,7 +5550,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                               <span className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-72 px-3 py-2 text-[11px] leading-relaxed text-white bg-slate-800/95 border border-white/[0.04] rounded-lg shadow-xl pointer-events-none">
                                 {metric.direction === "higher" && <span className="text-emerald-400 font-bold block mb-1">\u2191 Higher = Better</span>}
                                 {metric.direction === "lower" && <span className="text-emerald-400 font-bold block mb-1">\u2193 Lower = Better</span>}
-                                ▸ {metric.tip}
+                                ? {metric.tip}
                               </span>
                             </span>
                           )}
@@ -3426,11 +5568,14 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                         {kinematicsResults.pre && kinematicsResults.post && (
                           <td className="px-2 py-2.5 text-center whitespace-nowrap">
                             {deltaPrePost ? (
-                              <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${deltaPrePost.colorClass}`}>
+                              <span
+                                className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${deltaPrePost.colorClass}`}
+                                title={deltaPrePost.nc ? deltaPrePost.text : undefined}
+                              >
                                 {deltaPrePost.text}
                               </span>
                             ) : (
-                              <span className="text-white/20 text-xs">—</span>
+                              <span className="text-white/20 text-xs">?</span>
                             )}
                           </td>
                         )}
@@ -3442,7 +5587,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                                 {deltaPostHealthy.text}
                               </span>
                             ) : (
-                              <span className="text-white/20 text-xs">—</span>
+                              <span className="text-white/20 text-xs">?</span>
                             )}
                           </td>
                         )}
@@ -3463,18 +5608,136 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                       </td>
                     ))}
                     {kinematicsResults.pre && kinematicsResults.baseline && (
-                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">—</td>
+                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">?</td>
                     )}
                     {kinematicsResults.pre && kinematicsResults.post && (
-                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">—</td>
+                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">?</td>
                     )}
                     {hasKinTriple && (
-                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">—</td>
+                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">?</td>
                     )}
                   </tr>
                 )}
               </tbody>
             </table>
+          </div>
+        </Glass>
+      )}
+
+      {showResultsTable && activeResultPhases.some((ph) => getMovementProfile(kinematicsResults[ph.k]) || kinematicsResults[ph.k]?.movement_quality_index != null) && (
+        <Glass className="p-4 sm:p-5">
+          <p className="text-sm font-extrabold text-white/80 mb-1">Movement quality &amp; joint specs</p>
+          <p className="text-[11px] text-white/45 mb-4 leading-relaxed">
+            Fine motor (index path, micro-stops, pinch), forearm pronation/supination (3D palm normal or index?pinky 2D), shoulder abduction (both shoulders visible), plus flexion/elbow ? and ?/s. Re-analyze after updates. Side-only camera: abduction/rotation flags may show low reliability ? use oblique/frontal clips for rotation tasks.
+          </p>
+          <div className="space-y-4">
+            {activeResultPhases.map((ph) => {
+              const prof = getMovementProfile(kinematicsResults[ph.k]);
+              if (!prof && kinematicsResults[ph.k]?.movement_quality_index == null) return null;
+              const reliabilityNotes = [];
+              if (prof?.shoulder_abduction_reliable === false) {
+                reliabilityNotes.push("Shoulder abduction: limited (shoulders not well separated in view)");
+              }
+              if (prof?.forearm_rotation_reliable === false) {
+                reliabilityNotes.push("Forearm rotation: limited (need index+pinky / 3D landmarks)");
+              }
+              return (
+                <div key={ph.k} className={`rounded-xl border p-3 sm:p-4 ${phaseValueCls(ph.c)}`}>
+                  <p className={`text-xs font-extrabold uppercase mb-3 ${phaseLabelCls(ph.c)}`}>{ph.l}</p>
+                  {reliabilityNotes.length > 0 && (
+                    <p className="text-[10px] text-amber-200/70 mb-3 leading-snug">{reliabilityNotes.join(" ? ")}</p>
+                  )}
+                  <div className="space-y-4">
+                    {MOVEMENT_PROFILE_GROUP_ORDER.map((groupId) => {
+                      const fields = MOVEMENT_PROFILE_FIELDS.filter((f) => f.group === groupId);
+                      const cells = fields
+                        .map((f) => {
+                          const val = resolveProfileMetric(kinematicsResults[ph.k], f.key, overlayData?.[ph.k]);
+                          if (val == null && f.key !== "task_pattern") return null;
+                          return (
+                            <div key={f.key} className="rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-2">
+                              <p className="text-[9px] font-bold text-white/45 leading-tight">{f.label}</p>
+                              <p className="text-sm font-mono font-extrabold text-white/90 mt-0.5">
+                                {formatProfileValue(f.key, val ?? "?")}
+                                {f.unit ? <span className="text-[9px] font-normal text-white/35 ml-0.5">{f.unit}</span> : null}
+                              </p>
+                            </div>
+                          );
+                        })
+                        .filter(Boolean);
+                      if (!cells.length) return null;
+                      return (
+                        <div key={groupId}>
+                          <p className="text-[10px] font-extrabold uppercase tracking-wide text-white/50 mb-2">
+                            {MOVEMENT_PROFILE_GROUP_LABELS[groupId] || groupId}
+                          </p>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">{cells}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Glass>
+      )}
+
+      {showResultsTable && activeResultPhases.some((ph) => (kinematicsResults[ph.k]?.task_phases || []).length > 0) && (
+        <Glass className="p-4 sm:p-5">
+          <p className="text-sm font-extrabold text-white/80 mb-1">Task phases &amp; variables</p>
+          <p className="text-[11px] text-white/45 mb-4">
+            Per-phase kinematics from detected movement bouts (reach, transport, return). Study table above still uses the primary reach window for Pre/Post/Healthy comparison.
+          </p>
+          <div className="space-y-5">
+            {activeResultPhases.map((ph) => {
+              const phases = kinematicsResults[ph.k]?.task_phases || [];
+              if (!phases.length) return null;
+              const taskLabel = kinematicsResults[ph.k]?.clinical_task_label || clinicalTaskById(kinematicsResults[ph.k]?.clinical_task).label;
+              return (
+                <div key={ph.k} className={`rounded-xl border p-3 sm:p-4 ${phaseValueCls(ph.c)}`}>
+                  <p className={`text-xs font-extrabold uppercase mb-1 ${phaseLabelCls(ph.c)}`}>{ph.l}</p>
+                  <p className="text-[11px] text-white/55 mb-3">{taskLabel}</p>
+                  {phases.map((tp) => (
+                    <div key={`${ph.k}-${tp.id}`} className="mb-4 last:mb-0">
+                      <p className="text-[11px] font-bold text-white/75 mb-2">
+                        {tp.label}
+                        {tp.duration_sec != null ? (
+                          <span className="text-white/40 font-normal ml-2">{tp.duration_sec}s</span>
+                        ) : null}
+                        {tp.task_window?.rom != null ? (
+                          <span className="text-white/40 font-normal ml-2">ROM {tp.task_window.rom}</span>
+                        ) : null}
+                        {tp.expected_rom_ok === true ? (
+                          <span className="text-emerald-400/80 font-normal ml-2">within expected ROM</span>
+                        ) : null}
+                        {tp.expected_rom_ok === false ? (
+                          <span className="text-amber-300/80 font-normal ml-2">ROM outside expected range</span>
+                        ) : null}
+                      </p>
+                      {TASK_PHASE_NOTES[tp.id] ? (
+                        <p className="text-[10px] text-white/50 mb-2 leading-snug">{TASK_PHASE_NOTES[tp.id]}</p>
+                      ) : null}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {TASK_PHASE_METRIC_KEYS.map((mk) => {
+                          const val = tp.metrics?.[mk.key];
+                          if (val == null) return null;
+                          return (
+                            <div key={mk.key} className="rounded-lg border border-white/[0.06] bg-black/20 px-2 py-1.5">
+                              <p className="text-[9px] text-white/45">{mk.label}</p>
+                              <p className="text-xs font-mono font-bold text-white/90">
+                                {formatProfileValue(mk.key, val)}
+                                {mk.unit ? <span className="text-[9px] text-white/35 ml-0.5">{mk.unit}</span> : null}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </Glass>
       )}
@@ -3493,21 +5756,31 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
         </Glass>
       )}
 
-      {/* In-app video viewer — stay inside PWA on iOS/iPad */}
+      {/* In-app video viewer ? stay inside PWA on iOS/iPad */}
       <AnimatePresence>
         {mediaPreview && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             className="fixed inset-0 z-[99998] flex flex-col bg-black/95 backdrop-blur-sm"
             onClick={() => setMediaPreview(null)}
           >
-            <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 gap-2" onClick={(e) => e.stopPropagation()}>
               <p className="text-sm font-bold text-white/80 truncate">{mediaPreview.title}</p>
-              <GBtn variant="default" onClick={() => setMediaPreview(null)} className="!py-1.5 !px-3 text-xs shrink-0">
-                <X className="w-4 h-4 mr-1" /> Close
-              </GBtn>
+              <div className="flex items-center gap-2 shrink-0">
+                <GBtn
+                  variant="default"
+                  onClick={() => downloadFile(mediaPreview.phase, "unified-download")}
+                  className="!py-1.5 !px-3 text-xs"
+                >
+                  <Download className="w-4 h-4 mr-1" /> Save
+                </GBtn>
+                <GBtn variant="default" onClick={() => setMediaPreview(null)} className="!py-1.5 !px-3 text-xs">
+                  <X className="w-4 h-4 mr-1" /> Close
+                </GBtn>
+              </div>
             </div>
             <div className="flex-1 flex items-center justify-center px-3 pb-6 min-h-0" onClick={(e) => e.stopPropagation()}>
               <video
@@ -3520,7 +5793,7 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
                 className="w-full max-h-full rounded-xl bg-black"
                 style={{ maxHeight: "calc(100dvh - 5rem)" }}
                 onError={() => {
-                  showToast("Validation video expired on server — please re-analyze", "error");
+                  showToast("Validation video expired on server ? please re-analyze", "error");
                   setMediaPreview(null);
                 }}
               />
@@ -3531,9 +5804,9 @@ const KinSection = ({ data, demographics, onChange, showToast, sessionKey }) => 
 
     </div>
   );
-};
+});
 
-// ─── Patient Database ─────────────────────────────────────────────────────────
+// ??? Patient Database ?????????????????????????????????????????????????????????
 
 const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
   const [patients, setPatients] = useState([]);
@@ -3559,12 +5832,12 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
   }, [refreshPatients]);
 
   const persistList = useCallback((updated, message) => {
-    savePatients(updated);
-    setPatients(updated);
+    const cleaned = savePatients(updated);
+    setPatients(cleaned);
     setConfirm(null);
     if (message) showToast(message);
-    postPatientsSync(updated).catch(() => {});
-    backupToDrive(updated);
+    postPatientsSync(cleaned).catch(() => {});
+    backupToDrive(cleaned);
   }, [showToast]);
 
   const filtered = patients.filter((p) => {
@@ -3585,14 +5858,19 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
   };
 
   const setArchived = (id, archivedFlag) => {
+    const updated = patients.map((p) => (
+      p._id === id
+        ? { ...p, _archived: archivedFlag, _archivedAt: archivedFlag ? new Date().toISOString() : undefined }
+        : p
+    ));
     persistList(
-      patients.map((p) => (
-        p._id === id
-          ? { ...p, _archived: archivedFlag, _archivedAt: archivedFlag ? new Date().toISOString() : undefined }
-          : p
-      )),
+      updated,
       archivedFlag ? "Moved to Archive" : "Restored from Archive"
     );
+    // Drive: move patient folder under Archive/ (or restore); refresh Excel without archived rows.
+    setTimeout(() => {
+      rebuildDriveFromDatabase(updated, { showToast, waitMs: 120000 }).catch(() => {});
+    }, 600);
   };
 
   const setGroup = (id, group) => {
@@ -3606,8 +5884,8 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
   };
 
   const applyReorder = () => {
-    const updated = reorderStudyIds(patients);
-    persistList(updated, "Study IDs reordered from 1");
+    const updated = reorderStudyIds(patients); // default start=101 (clinic convention)
+    persistList(updated, "Study IDs reordered from 101");
     const curId = fd._loadedId;
     if (curId) {
       const cur = updated.find((p) => p._id === curId);
@@ -3620,12 +5898,55 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
     }
   };
 
+  const nameDupes = nameDuplicateGroups(patients);
+  const [rebuildingDrive, setRebuildingDrive] = useState(false);
+  const applyMergeSameNames = () => {
+    const before = patients.length;
+    const updated = mergeSameNameDuplicates(patients);
+    const removed = before - updated.length;
+    persistList(
+      updated,
+      removed > 0
+        ? `Merged ${removed} same-name duplicate(s) ? kept preferred Study ID`
+        : "No same-name duplicates to merge"
+    );
+    const curId = fd._loadedId || fd.demographics?.participantId;
+    if (curId) {
+      const cur = updated.find(
+        (p) => p._id === curId || patientStudyId(p) === String(curId).trim()
+      );
+      if (cur) {
+        setFd((prev) => ({
+          ...prev,
+          ...cur,
+          _loadedId: cur._id,
+          demographics: { ...(prev.demographics || {}), ...(cur.demographics || {}) },
+        }));
+      }
+    }
+    if (removed > 0) {
+      setTimeout(() => {
+        rebuildDriveFromDatabase(updated, { showToast }).catch(() => {});
+      }, 800);
+    }
+  };
+
+  const applyRebuildDrive = async () => {
+    setConfirm(null);
+    setRebuildingDrive(true);
+    try {
+      await rebuildDriveFromDatabase(patients, { showToast, waitMs: 180000 });
+    } finally {
+      setRebuildingDrive(false);
+    }
+  };
+
   const renderCard = (p, mode) => {
     const d = p.demographics || {};
-    const hasPre = !!p._hasPre;
-    const hasPost = !!p._hasPost;
+    const hasPre = !!(p._hasPre || patientHasPhaseData(p, "pre"));
+    const hasPost = !!(p._hasPost || patientHasPhaseData(p, "post"));
     return (
-      <Glass key={p._id} className="p-4">
+      <Glass key={patientStudyId(p) || p._id} className="p-4">
         <div className="flex items-start gap-4 flex-wrap">
           <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${
             mode === "archive"
@@ -3647,25 +5968,23 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
 
             <div className="flex flex-wrap gap-2 text-[10px] text-white/40 mb-2">
               {d.age && <span>Age: {d.age}</span>}
-              {d.sex && <span>· {d.sex === "1" ? "Male" : "Female"}</span>}
-              {d.strokeType && <span>· {d.strokeType === "1" ? "Ischemic" : "Hemorrhagic"}</span>}
-              {d.side && <span>· {d.side === "1" ? "Left" : "Right"} side</span>}
+              {d.sex && <span>? {d.sex === "1" ? "Male" : "Female"}</span>}
+              {d.strokeType && <span>? {d.strokeType === "1" ? "Ischemic" : "Hemorrhagic"}</span>}
+              {d.side && <span>? {d.side === "1" ? "Left" : "Right"} side</span>}
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
                 hasPre ? "bg-sky-500/20 border-sky-400/30 text-sky-300" : "bg-white/[0.05] border-white/[0.04] text-white/25"
               }`}>
-                {hasPre ? "✓ Pre-Assessment" : "○ Pre missing"}
+                {hasPre ? "? Pre-Assessment" : "? Pre missing"}
               </span>
               <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
                 hasPost ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-300" : "bg-white/[0.05] border-white/[0.04] text-white/25"
               }`}>
-                {hasPost ? "✓ Post-Assessment" : "○ Post missing"}
+                {hasPost ? "? Post-Assessment" : "? Post missing"}
               </span>
-              {formatSavedAt(p._savedAt) ? (
-                <span className="text-[9px] text-white/25 ml-auto">Saved: {formatSavedAt(p._savedAt)}</span>
-              ) : null}
+              <span className="text-[9px] text-white/25 ml-auto">Saved: {formatPatientSavedAt(p._savedAt)}</span>
             </div>
 
             {mode !== "archive" && (
@@ -3675,7 +5994,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
                   onChange={(e) => e.target.value && setGroup(p._id, e.target.value)}
                   className="text-[11px] px-2 py-1.5 rounded-lg bg-white/[0.09] border border-white/[0.08] text-white/80"
                 >
-                  <option value="">Set group…</option>
+                  <option value="">Set group?</option>
                   <option value="1">Intervention / AOMI</option>
                   <option value="2">Control</option>
                 </select>
@@ -3732,7 +6051,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
 
   return (
     <div className="space-y-5">
-      <SH icon={Database} en={archiveOpen ? "Archive" : "Patient Database"} tr={archiveOpen ? "Arşiv" : "Hasta Veritabanı"} badge={archiveOpen ? `${archived.length}` : `${activeCount} Records`} />
+      <SH icon={Database} en={archiveOpen ? "Archive" : "Patient Database"} tr={archiveOpen ? "Ar?iv" : "Hasta Veritaban?"} badge={archiveOpen ? `${archived.length}` : `${activeCount} Records`} />
 
       <Glass className="p-4">
         <div className="flex items-center gap-3 flex-wrap">
@@ -3741,7 +6060,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name or Participant ID…"
+              placeholder="Search by name or Participant ID?"
               className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/[0.09] border border-white/[0.06] text-white placeholder-white/15 text-sm font-light focus:outline-none focus:bg-white/[0.06] transition-all"
             />
             {search && (
@@ -3785,10 +6104,26 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
           }}>
             <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} /> {syncing ? "Syncing..." : "Sync"}
           </GBtn>
+          <GBtn
+            variant="sky"
+            disabled={syncing}
+            onClick={async () => {
+              setSyncing(true);
+              try {
+                const { ok, patients: merged } = await restorePatientsFromDriveNow({ showToast });
+                if (ok) setPatients(merged);
+                else refreshPatients();
+              } finally {
+                setSyncing(false);
+              }
+            }}
+          >
+            <HardDrive className={`w-4 h-4 ${syncing ? "animate-pulse" : ""}`} /> Restore from Drive
+          </GBtn>
           {confirm === "reorder" ? (
             <div className="flex items-center gap-1.5">
               <GBtn variant="sky" onClick={applyReorder} className="text-xs px-3 py-2">
-                <Check className="w-3.5 h-3.5" /> Confirm reorder 1…
+                <Check className="w-3.5 h-3.5" /> Confirm reorder 101?
               </GBtn>
               <GBtn variant="default" onClick={() => setConfirm(null)} className="text-xs px-3 py-2">
                 <X className="w-3.5 h-3.5" />
@@ -3797,6 +6132,53 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
           ) : (
             <GBtn variant="default" disabled={activeCount === 0} onClick={() => setConfirm("reorder")}>
               Reorder Study IDs
+            </GBtn>
+          )}
+          {confirm === "mergeNames" ? (
+            <div className="flex items-center gap-1.5">
+              <GBtn variant="sky" onClick={applyMergeSameNames} className="text-xs px-3 py-2">
+                <Check className="w-3.5 h-3.5" /> Confirm merge names
+              </GBtn>
+              <GBtn variant="default" onClick={() => setConfirm(null)} className="text-xs px-3 py-2">
+                <X className="w-3.5 h-3.5" />
+              </GBtn>
+            </div>
+          ) : (
+            <GBtn
+              variant="default"
+              disabled={nameDupes.length === 0}
+              onClick={() => setConfirm("mergeNames")}
+              title={nameDupes.length ? "Merge rows that share the same full name" : "No same-name duplicates"}
+            >
+              Merge same names{nameDupes.length ? ` (${nameDupes.length})` : ""}
+            </GBtn>
+          )}
+          <GBtn
+            variant="default"
+            onClick={() => { window.location.href = "/connect-drive"; }}
+            title="Reconnect Google Drive (same window ? keeps PWA session)"
+          >
+            <HardDrive className="w-4 h-4" />
+            Connect Drive
+          </GBtn>
+          {confirm === "rebuildDrive" ? (
+            <div className="flex items-center gap-1.5">
+              <GBtn variant="sky" onClick={applyRebuildDrive} className="text-xs px-3 py-2">
+                <Check className="w-3.5 h-3.5" /> Confirm rebuild Drive
+              </GBtn>
+              <GBtn variant="default" onClick={() => setConfirm(null)} className="text-xs px-3 py-2">
+                <X className="w-3.5 h-3.5" />
+              </GBtn>
+            </div>
+          ) : (
+            <GBtn
+              variant="default"
+              disabled={rebuildingDrive || activeCount === 0}
+              onClick={() => setConfirm("rebuildDrive")}
+              title="Align Google Drive folders 1:1 with this patient list (merge alias folders, keep files)"
+            >
+              <RefreshCw className={`w-4 h-4 ${rebuildingDrive ? "animate-spin" : ""}`} />
+              {rebuildingDrive ? "Rebuilding Drive?" : "Rebuild Drive from Database"}
             </GBtn>
           )}
           <button
@@ -3815,6 +6197,22 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
             )}
           </button>
         </div>
+        {nameDupes.length > 0 && (
+          <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2.5 text-[11px] text-amber-100/90 leading-relaxed">
+            <p className="font-semibold text-amber-100 mb-1">
+              Same name, different Study IDs (legacy duplicates) ? {nameDupes.length} name(s)
+            </p>
+            <p className="text-amber-100/70 mb-1">
+              Use ?Merge same names? (prefers 101+), then Sync or ?Rebuild Drive from Database? to merge alias folders on Google Drive (files moved first; empty aliases trashed).
+            </p>
+            <ul className="list-disc pl-4 space-y-0.5 text-amber-50/80">
+              {nameDupes.slice(0, 8).map((g) => (
+                <li key={g.key}>{g.name}: Study IDs {g.ids.join(", ")}</li>
+              ))}
+              {nameDupes.length > 8 && <li>?and {nameDupes.length - 8} more</li>}
+            </ul>
+          </div>
+        )}
       </Glass>
 
       {archiveOpen ? (
@@ -3848,7 +6246,8 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
   );
 };
 
-// ─── Report Helpers ───────────────────────────────────────────────────────────
+
+// ??? Report Helpers ???????????????????????????????????????????????????????????
 
 function buildSummaryRows(fd) {
   const rows = [];
@@ -3863,25 +6262,24 @@ function buildSummaryRows(fd) {
   const calcDelta = (pre, post, metricName) => {
     const p = parseFloat(pre);
     const q = parseFloat(post);
-    if (isNaN(p) || isNaN(q)) return "—";
+    if (isNaN(p) || isNaN(q)) return "?";
     const d = q - p;
     if (d === 0) return "0.00";
     return (d > 0 ? "+" : "") + d.toFixed(2);
   };
 
-  const v = (x) => (x !== undefined && x !== null && x !== "" ? String(x) : "—");
+  const v = (x) => (x !== undefined && x !== null && x !== "" ? String(x) : "?");
 
   // VAS
   const vas = fd.vas || {};
   [
     { k:"rest", en:"Pain at Rest" },
     { k:"activity", en:"Pain During Activity" },
-    { k:"night", en:"Night Pain" },
   ].forEach((item) => {
     const pre = v(vas[item.k]?.pre);
     const post = v(vas[item.k]?.post);
     const pNum = parseFloat(pre), qNum = parseFloat(post);
-    const improving = (pre !== "—" && post !== "—")
+    const improving = (pre !== "?" && post !== "?")
       ? (pNum === qNum ? null : (lowerIsBetter(item.en) ? pNum > qNum : qNum > pNum))
       : null;
     rows.push({ tool:"VAS", metric:item.en, pre, post, delta:calcDelta(pre, post, item.en), improving });
@@ -3898,7 +6296,7 @@ function buildSummaryRows(fd) {
     const pre = v(vams[item.k]?.pre);
     const post = v(vams[item.k]?.post);
     const pNum = parseFloat(pre), qNum = parseFloat(post);
-    const improving = (pre !== "—" && post !== "—")
+    const improving = (pre !== "?" && post !== "?")
       ? (pNum === qNum ? null : (lowerIsBetter(item.en) ? pNum > qNum : qNum > pNum))
       : null;
     rows.push({ tool:"VAMS", metric:item.en, pre, post, delta:calcDelta(pre, post, item.en), improving });
@@ -3911,9 +6309,9 @@ function buildSummaryRows(fd) {
     rows.push({
       tool:"Muscle Control",
       metric:item.en,
-      pre: item.phase === "pre" ? val : "—",
-      post: item.phase === "post" ? val : "—",
-      delta:"—"
+      pre: item.phase === "pre" ? val : "?",
+      post: item.phase === "post" ? val : "?",
+      delta:"?"
     });
   });
 
@@ -3923,7 +6321,7 @@ function buildSummaryRows(fd) {
     KGIA_TYPES.forEach((t) => {
       const pre = v(kgia[`${mi}_${t.key}`]?.once);
       const post = v(kgia[`${mi}_${t.key}`]?.sonra);
-      const improving = (pre !== "—" && post !== "—") ? (parseFloat(pre) === parseFloat(post) ? null : parseFloat(post) > parseFloat(pre)) : null;
+      const improving = (pre !== "?" && post !== "?") ? (parseFloat(pre) === parseFloat(post) ? null : parseFloat(post) > parseFloat(pre)) : null;
       rows.push({ tool:"KVIQ", metric:`${t.en}: ${mov.en}`, pre, post, delta:calcDelta(pre, post), improving });
     })
   );
@@ -3936,27 +6334,42 @@ function buildSummaryRows(fd) {
     const preR = v(wmft[t.id]?.pre?.rating);
     const postR = v(wmft[t.id]?.post?.rating);
 
-    const improvingT = (preT !== "—" && postT !== "—") ? (parseFloat(preT) === parseFloat(postT) ? null : parseFloat(preT) > parseFloat(postT)) : null;
-    const improvingR = (preR !== "—" && postR !== "—") ? (parseFloat(preR) === parseFloat(postR) ? null : parseFloat(postR) > parseFloat(preR)) : null;
-    rows.push({ tool:"WMFT", metric:`${t.en} — Time (sec)`, pre:preT, post:postT, delta:calcDelta(preT, postT), improving: improvingT });
-    rows.push({ tool:"WMFT", metric:`${t.en} — Ability Rating (0–5)`, pre:preR, post:postR, delta:calcDelta(preR, postR), improving: improvingR });
+    const improvingT = (preT !== "?" && postT !== "?") ? (parseFloat(preT) === parseFloat(postT) ? null : parseFloat(preT) > parseFloat(postT)) : null;
+    const improvingR = (preR !== "?" && postR !== "?") ? (parseFloat(preR) === parseFloat(postR) ? null : parseFloat(postR) > parseFloat(preR)) : null;
+    rows.push({ tool:"WMFT", metric:`${t.en} ? Time (sec)`, pre:preT, post:postT, delta:calcDelta(preT, postT), improving: improvingT });
+    rows.push({ tool:"WMFT", metric:`${t.en} ? Ability Rating (0?5)`, pre:preR, post:postR, delta:calcDelta(preR, postR), improving: improvingR });
   });
 
-  // Kinematics
-  let kin = fd.kinematics || {};
-  if (!kin.pre && !kin.post) {
-    try { const kr = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {}; kin = { pre: kr.pre, post: kr.post }; } catch {}
+  const bbt = fd.bbt || {};
+  const bbtPreP = v(bbt.pre?.pareticBlocks);
+  const bbtPostP = v(bbt.post?.pareticBlocks);
+  const bbtPreU = v(bbt.pre?.unaffectedBlocks);
+  const bbtPostU = v(bbt.post?.unaffectedBlocks);
+  const bbtImpP = (bbtPreP !== "?" && bbtPostP !== "?")
+    ? (parseFloat(bbtPreP) === parseFloat(bbtPostP) ? null : parseFloat(bbtPostP) > parseFloat(bbtPreP))
+    : null;
+  rows.push({ tool:"BBT", metric:"Paretic hand ? blocks / 60s", pre:bbtPreP, post:bbtPostP, delta:calcDelta(bbtPreP, bbtPostP), improving: bbtImpP });
+  if (bbtPreU !== "?" || bbtPostU !== "?") {
+    const bbtImpU = (bbtPreU !== "?" && bbtPostU !== "?")
+      ? (parseFloat(bbtPreU) === parseFloat(bbtPostU) ? null : parseFloat(bbtPostU) > parseFloat(bbtPreU))
+      : null;
+    rows.push({ tool:"BBT", metric:"Unaffected hand ? blocks / 60s (optional)", pre:bbtPreU, post:bbtPostU, delta:calcDelta(bbtPreU, bbtPostU), improving: bbtImpU });
   }
+
+  // Kinematics (video overlay metrics ? same source as Kinematic Lab)
+  const krLive = loadLiveKinResults(fd);
   const kinDisplay = orderedKinematicVars().map((v) => ({
     k: v.key,
     en: v.label,
     dir: v.dir,
   }));
   kinDisplay.forEach((item) => {
-    const pre = v(kin.pre?.[item.k]);
-    const post = v(kin.post?.[item.k]);
+    const preRaw = resolveKinMetricValue(krLive.pre, item.k);
+    const postRaw = resolveKinMetricValue(krLive.post, item.k);
+    const pre = preRaw != null ? formatKinValue(item.k, preRaw) : "?";
+    const post = postRaw != null ? formatKinValue(item.k, postRaw) : "?";
     const pNum = parseFloat(pre), qNum = parseFloat(post);
-    const improving = (pre !== "—" && post !== "—")
+    const improving = (pre !== "?" && post !== "?")
       ? (pNum === qNum ? null : (item.dir === "lower" ? pNum > qNum : qNum > pNum))
       : null;
     rows.push({ tool:"Kinematics", metric:item.en, pre, post, delta:calcDelta(pre, post, item.en), improving });
@@ -3965,14 +6378,14 @@ function buildSummaryRows(fd) {
   return rows;
 }
 
-// ─── SPSS Export Helper ───────────────────────────────────────────────────────
+// ??? SPSS Export Helper ???????????????????????????????????????????????????????
 
 function buildSPSSData(fd) {
   const row = buildMasterRow(fd, WMFT_ITEMS, KGIA_MOVEMENTS, IPAQ_ACTS);
   return row ? [row] : [];
 }
 
-// ─── Report Section ───────────────────────────────────────────────────────────
+// ??? Report Section ???????????????????????????????????????????????????????????
 
 const ReportSection = ({ fd, onChange, showToast }) => {
   const d = fd.demographics || {};
@@ -3981,15 +6394,14 @@ const ReportSection = ({ fd, onChange, showToast }) => {
   const kinRows = Array.isArray(fd.kinematics?.uploadedData) ? fd.kinematics.uploadedData : [];
   const kinCharts = Array.isArray(fd.kinematics?.chartImages) ? fd.kinematics.chartImages : [];
 
-  // Build kinematics data from video analysis results
+  // Build kinematics data from video analysis results (same source as Kinematic Lab)
   const buildVideoKinRows = () => {
-    let kr;
-    try { kr = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {}; } catch { kr = {}; }
+    const kr = loadLiveKinResults(fd);
     if (Object.keys(kr).length === 0) return null;
     const phaseLabels = { pre: "Pre", post: "Post", baseline: "Healthy side" };
     const vars = orderedKinematicVars().map((v) => ({
       key: v.key,
-      label: `${v.label}${v.dir === "higher" ? " ↑" : v.dir === "lower" ? " ↓" : ""}`,
+      label: `${v.label}${v.dir === "higher" ? " \u2191" : v.dir === "lower" ? " \u2193" : ""}`,
       unit: v.unit === "count" ? "" : v.unit,
       dir: v.dir,
     }));
@@ -4000,19 +6412,19 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     const body = vars.map((v) => {
       const row = [v.label, v.unit];
       phases.forEach((p) => {
-        const val = kr[p]?.[v.key];
-        row.push(formatKinValue(v.key, val));
+        const raw = resolveKinMetricValue(kr[p], v.key);
+        row.push(formatKinValue(v.key, raw));
       });
       return row;
     });
-    return { headers, body, varMeta: vars, phases };
+    return { headers, body, varMeta: vars, phases, kr };
   };
 
   const kinDirectionMap = (name) => {
     const n = (name || "").toLowerCase();
     if (n.includes("pause")) return "lower";
     if (n.includes("nsub")) return "lower";
-    if (n.includes("sparc")) return "higher";
+
     if (n.includes("trunk") && !n.includes("palm")) return "lower";
     if (n.includes("trunk") && n.includes("palm")) return "lower";
     if (n.includes("path") && n.includes("eff")) return "lower";
@@ -4029,7 +6441,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
   const calcKinDelta = (pre, post) => {
     const p = parseFloat(pre);
     const q = parseFloat(post);
-    if (isNaN(p) || isNaN(q)) return "—";
+    if (isNaN(p) || isNaN(q)) return "?";
     const delta = q - p;
     return (delta >= 0 ? "+" : "") + delta.toFixed(2);
   };
@@ -4041,10 +6453,11 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
     KVIQ: "text-cyan-300 bg-cyan-500/10 border-cyan-400/20",
     WMFT: "text-amber-300 bg-amber-500/10 border-amber-400/20",
+    BBT: "text-orange-300 bg-orange-500/10 border-orange-400/20",
     Kinematics: "text-rose-300 bg-rose-500/10 border-rose-400/20",
   };
 
-  // ── Glassmorphism HTML Report (print → PDF) ──
+  // ?? Glassmorphism HTML Report (print ? PDF) ??
   const exportGlassReport = () => {
     try {
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
@@ -4055,42 +6468,47 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       if (tool === "VAS") {
         const imp = items.filter((r) => r.improving === true).length;
         const wors = items.filter((r) => r.improving === false).length;
-        if (imp && !wors) { en.push("Pain decreased"); tr.push("Ağrı azaldı"); }
-        else if (wors && !imp) { en.push("Pain increased"); tr.push("Ağrı arttı"); }
-        else if (imp && wors) { en.push("Mixed pain results"); tr.push("Karışık ağrı sonuçları"); }
-        else { en.push("Pain stable"); tr.push("Ağrı sabit"); }
+        if (imp && !wors) { en.push("Pain decreased"); tr.push("A?r? azald?"); }
+        else if (wors && !imp) { en.push("Pain increased"); tr.push("A?r? artt?"); }
+        else if (imp && wors) { en.push("Mixed pain results"); tr.push("Kar???k a?r? sonu?lar?"); }
+        else { en.push("Pain stable"); tr.push("A?r? sabit"); }
       } else if (tool === "VAMS") {
         const pos = ["Happy","Calm"]; const neg = ["Sad","Tense"];
         const posUp = items.filter((r) => pos.some((n) => r.metric.includes(n)) && r.improving).length;
         const negDown = items.filter((r) => neg.some((n) => r.metric.includes(n)) && r.improving).length;
-        if (posUp) { en.push("Positive mood improved"); tr.push("Olumlu ruh hali iyileşti"); }
-        if (negDown) { en.push("Negative mood decreased"); tr.push("Olumsuz ruh hali azaldı"); }
+        if (posUp) { en.push("Positive mood improved"); tr.push("Olumlu ruh hali iyile?ti"); }
+        if (negDown) { en.push("Negative mood decreased"); tr.push("Olumsuz ruh hali azald?"); }
         if (!en.length) { en.push("Mood stable"); tr.push("Ruh hali sabit"); }
       } else if (tool === "Muscle Control") {
-        const preVal = trows.find(r => r.pre !== "—")?.pre;
-        const postVal = trows.find(r => r.post !== "—")?.post;
-        if (preVal && postVal && parseFloat(postVal) > parseFloat(preVal)) { en.push("Muscle control improved"); tr.push("Kas kontrolü iyileşti"); }
-        else if (preVal && postVal && parseFloat(postVal) < parseFloat(preVal)) { en.push("Muscle control declined"); tr.push("Kas kontrolü azaldı"); }
-        else if (preVal || postVal) { en.push("Muscle control stable"); tr.push("Kas kontrolü sabit"); }
+        const preVal = trows.find(r => r.pre !== "?")?.pre;
+        const postVal = trows.find(r => r.post !== "?")?.post;
+        if (preVal && postVal && parseFloat(postVal) > parseFloat(preVal)) { en.push("Muscle control improved"); tr.push("Kas kontrol? iyile?ti"); }
+        else if (preVal && postVal && parseFloat(postVal) < parseFloat(preVal)) { en.push("Muscle control declined"); tr.push("Kas kontrol? azald?"); }
+        else if (preVal || postVal) { en.push("Muscle control stable"); tr.push("Kas kontrol? sabit"); }
       } else if (tool === "KVIQ") {
         const imp = items.filter((r) => r.improving).length;
         const tot = items.length;
-        if (imp > tot / 2) { en.push("Imagery improved in most items"); tr.push("Çoğu öğede imgeleme iyileşti"); }
-        else if (imp > 0) { en.push("Imagery improved in some items"); tr.push("Bazı öğelerde imgeleme iyileşti"); }
-        else { en.push("Imagery stable"); tr.push("İmgeleme sabit"); }
+        if (imp > tot / 2) { en.push("Imagery improved in most items"); tr.push("?o?u ??ede imgeleme iyile?ti"); }
+        else if (imp > 0) { en.push("Imagery improved in some items"); tr.push("Baz? ??elerde imgeleme iyile?ti"); }
+        else { en.push("Imagery stable"); tr.push("?mgeleme sabit"); }
       } else if (tool === "WMFT") {
         const time = items.filter((r) => r.metric.includes("Time"));
         const rate = items.filter((r) => r.metric.includes("Rating"));
-        if (time.some((r) => r.improving)) { en.push("Faster task time"); tr.push("Daha hızlı görev süresi"); }
-        if (time.some((r) => r.improving === false)) { en.push("Slower task time"); tr.push("Daha yavaş görev süresi"); }
-        if (rate.some((r) => r.improving)) { en.push("Functional ability improved"); tr.push("Fonksiyonel yetenek iyileşti"); }
-        if (rate.some((r) => r.improving === false)) { en.push("Functional ability declined"); tr.push("Fonksiyonel yetenek azaldı"); }
-        if (!en.length && items.length) { en.push("No notable change in WMFT"); tr.push("WMFT'de kayda değer değişiklik yok"); }
+        if (time.some((r) => r.improving)) { en.push("Faster task time"); tr.push("Daha h?zl? g?rev s?resi"); }
+        if (time.some((r) => r.improving === false)) { en.push("Slower task time"); tr.push("Daha yava? g?rev s?resi"); }
+        if (rate.some((r) => r.improving)) { en.push("Functional ability improved"); tr.push("Fonksiyonel yetenek iyile?ti"); }
+        if (rate.some((r) => r.improving === false)) { en.push("Functional ability declined"); tr.push("Fonksiyonel yetenek azald?"); }
+        if (!en.length && items.length) { en.push("No notable change in WMFT"); tr.push("WMFT'de kayda de?er de?i?iklik yok"); }
+      } else if (tool === "BBT") {
+        const paretic = items.find((r) => r.metric.includes("Paretic"));
+        if (paretic?.improving === true) { en.push("More blocks transferred (paretic hand)"); tr.push("Etkilenen elde daha fazla blok"); }
+        else if (paretic?.improving === false) { en.push("Fewer blocks transferred (paretic hand)"); tr.push("Etkilenen elde daha az blok"); }
+        else if (paretic) { en.push("BBT count stable"); tr.push("BBT skoru sabit"); }
       } else if (tool === "Kinematics") {
         const imp = items.filter((r) => r.improving).length;
         const tot = items.length;
-        if (imp > tot / 2) { en.push("Kinematics improved"); tr.push("Kinematik iyileşti"); }
-        else if (imp > 0) { en.push("Kinematics partially improved"); tr.push("Kinematik kısmen iyileşti"); }
+        if (imp > tot / 2) { en.push("Kinematics improved"); tr.push("Kinematik iyile?ti"); }
+        else if (imp > 0) { en.push("Kinematics partially improved"); tr.push("Kinematik k?smen iyile?ti"); }
         else if (tot > 0) { en.push("Kinematics stable"); tr.push("Kinematik sabit"); }
       }
       if (!en.length) return "";
@@ -4098,11 +6516,12 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     };
 
     const toolMeta = {
-      "VAS":            { label: "Pain Scale (VAS) / Ağrı Skalası",            color: "#800020", bg: "#fdf2f4" },
+      "VAS":            { label: "Pain Scale (VAS) / A?r? Skalas?",            color: "#800020", bg: "#fdf2f4" },
       "VAMS":           { label: "Mood Scale (VAMS-4) / Ruh Hali",             color: "#0ea5e9", bg: "#f0f9ff" },
-      "Muscle Control": { label: "Muscle Control Scale / Kas Kontrolü",        color: "#10b981", bg: "#ecfdf5" },
-      "KVIQ":           { label: "Motor Imagery (KVIQ) / Motor İmgeleme",      color: "#0d9488", bg: "#f0fdfa" },
+      "Muscle Control": { label: "Muscle Control Scale / Kas Kontrol?",        color: "#10b981", bg: "#ecfdf5" },
+      "KVIQ":           { label: "Motor Imagery (KVIQ) / Motor ?mgeleme",      color: "#0d9488", bg: "#f0fdfa" },
       "WMFT":           { label: "Wolf Motor Function (WMFT) / Motor Fonksiyon",color: "#0ea5e9", bg: "#ecfeff" },
+      "BBT":            { label: "Box & Block Test (BBT) / Kutu Blok Testi",     color: "#ea580c", bg: "#fff7ed" },
       "Kinematics":     { label: "Kinematic Analysis / Kinematik Analiz",        color: "#f43f5e", bg: "#fff1f2" },
     };
 
@@ -4117,7 +6536,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
         if (text) all.push(`<p class="sum-item"><span class="sum-badge" style="background:${(toolMeta[tool] || toolMeta.VAS).color}88">${esc(tool)}</span> ${text.replace(/<\/?div[^>]*>/g, "").trim()}</p>`);
       });
       if (!all.length) return "";
-      return `<div class="singlecol pagebreak"><div class="card" style="border-left:6px solid #0d9488"><div class="badge" style="background:#0d948888;font-size:11px;padding:5px 18px">Summary / Özet</div>${all.join("")}</div></div>`;
+      return `<div class="singlecol pagebreak"><div class="card" style="border-left:6px solid #0d9488"><div class="badge" style="background:#0d948888;font-size:11px;padding:5px 18px">Summary / ?zet</div>${all.join("")}</div></div>`;
     };
 
     const buildNarrativeSummary = () => {
@@ -4126,31 +6545,31 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
       Object.entries(grouped).forEach(([tool, trows]) => {
         if (tool === "VAS") {
-          const items = trows.filter(r => r.delta !== "—" && r.delta !== "\u2014" && r.pre !== "—" && r.post !== "—");
+          const items = trows.filter(r => r.delta !== "?" && r.delta !== "\u2014" && r.pre !== "?" && r.post !== "?");
           if (!items.length) return;
           const parts = items.map(r => {
             const p = parseFloat(r.pre), q = parseFloat(r.post);
             const d = q - p;
             const trend = trendWord(-d, "decreased (improvement)", "increased (worsening)");
-            return `${esc(r.metric)} went from ${r.pre} to ${r.post} (Δ${r.delta}), indicating pain ${trend}`;
+            return `${esc(r.metric)} went from ${r.pre} to ${r.post} (?${r.delta}), indicating pain ${trend}`;
           });
           sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#0d9488">Pain Scale (VAS):</strong> ${parts.join("; ")}.</p>`);
           return;
         }
 
         if (tool === "VAMS") {
-          const items = trows.filter(r => r.delta !== "—" && r.delta !== "\u2014" && r.pre !== "—" && r.post !== "—");
+          const items = trows.filter(r => r.delta !== "?" && r.delta !== "\u2014" && r.pre !== "?" && r.post !== "?");
           if (!items.length) return;
           const positive = ["Happy","Calm"]; const negative = ["Sad","Tense"];
           const posItems = items.filter(r => positive.some(n => r.metric.includes(n)));
           const negItems = items.filter(r => negative.some(n => r.metric.includes(n)));
           const parts = [];
           if (posItems.length) {
-            const trends = posItems.map(r => `${r.pre}→${r.post} (Δ${r.delta})`).join(", ");
+            const trends = posItems.map(r => `${r.pre}?${r.post} (?${r.delta})`).join(", ");
             parts.push(`positive moods (${trends})`);
           }
           if (negItems.length) {
-            const trends = negItems.map(r => `${r.pre}→${r.post} (Δ${r.delta})`).join(", ");
+            const trends = negItems.map(r => `${r.pre}?${r.post} (?${r.delta})`).join(", ");
             parts.push(`negative moods (${trends})`);
           }
           sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#0ea5e9">Mood Scale (VAMS-4):</strong> ${parts.join("; ")}.</p>`);
@@ -4158,18 +6577,18 @@ const ReportSection = ({ fd, onChange, showToast }) => {
         }
 
         if (tool === "Muscle Control") {
-          const preRow = trows.find(r => r.pre !== "—");
-          const postRow = trows.find(r => r.post !== "—");
+          const preRow = trows.find(r => r.pre !== "?");
+          const postRow = trows.find(r => r.post !== "?");
           const preVal = preRow?.pre, postVal = postRow?.post;
           if (!preVal || !postVal) return;
           const d = parseFloat(postVal) - parseFloat(preVal);
           const trend = trendWord(d, "improved", "declined");
-          sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#10b981">Muscle Control:</strong> The participant's perceived muscle control changed from ${preVal} to ${postVal} (Δ${d > 0 ? "+" : ""}${d.toFixed(2)}), indicating the feeling of control has ${trend}.</p>`);
+          sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#10b981">Muscle Control:</strong> The participant's perceived muscle control changed from ${preVal} to ${postVal} (?${d > 0 ? "+" : ""}${d.toFixed(2)}), indicating the feeling of control has ${trend}.</p>`);
           return;
         }
 
         if (tool === "KVIQ") {
-          const items = trows.filter(r => r.delta !== "—" && r.delta !== "\u2014" && r.pre !== "—" && r.post !== "—");
+          const items = trows.filter(r => r.delta !== "?" && r.delta !== "\u2014" && r.pre !== "?" && r.post !== "?");
           if (!items.length) return;
           const imp = items.filter(r => r.improving === true).length;
           const wors = items.filter(r => r.improving === false).length;
@@ -4190,7 +6609,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
         }
 
         if (tool === "WMFT") {
-          const items = trows.filter(r => r.delta !== "—" && r.delta !== "\u2014" && r.pre !== "—" && r.post !== "—");
+          const items = trows.filter(r => r.delta !== "?" && r.delta !== "\u2014" && r.pre !== "?" && r.post !== "?");
           if (!items.length) return;
           const timeItems = items.filter(r => r.metric.includes("Time"));
           const rateItems = items.filter(r => r.metric.includes("Rating"));
@@ -4209,8 +6628,19 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           return;
         }
 
+        if (tool === "BBT") {
+          const paretic = trows.find(r => r.metric.includes("Paretic") && r.pre !== "?" && r.post !== "?");
+          if (!paretic) return;
+          const preN = parseFloat(paretic.pre);
+          const postN = parseFloat(paretic.post);
+          if (isNaN(preN) || isNaN(postN)) return;
+          const dir = postN > preN ? "increased" : postN < preN ? "decreased" : "was unchanged";
+          sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#ea580c">Box & Block Test (BBT):</strong> Paretic-hand blocks ${dir} from ${preN} to ${postN} in ${BBT_TEST_SECONDS} seconds.</p>`);
+          return;
+        }
+
         if (tool === "Kinematics") {
-          const items = trows.filter(r => r.delta !== "—" && r.delta !== "\u2014" && r.pre !== "—" && r.post !== "—");
+          const items = trows.filter(r => r.delta !== "?" && r.delta !== "\u2014" && r.pre !== "?" && r.post !== "?");
           if (!items.length) return;
           const improved = items.filter(r => r.improving === true).map(r => r.metric);
           const worsened = items.filter(r => r.improving === false).map(r => r.metric);
@@ -4223,7 +6653,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       });
 
       if (!sections.length) return "";
-      return `<div class="singlecol pagebreak"><div class="card" style="border-left:6px solid #0d9488"><div class="badge" style="background:#0d948888;font-size:11px;padding:5px 18px">Clinical Narrative / Klinik Anlatım</div><div style="padding:4px 0">${sections.join("")}</div></div></div>`;
+      return `<div class="singlecol pagebreak"><div class="card" style="border-left:6px solid #0d9488"><div class="badge" style="background:#0d948888;font-size:11px;padding:5px 18px">Clinical Narrative / Klinik Anlat?m</div><div style="padding:4px 0">${sections.join("")}</div></div></div>`;
     };
     const deltaCell = (r) => {
       if (!r.delta || r.delta === "\u2014") return `<span class="delta neutral">\u2014</span>`;
@@ -4233,19 +6663,19 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
     let toolSections = "";
     Object.entries(grouped).filter(([tool]) => tool !== "Kinematics").forEach(([tool, trows]) => {
-      const hasData = trows.some(r => r.pre !== "—" || r.post !== "—");
+      const hasData = trows.some(r => r.pre !== "?" || r.post !== "?");
       if (!hasData) return;
       const meta = toolMeta[tool] || { label: tool, color: "#0d9488" };
       const interp = buildToolInterp(tool, trows);
       let body;
       if (tool === "Muscle Control") {
-        const preRow = trows.find(r => r.pre !== "—");
-        const postRow = trows.find(r => r.post !== "—");
-        const preVal = preRow ? preRow.pre : "—";
-        const postVal = postRow ? postRow.post : "—";
-        const delta = preVal !== "—" && postVal !== "—"
+        const preRow = trows.find(r => r.pre !== "?");
+        const postRow = trows.find(r => r.post !== "?");
+        const preVal = preRow ? preRow.pre : "?";
+        const postVal = postRow ? postRow.post : "?";
+        const delta = preVal !== "?" && postVal !== "?"
           ? (parseFloat(postVal) - parseFloat(preVal)).toFixed(2)
-          : "—";
+          : "?";
         body = `<tr><td class="metric">Felt Difference</td><td class="num">${preVal}</td><td class="num">${postVal}</td><td class="num">${delta}</td></tr>`;
       } else {
         body = trows.map((r) => `
@@ -4272,7 +6702,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     });
 
     // combined velocity profile chart
-    let kr2; try { kr2 = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {}; } catch { kr2 = {}; }
+    const kr2 = loadLiveKinResults(fd);
     const velChart = buildCombinedVelChart({
       pre: kr2.pre?.velocity_profile,
       post: kr2.post?.velocity_profile,
@@ -4289,8 +6719,8 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       const postIdx = videoKin.headers.indexOf("Post");
       const healthyIdx = videoKin.headers.indexOf("Healthy side");
       const head = videoKin.headers.map((h) => `<th>${esc(h)}</th>`).join("")
-        + (preIdx >= 0 && postIdx >= 0 ? '<th style="text-align:center">Pre → Post</th>' : "")
-        + (postIdx >= 0 && healthyIdx >= 0 ? '<th style="text-align:center">Post → Healthy</th>' : "");
+        + (preIdx >= 0 && postIdx >= 0 ? '<th style="text-align:center">Pre ? Post</th>' : "")
+        + (postIdx >= 0 && healthyIdx >= 0 ? '<th style="text-align:center">Post ? Healthy</th>' : "");
       const body = fBody.map((row, ri) => {
         const dir = videoKin.varMeta?.[ri]?.dir || kinDirectionMap(row[0]);
         let prePostHtml = "";
@@ -4299,10 +6729,13 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           const preVal = parseFloat(row[preIdx]);
           const postVal = parseFloat(row[postIdx]);
           if (!isNaN(preVal) && !isNaN(postVal)) {
-            const badge = kinPrePostBadge(preVal, postVal, dir);
-            prePostHtml = `<td class="num">${esc(badge?.text || "—")}</td>`;
+            const metricKey = videoKin.varMeta?.[ri]?.key;
+            const badge = resolveKinPrePostCell(
+              preVal, postVal, dir, metricKey || "unknown", videoKin.kr, null,
+            );
+            prePostHtml = `<td class="num">${esc(badge?.text || "?")}</td>`;
           } else {
-            prePostHtml = '<td class="num">—</td>';
+            prePostHtml = '<td class="num">?</td>';
           }
         }
         if (postIdx >= 0 && healthyIdx >= 0) {
@@ -4310,9 +6743,9 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           const helVal = parseFloat(row[healthyIdx]);
           if (!isNaN(postVal) && !isNaN(helVal)) {
             const badge = kinPostHealthyBadge(null, postVal, helVal, dir);
-            postHealthyHtml = `<td class="num">${esc(badge?.text || "—")}</td>`;
+            postHealthyHtml = `<td class="num">${esc(badge?.text || "?")}</td>`;
           } else {
-            postHealthyHtml = '<td class="num">—</td>';
+            postHealthyHtml = '<td class="num">?</td>';
           }
         }
         return `<tr>${row.map((c, i) => `<td class="${i < 2 ? "metric" : "num"}">${esc(c)}</td>`).join("")}${prePostHtml}${postHealthyHtml}</tr>`;
@@ -4355,7 +6788,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     }
 
     const demoItems = [
-      ["Age / Yaş", d.age ? `${d.age} yrs` : "\u2014"],
+      ["Age / Ya?", d.age ? `${d.age} yrs` : "\u2014"],
       ["Sex", d.sex === "1" ? "Male" : d.sex === "2" ? "Female" : "\u2014"],
       ["Stroke Type", d.strokeType === "1" ? "Ischemic" : d.strokeType === "2" ? "Hemorrhagic" : "\u2014"],
       ["Affected Side", d.side === "1" ? "Left" : d.side === "2" ? "Right" : "\u2014"],
@@ -4385,9 +6818,9 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       const medTotal = ((parseFloat(ipaq.medium?.sure)||0)*(parseFloat(ipaq.medium?.gun)||0)) || 0;
       const lightTotal = ((parseFloat(ipaq.light?.sure)||0)*(parseFloat(ipaq.light?.gun)||0)) || 0;
       let clsLevel, clsColor, clsText;
-      if (highDays >= 3 && ipaqTotalMET >= 1500) { clsLevel="High"; clsColor="#10b981"; clsText="Vigorous activity ≥3 days & ≥1500 MET-min/week"; }
-      else if ((medDays+lightDays) >= 7 && ipaqTotalMET >= 3000) { clsLevel="High"; clsColor="#10b981"; clsText="Mixed activities 7 days & ≥3000 MET-min/week"; }
-      else if (ipaqTotalMET >= 600 || (medDays+lightDays >= 5 && (medTotal+lightTotal) >= 150)) { clsLevel="Moderate"; clsColor="#f59e0b"; clsText="≥600 MET-min/week or 5+ days moderate/walking"; }
+      if (highDays >= 3 && ipaqTotalMET >= 1500) { clsLevel="High"; clsColor="#10b981"; clsText="Vigorous activity ?3 days & ?1500 MET-min/week"; }
+      else if ((medDays+lightDays) >= 7 && ipaqTotalMET >= 3000) { clsLevel="High"; clsColor="#10b981"; clsText="Mixed activities 7 days & ?3000 MET-min/week"; }
+      else if (ipaqTotalMET >= 600 || (medDays+lightDays >= 5 && (medTotal+lightTotal) >= 150)) { clsLevel="Moderate"; clsColor="#f59e0b"; clsText="?600 MET-min/week or 5+ days moderate/walking"; }
       else { clsLevel="Low"; clsColor="#f43f5e"; clsText="Not meeting moderate or high criteria"; }
       ipaqSection = '<div class="singlecol"><div class="card"><div class="badge" style="background:#0ea5e988">Physical Activity (IPAQ) / Fiziksel Aktivite</div><div class="tblwrap"><table><thead><tr style="background:#0ea5e988;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)"><th>Activity</th><th>Days/wk</th><th>Min/day</th><th>Total min/wk</th><th>MET</th><th>MET-min/wk</th></tr></thead><tbody>' + ipaqRows + '</tbody></table></div>'
         + '<hr style="border:none;border-top:1px solid rgba(0,0,0,0.06);margin:14px 0">'
@@ -4409,8 +6842,8 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     const notesSrc = (d.notes || "").trim();
     const fmtNotes = notesSrc ? esc(notesSrc) : "";
     const notesHtml = d.antispasticDrugs || d.otherDrugs || notesSrc ? '<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.3)">' +
-      (d.antispasticDrugs ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Antispastic Drugs / Antispastik İlaçlar:</strong><br>' + esc(d.antispasticDrugs) + '</p>' : "") +
-      (d.otherDrugs ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Other Medications / Diğer İlaçlar:</strong><br>' + esc(d.otherDrugs) + '</p>' : "") +
+      (d.antispasticDrugs ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Antispastic Drugs / Antispastik ?la?lar:</strong><br>' + esc(d.antispasticDrugs) + '</p>' : "") +
+      (d.otherDrugs ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Other Medications / Di?er ?la?lar:</strong><br>' + esc(d.otherDrugs) + '</p>' : "") +
       (fmtNotes ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Clinical Notes / Klinik Notlar:</strong><br><div style="margin-top:4px;white-space:pre-wrap">' + fmtNotes + '</div></p>' : "") +
     '</div>' : "";
 
@@ -4418,7 +6851,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 <title>Clinical Report - ${esc(d.name || "Participant")}</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',system-ui,-apple-system,sans-serif; }
-  body { background:#ffffff; color:#1e293b; padding:28px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  body { background:#f5f0eb; color:#1e293b; padding:28px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   body::before { content:""; position:fixed; inset:0; background:url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E"); pointer-events:none; z-index:9999; }
   .wrap { max-width:920px; margin:0 auto; }
   .header { backdrop-filter:blur(40px) saturate(180%); -webkit-backdrop-filter:blur(40px) saturate(180%); border:1px solid rgba(255,255,255,0.3); border-radius:1rem; box-shadow:0 25px 50px -8px rgba(0,0,0,0.10); padding:22px 30px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; }
@@ -4464,17 +6897,17 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
   .interp { font-size:12px; line-height:1.8; color:#334155; }
   @media print {
-    body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; background:#ffffff !important; padding:16px; }
+    body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; background:#f5f0eb !important; padding:16px; }
     body::before { background:url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E") !important; }
     .card, .header, .patient { box-shadow:0 10px 30px -6px rgba(0,0,0,0.08) !important; page-break-inside:avoid; break-inside:avoid; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
     tr { page-break-inside:avoid; break-inside:avoid; }
     .badge, thead th, .tblwrap { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
     .pagebreak { break-before:page; page-break-before:always; }
-    @page { margin:12mm; background:#ffffff; }
+    @page { margin:12mm; }
   }
 </style></head><body><div class="wrap">
   <div class="header" style="background:${d.group === "1" ? "rgba(167,243,208,0.3)" : "rgba(251,207,232,0.4)"}">
-    <div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div>
+    <div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik De?erlendirme Raporu</div></div>
     <div class="meta">${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}<br>${esc(d.name || "Participant")}</div>
   </div>
   <div class="patient">
@@ -4497,7 +6930,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     if (isMobile) {
       downloadBlob(blob, `report_${d.participantId || d.name || "participant"}.html`);
-      alert("✓ Report downloaded — open the file and print to PDF");
+      alert("? Report downloaded ? open the file and print to PDF");
     } else {
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank");
@@ -4505,11 +6938,11 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     }
     } catch (e) { alert("Report error: " + e.message); } };
 
-  // ── PDF Export (jsPDF fallback) ──
+  // ?? PDF Export (jsPDF fallback) ??
   const exportPDF = () => {
     const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
 
-    // ── Design tokens (GlassCard style) ────────────────────────────
+    // ?? Design tokens (GlassCard style) ????????????????????????????
     const W = 210, M = 12, CW = W - 2 * M, R = 6, R2 = 4, R3 = 3;
     const C = {
       teal:    [13,  148, 136],
@@ -4533,7 +6966,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
     const B_R = R; // card border radius
 
-    // ── Helpers ────────────────────────────────────────────────────
+    // ?? Helpers ????????????????????????????????????????????????????
     const rr = (x, y, w, h, r, fill, stroke, lw = 0.3) => {
       if (fill)   doc.setFillColor(...fill);
       if (stroke) { doc.setDrawColor(...stroke); doc.setLineWidth(lw); }
@@ -4565,7 +6998,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       doc.rect(0, 0, W, 297, "F");
     };
 
-    // ── Page 1: background ────────────────────────────────────────
+    // ?? Page 1: background ????????????????????????????????????????
     drawPageBg();
 
     // Glass header card
@@ -4577,22 +7010,22 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     txt(new Date().toLocaleDateString("en-GB", {day:"2-digit",month:"short",year:"numeric"}), W - M - 10, y + 8, 7.5, false, C.gray500, "right");
     txt(d.name || "Participant", W - M - 10, y + 14, 7.5, false, C.gray500, "right");
 
-    // ── Patient Card (GlassCard style) ─────────────────────────────
+    // ?? Patient Card (GlassCard style) ?????????????????????????????
     y = 42;
     rr(M, y, CW, 32, R, C.white, C.gray200);
     rr(M + 2, y + 2, 4, 28, 2, C.teal, null);
 
-    txt(d.name || "—", M + 10, y + 9, 13, true, C.gray900);
+    txt(d.name || "?", M + 10, y + 9, 13, true, C.gray900);
     txt(d.participantId ? `ID: ${d.participantId}` : "", M + 10, y + 15, 7.5, false, C.gray500);
 
     const demoGrid = [
-      ["Age",        d.age ? `${d.age} yrs` : "—"],
-      ["Sex",        d.sex === "1" ? "Male" : d.sex === "2" ? "Female" : "—"],
-      ["Stroke",     d.strokeType === "1" ? "Ischemic" : d.strokeType === "2" ? "Hemorrhagic" : "—"],
-      ["Side",       d.side === "1" ? "Left" : d.side === "2" ? "Right" : "—"],
-      ["TSS",        d.timeSinceStroke ? `${d.timeSinceStroke}m` : "—"],
-      ["MAS",        d.mas || "—"],
-      ["MRC",        d.mrc || "—"],
+      ["Age",        d.age ? `${d.age} yrs` : "?"],
+      ["Sex",        d.sex === "1" ? "Male" : d.sex === "2" ? "Female" : "?"],
+      ["Stroke",     d.strokeType === "1" ? "Ischemic" : d.strokeType === "2" ? "Hemorrhagic" : "?"],
+      ["Side",       d.side === "1" ? "Left" : d.side === "2" ? "Right" : "?"],
+      ["TSS",        d.timeSinceStroke ? `${d.timeSinceStroke}m` : "?"],
+      ["MAS",        d.mas || "?"],
+      ["MRC",        d.mrc || "?"],
     ];
     const colW = CW / 4;
     demoGrid.forEach((item, i) => {
@@ -4604,13 +7037,14 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
     y = 80;
 
-    // ── Per-tool sections (GlassCard style) ───────────────────────
+    // ?? Per-tool sections (GlassCard style) ???????????????????????
     const toolConfig = {
       "VAS":          { label: "Pain Scale (VAS)",          color: C.rose  },
       "VAMS":         { label: "Mood Scale (VAMS-4)",        color: C.violet},
       "Muscle Control":{ label: "Muscle Control Scale",      color: C.amber },
       "KVIQ":         { label: "Motor Imagery (KVIQ)",       color: C.teal  },
       "WMFT":         { label: "Wolf Motor Function (WMFT)", color: C.cyan  },
+      "BBT":          { label: "Box & Block Test (BBT)",     color: C.amber },
     };
 
     const groupedRows = {};
@@ -4658,7 +7092,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           if (data.column.index === 3 && data.section === "body") {
             const delta = data.row.raw[3];
             const imp   = data.row.raw[4];
-            if (delta && delta !== "—") {
+            if (delta && delta !== "?") {
               data.cell.styles.textColor = imp === true ? C.green : imp === false ? C.red : C.gray700;
             }
           }
@@ -4671,7 +7105,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       y = (doc.lastAutoTable?.finalY || y) + 5;
     });
 
-    // ── Video Kinematics ──────────────────────────────────────────
+    // ?? Video Kinematics ??????????????????????????????????????????
     const videoKin = buildVideoKinRows();
     if (videoKin) {
       y = checkPage(y, 40);
@@ -4701,9 +7135,8 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       y = (doc.lastAutoTable?.finalY || y) + 4;
     }
 
-    // ── Velocity profiles (combined chart) ────────────────────────
-    let kr2;
-    try { kr2 = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {}; } catch { kr2 = {}; }
+    // ?? Velocity profiles (combined chart) ????????????????????????
+    const kr2 = loadLiveKinResults(fd);
     const kinPhases = ["pre","post","baseline"].filter((p) => kr2[p]?.velocity_profile);
     if (kinPhases.length > 0) {
       const combinedSvg = buildCombinedVelChart({
@@ -4722,7 +7155,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       }
     }
 
-    // ── Footer on each page ───────────────────────────────────────
+    // ?? Footer on each page ???????????????????????????????????????
     const totalPages = doc.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
@@ -4731,11 +7164,21 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       txt(`Stroke Rehab Platform  |  Confidential  |  Page ${i} of ${totalPages}`, W / 2, 290, 6.5, false, C.gray500, "center");
     }
 
-    doc.save(`report_${d.participantId || d.name || "participant"}_${new Date().toISOString().split("T")[0]}.pdf`);
+    const pdfName = `report_${d.participantId || d.name || "participant"}_${new Date().toISOString().split("T")[0]}.pdf`;
+    const pdfBlob = doc.output("blob");
+    downloadBlob(pdfBlob, pdfName);
+    scheduleDriveFileBackup(pdfName, pdfBlob, {
+      patientKey: patientDriveKeyFromDemographics(d),
+      subfolder: "reports",
+    });
   };
 
-  // ── Excel Export ──
+  // ?? Excel Export (per clinical task; archived excluded) ??
   const exportExcel = () => {
+    if (fd?._archived) {
+      showToast("Archived sessions are excluded from Excel export", "error");
+      return;
+    }
     const wb = XLSX.utils.book_new();
 
     // Sheet 1: Demographics
@@ -4756,13 +7199,13 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
     // Sheet 2: Clinical Summary
     const ws2 = XLSX.utils.aoa_to_sheet([
-      ["Tool", "Metric / Task", "Pre-Assessment", "Post-Assessment", "Δ Change"],
+      ["Tool", "Metric / Task", "Pre-Assessment", "Post-Assessment", "? Change"],
       ...rows.map((r) => [
         r.tool,
         r.metric,
-        r.pre === "—" ? "" : r.pre,
-        r.post === "—" ? "" : r.post,
-        r.delta === "—" ? "" : r.delta,
+        r.pre === "?" ? "" : r.pre,
+        r.post === "?" ? "" : r.post,
+        r.delta === "?" ? "" : r.delta,
       ]),
     ]);
     ws2["!cols"] = [{ wch: 20 }, { wch: 55 }, { wch: 18 }, { wch: 18 }, { wch: 12 }];
@@ -4770,17 +7213,16 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
     // Sheet 3: VAS
     const vas = fd.vas || {};
-    const vasSheet = [["Metric", "Pre (0-10)", "Post (0-10)", "Δ"]];
+    const vasSheet = [["Metric", "Pre (0-10)", "Post (0-10)", "?"]];
     [
       { k:"rest", en:"Pain at Rest" },
       { k:"activity", en:"Pain During Activity" },
-      { k:"night", en:"Night Pain" },
     ].forEach((item) => vasSheet.push([item.en, vas[item.k]?.pre || "", vas[item.k]?.post || "", ""]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(vasSheet), "VAS");
 
     // Sheet 4: VAMS-4
     const vams = fd.vams || {};
-    const vamsSheet = [["Metric", "Pre (0-10)", "Post (0-10)", "Δ"]];
+    const vamsSheet = [["Metric", "Pre (0-10)", "Post (0-10)", "?"]];
     [
       { k:"happy", en:"Happy" },
       { k:"sad", en:"Sad" },
@@ -4791,7 +7233,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
     // Sheet 5: KVIQ
     const kgia = fd.kgia || {};
-    const kviqSheet = [["#", "Movement", "Type", "Pre (1-5)", "Post (1-5)", "Δ"]];
+    const kviqSheet = [["#", "Movement", "Type", "Pre (1-5)", "Post (1-5)", "?"]];
     KGIA_MOVEMENTS.forEach((mov, mi) =>
       KGIA_TYPES.forEach((t) =>
         kviqSheet.push([
@@ -4818,12 +7260,39 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     );
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wmftSheet), "WMFT");
 
-    // Sheet 7: Kinematics (if uploaded)
-    if (kinRows.length > 0) {
+    const bbt = fd.bbt || {};
+    const bbtSheet = [
+      ["Phase", "Paretic hand (blocks/60s)", "Unaffected hand (optional)", "Notes"],
+      ["Pre", bbt.pre?.pareticBlocks || "", bbt.pre?.unaffectedBlocks || "", bbt.pre?.notes || ""],
+      ["Post", bbt.post?.pareticBlocks || "", bbt.post?.unaffectedBlocks || "", bbt.post?.notes || ""],
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bbtSheet), "BBT");
+
+    // Kinematics: only this patient's clinical-task core variables (never mix tasks).
+    const taskKinRows = patientTaskKinSheetRows(fd);
+    if (taskKinRows.length > 0) {
       XLSX.utils.book_append_sheet(
         wb,
         XLSX.utils.aoa_to_sheet([
-          ["Variable", "Unit", "Pre", "Post", "Δ"],
+          ["Task", "Variable", "Unit", "Pre", "Post", "Healthy", "? Pre?Post"],
+          ...taskKinRows.map((r) => [
+            r.taskId || "",
+            r.name || "",
+            r.unit || "",
+            r.pre || "",
+            r.post || "",
+            r.healthy || "",
+            calcKinDelta(r.pre, r.post),
+          ]),
+        ]),
+        "Kinematics"
+      );
+    } else if (kinRows.length > 0) {
+      // Legacy uploadedData fallback ? still label as uploaded, not mixed KINEMATIC_VARS dump.
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.aoa_to_sheet([
+          ["Variable", "Unit", "Pre", "Post", "?"],
           ...kinRows.map((r) => [r.name || "", r.unit || "", r.pre || "", r.post || "", calcKinDelta(r.pre, r.post)]),
         ]),
         "Kinematics"
@@ -4833,7 +7302,19 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     XLSX.writeFile(wb, `research_data_${d.participantId || "participant"}_${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
-  // ── SPSS Export (all patients, split by group + demo/assess/full) ──
+  const exportTaskExcels = async () => {
+    const allPts = activePatients();
+    if (!allPts.length) {
+      showToast("No active patients to export", "error");
+      return;
+    }
+    const result = await syncTaskExcelsToDrive(allPts, { showToast, downloadLocal: true });
+    if (result.count) {
+      showToast(`? Excel ? ${result.count} task file(s); Drive ${result.uploaded}/${result.count}`, "success");
+    }
+  };
+
+  // ?? SPSS Export (all patients, split by group + demo/assess/full) ??
   const exportSPSS = () => {
     const allPts = activePatients();
     if (allPts.length === 0) { showToast("No patients to export", "error"); return; }
@@ -4850,9 +7331,11 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
     toCsv("master_study_data.csv", masterRows);
 
-    const aomi = masterRows.filter((r) => r.Group === "1");
-    const ctrl = masterRows.filter((r) => r.Group === "2");
-    const demoKeys = ["ID","Group","Age","Sex","TimeSinceStroke","StrokeType","AffectedSide","MAS","MRC"];
+    const groupIsAomi = (r) => String(r.Group) === "1" || r.Group === 1;
+    const groupIsCtrl = (r) => String(r.Group) === "2" || r.Group === 2;
+    const aomi = masterRows.filter(groupIsAomi);
+    const ctrl = masterRows.filter(groupIsCtrl);
+    const demoKeys = DEMO_SPSS_KEYS;
     const assessKeys = Object.keys(masterRows[0]).filter((k) => k !== "ID" && !demoKeys.includes(k));
     const pick = (row, keys) => keys.reduce((o, k) => ({ ...o, [k]: row[k] }), {});
 
@@ -4865,10 +7348,10 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       "neuro_study_analysis.sps"
     ), count * 400);
 
-    showToast(`✓ Exported master CSV + group files + SPSS syntax`);
+    showToast("? Exported master + group CSVs + SPSS syntax");
   };
 
-  // ── JSON Export (all patients) ──
+  // ?? JSON Export (all patients) ??
   const exportJSON = () => {
     const allPts = activePatients();
     if (allPts.length === 0) { return; }
@@ -4877,18 +7360,24 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     downloadBlob(blob, `neuro_data_${allPts.length}patients_${new Date().toISOString().split("T")[0]}.json`);
   };
 
-  // ── SPSS Syntax (.sps) export — full study analysis workflow ──
+  // ?? SPSS Syntax (.sps) export ? full study analysis workflow ??
   const exportSPSSyntax = () => {
+    const allPts = activePatients();
+    const masterRows = buildMasterDataset(allPts, WMFT_ITEMS, KGIA_MOVEMENTS, IPAQ_ACTS);
+    if (masterRows.length === 0) {
+      showToast("No patient data for SPSS syntax", "error");
+      return;
+    }
     // eslint-disable-next-line no-undef
-    const syn = generateStudySPSSyntax("master_study_data.csv", rows[0]);
+    const syn = generateStudySPSSyntax("master_study_data.csv", masterRows[0]);
     const blob = new Blob(["\uFEFF" + syn], { type: "text/plain;charset=utf-8" });
     downloadBlob(blob, "neuro_study_analysis.sps");
-    showToast("✓ SPSS syntax downloaded (neuro_study_analysis.sps)");
+    showToast("? SPSS syntax downloaded (neuro_study_analysis.sps)");
   };
 
   return (
     <div className="space-y-5">
-      <SH icon={FileText} en="Clinical Report & Export" tr="Klinik Rapor ve Dışa Aktarma" />
+      <SH icon={FileText} en="Clinical Report & Export" tr="Klinik Rapor ve D??a Aktarma" />
 
       {d.name && (
         <Glass className="p-4 border-l-2 border-violet-400/40">
@@ -4900,7 +7389,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
             <div className="min-w-0">
               <p className="font-extrabold text-white text-sm">{d.name}</p>
               <p className="text-xs text-white/40 truncate">
-                {d.participantId} · {d.age} yrs · {d.strokeType} · {d.side} side
+                {d.participantId} ? {d.age} yrs ? {d.strokeType} ? {d.side} side
               </p>
             </div>
 
@@ -4928,13 +7417,13 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           <div className="space-y-3">
             {d.antispasticDrugs && (
               <div className="glass-float bg-white/[0.09] border border-white/12 rounded-xl px-4 py-2.5">
-                <p className="text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-1">Antispastic Drugs / Antispastik İlaçlar</p>
+                <p className="text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-1">Antispastic Drugs / Antispastik ?la?lar</p>
                 <p className="text-sm text-white/80 font-medium">{d.antispasticDrugs}</p>
               </div>
             )}
             {d.otherDrugs && (
               <div className="glass-float bg-white/[0.09] border border-white/12 rounded-xl px-4 py-2.5">
-                <p className="text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-1">Other Medications / Diğer İlaçlar</p>
+                <p className="text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-1">Other Medications / Di?er ?la?lar</p>
                 <p className="text-sm text-white/80 font-medium">{d.otherDrugs}</p>
               </div>
             )}
@@ -4956,7 +7445,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
               <Activity className="w-5 h-5 text-sky-300 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-extrabold text-white/90">International Physical Activity Questionnaire (IPAQ)</p>
-                <p className="text-xs font-light text-white/40 mt-0.5">Uluslararası Fiziksel Aktivite Anketi</p>
+                <p className="text-xs font-light text-white/40 mt-0.5">Uluslararas? Fiziksel Aktivite Anketi</p>
               </div>
             </div>
             <div className="glass-float overflow-x-auto rounded-xl border border-white/[0.08]">
@@ -4995,9 +7484,9 @@ const ReportSection = ({ fd, onChange, showToast }) => {
               const med = totMin(IPAQ_ACTS.find(a=>a.id==="medium")) || 0;
               const light = totMin(IPAQ_ACTS.find(a=>a.id==="light")) || 0;
               let cls;
-              if (highDays >= 3 && totalMET >= 1500) cls = { level:"High", color:"emerald", text:"Vigorous activity ≥3 days & ≥1500 MET-min/week" };
-              else if ((medDays + lightDays) >= 7 && totalMET >= 3000) cls = { level:"High", color:"emerald", text:"Mixed activities 7 days & ≥3000 MET-min/week" };
-              else if (totalMET >= 600 || (medDays + lightDays >= 5 && (med + light) >= 150)) cls = { level:"Moderate", color:"amber", text:"≥600 MET-min/week or 5+ days moderate/walking" };
+              if (highDays >= 3 && totalMET >= 1500) cls = { level:"High", color:"emerald", text:"Vigorous activity ?3 days & ?1500 MET-min/week" };
+              else if ((medDays + lightDays) >= 7 && totalMET >= 3000) cls = { level:"High", color:"emerald", text:"Mixed activities 7 days & ?3000 MET-min/week" };
+              else if (totalMET >= 600 || (medDays + lightDays >= 5 && (med + light) >= 150)) cls = { level:"Moderate", color:"amber", text:"?600 MET-min/week or 5+ days moderate/walking" };
               else cls = { level:"Low", color:"rose", text:"Not meeting moderate or high criteria" };
               return (
                 <><div className="my-4 border-t border-white/[0.06]" />
@@ -5027,7 +7516,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           <BarChart3 className="w-5 h-5 text-amber-300 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-extrabold text-white/90">Clinical Summary Dashboard</p>
-            <p className="text-xs font-light text-white/40 mt-0.5">All assessment tools · Pre vs Post results · Auto-calculated Δ</p>
+            <p className="text-xs font-light text-white/40 mt-0.5">All assessment tools ? Pre vs Post results ? Auto-calculated ?</p>
           </div>
         </div>
 
@@ -5048,24 +7537,24 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                       <th className="text-left px-4 py-2.5 text-xs font-extrabold text-white/50 uppercase">Metric / Task</th>
                       <th className="text-center px-3 py-2.5 text-xs font-extrabold text-sky-300 uppercase">Pre</th>
                       <th className="text-center px-3 py-2.5 text-xs font-extrabold text-emerald-300 uppercase">Post</th>
-                      <th className="text-center px-3 py-2.5 text-xs font-extrabold text-amber-300 uppercase">Δ Change</th>
+                      <th className="text-center px-3 py-2.5 text-xs font-extrabold text-amber-300 uppercase">? Change</th>
                     </tr>
                   </thead>
 
                   <tbody>
                     {tool === "Muscle Control" ? (() => {
-                      const preRow = toolRows.find(r => r.pre !== "—");
-                      const postRow = toolRows.find(r => r.post !== "—");
-                      const preVal = preRow ? preRow.pre : "—";
-                      const postVal = postRow ? postRow.post : "—";
-                      const delta = preVal !== "—" && postVal !== "—" ? (parseFloat(postVal) - parseFloat(preVal)).toFixed(2) : "—";
-                      const imp = preVal !== "—" && postVal !== "—" ? (parseFloat(postVal) > parseFloat(preVal) ? true : parseFloat(postVal) < parseFloat(preVal) ? false : null) : null;
+                      const preRow = toolRows.find(r => r.pre !== "?");
+                      const postRow = toolRows.find(r => r.post !== "?");
+                      const preVal = preRow ? preRow.pre : "?";
+                      const postVal = postRow ? postRow.post : "?";
+                      const delta = preVal !== "?" && postVal !== "?" ? (parseFloat(postVal) - parseFloat(preVal)).toFixed(2) : "?";
+                      const imp = preVal !== "?" && postVal !== "?" ? (parseFloat(postVal) > parseFloat(preVal) ? true : parseFloat(postVal) < parseFloat(preVal) ? false : null) : null;
                       return (
                         <tr className="border-b border-white/[0.05] bg-white/[0.02]">
                           <td className="px-4 py-2.5 text-xs text-white/75 font-medium">Felt Difference</td>
                           <td className="px-3 py-2.5 text-center"><span className="px-2.5 py-1 rounded-lg border bg-sky-500/10 border-sky-400/20 text-sky-200 text-xs font-bold">{preVal}</span></td>
                           <td className="px-3 py-2.5 text-center"><span className="px-2.5 py-1 rounded-lg border bg-emerald-500/10 border-emerald-400/20 text-emerald-200 text-xs font-bold">{postVal}</span></td>
-                          <td className="px-3 py-2.5 text-center"><span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${delta === "—" ? "text-white/25 bg-white/[0.03] border-white/[0.06]" : imp === true ? "text-emerald-300 bg-emerald-500/20 border-emerald-400/30" : imp === false ? "text-rose-300 bg-rose-500/20 border-rose-400/30" : "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>{delta}</span></td>
+                          <td className="px-3 py-2.5 text-center"><span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${delta === "?" ? "text-white/25 bg-white/[0.03] border-white/[0.06]" : imp === true ? "text-emerald-300 bg-emerald-500/20 border-emerald-400/30" : imp === false ? "text-rose-300 bg-rose-500/20 border-rose-400/30" : "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>{delta}</span></td>
                         </tr>
                       );
                     })() : (
@@ -5077,7 +7566,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                             <td className="px-4 py-2.5 text-xs text-white/75 font-medium">{row.metric}</td>
                             <td className="px-3 py-2.5 text-center"><span className="px-2.5 py-1 rounded-lg border bg-sky-500/10 border-sky-400/20 text-sky-200 text-xs font-bold">{row.pre}</span></td>
                             <td className="px-3 py-2.5 text-center"><span className="px-2.5 py-1 rounded-lg border bg-emerald-500/10 border-emerald-400/20 text-emerald-200 text-xs font-bold">{row.post}</span></td>
-                            <td className="px-3 py-2.5 text-center"><span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${dVal === "—" ? "text-white/25 bg-white/[0.03] border-white/[0.06]" : imp === true ? "text-emerald-300 bg-emerald-500/20 border-emerald-400/30" : imp === false ? "text-rose-300 bg-rose-500/20 border-rose-400/30" : "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>{dVal}</span></td>
+                            <td className="px-3 py-2.5 text-center"><span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${dVal === "?" ? "text-white/25 bg-white/[0.03] border-white/[0.06]" : imp === true ? "text-emerald-300 bg-emerald-500/20 border-emerald-400/30" : imp === false ? "text-rose-300 bg-rose-500/20 border-rose-400/30" : "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>{dVal}</span></td>
                           </tr>
                         );
                       })
@@ -5127,7 +7616,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                     <th className="text-left px-3 py-2.5 text-xs font-extrabold text-white/50 uppercase">Unit</th>
                     <th className="text-center px-3 py-2.5 text-sky-300 uppercase">Pre</th>
                     <th className="text-center px-3 py-2.5 text-emerald-300 uppercase">Post</th>
-                    <th className="text-center px-3 py-2.5 text-amber-300 uppercase">Δ</th>
+                    <th className="text-center px-3 py-2.5 text-amber-300 uppercase">?</th>
                   </tr>
                 </thead>
 
@@ -5135,17 +7624,17 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                   {kinRows.map((r, i) => (
                     <tr key={r.id || i} className={`border-b border-white/[0.05] hover:bg-white/[0.03] ${i % 2 === 0 ? "" : "bg-white/[0.02]"}`}>
                       <td className="px-4 py-2.5 text-xs text-white/75 font-bold">{r.name}</td>
-                      <td className="px-3 py-2.5 text-center text-xs text-white/40">{r.unit || "—"}</td>
+                      <td className="px-3 py-2.5 text-center text-xs text-white/40">{r.unit || "?"}</td>
 
                       <td className="px-3 py-2.5 text-center">
                         <span className="px-2.5 py-1 rounded-lg border bg-sky-500/10 border-sky-400/20 text-sky-200 text-xs font-bold">
-                          {r.pre || "—"}
+                          {r.pre || "?"}
                         </span>
                       </td>
 
                       <td className="px-3 py-2.5 text-center">
                         <span className="px-2.5 py-1 rounded-lg border bg-emerald-500/10 border-emerald-400/20 text-emerald-200 text-xs font-bold">
-                          {r.post || "—"}
+                          {r.post || "?"}
                         </span>
                       </td>
 
@@ -5154,7 +7643,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                           className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${
                             (() => {
                               const d = calcKinDelta(r.pre, r.post);
-                              if (d === "—") return "text-white/25 bg-white/[0.03] border-white/[0.06]";
+                              if (d === "?") return "text-white/25 bg-white/[0.03] border-white/[0.06]";
                               const dir = kinDirectionMap(r.name);
                               const isImprovement = dir === "lower" ? d.startsWith("-") : d.startsWith("+");
                               return isImprovement
@@ -5220,7 +7709,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                       </th>
                     ))}
                     {preIdx >= 0 && postIdx >= 0 && <th className="text-center px-3 py-2.5 text-xs font-extrabold text-white/50 uppercase">Pre → Post</th>}
-                    {postIdx >= 0 && healthyIdx >= 0 && <th className="text-center px-3 py-2.5 text-xs font-extrabold text-white/50 uppercase">Post → Healthy</th>}
+                    {postIdx >= 0 && healthyIdx >= 0 && <th className="text-center px-3 py-2.5 text-xs font-extrabold text-white/50 uppercase">Post ? Healthy</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -5232,10 +7721,13 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                       const preVal = parseFloat(row[preIdx]);
                       const postVal = parseFloat(row[postIdx]);
                       if (!isNaN(preVal) && !isNaN(postVal)) {
-                        const badge = kinPrePostBadge(preVal, postVal, dir);
+                        const metricKey = videoKin.varMeta?.[i]?.key;
+                        const badge = resolveKinPrePostCell(
+                          preVal, postVal, dir, metricKey || "unknown", videoKin.kr, null,
+                        );
                         prePostHtml = (
                           <span className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold ${badge?.colorClass || "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>
-                            {badge?.text || "—"}
+                            {badge?.text || "?"}
                           </span>
                         );
                       }
@@ -5247,7 +7739,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                         const badge = kinPostHealthyBadge(null, postVal, helVal, dir);
                         postHealthyHtml = (
                           <span className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold ${badge?.colorClass || "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>
-                            {badge?.text || "—"}
+                            {badge?.text || "?"}
                           </span>
                         );
                       }
@@ -5264,10 +7756,10 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                           </td>
                         ))}
                         {preIdx >= 0 && postIdx >= 0 && (
-                          <td className="px-3 py-2.5 text-center">{prePostHtml || <span className="text-white/25 text-xs">—</span>}</td>
+                          <td className="px-3 py-2.5 text-center">{prePostHtml || <span className="text-white/25 text-xs">?</span>}</td>
                         )}
                         {postIdx >= 0 && healthyIdx >= 0 && (
-                          <td className="px-3 py-2.5 text-center">{postHealthyHtml || <span className="text-white/25 text-xs">—</span>}</td>
+                          <td className="px-3 py-2.5 text-center">{postHealthyHtml || <span className="text-white/25 text-xs">?</span>}</td>
                         )}
                       </tr>
                     );
@@ -5287,7 +7779,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           {/* PDF */}
           <motion.button
             whileHover={{ scale: 1.01 }}
-            whileTap={tapMotion(0.98)}
+            whileTap={nlMotionTap(0.98)}
             onClick={exportGlassReport}
             className="flex flex-col gap-3 p-5 rounded-xl bg-rose-500/10 border border-rose-400/25 hover:bg-rose-500/15 hover:border-rose-400/40 transition-all text-left"
           >
@@ -5297,7 +7789,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
               </div>
               <div>
                 <p className="font-extrabold text-rose-200 text-sm">Download PDF</p>
-                <p className="text-[10px] text-rose-300/60">Glassmorphism Report → Print/Save PDF</p>
+                <p className="text-[10px] text-rose-300/60">Glassmorphism Report ? Print/Save PDF</p>
               </div>
             </div>
             <p className="text-xs text-white/45 leading-relaxed">
@@ -5305,10 +7797,52 @@ const ReportSection = ({ fd, onChange, showToast }) => {
             </p>
           </motion.button>
 
+          {/* Per-task Excel (clinic study) */}
+          <motion.button
+            whileHover={{ scale: 1.01 }}
+            whileTap={nlMotionTap(0.98)}
+            onClick={exportTaskExcels}
+            className="flex flex-col gap-3 p-5 rounded-xl bg-teal-500/10 border border-teal-400/25 hover:bg-teal-500/15 hover:border-teal-400/40 transition-all text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center flex-shrink-0">
+                <FileSpreadsheet className="w-5 h-5 text-teal-300" />
+              </div>
+              <div>
+                <p className="font-extrabold text-teal-200 text-sm">Export Excel (per task)</p>
+                <p className="text-[10px] text-teal-300/60">One file / clinical task ? Drive/Excel</p>
+              </div>
+            </div>
+            <p className="text-xs text-white/45 leading-relaxed">
+              Active patients only. Each workbook has <strong className="text-white/60">one task</strong> and that task?s kinematic columns (no archive, no mixed tasks).
+            </p>
+          </motion.button>
+
+          {/* Current-patient Excel */}
+          <motion.button
+            whileHover={{ scale: 1.01 }}
+            whileTap={nlMotionTap(0.98)}
+            onClick={exportExcel}
+            className="flex flex-col gap-3 p-5 rounded-xl bg-sky-500/10 border border-sky-400/25 hover:bg-sky-500/15 hover:border-sky-400/40 transition-all text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-sky-500/20 border border-sky-400/30 flex items-center justify-center flex-shrink-0">
+                <FileSpreadsheet className="w-5 h-5 text-sky-300" />
+              </div>
+              <div>
+                <p className="font-extrabold text-sky-200 text-sm">This patient Excel</p>
+                <p className="text-[10px] text-sky-300/60">Clinical sheets + this task?s kinematics</p>
+              </div>
+            </div>
+            <p className="text-xs text-white/45 leading-relaxed">
+              Single-patient workbook. Kinematics sheet uses only the recorded clinical task variables.
+            </p>
+          </motion.button>
+
           {/* SPSS */}
           <motion.button
             whileHover={{ scale: 1.01 }}
-            whileTap={tapMotion(0.98)}
+            whileTap={nlMotionTap(0.98)}
             onClick={exportSPSS}
             className="flex flex-col gap-3 p-5 rounded-xl bg-violet-500/10 border border-violet-400/25 hover:bg-violet-500/15 hover:border-violet-400/40 transition-all text-left"
           >
@@ -5318,18 +7852,18 @@ const ReportSection = ({ fd, onChange, showToast }) => {
               </div>
               <div>
                 <p className="font-extrabold text-violet-200 text-sm">Export SPSS CSVs</p>
-                <p className="text-[10px] text-violet-300/60">AOMI + Control · Demo / Assess / Full</p>
+                <p className="text-[10px] text-violet-300/60">Master + AOMI / Control full datasets</p>
               </div>
             </div>
             <p className="text-xs text-white/45 leading-relaxed">
-              6 CSV files (AOMI & Control groups × demographics / assessments / full). Ready for SPSS.
+              Downloads <strong className="text-white/60">master_study_data.csv</strong>, optional group splits, and <strong className="text-white/60">neuro_study_analysis.sps</strong> (use the master file in SPSS).
             </p>
           </motion.button>
 
           {/* JSON */}
           <motion.button
             whileHover={{ scale: 1.01 }}
-            whileTap={tapMotion(0.98)}
+            whileTap={nlMotionTap(0.98)}
             onClick={exportJSON}
             className="flex flex-col gap-3 p-5 rounded-xl bg-emerald-500/10 border border-emerald-400/25 hover:bg-emerald-500/15 hover:border-emerald-400/40 transition-all text-left"
           >
@@ -5350,7 +7884,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           {/* SPSS Syntax */}
           <motion.button
             whileHover={{ scale: 1.01 }}
-            whileTap={tapMotion(0.98)}
+            whileTap={nlMotionTap(0.98)}
             onClick={exportSPSSyntax}
             className="flex flex-col gap-3 p-5 rounded-xl bg-indigo-500/10 border border-indigo-400/25 hover:bg-indigo-500/15 hover:border-indigo-400/40 transition-all text-left"
           >
@@ -5364,7 +7898,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
               </div>
             </div>
             <p className="text-xs text-white/45 leading-relaxed">
-              Run this syntax before analysis — auto-defines all variable labels, value labels, and measure levels.
+              Run this syntax before analysis ? auto-defines all variable labels, value labels, and measure levels.
             </p>
           </motion.button>
         </div>
@@ -5373,7 +7907,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
   );
 };
 
-// ─── Analysis Dashboard ───────────────────────────────────────────────────────────
+// ??? Analysis Dashboard ???????????????????????????????????????????????????????????
 
 function _mean(arr) { return arr.reduce((a, b) => a + b, 0) / arr.length; }
 function _sd(arr) { const m = _mean(arr); return Math.sqrt(arr.reduce((s, x) => s + (x - m) ** 2, 0) / (arr.length - 1)); }
@@ -5550,6 +8084,15 @@ const AnalysisDashboard = () => {
     downloadBlob(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }), "master_study_data.csv");
   };
 
+  const downloadTaskExcels = async () => {
+    const result = await syncTaskExcelsToDrive(pts, { downloadLocal: true });
+    if (!result.count) {
+      alert("No active task kinematics for Excel export (archived sessions are excluded)");
+      return;
+    }
+    alert(`Exported ${result.count} task Excel file(s). Drive upload: ${result.uploaded}/${result.count} ? RAED_AI_Backups/Excel/`);
+  };
+
   const downloadSpssSyntax = () => {
     // eslint-disable-next-line no-undef
     downloadBlob(
@@ -5598,16 +8141,16 @@ const AnalysisDashboard = () => {
         <TabBtn id="thesis" label="Thesis Docs" />
       </div>
 
-      {/* Enrollment — always visible */}
+      {/* Enrollment ? always visible */}
       <Glass className="p-5">
-        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Enrollment / Kayıt (target n={STUDY_DESIGN.targetN})</p>
+        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Enrollment / Kay?t (target n={STUDY_DESIGN.targetN})</p>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
             { label: "Total", val: n, color: "text-white" },
             { label: "AOMI", val: aomi.length, color: "text-teal-300" },
             { label: "Control", val: ctrl.length, color: "text-rose-300" },
             { label: "Kin complete", val: kinComplete, color: "text-sky-300" },
-            { label: "Ready for ANOVA", val: rows.length >= 8 && aomi.length >= 2 && ctrl.length >= 2 ? "✓" : "—", color: "text-amber-300" },
+            { label: "Ready for ANOVA", val: rows.length >= 8 && aomi.length >= 2 && ctrl.length >= 2 ? "?" : "?", color: "text-amber-300" },
           ].map((item) => (
             <div key={item.label} className="glass-float p-3 rounded-xl bg-white/[0.09] border border-white/12 text-center">
               <p className={`text-xl font-black ${item.color}`}>{item.val}</p>
@@ -5633,29 +8176,29 @@ const AnalysisDashboard = () => {
                 min="0"
                 className="mt-1 w-full bg-transparent text-lg font-black text-white outline-none"
                 value={val}
-                placeholder={auto != null ? String(auto) : "—"}
+                placeholder={auto != null ? String(auto) : "?"}
                 onChange={(e) => saveConsort({ [k]: e.target.value === "" ? "" : parseInt(e.target.value, 10) })}
               />
               {auto != null && <p className="text-[9px] text-white/30 mt-1">Auto: {auto}</p>}
             </div>
           ))}
         </div>
-        <p className="text-[10px] text-white/35">Healthy side collected: {healthyComplete} · LOCF export: {locfExport ? "on" : "off"}</p>
+        <p className="text-[10px] text-white/35">Healthy side collected: {healthyComplete} ? LOCF export: {locfExport ? "on" : "off"}</p>
       </Glass>
 
       {tab === "plan" && (
         <>
           <Glass className="p-5">
             <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-3">Study Design</p>
-            <p className="text-sm text-white/70 leading-relaxed mb-4">{STUDY_DESIGN.design} · Primary: <strong className="text-violet-300">{STUDY_DESIGN.primaryOutcome}</strong> · α={STUDY_DESIGN.alpha}</p>
+            <p className="text-sm text-white/70 leading-relaxed mb-4">{STUDY_DESIGN.design} ? Primary: <strong className="text-violet-300">{STUDY_DESIGN.primaryOutcome}</strong> ? ?={STUDY_DESIGN.alpha}</p>
             <div className="grid md:grid-cols-2 gap-4 text-xs">
               <div>
-                <p className="font-bold text-teal-300 mb-2">Kinematic ({KINEMATIC_VARS.length} vars — manuscript tiers)</p>
+                <p className="font-bold text-teal-300 mb-2">Kinematic ({KINEMATIC_VARS.length} vars ? manuscript tiers)</p>
                 <ul className="space-y-1 text-white/60">
                   {KINEMATIC_VARS.map((k) => (
                     <li key={k.key}>
-                      • {k.label} ({k.key}) — {k.tier}
-                      {k.dir === "lower" ? " ↓" : k.dir === "higher" ? " ↑" : ""}
+                      ? {k.label} ({k.key}) ? {k.tier}
+                      {k.dir === "lower" ? " ?" : k.dir === "higher" ? " ?" : ""}
                     </li>
                   ))}
                 </ul>
@@ -5664,7 +8207,7 @@ const AnalysisDashboard = () => {
                 <p className="font-bold text-amber-300 mb-2">Clinical & moderators</p>
                 <ul className="space-y-1 text-white/60">
                   {CLINICAL_VARS.map((c) => (
-                    <li key={c.label}>• {c.label} ({c.tier})</li>
+                    <li key={c.label}>? {c.label} ({c.tier})</li>
                   ))}
                 </ul>
               </div>
@@ -5684,7 +8227,7 @@ const AnalysisDashboard = () => {
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-white/35 mt-4">Full document: STUDY_ANALYSIS_PLAN.md in NeuroLab folder</p>
+            <p className="text-[10px] text-white/35 mt-4">Full document: STUDY_ANALYSIS_PLAN.md in RA.ED AI folder</p>
           </Glass>
         </>
       )}
@@ -5694,12 +8237,12 @@ const AnalysisDashboard = () => {
           <Glass className="p-5">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <div>
-                <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest">Preliminary 2×2 Analysis</p>
-                <p className="text-[10px] text-amber-400/80 font-bold mt-1">Δ between groups ≈ Group×Time interaction · Confirm in SPSS GLM</p>
+                <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest">Preliminary 2?2 Analysis</p>
+                <p className="text-[10px] text-amber-400/80 font-bold mt-1">? between groups ? Group?Time interaction ? Confirm in SPSS GLM</p>
               </div>
               <button type="button" onClick={runBackendAnalysis} disabled={runningBackend || rows.length < 4}
                 className="px-4 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-extrabold disabled:opacity-40">
-                {runningBackend ? "Running…" : "Run Python ANOVA (backend)"}
+                {runningBackend ? "Running?" : "Run Python ANOVA (backend)"}
               </button>
             </div>
 
@@ -5713,26 +8256,26 @@ const AnalysisDashboard = () => {
                     <th className="text-center px-2 py-2 text-emerald-300">AOMI Post</th>
                     <th className="text-center px-2 py-2 text-rose-300">Ctrl Pre</th>
                     <th className="text-center px-2 py-2 text-amber-300">Ctrl Post</th>
-                    <th className="text-center px-2 py-2 text-violet-300">AOMI Δ p</th>
-                    <th className="text-center px-2 py-2 text-violet-300">Ctrl Δ p</th>
-                    <th className="text-center px-2 py-2 font-extrabold text-white">Group Δ p</th>
+                    <th className="text-center px-2 py-2 text-violet-300">AOMI ? p</th>
+                    <th className="text-center px-2 py-2 text-violet-300">Ctrl ? p</th>
+                    <th className="text-center px-2 py-2 font-extrabold text-white">Group ? p</th>
                     <th className="text-center px-2 py-2">d</th>
               </tr>
             </thead>
             <tbody>
                   {outcomes.map((r) => {
-                    const fmtM = (s) => s ? `${s.mean}±${s.sd}` : "—";
+                    const fmtM = (s) => s ? `${s.mean}?${s.sd}` : "?";
                     const norm = normalityForOutcome(r);
                 return (
                       <tr key={r.label} className={`border-b border-white/[0.04] ${r.isPrimary ? "bg-violet-500/10" : ""}`}>
                         <td className="px-3 py-2 text-white/70 font-medium">
-                          {r.isPrimary ? "★ " : ""}{r.label}
+                          {r.isPrimary ? "? " : ""}{r.label}
                           {r.pre?.includes("_Pre") && r.label && (
                             <span className="block text-[9px] text-white/30 font-normal">{r.pre?.replace("_Pre", "")}</span>
                           )}
                         </td>
                         <td className="px-2 py-2 text-center text-[10px]">
-                          {norm ? (norm.normal ? <span className="text-emerald-400" title={`skew=${norm.skew} kurt=${norm.kurt}`}>✓</span> : <span className="text-amber-400" title={`skew=${norm.skew} kurt=${norm.kurt}`}>NP</span>) : "—"}
+                          {norm ? (norm.normal ? <span className="text-emerald-400" title={`skew=${norm.skew} kurt=${norm.kurt}`}>?</span> : <span className="text-amber-400" title={`skew=${norm.skew} kurt=${norm.kurt}`}>NP</span>) : "?"}
                         </td>
                         <td className="px-2 py-2 text-center text-white/55">{fmtM(r.aomiPre)}</td>
                         <td className="px-2 py-2 text-center text-white/55">{fmtM(r.aomiPost)}</td>
@@ -5741,7 +8284,7 @@ const AnalysisDashboard = () => {
                         <td className="px-2 py-2 text-center">{fmtP(r.withinAomi?.p)}{sigStars(r.withinAomi?.p)}</td>
                         <td className="px-2 py-2 text-center">{fmtP(r.withinCtrl?.p)}{sigStars(r.withinCtrl?.p)}</td>
                         <td className="px-2 py-2 text-center font-bold text-white">{fmtP(r.betweenDelta?.p)}{sigStars(r.betweenDelta?.p)}</td>
-                        <td className="px-2 py-2 text-center text-white/50">{r.betweenDelta?.es != null ? Math.abs(r.betweenDelta.es).toFixed(2) : "—"}</td>
+                        <td className="px-2 py-2 text-center text-white/50">{r.betweenDelta?.es != null ? Math.abs(r.betweenDelta.es).toFixed(2) : "?"}</td>
                   </tr>
                 );
               })}
@@ -5753,7 +8296,7 @@ const AnalysisDashboard = () => {
           {backendReport?.outcomes && (
             <>
         <Glass className="p-5">
-              <p className="text-xs font-extrabold text-emerald-300 uppercase tracking-widest mb-4">Backend Mixed ANOVA (Group × Time)</p>
+              <p className="text-xs font-extrabold text-emerald-300 uppercase tracking-widest mb-4">Backend Mixed ANOVA (Group ? Time)</p>
               <div className="overflow-x-auto rounded-xl border border-emerald-500/20">
             <table className="w-full text-xs">
               <thead>
@@ -5761,7 +8304,7 @@ const AnalysisDashboard = () => {
                       <th className="text-left px-3 py-2 text-emerald-200">Outcome</th>
                       <th className="text-center px-3 py-2">F (interaction)</th>
                       <th className="text-center px-3 py-2">p</th>
-                      <th className="text-center px-3 py-2">ηp²</th>
+                      <th className="text-center px-3 py-2">?p?</th>
                 </tr>
               </thead>
               <tbody>
@@ -5770,9 +8313,9 @@ const AnalysisDashboard = () => {
                   return (
                         <tr key={o.base} className="border-b border-white/[0.04]">
                           <td className="px-3 py-2 text-white/70">{o.label}</td>
-                          <td className="px-3 py-2 text-center text-white/60">{ix ? ix.F.toFixed(3) : "—"}</td>
-                          <td className="px-3 py-2 text-center font-bold">{ix ? fmtP(ix.p) : "—"}</td>
-                          <td className="px-3 py-2 text-center text-white/50">{ix ? ix.eta_p2 : "—"}</td>
+                          <td className="px-3 py-2 text-center text-white/60">{ix ? ix.F.toFixed(3) : "?"}</td>
+                          <td className="px-3 py-2 text-center font-bold">{ix ? fmtP(ix.p) : "?"}</td>
+                          <td className="px-3 py-2 text-center text-white/50">{ix ? ix.eta_p2 : "?"}</td>
                     </tr>
                   );
                 })}
@@ -5782,14 +8325,14 @@ const AnalysisDashboard = () => {
         </Glass>
           {backendReport?.holm_secondary_kinematic && (
         <Glass className="p-5">
-              <p className="text-xs font-extrabold text-amber-300 uppercase tracking-widest mb-4">Holm–Bonferroni (secondary kinematic, k={KINEMATIC_VARS.filter((k) => k.tier === "secondary").length})</p>
+              <p className="text-xs font-extrabold text-amber-300 uppercase tracking-widest mb-4">Holm?Bonferroni (secondary kinematic, k={KINEMATIC_VARS.filter((k) => k.tier === "secondary").length})</p>
               <div className="overflow-x-auto rounded-xl border border-amber-500/20">
             <table className="w-full text-xs">
               <thead>
                     <tr className="bg-amber-500/10">
                       <th className="text-left px-3 py-2 text-amber-200">Variable</th>
                       <th className="text-center px-3 py-2">p (interaction)</th>
-                      <th className="text-center px-3 py-2">Holm α</th>
+                      <th className="text-center px-3 py-2">Holm ?</th>
                       <th className="text-center px-3 py-2">Sig?</th>
                 </tr>
               </thead>
@@ -5799,7 +8342,7 @@ const AnalysisDashboard = () => {
                         <td className="px-3 py-2 text-white/70">{h.name}</td>
                         <td className="px-3 py-2 text-center">{fmtP(h.p)}</td>
                         <td className="px-3 py-2 text-center text-white/50">{h.holm_alpha}</td>
-                        <td className="px-3 py-2 text-center font-bold">{h.significant ? "✓" : "—"}</td>
+                        <td className="px-3 py-2 text-center font-bold">{h.significant ? "?" : "?"}</td>
                     </tr>
                     ))}
               </tbody>
@@ -5819,16 +8362,16 @@ const AnalysisDashboard = () => {
             <p className="text-sm text-white/60 mb-4">Literature review (condensed Introduction) and CONSORT + SAP for committee review.</p>
             <div className="flex flex-wrap gap-3">
               <button type="button" onClick={() => downloadBlob(new Blob(["\uFEFF" + generateLiteratureReviewMarkdown()], { type: "text/markdown;charset=utf-8" }), "THESIS_LITERATURE_REVIEW.md")} className="px-5 py-2.5 rounded-xl bg-teal-500/20 border border-teal-400/30 text-teal-200 text-xs font-extrabold">
-                ⬇ Literature Review
+                ? Literature Review
               </button>
               <button type="button" onClick={() => downloadBlob(new Blob(["\uFEFF" + generateConsortSapMarkdown()], { type: "text/markdown;charset=utf-8" }), "THESIS_CONSORT_SAP.md")} className="px-5 py-2.5 rounded-xl bg-violet-500/20 border border-violet-400/30 text-violet-200 text-xs font-extrabold">
-                ⬇ CONSORT + SAP
+                ? CONSORT + SAP
               </button>
           </div>
         </Glass>
 
           <Glass className="p-5">
-            <p className="text-xs font-extrabold text-rose-300 uppercase tracking-widest mb-4">Program Roadmap (what NeuroLab still needs)</p>
+            <p className="text-xs font-extrabold text-rose-300 uppercase tracking-widest mb-4">Program Roadmap (what RA.ED AI still needs)</p>
             <div className="space-y-2">
               {PROGRAM_GAPS.map((g) => (
                 <div key={g.item} className="flex gap-3 text-xs border-b border-white/[0.06] pb-2">
@@ -5847,26 +8390,29 @@ const AnalysisDashboard = () => {
       {tab === "export" && (
       <Glass className="p-5">
           <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Post-Study Export Package</p>
-          <p className="text-sm text-white/60 mb-4">After data collection: export master CSV → open in SPSS → run syntax → copy GLM tables to manuscript.</p>
+          <p className="text-sm text-white/60 mb-4">After data collection: export master CSV ? open in SPSS ? run syntax ? copy GLM tables to manuscript.</p>
           <label className="flex items-center gap-2 text-xs text-white/60 mb-4 cursor-pointer">
             <input type="checkbox" checked={locfExport} onChange={(e) => setLocfExport(e.target.checked)} className="rounded" />
-            Apply LOCF imputation (missing Post ← Pre) for ITT export
+            Apply LOCF imputation (missing Post ? Pre) for ITT export
           </label>
         <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={downloadTaskExcels} className="px-5 py-2.5 rounded-xl bg-teal-500/20 border border-teal-400/30 text-teal-200 text-xs font-extrabold hover:bg-teal-500/30">
+              ? Excel per task ? Drive/Excel
+            </button>
             <button type="button" onClick={downloadMasterCsv} className="px-5 py-2.5 rounded-xl bg-violet-500/20 border border-violet-400/30 text-violet-200 text-xs font-extrabold hover:bg-violet-500/30">
-              ⬇ master_study_data.csv
+              ? master_study_data.csv
             </button>
             <button type="button" onClick={downloadSpssSyntax} className="px-5 py-2.5 rounded-xl bg-sky-500/20 border border-sky-400/30 text-sky-200 text-xs font-extrabold hover:bg-sky-500/30">
-              ⬇ neuro_study_analysis.sps
+              ? neuro_study_analysis.sps
             </button>
             <button type="button" onClick={() => {
             const allPts = activePatients();
               downloadBlob(new Blob([JSON.stringify(allPts, null, 2)], { type: "application/json" }), `neuro_backup_${allPts.length}pts.json`);
             }} className="px-5 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-extrabold">
-              ⬇ JSON backup
+              ? JSON backup
             </button>
           </div>
-          <p className="text-[10px] text-white/35 mt-4 font-mono">CLI: python backend/study_analysis.py master_study_data.csv --out study_results.txt</p>
+          <p className="text-[10px] text-white/35 mt-4 font-mono">Excel: one file per clinical task (task variables only; archive excluded). Path: RAED_AI_Backups/Excel/</p>
         </Glass>
       )}
 
@@ -5877,7 +8423,7 @@ const AnalysisDashboard = () => {
             {missingFields.slice(0, 20).map((m, i) => (
               <p key={i}>{m.id}: {m.field}</p>
             ))}
-            {missingFields.length > 20 && <p>…and {missingFields.length - 20} more</p>}
+            {missingFields.length > 20 && <p>?and {missingFields.length - 20} more</p>}
         </div>
       </Glass>
       )}
@@ -5885,53 +8431,253 @@ const AnalysisDashboard = () => {
   );
 };
 
-// ─── Root App ─────────────────────────────────────────────────────────────────
+// ??? Root App ?????????????????????????????????????????????????????????????????
 
 const getTodayDate = () => new Date().toISOString().split("T")[0];
 
-const SectionTransition = React.memo(function SectionTransition({ active, activeSection }) {
+const SECTION_NAV_ORDER = [
+  ...NAV_ITEMS.filter((n) => !n.topBarOnly).map((n) => n.id),
+  "analysis",
+  "database",
+  "users",
+];
+const BOUNCE_OUT_MS = 150;
+const BOUNCE_IN_MS = 280;
+const BOUNCE_OUT_FALLBACK_MS = BOUNCE_OUT_MS + 60;
+
+const StableSectionView = React.memo(
+  function StableSectionView({ sectionId, renderSection }) {
+    return renderSection(sectionId);
+  },
+  (prev, next) =>
+    prev.sectionId === next.sectionId && prev.renderSection === next.renderSection,
+);
+
+function SectionTransition({
+  sectionId,
+  renderSection,
+  navPhase,
+  contentRef,
+  mobileNav,
+  onExitComplete,
+  onBeginEnter,
+  onEnterComplete,
+}) {
+  const reduceMotion = useReducedMotion();
+  const exiting = navPhase === "exiting" && !reduceMotion;
+  const mounting = navPhase === "mounting" && !reduceMotion;
+  const entering = navPhase === "entering" && !reduceMotion;
+  const animating = exiting || mounting || entering;
+  const mobileFade = mobileNav && !reduceMotion;
+  const beginEnterRef = useRef(onBeginEnter);
+  beginEnterRef.current = onBeginEnter;
+
+  useLayoutEffect(() => {
+    if (!mounting || reduceMotion) return;
+    let cancelled = false;
+    const startEnter = () => {
+      if (cancelled) return;
+      beginEnterRef.current?.();
+    };
+
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      if (cancelled) return;
+      raf2 = requestAnimationFrame(startEnter);
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [mounting, reduceMotion, sectionId]);
+
+  const handleAnimEnd = (e) => {
+    if (e.target !== e.currentTarget) return;
+    const name = e.animationName || "";
+    if (exiting && (name.startsWith("nl-bounce-out") || name.startsWith("nl-mobile-fade-out"))) {
+      onExitComplete?.();
+    }
+    if (entering && (name.startsWith("nl-bounce-in") || name.startsWith("nl-mobile-fade-in"))) {
+      onEnterComplete?.();
+    }
+  };
+
+  const paneAnimClass = mobileFade
+    ? `${exiting ? " section-fade-out" : ""}${mounting ? " section-fade-mount" : ""}${
+        entering ? " section-fade-in" : ""
+      }`
+    : `${exiting ? " section-bounce-out" : ""}${mounting ? " section-bounce-mount" : ""}${
+        entering ? " section-bounce-mount section-bounce-in" : ""
+      }`;
+
   return (
-    <div className="section-transition-host min-h-[420px]">
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={active}
-          className="section-pane w-full"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+    <div
+      className={`section-transition-host min-h-[420px]${
+        mobileNav ? " section-transition-host-mobile" : ""
+      }${animating ? " section-transition-animating" : ""}`}
+      aria-busy={animating}
+    >
+      <div ref={contentRef} className="section-pane section-content-root">
+        <div
+          onAnimationEnd={handleAnimEnd}
+          className={`section-nav-motion${paneAnimClass}`}
         >
-          {activeSection}
-        </motion.div>
-      </AnimatePresence>
+          <StableSectionView sectionId={sectionId} renderSection={renderSection} />
+        </div>
+      </div>
     </div>
   );
-});
+}
 
 export default function App() {
-  const [active, setActive] = useState("demographics");
+  const [active, setActive] = useState(loadStoredActiveSection);
+  const [sidebarActiveId, setSidebarActiveId] = useState(loadStoredActiveSection);
+  const [navPhase, setNavPhase] = useState("idle");
+  const navPhaseRef = useRef("idle");
+  navPhaseRef.current = navPhase;
+  const [sectionNavLocked, setSectionNavLocked] = useState(false);
+  const sectionContentRef = useRef(null);
+  const isDesktopNavRef = useRef(
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true,
+  );
+  const slideOutFallbackRef = useRef(null);
+  const slideInFallbackRef = useRef(null);
+  const mountEnterFallbackRef = useRef(null);
+  const slideTargetRef = useRef(null);
+  const outgoingDoneRef = useRef(false);
+  const incomingDoneRef = useRef(false);
+  const pendingNavRef = useRef(null);
+  const goToSectionRef = useRef(null);
+  const prevSectionRef = useRef(loadStoredActiveSection());
+
+  const clearSlideTimers = useCallback(() => {
+    if (slideOutFallbackRef.current) {
+      clearTimeout(slideOutFallbackRef.current);
+      slideOutFallbackRef.current = null;
+    }
+    if (slideInFallbackRef.current) {
+      clearTimeout(slideInFallbackRef.current);
+      slideInFallbackRef.current = null;
+    }
+    if (mountEnterFallbackRef.current) {
+      clearTimeout(mountEnterFallbackRef.current);
+      mountEnterFallbackRef.current = null;
+    }
+  }, []);
+
+  const finishSectionNav = useCallback(() => {
+    clearSlideTimers();
+    setNavPhase("idle");
+    setSectionNavLocked(false);
+    slideTargetRef.current = null;
+    outgoingDoneRef.current = false;
+    incomingDoneRef.current = false;
+    const pending = pendingNavRef.current;
+    pendingNavRef.current = null;
+    if (pending) {
+      requestAnimationFrame(() => {
+        goToSectionRef.current?.(pending, { force: true });
+      });
+    }
+  }, [clearSlideTimers]);
+
+  const beginEnterPhase = useCallback(() => {
+    if (navPhaseRef.current !== "mounting") return;
+    if (mountEnterFallbackRef.current) {
+      clearTimeout(mountEnterFallbackRef.current);
+      mountEnterFallbackRef.current = null;
+    }
+    setNavPhase("entering");
+    slideInFallbackRef.current = setTimeout(() => {
+      finishSectionNav();
+    }, BOUNCE_IN_MS + 40);
+  }, [finishSectionNav]);
+
+  const completeExitPhase = useCallback(() => {
+    if (outgoingDoneRef.current) return;
+    outgoingDoneRef.current = true;
+    incomingDoneRef.current = false;
+    if (slideOutFallbackRef.current) {
+      clearTimeout(slideOutFallbackRef.current);
+      slideOutFallbackRef.current = null;
+    }
+    const targetId = slideTargetRef.current;
+    if (!targetId) {
+      finishSectionNav();
+      return;
+    }
+    setNavPhase("mounting");
+    setActive(targetId);
+  }, [finishSectionNav]);
+
+  const handleIncomingComplete = useCallback(() => {
+    if (incomingDoneRef.current) return;
+    incomingDoneRef.current = true;
+    finishSectionNav();
+  }, [finishSectionNav]);
+
+  const goToSection = useCallback((id, { force = false } = {}) => {
+    if (!ACTIVE_SECTION_IDS.has(id)) return;
+    if (sectionNavLocked && !force) {
+      pendingNavRef.current = id;
+      return;
+    }
+    if (id === active && !sectionNavLocked) return;
+
+    setSidebarActiveId(id);
+
+    pendingNavRef.current = null;
+    clearSlideTimers();
+    setNavPhase("idle");
+    outgoingDoneRef.current = false;
+    incomingDoneRef.current = false;
+    prevSectionRef.current = id;
+
+    setSectionNavLocked(false);
+    startTransition(() => setActive(id));
+  }, [active, clearSlideTimers, sectionNavLocked]);
+
+  goToSectionRef.current = goToSection;
   const [sidebar, setSidebar] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true
   );
   const [isDesktop, setIsDesktop] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true
   );
-  const [sidebarPush, setSidebarPush] = useState(() => sidebarPushWidth());
-  const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
+  const [sidebarPush, setSidebarPush] = useState(() =>
+    typeof window !== "undefined" ? sidebarPushWidth() : SIDEBAR_W
+  );
+  const useDesktopTopBar = isDesktop;
+  const useMobileMenuPortal = true;
   const [bgUrl, setBgUrl] = useState(BG);
   const [importPreview, setImportPreview] = useState(null);
   const [user, setUser] = useState(null);
-  const [topBarHeight, setTopBarHeight] = useState(0);
   const [mobileTopMenuOpen, setMobileTopMenuOpen] = useState(false);
+  const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
+  const [originRestoreBanner, setOriginRestoreBanner] = useState("");
   const bgRef = useRef(null);
   const importRef = useRef(null);
   const topBarWrapperRef = useRef(null);
+  const topBarSpacerRef = useRef(null);
+  const appScrollRef = useRef(null);
+  const ptrSpinnerAnchorRef = useRef(null);
   const mobileMenuRef = useRef(null);
+  const iosPullScroll =
+    typeof window !== "undefined" && (isIOSDevice() || isStandalonePWA());
+  const touchUi = typeof window !== "undefined" && isTouchUi();
+
+  useEffect(() => {
+    if (!touchUi) return undefined;
+    document.documentElement.classList.add("nl-touch");
+    return () => document.documentElement.classList.remove("nl-touch");
+  }, [touchUi]);
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const syncLayout = () => {
       setIsDesktop(mq.matches);
+      isDesktopNavRef.current = mq.matches;
       setSidebarPush(sidebarPushWidth());
     };
     syncLayout();
@@ -5945,28 +8691,36 @@ export default function App() {
 
   useLayoutEffect(() => {
     const el = topBarWrapperRef.current;
-    if (!el) return;
+    if (!el) return undefined;
+    const spacer = topBarSpacerRef.current;
+    let lastH = 0;
     const measure = () => {
-      const h = el.getBoundingClientRect().height;
-      if (h > 0) setTopBarHeight(h);
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      if (h <= 0 || h === lastH) return;
+      lastH = h;
+      if (spacer) spacer.style.height = `${h}px`;
     };
     measure();
     if (typeof ResizeObserver === "undefined") {
       window.addEventListener("resize", measure);
       return () => window.removeEventListener("resize", measure);
     }
-    const ro = new ResizeObserver((entries) => {
-      const h = entries[0]?.target.getBoundingClientRect().height;
-      if (typeof h === "number") setTopBarHeight(h);
-    });
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [iosPullScroll]);
+
+  useEffect(() => () => finishSectionNav(), [finishSectionNav]);
 
   useEffect(() => {
     fetch("/auth/me", { credentials: "same-origin", headers: authHeaders() })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (data) setUser(data); })
+      .then((data) => {
+        if (!data) return;
+        setUser(data);
+        const email = data.last_login_email || data.email;
+        if (email) rememberLoginEmail(email);
+      })
       .catch(() => {});
   }, []);
 
@@ -6010,56 +8764,59 @@ export default function App() {
   }, [isDesktop, sidebar]);
 
   useEffect(() => {
-    if (!mobileTopMenuOpen) return;
-    const onDocClick = (e) => {
-      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target)) {
-        setMobileTopMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("touchstart", onDocClick, { passive: true });
+    if (!mobileTopMenuOpen || !useMobileMenuPortal) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("touchstart", onDocClick);
+      document.body.style.overflow = prevOverflow;
     };
-  }, [mobileTopMenuOpen]);
+  }, [mobileTopMenuOpen, useMobileMenuPortal]);
 
   useEffect(() => {
-    const KEY = "nl_app_v";
+    if (active === "bbt") goToSection("demographics", { force: true });
+  }, [active, goToSection]);
+
+  useEffect(() => {
     try {
-      const prev = localStorage.getItem(KEY);
-      if (prev && prev !== APP_VERSION) {
-        localStorage.setItem(KEY, APP_VERSION);
-        const url = new URL(window.location.href);
-        if (url.searchParams.get("_v") !== APP_VERSION) {
-          url.searchParams.set("_v", APP_VERSION);
-          window.location.replace(url.toString());
-          return;
-        }
-      }
-      localStorage.setItem(KEY, APP_VERSION);
+      localStorage.setItem(ACTIVE_SECTION_LS_KEY, active);
     } catch {}
-  }, []);
+  }, [active]);
 
   useEffect(() => {
-    fetch("/bg.b64.txt")
-      .then((r) => (r.ok ? r.text() : Promise.reject()))
-      .then((b64) => setBgUrl(`data:image/jpeg;base64,${b64.trim()}`))
-      .catch(() => {});
+    if (navPhase !== "idle") return;
+    const scrollEl = appScrollRef.current;
+    requestAnimationFrame(() => {
+      if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: "auto" });
+      else window.scrollTo({ top: 0, behavior: "auto" });
+    });
+  }, [active, navPhase]);
+
+  useEffect(() => {
+    if (active === "users" && user && !user.is_admin) {
+      goToSection("demographics", { force: true });
+    }
+  }, [active, user, goToSection]);
+
+  useEffect(() => {
+    // Defer large base64 background so first paint is not competing with main.js parse.
+    const loadBg = () => {
+      fetch("/bg.b64.txt")
+        .then((r) => (r.ok ? r.text() : Promise.reject()))
+        .then((b64) => setBgUrl(`data:image/jpeg;base64,${b64.trim()}`))
+        .catch(() => {});
+    };
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(loadBg, { timeout: 4000 });
+      return () => cancelIdleCallback(id);
+    }
+    const t = setTimeout(loadBg, isStandalonePWA() ? 2500 : 800);
+    return () => clearTimeout(t);
   }, []);
 
   const [fd, setFd] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(FD_LS_KEY));
-      if (saved && typeof saved === "object") {
-        const kin = saved.kinematics && typeof saved.kinematics === "object" ? saved.kinematics : saved;
-        ["pre", "post", "baseline"].forEach((phase) => {
-          const key = `status_${phase}`;
-          if (kin[key] === "analyzing") kin[key] = "uploaded";
-          if (saved[key] === "analyzing") saved[key] = "uploaded";
-        });
-        return saved;
-      }
+      if (saved && typeof saved === "object") return saved;
     } catch {}
     return {
       demographics: { participantId: String(nextStudyId()) },
@@ -6069,35 +8826,147 @@ export default function App() {
       motorchange: {},
       kgia: {},
       wmft: {},
+      bbt: {},
       kinematics: {},
     };
   });
 
-  // Auto-save all sections to localStorage on any change
+  const fdSaveTimerRef = useRef(null);
+  const suppressDirtyRef = useRef(true);
+  const [sessionDirty, setSessionDirty] = useState(false);
+
   useEffect(() => {
-    localStorage.setItem(FD_LS_KEY, JSON.stringify(fd));
+    const id = requestAnimationFrame(() => {
+      suppressDirtyRef.current = false;
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  useEffect(() => {
+    if (suppressDirtyRef.current) return;
+    setSessionDirty(true);
   }, [fd]);
 
-  // Sync patients from server on startup (cross-device)
+  // Auto-save all sections to localStorage on any change (debounced; slower during analyze)
   useEffect(() => {
-    syncPatientsWithServer({ silent: true }).then(({ ok, patients: merged }) => {
-      if (!ok) return;
-          const curId = fd._loadedId || fd.demographics?.participantId;
-          if (curId) {
-            const cur = merged.find((p) => (p._id || p.demographics?.participantId) === curId);
-            if (cur?.kinematics?.analysisResults) {
-              localStorage.setItem(KIN_LS_KEY, JSON.stringify(cur.kinematics.analysisResults));
-            }
+    if (fdSaveTimerRef.current) clearTimeout(fdSaveTimerRef.current);
+    const delay = isKinAnalyzeActive() ? 2000 : 500;
+    fdSaveTimerRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(FD_LS_KEY, JSON.stringify(fd));
+      } catch (e) {
+        console.warn("Could not persist session to localStorage (quota or size):", e);
+      }
+    }, delay);
+    return () => {
+      if (fdSaveTimerRef.current) clearTimeout(fdSaveTimerRef.current);
+    };
+  }, [fd]);
+
+  // Sync patients from server after first paint ? never block UI / Drive on boot
+  useEffect(() => {
+    let cancelled = false;
+    const bootDelayMs = isStandalonePWA() ? 18000 : 12000;
+    const attempt = () => {
+      if (cancelled) return;
+      if (isKinAnalyzeActive()) {
+        setTimeout(attempt, 4000);
+        return;
+      }
+      syncPatientsWithServer({ silent: true, skipDrive: true }).then(({ ok, patients: merged }) => {
+        if (!ok) return;
+        const curId = fd._loadedId || fd.demographics?.participantId;
+        if (curId) {
+          const cur = merged.find((p) => (p._id || p.demographics?.participantId) === curId);
+          if (cur?.kinematics?.analysisResults) {
+            localStorage.setItem(KIN_LS_KEY, JSON.stringify(cur.kinematics.analysisResults));
           }
-    });
+        }
+      });
+    };
+    const t = setTimeout(attempt, bootDelayMs);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, []);
 
   const upd = useCallback((sec, d) => setFd((p) => ({ ...p, [sec]: d })), []);
 
   const showToast = useCallback((msg, variant = "success") => {
-    setToast({ visible: true, msg, variant });
+    setToast({ visible: true, msg: formatUserMessage(msg), variant });
     setTimeout(() => setToast({ visible: false, msg: "", variant: "success" }), 2800);
   }, []);
+
+  // After Space rename (neurolab ? raedai): new browser origin is empty until server restore.
+  useEffect(() => {
+    let cancelled = false;
+    let hideTimer = null;
+    const run = async () => {
+      let pending = false;
+      let done = false;
+      let localEmpty = true;
+      try {
+        pending = localStorage.getItem(RAED_ORIGIN_RESTORE_PENDING_KEY) === "1";
+        done = localStorage.getItem(RAED_ORIGIN_RESTORE_DONE_KEY) === "1";
+        localEmpty = loadPatients().length === 0;
+      } catch {}
+      if (done && !pending && !localEmpty) return;
+      if (cancelled) return;
+      setOriginRestoreBanner("Restoring your study data from the server?");
+      const { ok, patients: merged } = await restoreStudyDataFromServer({
+        showToast: (msg, variant) => {
+          if (!cancelled) showToast(msg, variant);
+        },
+      });
+      if (cancelled) return;
+      const count = (merged || []).length;
+      // Only mark done when we actually recovered rows ? otherwise retry next launch.
+      if (ok && count > 0) {
+        try {
+          localStorage.setItem(RAED_ORIGIN_RESTORE_DONE_KEY, "1");
+          localStorage.removeItem(RAED_ORIGIN_RESTORE_PENDING_KEY);
+        } catch {}
+      }
+      if (ok) {
+        window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count } }));
+        setOriginRestoreBanner(
+          count
+            ? `Restored ${count} record(s) from server / Google Drive.`
+            : "No records yet ? open Database ? Restore from Drive (PDFs are on Drive)."
+        );
+      } else {
+        setOriginRestoreBanner("Could not restore yet ? tap Restore from Drive in Database when the Space is awake.");
+      }
+      hideTimer = setTimeout(() => {
+        if (!cancelled) setOriginRestoreBanner("");
+      }, count > 0 ? 5000 : 12000);
+    };
+    const t = setTimeout(run, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      if (hideTimer) clearTimeout(hideTimer);
+    };
+  }, [showToast]);
+
+  const performSoftRefresh = useCallback(async () => {
+    if (isKinAnalyzeActive()) {
+      showToast("Sync paused while video analysis is running", "info");
+      return;
+    }
+    // UI must return immediately ? Drive restore / patient push run in background.
+    try {
+      const r = await fetchWithTimeout("/auth/me", {}, 5000);
+      if (r.ok) {
+        const data = await r.json();
+        if (data) setUser(data);
+      }
+    } catch {
+      /* keep current session */
+    }
+    syncPatientsWithServer({ silent: true, skipDrive: true });
+  }, [showToast]);
 
   const logout = useCallback(() => {
     clearAuthToken();
@@ -6108,19 +8977,20 @@ export default function App() {
   const saveSession = useCallback(() => {
     const patients = loadPatients();
     const d = fd.demographics || {};
+    const studyId = String(d.participantId || "").trim();
 
     const hasPre = !!(fd.vas?.rest?.pre || fd.motorchange?.control || fd.vams?.happy?.pre);
     const hasPost = !!(fd.vas?.rest?.post || fd.motorchange?.difference || fd.vams?.happy?.post);
 
-    // Try to match by internal _loadedId first, then by participantId
+    // Match Study ID first (canonical), then internal _loadedId ? prevents duplicate rows.
     let existingIdx = -1;
-    if (fd._loadedId) {
-      existingIdx = patients.findIndex((p) => p._id === fd._loadedId);
-    }
-    if (existingIdx < 0) {
+    if (studyId) {
       existingIdx = patients.findIndex(
-        (p) => p.demographics?.participantId && p.demographics.participantId === d.participantId
+        (p) => String(p.demographics?.participantId || "").trim() === studyId
       );
+    }
+    if (existingIdx < 0 && fd._loadedId) {
+      existingIdx = patients.findIndex((p) => p._id === fd._loadedId);
     }
 
     let kinResults;
@@ -6132,42 +9002,109 @@ export default function App() {
       patients[existingIdx] = {
         ...existing,
         ...cleanFd,
+        _id: existing._id,
         _savedAt: new Date().toISOString(),
         _hasPre: existing._hasPre || hasPre,
         _hasPost: existing._hasPost || hasPost,
       };
-      savePatients(patients);
-      window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: patients.length } }));
-      showToast("✓ Session updated");
+      const cleaned = savePatients(patients);
+      setFd((prev) => ({ ...prev, _loadedId: existing._id }));
+      window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: cleaned.length } }));
+      showToast("? Session updated");
+      backupSessionKinematicsVideosToDrive(fdWithKin.kinematics, d);
       syncPatientsWithServer({ silent: true }).then(({ ok }) => {
-        if (!ok) showToast("Saved locally — server sync pending. Tap Sync in Database.", "error");
+        if (!ok) showToast("Saved locally ? server sync pending. Tap Sync in Database.", "error");
       });
     } else {
-      const fdWithKin = { ...fd, kinematics: { ...fd.kinematics, analysisResults: kinResults } };
-      const { _loadedId, ...cleanFd } = fdWithKin;
-      patients.push({
-        _id: `pt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        _savedAt: new Date().toISOString(),
-        _hasPre: hasPre,
-        _hasPost: hasPost,
-        ...cleanFd,
+      // Soft-block: same full name + new Study ID was the main clinic duplicate source.
+      const nameHits = findActiveByNormalizedName(patients, d.name || d.fullName, {
+        excludeStudyId: studyId,
       });
-      savePatients(patients);
-      window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: patients.length } }));
-      showToast("✓ New patient saved");
-      syncPatientsWithServer({ silent: true }).then(({ ok }) => {
-        if (!ok) showToast("Saved locally — server sync pending. Tap Sync in Database.", "error");
-      });
-      setFd((p) => ({
-        ...p,
-        demographics: { ...p.demographics, participantId: String(nextStudyId()) },
-      }));
+      if (nameHits.length > 0) {
+        const hit = nameHits[0];
+        const hitId = patientStudyId(hit) || "?";
+        const hitName = patientDisplayName(hit) || "this patient";
+        const okUpdate = window.confirm(
+          `"${hitName}" already exists as Study ID ${hitId}.\n\n` +
+            `OK = update that existing record (recommended)\n` +
+            `Cancel = abort save (will not create a duplicate)`
+        );
+        if (!okUpdate) {
+          showToast("Save cancelled ? open the existing patient from Database", "error");
+          return;
+        }
+        const fdWithKin = {
+          ...fd,
+          demographics: {
+            ...(fd.demographics || {}),
+            participantId: String(hit.demographics?.participantId || hitId),
+            name: hit.demographics?.name || fd.demographics?.name,
+          },
+          kinematics: { ...fd.kinematics, analysisResults: kinResults },
+        };
+        const { _loadedId, ...cleanFd } = fdWithKin;
+        const idx = patients.findIndex((p) => p._id === hit._id);
+        if (idx >= 0) {
+          patients[idx] = {
+            ...hit,
+            ...cleanFd,
+            _id: hit._id,
+            _savedAt: new Date().toISOString(),
+            _hasPre: hit._hasPre || hasPre,
+            _hasPost: hit._hasPost || hasPost,
+          };
+        }
+        const cleaned = savePatients(patients);
+        setFd((prev) => ({
+          ...prev,
+          ...cleanFd,
+          _loadedId: hit._id,
+          demographics: {
+            ...(prev.demographics || {}),
+            ...(cleanFd.demographics || {}),
+          },
+        }));
+        window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: cleaned.length } }));
+        showToast(`? Updated existing Study ID ${hitId} (same name)`);
+        backupSessionKinematicsVideosToDrive(fdWithKin.kinematics, cleanFd.demographics || d);
+        syncPatientsWithServer({ silent: true }).then(({ ok }) => {
+          if (!ok) showToast("Saved locally ? server sync pending. Tap Sync in Database.", "error");
+        });
+      } else {
+        const fdWithKin = { ...fd, kinematics: { ...fd.kinematics, analysisResults: kinResults } };
+        const { _loadedId, ...cleanFd } = fdWithKin;
+        const newId = `pt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        patients.push({
+          _id: newId,
+          _savedAt: new Date().toISOString(),
+          _hasPre: hasPre,
+          _hasPost: hasPost,
+          ...cleanFd,
+        });
+        const cleaned = savePatients(patients);
+        setFd((prev) => ({ ...prev, _loadedId: newId }));
+        window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: cleaned.length } }));
+        showToast("? New patient saved");
+        backupSessionKinematicsVideosToDrive(fdWithKin.kinematics, d);
+        syncPatientsWithServer({ silent: true }).then(({ ok }) => {
+          if (!ok) showToast("Saved locally ? server sync pending. Tap Sync in Database.", "error");
+        });
+        // Stay on the saved patient ? do NOT bump Study ID while keeping the same name/data
+        // (that created duplicate people with different Study IDs, especially on iPad).
+      }
     }
+    suppressDirtyRef.current = true;
+    setSessionDirty(false);
+    requestAnimationFrame(() => {
+      suppressDirtyRef.current = false;
+    });
   }, [fd, showToast]);
 
   const newSession = useCallback(() => {
     localStorage.setItem("neuro_last_session_backup", JSON.stringify(fd));
     localStorage.removeItem(KIN_LS_KEY);
+    suppressDirtyRef.current = true;
+    setSessionDirty(false);
     setFd({
       demographics: { participantId: String(nextStudyId()) },
       ipaq: {},
@@ -6176,22 +9113,31 @@ export default function App() {
       motorchange: {},
       kgia: {},
       wmft: {},
+      bbt: {},
       kinematics: {},
     });
-    setActive("demographics");
+    goToSection("demographics");
     if (!isDesktop) setSidebar(false);
-    showToast("✓ New session started / Yeni seans başlatıldı");
-  }, [fd, showToast, isDesktop]);
+    showToast("? New session started / Yeni seans ba?lat?ld?");
+    requestAnimationFrame(() => {
+      suppressDirtyRef.current = false;
+    });
+  }, [fd, showToast, isDesktop, goToSection]);
 
   const handleLoadSession = useCallback((record) => {
     const { _id, _savedAt, _hasPre, _hasPost, ...sessionData } = record;
+    suppressDirtyRef.current = true;
+    setSessionDirty(false);
     setFd((prev) => ({ ...prev, ...sessionData, _loadedId: _id }));
     if (sessionData.kinematics?.analysisResults) {
       localStorage.setItem(KIN_LS_KEY, JSON.stringify(sessionData.kinematics.analysisResults));
     }
-    setActive("demographics");
-    showToast(`✓ Loaded: ${record.demographics?.name || record.demographics?.participantId || "patient"}`);
-  }, [showToast]);
+    goToSection("demographics");
+    showToast(`? Loaded: ${record.demographics?.name || record.demographics?.participantId || "patient"}`);
+    requestAnimationFrame(() => {
+      suppressDirtyRef.current = false;
+    });
+  }, [showToast, goToSection]);
 
   const handleImportFile = useCallback(async (e) => {
     const file = e.target.files?.[0];
@@ -6255,171 +9201,259 @@ export default function App() {
 
   const closeMobileTopMenu = () => setMobileTopMenuOpen(false);
 
-  function TopBarOverflowMenu() {
-    const [open, setOpen] = useState(false);
-    const ref = useRef(null);
-
-    useEffect(() => {
-      const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-      document.addEventListener("mousedown", h);
-      return () => document.removeEventListener("mousedown", h);
-    }, []);
-
-    const items = [
-      { icon: <Save />, label: "Save Session", onClick: () => { saveSession(); } },
-      { icon: <Database />, label: "Database", onClick: () => setActive("database") },
-      { icon: <Cloud />, label: "Connect Drive", onClick: () => { window.location.href = "/connect-drive"; } },
-      { icon: <FileUp />, label: "Upload validation to Drive", onClick: uploadValidationToDrive },
-      { icon: <Users />, label: "Users", onClick: () => setActive("users"), admin: true },
-      { icon: <LogOut />, label: "Sign out", onClick: logout },
-    ];
-
-    return (
-      <div className="relative" ref={ref}>
-        <motion.button
-          whileHover={{ scale: 1.08 }}
-          whileTap={tapMotion(0.92)}
-          onClick={() => setOpen((p) => !p)}
-          className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
-          style={GLASS_FIELD}
-          title="More"
-          aria-label="More"
-        >
-          <User className="w-4 h-4" />
-        </motion.button>
-        {open && (
-          <div className="gselect-menu absolute right-0 top-full mt-2 z-[99999] overflow-hidden rounded-xl py-1 min-w-[240px]">
-            {items.filter((i) => !i.admin || user?.is_admin).map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => { item.onClick(); setOpen(false); }}
-                className="w-full text-left px-3 py-2 flex items-center gap-3 text-sm text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                {React.cloneElement(item.icon, { className: "w-4 h-4 flex-shrink-0" })}
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   function TopBarActions({ inMenu }) {
     const btnBase = inMenu
-      ? "w-full flex items-center gap-3 px-3 py-1.5 rounded-xl text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+      ? "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors duration-200 relative group hover:bg-white/[0.04]"
       : "w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 transition-all flex-shrink-0";
+
+    const menuItems = [
+      { onClick: () => { goToSection("analysis"); if (!isDesktop) setSidebar(false); }, icon: <BarChart3 />, label: "Analysis Dashboard", colorClass: "hover:text-amber-300" },
+      { onClick: () => importRef.current?.click(), icon: <FileUp />, label: "Import patient", colorClass: "hover:text-emerald-300" },
+      { onClick: () => bgRef.current?.click(), icon: <ImageIcon />, label: "Background" },
+      { onClick: () => { goToSection("database"); if (!isDesktop) setSidebar(false); }, icon: <Database />, label: "Database" },
+      { onClick: () => { window.location.href = "/connect-drive"; }, icon: <HardDrive />, label: "Connect Drive", colorClass: "hover:text-sky-300" },
+      ...(user?.is_admin ? [{ onClick: () => { goToSection("users"); if (!isDesktop) setSidebar(false); }, icon: <Users />, label: "Users", colorClass: "hover:text-violet-300" }] : []),
+      { onClick: logout, icon: <LogOut />, label: "Sign out", colorClass: "hover:text-rose-300" },
+    ];
 
     const Action = ({ onClick, icon, label, colorClass = "hover:text-white" }) => (
       <motion.button
-        whileHover={inMenu ? undefined : { scale: 1.08 }}
-        whileTap={tapMotion(0.92)}
+        whileTap={nlMotionTap(0.97)}
         onClick={() => { onClick(); if (inMenu) closeMobileTopMenu(); }}
         className={`${btnBase} ${inMenu ? "" : colorClass}`}
-        style={inMenu ? undefined : GLASS_FIELD}
+        style={inMenu ? { border: "1px solid transparent" } : GLASS_FIELD}
         title={label}
         aria-label={label}
       >
-        {React.cloneElement(icon, { className: "w-4 h-4 flex-shrink-0" })}
-        {inMenu && <span>{label}</span>}
+        {inMenu ? (
+          <>
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 relative z-10 bg-white/[0.04] group-hover:bg-white/[0.07] transition-all"
+              style={GLASS_FIELD}
+            >
+              {React.cloneElement(icon, { className: "w-4 h-4 text-white/45 group-hover:text-white/70" })}
+            </div>
+            <span className="text-sm font-extrabold leading-snug text-white/60 group-hover:text-white/85 relative z-10">{label}</span>
+          </>
+        ) : (
+          React.cloneElement(icon, { className: "w-4 h-4 flex-shrink-0" })
+        )}
       </motion.button>
     );
 
-    if (inMenu) {
-      return (
-        <>
-          <Action onClick={() => { newSession(); }} icon={<PlusCircle />} label="New Session" colorClass="hover:text-violet-300" />
-          <Action onClick={() => { saveSession(); if (!isDesktop) setSidebar(false); }} icon={<Save />} label="Save Session" colorClass="hover:text-emerald-300" />
-          <Action onClick={() => { setActive("analysis"); if (!isDesktop) setSidebar(false); }} icon={<BarChart3 />} label="Analysis Dashboard" colorClass="hover:text-amber-300" />
-          {user?.is_admin && <Action onClick={() => { setActive("users"); if (!isDesktop) setSidebar(false); }} icon={<Users />} label="Users" colorClass="hover:text-violet-300" />}
-          <Action onClick={() => importRef.current?.click()} icon={<FileUp />} label="Import patient" colorClass="hover:text-emerald-300" />
-          <Action onClick={() => bgRef.current?.click()} icon={<ImageIcon />} label="Background" />
-          <Action onClick={() => { setActive("database"); if (!isDesktop) setSidebar(false); }} icon={<Database />} label="Database" />
-          <Action onClick={() => { window.location.href = "/connect-drive"; }} icon={<Cloud />} label="Connect Drive" />
-          <Action onClick={uploadValidationToDrive} icon={<FileUp />} label="Upload validation to Drive" />
-          <Action onClick={logout} icon={<LogOut />} label="Sign out" colorClass="hover:text-rose-300" />
-        </>
-      );
-    }
+    if (!inMenu) return null;
 
-    // Desktop toolbar: primary + secondary + overflow menu
     return (
-      <div className="flex items-center gap-2">
-        <motion.button
-          whileHover={{ scale: 1.03 }}
-          whileTap={tapMotion(0.97)}
-          onClick={() => newSession()}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-emerald-500/25 border border-emerald-400/40 hover:bg-emerald-500/35 transition-all"
-          title="New Session"
-          aria-label="New Session"
+      <>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={NL_TWEEN_MENU}
+          className={`rounded-2xl sidebar-shell ${SIDEBAR_CLS}`}
+          style={{ boxShadow: FLOAT_M }}
         >
-          <PlusCircle className="w-4 h-4" />
-          <span className="hidden sm:inline">New</span>
-        </motion.button>
+          <nav className="py-3 px-1 flex flex-col">
+            {menuItems.map((item) => (
+              <Action key={item.label} onClick={item.onClick} icon={item.icon} label={item.label} colorClass={item.colorClass} />
+            ))}
+          </nav>
+        </motion.div>
+      </>
+    );
+  }
 
-        <Action onClick={() => setActive("analysis")} icon={<BarChart3 />} label="Analysis Dashboard" colorClass="hover:text-amber-300" />
-        <Action onClick={() => importRef.current?.click()} icon={<FileUp />} label="Import patient" colorClass="hover:text-emerald-300" />
-        <Action onClick={() => bgRef.current?.click()} icon={<ImageIcon />} label="Background" />
-        <TopBarOverflowMenu />
+  const nav = NAV_ITEMS.find((n) => n.id === sidebarActiveId);
+
+  const topBarHiddenInputs = (
+    <>
+      <input
+        ref={importRef}
+        type="file"
+        accept=".json,.pdf,application/json,application/pdf"
+        className="hidden"
+        onChange={handleImportFile}
+      />
+      <input
+        ref={bgRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) setBgUrl(URL.createObjectURL(f));
+        }}
+      />
+    </>
+  );
+
+  const topBarNav = (!sidebar || isDesktop) && nav && (() => {
+    const Icon = nav.icon;
+    return (
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <Icon className="w-4 h-4 text-white/60 flex-shrink-0" />
+        <span className="text-sm font-extrabold text-white truncate">{nav.en}</span>
+        <span className="text-xs font-light text-white/30 hidden md:inline truncate">/{nav.tr}</span>
+        <span className="hidden lg:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-light text-white/40 bg-white/[0.04] border border-white/[0.04]">
+          {new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" })}
+        </span>
+        {readNlVersion() && (
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold tracking-wide text-sky-200/80 bg-sky-400/10 border border-sky-400/20 flex-shrink-0"
+            title="App build version ? confirm this on iPad after update"
+            data-nl-version={readNlVersion()}
+          >
+            v{readNlVersion()}
+          </span>
+        )}
+      </div>
+    );
+  })();
+
+  const topBarMenuBtn = (
+    <motion.button
+      whileTap={nlMotionTap(0.9)}
+      onClick={() => setSidebar((p) => !p)}
+      className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0"
+      style={GLASS_FIELD}
+      aria-label={sidebar ? "Close menu" : "Open menu"}
+    >
+      {sidebar ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+    </motion.button>
+  );
+
+  function DesktopUnifiedTopBar() {
+    const shellRef = useRef(null);
+    const rowRef = useRef(null);
+    const rightColRef = useRef(null);
+    const shellWidthMv = useMotionValue(0);
+    const rowHeightMv = useMotionValue(TOPBAR_ROW_H);
+
+    const applyShellClip = useCallback(() => {
+      const shell = shellRef.current;
+      if (!shell) return;
+      const w = Math.round(
+        shell.offsetWidth
+        || shellWidthMv.get()
+        || topBarWrapperRef.current?.clientWidth
+        || 0
+      );
+      const css = buildTopBarClipPath(
+        w,
+        Math.round(rowHeightMv.get()),
+        w,
+        0,
+        TOPBAR_FILLET_R,
+        false
+      );
+      shell.style.clipPath = css;
+      shell.style.webkitClipPath = css;
+    }, [shellWidthMv, rowHeightMv]);
+
+    const measureLayout = useCallback(() => {
+      const shell = shellRef.current;
+      const row = rowRef.current;
+      const right = rightColRef.current;
+      if (!shell) return;
+      shellWidthMv.set(shell.offsetWidth || topBarWrapperRef.current?.clientWidth || 0);
+      const leftH = row?.getBoundingClientRect().height ?? 0;
+      const btnRow = right?.firstElementChild;
+      const rightH = btnRow?.getBoundingClientRect().height ?? 0;
+      rowHeightMv.set(Math.max(leftH, rightH, TOPBAR_ROW_H));
+      applyShellClip();
+    }, [shellWidthMv, rowHeightMv, applyShellClip]);
+
+    useLayoutEffect(() => {
+      measureLayout();
+      const shell = shellRef.current;
+      const row = rowRef.current;
+      const right = rightColRef.current;
+      if (!shell) return undefined;
+
+      const ro = new ResizeObserver(measureLayout);
+      ro.observe(shell);
+      if (row) ro.observe(row);
+      if (right) ro.observe(right);
+      window.addEventListener("resize", measureLayout);
+      return () => {
+        ro.disconnect();
+        window.removeEventListener("resize", measureLayout);
+      };
+    }, [measureLayout, user?.is_admin, sidebar, sidebarPush, isDesktop]);
+
+    useLayoutEffect(() => {
+      const t = requestAnimationFrame(() => measureLayout());
+      return () => cancelAnimationFrame(t);
+    }, [sidebar, sidebarPush, isDesktop, measureLayout]);
+
+    return (
+      <div
+        ref={shellRef}
+        className={`relative w-full overflow-hidden app-topbar-glass glass-float ${GLASS_CLS}`}
+        style={{ boxShadow: FLOAT_M }}
+      >
+        <div className="relative z-[1] flex items-start w-full min-w-0 flex-nowrap">
+          {topBarHiddenInputs}
+
+          <div
+            ref={rowRef}
+            className="flex-1 flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 min-w-0 self-start"
+          >
+            {topBarMenuBtn}
+            {topBarNav}
+          </div>
+
+          <div ref={rightColRef} className="flex flex-col flex-shrink-0 self-start">
+            <div className="flex items-center gap-2 px-2 sm:px-3 py-2.5 sm:py-3 flex-shrink-0">
+              <TopBarSessionCapsule
+                onNew={newSession}
+                onSave={saveSession}
+                dirty={sessionDirty}
+              />
+
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={nlMotionTap(0.95)}
+                onClick={() => setMobileTopMenuOpen((p) => !p)}
+                className={`w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
+                style={GLASS_FIELD}
+                title="More actions"
+                aria-label="More actions"
+                aria-expanded={mobileTopMenuOpen}
+                aria-haspopup="dialog"
+                animate={{ rotate: mobileTopMenuOpen ? 90 : 0 }}
+                transition={NL_TWEEN_MENU}
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </motion.button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
-  const nav = NAV_ITEMS.find((n) => n.id === active);
+  const topBar = useDesktopTopBar ? (
+    <DesktopUnifiedTopBar />
+  ) : (
+    <div
+      className={`app-topbar-glass glass-float relative flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl overflow-visible ${GLASS_CLS}`}
+      style={{ boxShadow: FLOAT_M }}
+    >
+      {topBarMenuBtn}
 
-  const topBar = (
-    <div className={`app-topbar-glass glass-float flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl ${GLASS_CLS}`} style={{ boxShadow: FLOAT_M }}>
-      <motion.button
-        whileTap={tapMotion(0.9)}
-        onClick={() => setSidebar((p) => !p)}
-        className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0"
-        style={GLASS_FIELD}
-        aria-label={sidebar ? "Close menu" : "Open menu"}
-      >
-        {sidebar ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-      </motion.button>
+      {topBarNav}
 
-      {nav && (() => {
-        const Icon = nav.icon;
-        return (
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <Icon className="w-4 h-4 text-white/60 flex-shrink-0" />
-            <span className="text-sm font-extrabold text-white truncate">{nav.en}</span>
-            <span className="text-xs font-light text-white/30 hidden md:inline truncate">/{nav.tr}</span>
-            <span className="hidden lg:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-light text-white/40 bg-white/[0.04] border border-white/[0.04]">
-              {new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" })}
-            </span>
-          </div>
-        );
-      })()}
+      {sidebar && !isDesktop && (
+        <span className="flex-1 text-sm font-extrabold text-white/70 truncate">Navigation</span>
+      )}
 
-      <div className={`ml-auto flex items-center gap-2 flex-shrink-0 ${sidebar && !isDesktop ? "hidden" : ""}`}>
-        <input
-          ref={importRef}
-          type="file"
-          accept=".json,.pdf,application/json,application/pdf"
-          className="hidden"
-          onChange={handleImportFile}
-        />
+      <div className={`absolute right-3 sm:right-4 top-2.5 sm:top-3 z-[70] ${sidebar && !isDesktop ? "hidden" : ""}`}>
+        {topBarHiddenInputs}
 
-        <input
-          ref={bgRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) setBgUrl(URL.createObjectURL(f));
-          }}
-        />
-
-        {isDesktop ? (
-          <TopBarActions inMenu={false} />
-        ) : (
+        <div className="flex items-start gap-2">
           <motion.button
             whileHover={{ scale: 1.08 }}
-            whileTap={tapMotion(0.92)}
+            whileTap={nlMotionTap(0.92)}
             onClick={() => setMobileTopMenuOpen((p) => !p)}
             className="w-9 h-9 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
             style={GLASS_FIELD}
@@ -6428,7 +9462,7 @@ export default function App() {
           >
             <MoreHorizontal className="w-4 h-4" />
           </motion.button>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -6638,7 +9672,7 @@ export default function App() {
                 <div>
                   <p className="text-sm font-medium text-white">{u.name || u.email}</p>
                   <p className="text-xs text-white/50">{u.email}</p>
-                  <p className="text-xs text-white/40">{u.is_approved ? "Approved" : "Pending approval"} {u.is_admin ? "· Admin" : ""}</p>
+                  <p className="text-xs text-white/40">{u.is_approved ? "Approved" : "Pending approval"} {u.is_admin ? "? Admin" : ""}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {!u.is_approved && (
@@ -6668,35 +9702,125 @@ export default function App() {
     );
   }
 
-  const sections = useMemo(() => ({
-    demographics: <DemoSection data={fd.demographics} onChange={(d) => upd("demographics", d)} onBulkUpdate={(sec, d) => upd(sec, d)} />,
-    ipaq: <IPAQSection data={fd.ipaq} onChange={(d) => upd("ipaq", d)} />,
-    vas: <VASSection data={fd.vas} onChange={(d) => upd("vas", d)} />,
-    vams: <VAMSSection data={fd.vams} onChange={(d) => upd("vams", d)} />,
-    motorchange: <MotorSection data={fd.motorchange} onChange={(d) => upd("motorchange", d)} />,
+  const renderSection = useCallback(
+    (sectionId) => {
+      switch (sectionId) {
+        case "demographics":
+          return (
+            <DemoSection
+              data={fd.demographics}
+              onChange={(d) => upd("demographics", d)}
+              onBulkUpdate={(sec, d) => upd(sec, d)}
+            />
+          );
+        case "ipaq":
+          return <IPAQSection data={fd.ipaq} onChange={(d) => upd("ipaq", d)} />;
+        case "vas":
+          return <VASSection data={fd.vas} onChange={(d) => upd("vas", d)} />;
+        case "vams":
+          return <VAMSSection data={fd.vams} onChange={(d) => upd("vams", d)} />;
+        case "motorchange":
+          return <MotorSection data={fd.motorchange} onChange={(d) => upd("motorchange", d)} />;
+        case "kgia":
+          return <KGIASection data={fd.kgia} onChange={(d) => upd("kgia", d)} />;
+        case "wmft":
+          return (
+            <WMFTSection
+              data={fd.wmft}
+              kinematics={fd.kinematics}
+              showToast={showToast}
+              onChange={(d) => upd("wmft", d)}
+            />
+          );
+        case "kinematics":
+          return (
+            <KinSection
+              data={fd.kinematics}
+              sessionKey={fd._loadedId || fd.demographics?.participantId}
+              demographics={fd.demographics}
+              onChange={(d) => upd("kinematics", d)}
+              showToast={showToast}
+            />
+          );
+        case "database":
+          return (
+            <DatabaseSection
+              fd={fd}
+              setFd={setFd}
+              onLoadSession={handleLoadSession}
+              showToast={showToast}
+              isActive={active === "database"}
+            />
+          );
+        case "report":
+          return <ReportSection fd={fd} onChange={(d) => upd("demographics", d)} showToast={showToast} />;
+        case "analysis":
+          return <AnalysisDashboard />;
+        case "users":
+          return <UsersSection />;
+        default:
+          return null;
+      }
+    },
+    [fd, setFd, showToast, handleLoadSession, active, upd]
+  );
 
-    kgia: <KGIASection data={fd.kgia} onChange={(d) => upd("kgia", d)} />,
-    wmft: <WMFTSection data={fd.wmft} onChange={(d) => upd("wmft", d)} />,
-    kinematics: (
-      <KinSection
-        data={fd.kinematics}
-        sessionKey={fd.demographics?.participantId || fd._loadedId}
-        demographics={fd.demographics}
-        onChange={(d) => upd("kinematics", d)}
-        showToast={showToast}
-      />
-    ),
-    database: <DatabaseSection fd={fd} setFd={setFd} onLoadSession={handleLoadSession} showToast={showToast} isActive={active === "database"} />,
-    report: <ReportSection fd={fd} onChange={(d) => upd("demographics", d)} showToast={showToast} />,
-    analysis: <AnalysisDashboard />,
-    users: <UsersSection />,
-  }), [fd, setFd, showToast, handleLoadSession, active, upd]);
+  const sidebarOpenDesktop = isDesktop && sidebar;
+  const mainColumnWidth = sidebarOpenDesktop ? `calc(100% - ${sidebarPush}px)` : "100%";
+  const topBarShellStyle = {
+    left: sidebarOpenDesktop ? sidebarPush : 0,
+    width: mainColumnWidth,
+    paddingTop: SAFE_TOP,
+    transition: SIDEBAR_LAYOUT_TRANSITION,
+  };
 
-  const activeSection = useMemo(() => sections[active], [active, sections]);
+  const topBarChrome = (
+    <div
+      ref={topBarWrapperRef}
+      className={`${iosPullScroll ? "sticky" : "fixed"} top-0 z-[60] px-3 sm:px-4 pb-0 ${!isDesktop && sidebar ? "hidden" : ""}`}
+      style={topBarShellStyle}
+    >
+      {topBar}
+    </div>
+  );
+
+  const mainChrome = (
+    <main
+      className="flex-none relative z-30"
+      style={{
+        width: mainColumnWidth,
+        marginLeft: sidebarOpenDesktop ? sidebarPush : 0,
+        minWidth: 0,
+        transition: SIDEBAR_LAYOUT_TRANSITION,
+      }}
+    >
+      {!iosPullScroll && <div ref={topBarSpacerRef} aria-hidden="true" style={{ height: 96 }} />}
+      <div
+        className={`app-main-inner px-3 sm:px-4 pb-4 sm:pb-6 max-w-5xl w-full mx-auto ${
+          iosPullScroll ? "pt-3 sm:pt-4" : "pt-16 sm:pt-6"
+        }`}
+      >
+        <div className={`content-shell rounded-2xl w-full min-w-0${sectionNavLocked && isDesktop ? " content-shell-nav-motion" : ""}`}>
+          <div className="content-shell-inner p-4 sm:p-6 w-full min-w-0">
+            <SectionTransition
+              sectionId={active}
+              renderSection={renderSection}
+              navPhase={navPhase}
+              contentRef={sectionContentRef}
+              mobileNav={!isDesktop || isTouchUi()}
+              onExitComplete={completeExitPhase}
+              onBeginEnter={beginEnterPhase}
+              onEnterComplete={handleIncomingComplete}
+            />
+          </div>
+        </div>
+      </div>
+    </main>
+  );
 
   return (
     <AuthGate>
-    <div className="min-h-screen flex relative overflow-x-hidden" style={{ fontFamily: "'Inter',system-ui,sans-serif" }}>
+    <div className="min-h-screen w-full min-w-0 max-w-full flex relative overflow-x-hidden" style={{ fontFamily: "'Inter',system-ui,sans-serif" }}>
       <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
         <div
           className="absolute inset-0"
@@ -6727,32 +9851,32 @@ export default function App() {
           width: isDesktop ? sidebarPush : MOBILE_SIDEBAR_W,
           paddingTop: SAFE_TOP,
           transform: sidebar ? "translate3d(0,0,0)" : (isDesktop ? `translate3d(-${sidebarPush}px,0,0)` : "translate3d(-100%,0,0)"),
-          transition: SIDEBAR_EASE,
-          willChange: "transform",
+          transition: SIDEBAR_SHELL_TRANSITION,
           backfaceVisibility: "hidden",
           WebkitBackfaceVisibility: "hidden",
+          isolation: undefined,
         }}
       >
             <div className={`sidebar-shell flex-1 flex flex-col min-h-0 rounded-2xl overflow-hidden ${SIDEBAR_CLS}`} style={{ boxShadow: FLOAT_M }}>
-              <div className="p-5 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                  <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={GLASS_FIELD}>
-                      <Stethoscope className="w-5 h-5 text-white/80" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-extrabold text-white truncate">Stroke Rehab Platform</p>
-                    <p className="text-[10px] text-white/30 font-light">{APP_VERSION}</p>
-                    </div>
+              <div className="px-5 pt-7 pb-5 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                  <div className="relative flex flex-col items-center text-center gap-2 mb-4">
                     {!isDesktop && (
                       <button
                         type="button"
                         onClick={() => setSidebar(false)}
-                        className="ml-auto p-1 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition"
+                        className="absolute top-0 right-0 p-1 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition"
                         aria-label="Close menu"
                       >
                         <X className="w-5 h-5" />
                       </button>
                     )}
+                    <img
+                      src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.40`}
+                      alt="RA.ED AI"
+                      className="w-20 h-20 object-contain"
+                      style={{ background: "transparent" }}
+                    />
+                    <p className="text-base font-extrabold text-white leading-tight tracking-wide">RA.ED AI</p>
                   </div>
                 <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl" style={GLASS_FIELD}>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
@@ -6762,17 +9886,18 @@ export default function App() {
 
               <nav className="flex-1 min-h-0 p-3 space-y-0.5 overflow-y-auto">
                 {NAV_ITEMS.filter((item) => !item.topBarOnly && (!item.adminOnly || user?.is_admin)).map((item) => {
-                  const on = active === item.id;
+                  const on = sidebarActiveId === item.id;
                   const Icon = item.icon;
 
                   return (
                     <motion.button
                       key={item.id}
-                      whileTap={tapMotion(0.97)}
-                      onClick={() => { setActive(item.id); if (!isDesktop) setSidebar(false); }}
+                      whileTap={sectionNavLocked ? undefined : nlMotionTap(0.97)}
+                      onClick={() => { goToSection(item.id); if (!isDesktop) setSidebar(false); }}
+                      disabled={sectionNavLocked}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors duration-200 relative group ${
                         on ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
-                      }`}
+                      }${sectionNavLocked ? " pointer-events-none" : ""}`}
                       style={on ? { backgroundColor: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.06)", boxShadow: "none" } : { border: "1px solid transparent" }}
                     >
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 relative z-10 transition-all ${
@@ -6790,7 +9915,11 @@ export default function App() {
                         </p>
                       </div>
 
-                      {on && <ChevronRight className="w-3.5 h-3.5 text-white/40 relative z-10 flex-shrink-0" />}
+                      {on ? (
+                        <ChevronRight className="w-3.5 h-3.5 text-white/40 relative z-10 flex-shrink-0" />
+                      ) : (
+                        <span className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+                      )}
                     </motion.button>
                   );
                 })}
@@ -6798,65 +9927,53 @@ export default function App() {
             </div>
           </aside>
 
-      <div
-        ref={topBarWrapperRef}
-        className="fixed top-0 z-[60] px-3 sm:px-4 pb-0"
-        style={{
-          left: 0,
-          width: "100%",
-          paddingLeft: isDesktop && sidebar ? sidebarPush : 0,
-          paddingTop: SAFE_TOP,
-          boxSizing: "border-box",
-          transition: PAD_EASE,
-        }}
-      >
-        {topBar}
-        {!isDesktop && mobileTopMenuOpen && (
+      {iosPullScroll ? (
+        <>
           <div
-            ref={mobileMenuRef}
-            className="fixed z-[70] min-w-[220px] max-w-[calc(100vw-24px)] overflow-y-auto p-2 pb-4 rounded-xl glass-float bg-white/15 backdrop-blur-3xl border border-white/30 shadow-2xl"
+            ref={ptrSpinnerAnchorRef}
+            className="ptr-spinner-anchor fixed left-0 right-0 z-[85] flex justify-center pointer-events-none"
             style={{
-              top: (topBarHeight || 96) + 8,
-              right: 12,
-              maxHeight: `calc(100vh - ${(topBarHeight || 96) + 24}px)`,
-              boxShadow: FLOAT_M,
+              opacity: 0,
+              top: "max(10px, env(safe-area-inset-top, 0px))",
             }}
+            aria-hidden="true"
           >
-            <TopBarActions inMenu={true} />
+            <PtrIosSpinner spinning={false} size={20} />
           </div>
-        )}
-      </div>
-
-      <main
-        className="flex-none relative z-30"
-        style={{
-          width: "100%",
-          minWidth: 0,
-          marginLeft: 0,
-          paddingLeft: isDesktop && sidebar ? sidebarPush : 0,
-          boxSizing: "border-box",
-          transition: PAD_EASE,
-        }}
-      >
-        <div aria-hidden="true" style={{ height: topBarHeight || 96 }} />
-        <div className="app-main-inner px-3 sm:px-4 pt-16 pb-4 sm:pt-6 sm:pb-6 max-w-5xl w-full mx-auto">
-          <div className="content-shell rounded-2xl">
-            <div className="content-shell-inner p-4 sm:p-6">
-              <SectionTransition active={active} activeSection={activeSection} />
+          <div
+            ref={appScrollRef}
+            className="fixed inset-0 z-20 overflow-y-auto overscroll-y-auto"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            <div className="ptr-inner min-h-full relative">
+              <div className="ptr-pull-content">
+                {topBarChrome}
+                {mainChrome}
+              </div>
             </div>
           </div>
-        </div>
-      </main>
+          <PullToRefresh
+            scrollRef={appScrollRef}
+            spinnerAnchorRef={ptrSpinnerAnchorRef}
+            onRefresh={performSoftRefresh}
+            disabled={sectionNavLocked}
+          />
+        </>
+      ) : (
+        <>
+          {topBarChrome}
+          {mainChrome}
+        </>
+      )}
 
       {/* Global Styles */}
       <style>{`
         * { box-sizing: border-box; }
-        html, body, #root { overflow-x: hidden; }
         h1, h2, h3, p, span, label, button {
           text-shadow: 0 1px 2px rgba(0,0,0,0.12);
         }
 
-        /* Design tokens — very muted liquid glass: minimal light/shine */
+        /* Design tokens ? very muted liquid glass: minimal light/shine */
         [class*="border-white"] {
           border-color: rgba(255,255,255,0.03) !important;
         }
@@ -6886,6 +10003,7 @@ export default function App() {
 
         .sidebar-shell::before,
         .glass-float::before,
+        .gselect-menu-portal::before,
         .content-shell::before {
           content: "";
           position: absolute;
@@ -6915,6 +10033,7 @@ export default function App() {
 
         .sidebar-shell::after,
         .glass-float::after,
+        .gselect-menu-portal::after,
         .content-shell::after {
           content: "";
           position: absolute;
@@ -6931,6 +10050,28 @@ export default function App() {
           background: transparent;
         }
 
+        /* Inner section panels ? frosted cards (same on iPad and desktop) */
+        .content-shell .content-panel-glass,
+        .content-shell .glass-float:not(.section-header):not(.app-topbar-glass) {
+          backdrop-filter: blur(16px) saturate(1.85) !important;
+          -webkit-backdrop-filter: blur(16px) saturate(1.85) !important;
+          background-color: rgba(255,255,255,0.028) !important;
+          border-color: rgba(255,255,255,0.05) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.018), 0 10px 28px -6px rgba(0,0,0,0.12), 0 22px 52px -14px rgba(0,0,0,0.10), 0 36px 72px -24px rgba(0,0,0,0.07) !important;
+        }
+
+        .content-shell .content-panel-glass::before,
+        .content-shell .glass-float:not(.section-header)::before {
+          opacity: 0.025;
+        }
+
+        .content-shell .content-panel-glass::after,
+        .content-shell .glass-float:not(.section-header)::after {
+          opacity: 0.35;
+          background:
+            linear-gradient(180deg, rgba(255,255,255,0.006) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.00) 100%);
+        }
+
         .app-main-inner {
           background: transparent;
         }
@@ -6939,13 +10080,13 @@ export default function App() {
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
         }
 
-        /* Section headers — stronger frosted glass */
+        /* Section headers ? stronger frosted glass */
         .section-header {
           backdrop-filter: blur(24px) saturate(2.25) !important;
           -webkit-backdrop-filter: blur(24px) saturate(2.25) !important;
         }
 
-        /* Inputs — neutral dark glass, less blue */
+        /* Inputs ? neutral dark glass, less blue */
         .glass-field,
         input, select, textarea {
           background-color: rgba(255,255,255,0.06) !important;
@@ -6967,7 +10108,10 @@ export default function App() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 99px; }
         input[type=number]::-webkit-inner-spin-button { opacity: 0; }
-        select option { background-color: #0e1120; color: white; }
+        select option {
+          background-color: rgba(255, 255, 255, 0.08);
+          color: rgba(255, 255, 255, 0.92);
+        }
         input, select, textarea, button { -webkit-tap-highlight-color: transparent; }
         input[type=date] {
           -webkit-appearance: none;
@@ -6981,47 +10125,137 @@ export default function App() {
           opacity: 0.6;
         }
         input[type=date]::-webkit-date-and-time-value { text-align: left; }
+        .app-topbar-glass button[aria-label="Refresh"],
+        .app-topbar-glass a[aria-label="Refresh"] {
+          display: none !important;
+          pointer-events: none !important;
+        }
+
+        .ptr-inner { position: relative; }
+        .ptr-pull-content {
+          transform: translate3d(0, 0, 0);
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
+          touch-action: pan-y;
+        }
+        .ptr-spinner-anchor {
+          overflow: visible;
+          will-change: transform, opacity;
+        }
+        .ptr-ios-spinner {
+          position: relative;
+          display: inline-block;
+          width: 20px;
+          height: 20px;
+          transform: scale(var(--ptr-scale, 1));
+          transform-origin: 50% 50%;
+        }
         video { outline: none; background: #000; }
         .grid { min-width: 0; }
         .grid > * { min-width: 0; overflow-wrap: break-word; word-break: break-word; }
         input, select { min-height: 44px !important; }
         button { min-height: 44px !important; }
-        button, a, [role="button"], input, select, textarea, label, .gselect-trigger {
-          touch-action: manipulation;
+
+        .gselect-chevron {
+          transition: transform 0.24s cubic-bezier(0.33, 1, 0.68, 1);
+          transform: translateZ(0);
+        }
+        .gselect-chevron-open {
+          transform: rotate(180deg) translateZ(0);
         }
 
-        @keyframes gselect-open {
-          0% { opacity: 0; transform: translateY(-12px) scale(0.96); }
-          70% { opacity: 1; transform: translateY(2px) scale(1.01); }
-          100% { opacity: 1; transform: translateY(0) scale(1); }
+        @keyframes gselect-body-in {
+          from {
+            opacity: 0;
+            transform: translate3d(0, -8px, 0);
+          }
+          to {
+            opacity: 1;
+            transform: translate3d(0, 0, 0);
+          }
         }
-        .gselect-menu-anim {
-          animation: gselect-open 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
-        }
-
-        .gselect-trigger {
-          background-color: rgba(55,55,55,0.88) !important;
-          background-image: linear-gradient(180deg, rgba(255,255,255,0.015) 0%, rgba(255,255,255,0.00) 50%, rgba(0,0,0,0.05) 100%) !important;
-          border-color: rgba(255,255,255,0.08) !important;
-          backdrop-filter: blur(24px) saturate(1.1) !important;
-          -webkit-backdrop-filter: blur(24px) saturate(1.1) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 4px 14px rgba(0,0,0,0.15) !important;
-        }
-
-        .gselect-menu {
-          background-color: rgba(55,55,55,0.95) !important;
-          background-image: linear-gradient(180deg, rgba(255,255,255,0.015) 0%, rgba(255,255,255,0.00) 45%, rgba(0,0,0,0.06) 100%) !important;
-          border-color: rgba(255,255,255,0.08) !important;
-          backdrop-filter: blur(30px) saturate(1.1) !important;
-          -webkit-backdrop-filter: blur(30px) saturate(1.1) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 18px 45px -22px rgba(0,0,0,0.35) !important;
+        .gselect-menu-body--animate {
+          animation: gselect-body-in 0.24s cubic-bezier(0.33, 1, 0.68, 1) both;
+          transform: translateZ(0);
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
         }
 
-        .gselect-menu .gselect-option {
+        .gselect-menu-portal {
+          contain: layout style;
+        }
+
+        .gselect-trigger-shell.glass-float {
+          transition: border-color 0.28s cubic-bezier(0.33, 1, 0.68, 1), box-shadow 0.28s cubic-bezier(0.33, 1, 0.68, 1);
+        }
+        .gselect-trigger-shell.glass-float[aria-expanded="true"] {
+          border-color: rgba(255,255,255,0.05) !important;
+        }
+
+        .gselect-menu-portal.glass-float {
+          border-color: rgba(255,255,255,0.03) !important;
+          backdrop-filter: blur(12px) saturate(2.25) !important;
+          -webkit-backdrop-filter: blur(12px) saturate(2.25) !important;
+          background-color: rgba(255,255,255,0.008) !important;
+          background-image:
+            radial-gradient(ellipse 150% 60% at 50% 0%, rgba(255,255,255,0.015) 0%, transparent 65%),
+            radial-gradient(ellipse 150% 70% at 50% 100%, rgba(200,230,255,0.015) 0%, transparent 60%),
+            radial-gradient(circle at 0% 25%, rgba(255,255,255,0.008) 0%, transparent 40%),
+            radial-gradient(circle at 100% 75%, rgba(255,255,255,0.008) 0%, transparent 40%),
+            linear-gradient(175deg, rgba(255,255,255,0.005) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.00) 65%, rgba(255,255,255,0.004) 100%) !important;
+          background-blend-mode: overlay, overlay, overlay, overlay, normal;
+        }
+
+        .gselect-menu-portal .gselect-option {
           transition: background-color 0.12s, color 0.12s;
+          background-color: transparent !important;
+          box-shadow: none !important;
+          border: none !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
         }
-        .gselect-menu .gselect-option:hover {
-          background-color: rgba(255,255,255,0.04) !important;
+        .gselect-menu-portal .gselect-option:hover {
+          background-color: rgba(255,255,255,0.06) !important;
+        }
+
+        /* GSelect portal ? identical liquid glass tokens as .app-topbar-glass (transform anim on inner body only ? keeps backdrop-filter) */
+        @media (prefers-reduced-motion: reduce) {
+          .gselect-menu-body--animate,
+          .gselect-chevron {
+            animation: none !important;
+            transition: none !important;
+          }
+        }
+
+        html.nl-touch .sidebar-shell,
+        html.nl-touch .glass-float,
+        html.nl-touch .content-shell {
+          backdrop-filter: blur(8px) saturate(1.45) !important;
+          -webkit-backdrop-filter: blur(8px) saturate(1.45) !important;
+        }
+        html.nl-touch .content-shell .glass-float:not(.section-header):not(.app-topbar-glass),
+        html.nl-touch .content-shell .content-panel-glass {
+          backdrop-filter: blur(6px) saturate(1.25) !important;
+          -webkit-backdrop-filter: blur(6px) saturate(1.25) !important;
+        }
+        html.nl-touch .sidebar-shell::before,
+        html.nl-touch .sidebar-shell::after,
+        html.nl-touch .content-shell::before,
+        html.nl-touch .content-shell::after,
+        html.nl-touch .content-shell .glass-float::before,
+        html.nl-touch .content-shell .glass-float::after,
+        html.nl-touch .content-shell .content-panel-glass::before,
+        html.nl-touch .content-shell .content-panel-glass::after {
+          display: none !important;
+        }
+        html.nl-touch h1,
+        html.nl-touch h2,
+        html.nl-touch h3,
+        html.nl-touch p,
+        html.nl-touch span,
+        html.nl-touch label,
+        html.nl-touch button {
+          text-shadow: none !important;
         }
 
         @media (max-width: 768px) {
@@ -7036,6 +10270,56 @@ export default function App() {
 
       `}</style>
 
+      {useMobileMenuPortal && typeof document !== "undefined" && ReactDOM.createPortal(
+        <AnimatePresence>
+          {mobileTopMenuOpen && (
+            <div key="mobile-top-menu" className="fixed inset-0 z-[200]">
+              <motion.button
+                type="button"
+                aria-label="Close menu"
+                className="absolute inset-0 bg-black/50 backdrop-blur-[3px]"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={closeMobileTopMenu}
+              />
+              <motion.div
+                ref={mobileMenuRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Actions menu"
+                className="absolute left-0 right-0 bottom-0 px-3"
+                initial={{ y: "50vh" }}
+                animate={{ y: 0 }}
+                exit={{ y: "50vh" }}
+                transition={{ type: "tween", duration: 0.34, ease: [0.32, 0.72, 0, 1] }}
+                style={{
+                  maxHeight: "min(78vh, calc(100dvh - env(safe-area-inset-top, 0px) - 72px))",
+                  paddingBottom: "max(12px, env(safe-area-inset-bottom, 0px))",
+                  willChange: "transform",
+                }}
+              >
+                <div
+                  className={`sidebar-shell flex flex-col max-h-full rounded-2xl overflow-hidden ${SIDEBAR_CLS}`}
+                  style={{ boxShadow: FLOAT_M }}
+                >
+                  <nav
+                    className="flex-1 min-h-0 px-3 pt-3 pb-3 flex flex-col gap-3 overflow-y-auto overscroll-contain"
+                    style={{
+                      paddingBottom: "max(12px, calc(12px + env(safe-area-inset-bottom, 0px) * 0.35))",
+                    }}
+                  >
+                    <TopBarActions inMenu={true} />
+                  </nav>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
       {importPreview && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={cancelImportPreview}>
           <div
@@ -7044,7 +10328,7 @@ export default function App() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b border-white/10 flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-white">Import Preview — No fields found</h3>
+              <h3 className="text-sm font-extrabold text-white">Import Preview ? No fields found</h3>
               <button onClick={cancelImportPreview} className="text-white/50 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
             <div className="flex-1 overflow-auto p-4 space-y-4">
@@ -7054,7 +10338,7 @@ export default function App() {
               <div className="rounded-xl bg-black/40 border border-white/10 p-3">
                 <p className="text-[10px] uppercase tracking-wider text-white/40 mb-1">Extracted text ({importPreview.extractedText.length} chars)</p>
                 <pre className="text-xs text-white/70 whitespace-pre-wrap font-mono max-h-[40vh] overflow-auto">
-                  {importPreview.extractedText || "(empty — PDF is likely an image)"}
+                  {importPreview.extractedText || "(empty ? PDF is likely an image)"}
                 </pre>
               </div>
               <div className="rounded-xl bg-black/40 border border-white/10 p-3">
@@ -7081,6 +10365,11 @@ export default function App() {
       )}
 
       <Toast msg={toast.msg} visible={toast.visible} variant={toast.variant} />
+      {originRestoreBanner ? (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[99998] max-w-[92vw] px-4 py-2.5 rounded-xl bg-sky-500/20 border border-sky-400/30 text-sky-100 text-sm font-medium shadow-xl backdrop-blur-xl text-center">
+          {originRestoreBanner}
+        </div>
+      ) : null}
     </div>
     </AuthGate>
   );
