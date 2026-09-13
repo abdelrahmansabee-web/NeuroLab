@@ -19,7 +19,11 @@ except Exception:  # pragma: no cover
     _sqlcipher3 = _stdlib_sqlite3
     SQLCIPHER_AVAILABLE = False
 
-Row = _stdlib_sqlite3.Row
+# Bind Row to the active driver. A sqlcipher3 connection's cursor cannot be
+# consumed by stdlib sqlite3.Row, so when SQLCipher is available we must use its
+# own Row factory. When it is not, _sqlcipher3 is the stdlib module, so this
+# still resolves to sqlite3.Row.
+Row = _sqlcipher3.Row
 
 
 def get_db_key() -> str:

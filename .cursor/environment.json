@@ -1,0 +1,17 @@
+{
+  "name": "NeuroLab",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "neurolab-server",
+      "command": "bash .cursor/start-server.sh",
+      "description": "NeuroLab FastAPI app: serves the web UI and the kinematic analysis API on http://localhost:7860 (health check at /health)."
+    }
+  ],
+  "ports": [
+    {
+      "name": "web",
+      "port": 7860
+    }
+  ]
+}
