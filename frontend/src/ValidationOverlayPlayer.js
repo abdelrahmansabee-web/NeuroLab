@@ -1608,9 +1608,10 @@ export function ValidationOverlayPlayer({
     }
 
     // Pre-v37 overlays re-anchored HL tips onto pose wrist (floated off fingers).
-    // Undo: tip' = tip - poseWrist + hlWrist. v37+ already stores absolute HL.
+    // Undo: tip' = tip - poseWrist + hlWrist. v37+ / hl_absolute already stores absolute HL.
     const overlayVer = Number(overlayData?.overlay_version) || 0;
-    const needUndoReanchor = overlayVer < 37;
+    const absHl = overlayData?.finger_coords === "hl_absolute" || overlayVer >= 37;
+    const needUndoReanchor = overlayVer > 0 && overlayVer < 37 && !absHl;
     const poseWristPt = pt("wrist");
     const hlWristPt = pt("hl_wrist");
     const undoReanchor = (cpt) => {
@@ -1620,6 +1621,29 @@ export function ValidationOverlayPlayer({
         cpt[1] - poseWristPt[1] + hlWristPt[1],
       ];
     };
+    // Drop HL when it latches a static object (cup) far from the pose wrist.
+    const handSpan = Math.max(1, Math.min(cw, ch));
+    const distNorm = (a, b) => {
+      if (!a || !b) return null;
+      return Math.hypot(a[0] - b[0], a[1] - b[1]) / handSpan;
+    };
+    const hlOffHand = (() => {
+      const dHl = distNorm(poseWristPt, hlWristPt);
+      if (dHl != null && dHl > 0.16) return true;
+      if (!fingerJoints || !poseWristPt) return false;
+      let n = 0;
+      let far = 0;
+      HAND_FINGER_ORDER.forEach((fid) => {
+        const tip = fingerJoints[fid]?.tip;
+        if (!tip || tip[0] == null || tip[1] == null) return;
+        n += 1;
+        if (distNorm(poseWristPt, [tip[0] * cw, tip[1] * ch]) > 0.22) far += 1;
+      });
+      return n >= 3 && far >= Math.ceil(n * 0.6);
+    })();
+    if (hlOffHand) {
+      Object.keys(fingerStickyRef.current).forEach((k) => { delete fingerStickyRef.current[k]; });
+    }
 
     const smoothStore = fingerSmoothRef.current;
     const smoothAlpha = 0.42;
@@ -1661,7 +1685,7 @@ export function ValidationOverlayPlayer({
       }
     };
 
-    if (fingerJoints) {
+    if (fingerJoints && !hlOffHand) {
       HAND_FINGER_ORDER.forEach((fid) => {
         const fj = fingerJoints[fid];
         if (!fj) return;
@@ -1683,7 +1707,7 @@ export function ValidationOverlayPlayer({
       });
     } else {
       HAND_FINGER_ORDER.forEach((id) => {
-        const tipPt = undoReanchor(pt(id));
+        const tipPt = pt(id);
         const visOk = fingerVis ? fingerVis[id] !== false : true;
         if (tipPt) pushFingerDot(id, "tip", tipPt, JOINT_DOT.tip, visOk || true);
         else pushFingerDot(id, "tip", tipPt, JOINT_DOT.tip, false);
