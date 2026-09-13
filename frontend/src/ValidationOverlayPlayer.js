@@ -939,6 +939,7 @@ export function ValidationOverlayPlayer({
   onEnded,
   onDownloadReady,
   onError,
+  onSourceMismatch,
 }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -977,6 +978,14 @@ export function ValidationOverlayPlayer({
   const [renderProgress, setRenderProgress] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [videoAspect, setVideoAspect] = useState(null);
+  /** Loaded video is not the clip the overlay was computed from (e.g. a baked composite). */
+  const [sourceMismatch, setSourceMismatch] = useState(false);
+  const sourceMismatchRef = useRef(false);
+  const mismatchReportedRef = useRef(null);
+  useEffect(() => {
+    sourceMismatchRef.current = false;
+    setSourceMismatch(false);
+  }, [videoUrl]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isTouchUi, setIsTouchUi] = useState(false);
   const mediaRecorderRef = useRef(null);
@@ -1062,11 +1071,58 @@ export function ValidationOverlayPlayer({
     return Number(v).toFixed(digits);
   };
 
+  /**
+   * Overlay coords are normalized to the analyzed clip. A baked composite (burned-in
+   * skeleton + side panel) has a different frame shape and length, so drawing on it puts
+   * chalk across the table. Detect that and stop drawing instead of showing wrong lines.
+   */
+  const checkOverlaySource = useCallback((vw, vh, vDuration) => {
+    const overlayW = Number(overlayData?.frame_width_px) || 0;
+    const overlayH = Number(overlayData?.frame_height_px) || 0;
+    const overlayDur = Number(overlayData?.duration_sec)
+      || (frames.length > 1 && fps > 0 ? frames.length / fps : 0);
+    const remapped = Boolean(overlayData?.coord_remap);
+
+    let shapeBad = false;
+    if (!remapped && vw > 0 && vh > 0 && overlayW > 0 && overlayH > 0) {
+      const ratio = (vw / vh) / (overlayW / overlayH);
+      shapeBad = ratio > 1.12 || ratio < 0.89;
+    }
+    const durBad = overlayDur > 0.5
+      && Number.isFinite(vDuration)
+      && vDuration > 0.2
+      && overlayDur - vDuration > overlayDur * 0.3;
+
+    const bad = shapeBad || durBad;
+    sourceMismatchRef.current = bad;
+    setSourceMismatch(bad);
+    if (!bad) {
+      mismatchReportedRef.current = null;
+      return;
+    }
+    if (mismatchReportedRef.current === videoUrl) return;
+    mismatchReportedRef.current = videoUrl;
+    onSourceMismatch?.({
+      videoWidth: vw,
+      videoHeight: vh,
+      videoDuration: Number.isFinite(vDuration) ? vDuration : null,
+      overlayWidth: overlayW,
+      overlayHeight: overlayH,
+      overlayDuration: overlayDur,
+      reason: shapeBad ? "frame_shape" : "duration",
+    });
+  }, [overlayData, frames.length, fps, videoUrl, onSourceMismatch]);
+
   const drawOverlay = useCallback(() => {
     const bakePass = bakeOverlayPassRef.current;
     const canvas = bakePass ? bakeOverlayCanvasRef.current : canvasRef.current;
     const video = videoRef.current;
     if (!canvas || !video) return;
+    if (sourceMismatchRef.current) {
+      const ctx0 = canvas.getContext("2d");
+      ctx0?.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
 
     const stageEl = bakePass ? null : stageRef.current;
     const contentEl = bakePass ? null : contentWrapRef.current;
@@ -2623,6 +2679,7 @@ export function ValidationOverlayPlayer({
       const vw = video.videoWidth || 1;
       const vh = video.videoHeight || 1;
       setVideoAspect(vw / vh);
+      checkOverlaySource(vw, vh, video.duration);
       videoTimeRef.current = video.currentTime ?? 0;
       lastPaintMediaTimeRef.current = -1;
       setDisplayDuration(video.duration || 0);
@@ -2704,7 +2761,7 @@ export function ValidationOverlayPlayer({
       stopRafLoop();
       if (progressRafRef.current) cancelAnimationFrame(progressRafRef.current);
     };
-  }, [videoUrl, drawOverlay, drawRecordingFrame, recording, onEnded, tryAutoRender]);
+  }, [videoUrl, drawOverlay, drawRecordingFrame, recording, onEnded, tryAutoRender, checkOverlaySource]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -3014,6 +3071,28 @@ export function ValidationOverlayPlayer({
                 className="absolute pointer-events-none"
                 style={{ transform: "translateZ(0)", WebkitTransform: "translateZ(0)" }}
               />
+              {sourceMismatch ? (
+                <div
+                  className="absolute pointer-events-none"
+                  style={{ left: 0, right: 0, top: 0, padding: "8px" }}
+                >
+                  <p
+                    style={{
+                      margin: "0 auto",
+                      maxWidth: "22rem",
+                      borderRadius: "6px",
+                      background: "rgba(0,0,0,0.7)",
+                      padding: "4px 8px",
+                      textAlign: "center",
+                      fontSize: "11px",
+                      lineHeight: 1.4,
+                      color: "rgba(253,230,138,0.92)",
+                    }}
+                  >
+                    {"Drawing paused \u2014 this clip is not the analyzed original. Reloading it\u2026"}
+                  </p>
+                </div>
+              ) : null}
           </div>
         </div>
       </div>
