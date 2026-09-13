@@ -23,15 +23,6 @@ import {
   HAND_FINGER_ORDER,
   SKELETON_PALETTE,
 } from "./clinicalSkeleton";
-import {
-  buildPoseRestHand,
-  buildSmoothedTracks,
-  hlTipsOffPoseHand,
-  interpPair,
-  overlayPalmIsTrusted,
-  resolveHandDrawSource,
-  shouldDrawHlFingers,
-} from "./overlayHandTrack";
 
 /** Same background treatment as App.js shell (bg.jpg + blur/dim). */
 const APP_BG_URL = "/bg.jpg";
@@ -1016,10 +1007,7 @@ export function ValidationOverlayPlayer({
   const paintPendingRef = useRef(false);
   /** Keep last good finger dots briefly so they don't vanish on 1–2 missing frames. */
   const fingerStickyRef = useRef({});
-  /** Light same-source EMA only. Cleared on cup↔hand model switch. */
   const fingerSmoothRef = useRef({});
-  /** Hysteresis for pose-rest vs HL fingers (must not flicker at movement onset). */
-  const handSourceRef = useRef({ src: "pose", offStreak: 0, onStreak: 0 });
 
   const phaseColor = useMemo(() => {
     const p = (phaseLabel || "").toLowerCase();
@@ -1032,10 +1020,6 @@ export function ValidationOverlayPlayer({
 
   const frames = overlayData?.frames || [];
   const fps = overlayData?.fps || 60;
-  const smoothTracks = useMemo(
-    () => buildSmoothedTracks(overlayData?.frames, overlayData?.fps || 60),
-    [overlayData?.frames, overlayData?.fps],
-  );
   const metrics = overlayData?.metrics || {};
   const win = overlayData?.movement_window || { start_idx: 0, end_idx: frames.length - 1 };
   const startPalm = overlayData?.start_palm;
@@ -1224,26 +1208,24 @@ export function ValidationOverlayPlayer({
 
     const color = phaseColor;
 
-    const idxNext = Math.min(idx + 1, frames.length - 1);
-    const trackPair = (key) => {
-      const p = smoothTracks?.at(key, idx) || null;
-      if (!p) return null;
-      const pn = alpha > 0 ? smoothTracks.at(key, idxNext) : null;
-      if (!pn || alpha <= 0) return p;
-      return [p[0] + (pn[0] - p[0]) * alpha, p[1] + (pn[1] - p[1]) * alpha];
-    };
     const ptCache = new Map();
 
     function pt(name) {
       if (ptCache.has(name)) return ptCache.get(name);
-      const sm = trackPair(name);
-      const raw = interpPair(f[name], fNext?.[name], alpha);
-      const p = sm || raw;
+      const p = f[name];
+      const pn = alpha > 0 ? fNext?.[name] : null;
       let out = null;
-      if (p) {
+      if (p && p[0] != null && p[1] != null) {
+        let nx = p[0];
+        let ny = p[1];
+        if (pn && pn[0] != null && pn[1] != null && alpha > 0) {
+          nx = p[0] + (pn[0] - p[0]) * alpha;
+          ny = p[1] + (pn[1] - p[1]) * alpha;
+        }
         const isHandLm = /^(index|thumb|pinky|middle|ring|hl_wrist)$/.test(name);
-        const edge = p[0] <= 0.0002 || p[0] >= 0.9998 || p[1] <= 0.0002 || p[1] >= 0.9998;
-        if (!isHandLm || !edge) out = [p[0] * cw, p[1] * ch];
+        if (!(isHandLm && (nx <= 0.0002 || nx >= 0.9998 || ny <= 0.0002 || ny >= 0.9998))) {
+          out = [nx * cw, ny * ch];
+        }
       }
       ptCache.set(name, out);
       return out;
@@ -1681,18 +1663,22 @@ export function ValidationOverlayPlayer({
     const JOINT_ORDER = ["mcp", "ip", "tip"];
 
     function jointToCanvas(pair, pairNext) {
-      const p = interpPair(pair, pairNext, alpha);
-      return p ? [p[0] * cw, p[1] * ch] : null;
+      if (!pair || pair[0] == null || pair[1] == null) return null;
+      let nx = pair[0];
+      let ny = pair[1];
+      if (pairNext && pairNext[0] != null && pairNext[1] != null && alpha > 0) {
+        nx = pair[0] + (pairNext[0] - pair[0]) * alpha;
+        ny = pair[1] + (pairNext[1] - pair[1]) * alpha;
+      }
+      return [nx * cw, ny * ch];
     }
 
     // Pre-v37 overlays re-anchored HL tips onto pose wrist (floated off fingers).
-    // Undo: tip' = tip - poseWrist + hlWrist. v37+ / hl_absolute already stores absolute HL.
+    // Undo: tip' = tip - poseWrist + hlWrist. v37+ already stores absolute HL.
     const overlayVer = Number(overlayData?.overlay_version) || 0;
-    const absHl = overlayData?.finger_coords === "hl_absolute" || overlayVer >= 37;
-    const needUndoReanchor = overlayVer > 0 && overlayVer < 37 && !absHl;
+    const needUndoReanchor = overlayVer < 37;
     const poseWristPt = pt("wrist");
     const hlWristPt = pt("hl_wrist");
-    const elbowPt = pt("elbow");
     const undoReanchor = (cpt) => {
       if (!needUndoReanchor || !cpt || !poseWristPt || !hlWristPt) return cpt;
       return [
@@ -1700,78 +1686,31 @@ export function ValidationOverlayPlayer({
         cpt[1] - poseWristPt[1] + hlWristPt[1],
       ];
     };
-    // When Hand Landmarker latches the cup at rest / movement onset, ignore those
-    // joints and draw a resting pose-palm hand. Never rotate/scale the cup fan.
-    const handSpan = Math.max(1, Math.min(cw, ch));
-    const hypotPt = (a, b) => {
-      if (!a || !b) return null;
-      return Math.hypot(a[0] - b[0], a[1] - b[1]);
-    };
-    const hlTipsCanvas = [];
-    const hlMcpsCanvas = [];
-    if (fingerJoints) {
-      HAND_FINGER_ORDER.forEach((fid) => {
-        const fj = fingerJoints[fid];
-        if (!fj) return;
-        const tip = undoReanchor(jointToCanvas(fj.tip, fNext?.finger_joints?.[fid]?.tip));
-        if (tip) hlTipsCanvas.push(tip);
-        const mcp = undoReanchor(jointToCanvas(fj.mcp, fNext?.finger_joints?.[fid]?.mcp));
-        if (mcp) hlMcpsCanvas.push(mcp);
-      });
-    } else {
-      HAND_FINGER_ORDER.forEach((fid) => {
-        const tip = undoReanchor(pt(fid));
-        if (tip) hlTipsCanvas.push(tip);
-      });
-    }
-    const forearmPx = hypotPt(elbowPt, poseWristPt) || 0;
-    const palmReachPx = hypotPt(palm, poseWristPt) || 0;
-    const hlOffHand = hlTipsOffPoseHand({
-      poseWrist: poseWristPt,
-      hlWrist: hlWristPt,
-      tips: hlTipsCanvas,
-      mcps: hlMcpsCanvas,
-      forearmPx,
-      palmReachPx,
-      handSpan,
-    });
-
-    const sourceState = resolveHandDrawSource(handSourceRef.current, hlOffHand);
-    handSourceRef.current = sourceState;
-    const drawHl = shouldDrawHlFingers(hlOffHand, sourceState.src);
-    if (sourceState.switched) {
-      fingerSmoothRef.current = {};
-      fingerStickyRef.current = {};
-    }
-
-    const restPalm = overlayPalmIsTrusted(palmReachPx, forearmPx, handSpan) ? palm : null;
-    const restJoints = !drawHl
-      ? (buildPoseRestHand(poseWristPt, restPalm, elbowPt, trunk)?.joints || null)
-      : null;
 
     const smoothStore = fingerSmoothRef.current;
+    const smoothAlpha = 0.42;
     const smoothFinger = (key, cpt, live) => {
       if (!cpt) return null;
       if (!live) return cpt;
+      const prev = smoothStore[key];
       if (smoothStore._idx != null && Math.abs(idx - smoothStore._idx) > 8) {
         Object.keys(smoothStore).forEach((k) => { if (k !== "_idx") delete smoothStore[k]; });
       }
       smoothStore._idx = idx;
-      const prev = smoothStore[key];
       if (!prev) {
-        smoothStore[key] = [cpt[0], cpt[1]];
+        smoothStore[key] = [...cpt];
         return cpt;
       }
-      // Same-source only, high gain: damps 1px tracker sparkle without trailing
-      // the reach and without blending the cup model into the first moving frames.
-      const a = 0.78;
-      const out = [prev[0] + (cpt[0] - prev[0]) * a, prev[1] + (cpt[1] - prev[1]) * a];
+      const out = [
+        prev[0] + (cpt[0] - prev[0]) * smoothAlpha,
+        prev[1] + (cpt[1] - prev[1]) * smoothAlpha,
+      ];
       smoothStore[key] = out;
       return out;
     };
 
     const jointDots = [];
-    const stickyHoldFrames = Math.max(3, Math.round(fps * 0.06));
+    const stickyHoldFrames = Math.max(10, Math.round(fps * 0.4));
     const stickyStore = fingerStickyRef.current;
     const pushFingerDot = (fid, jname, cpt, style, live) => {
       if (!cpt) return;
@@ -1788,20 +1727,13 @@ export function ValidationOverlayPlayer({
       }
     };
 
-    if (restJoints) {
-      HAND_FINGER_ORDER.forEach((fid) => {
-        const aj = restJoints[fid];
-        if (!aj) return;
-        JOINT_ORDER.forEach((jname) => {
-          pushFingerDot(fid, jname, aj[jname], JOINT_DOT[jname], true);
-        });
-      });
-    } else if (drawHl && fingerJoints) {
+    if (fingerJoints) {
       HAND_FINGER_ORDER.forEach((fid) => {
         const fj = fingerJoints[fid];
         if (!fj) return;
         JOINT_ORDER.forEach((jname) => {
-          let cpt = jointToCanvas(fj[jname], fNext?.finger_joints?.[fid]?.[jname]);
+          const fjNext = fNext?.finger_joints?.[fid];
+          let cpt = jointToCanvas(fj[jname], fjNext?.[jname]);
           if (!cpt && jname === "tip") cpt = pt(fid);
           cpt = undoReanchor(cpt);
           const coordsOk = Boolean(cpt)
@@ -1815,7 +1747,7 @@ export function ValidationOverlayPlayer({
           pushFingerDot(fid, jname, cpt, JOINT_DOT[jname], visOk || Boolean(fj[jname]) || jname === "tip");
         });
       });
-    } else if (drawHl) {
+    } else {
       HAND_FINGER_ORDER.forEach((id) => {
         const tipPt = undoReanchor(pt(id));
         const visOk = fingerVis ? fingerVis[id] !== false : true;
@@ -2324,7 +2256,7 @@ export function ValidationOverlayPlayer({
     ctx.fillText(`Speed ${Math.round(speed)} ?/s`, gx, gy - 4);
     }
 
-  }, [frames, fps, win, peakV, handPeakV, startPalm, endPalm, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, isExpanded, overlayStyle, smoothTracks]);
+  }, [frames, fps, win, peakV, handPeakV, startPalm, endPalm, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, isExpanded, overlayStyle]);
 
   const renderBakeOverlayNative = useCallback(() => {
     if (!bakeOverlayCanvasRef.current) {
@@ -2417,7 +2349,6 @@ export function ValidationOverlayPlayer({
     recordingRef.current = true;
     fingerStickyRef.current = {};
     fingerSmoothRef.current = {};
-    handSourceRef.current = { src: "pose", offStreak: 0, onStreak: 0 };
     // Keep the live overlay in display space. Baking used to switch the visible
     // canvas to native pixels, which threw chalk off the hand for the first plays.
     drawOverlay();
@@ -2444,7 +2375,6 @@ export function ValidationOverlayPlayer({
       recordingRef.current = false;
       fingerStickyRef.current = {};
       fingerSmoothRef.current = {};
-      handSourceRef.current = { src: "pose", offStreak: 0, onStreak: 0 };
       if (video) video.playbackRate = playbackRate || 1;
       const blob = new Blob(recordedChunksRef.current, { type: mimeType.includes("mp4") ? "video/mp4" : "video/webm" });
       const url = URL.createObjectURL(blob);
@@ -2730,7 +2660,6 @@ export function ValidationOverlayPlayer({
     lastPaintMediaTimeRef.current = -1;
     fingerStickyRef.current = {};
     fingerSmoothRef.current = {};
-    handSourceRef.current = { src: "pose", offStreak: 0, onStreak: 0 };
     drawOverlay();
   };
 
@@ -2818,7 +2747,6 @@ export function ValidationOverlayPlayer({
     lastPaintMediaTimeRef.current = -1;
     fingerStickyRef.current = {};
     fingerSmoothRef.current = {};
-    handSourceRef.current = { src: "pose", offStreak: 0, onStreak: 0 };
     drawOverlay();
   };
 
