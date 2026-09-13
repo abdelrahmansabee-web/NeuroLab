@@ -1596,26 +1596,6 @@ export function ValidationOverlayPlayer({
     };
     const JOINT_ORDER = ["mcp", "ip", "tip"];
 
-    const legacyWristOffset = (Number(overlayData?.overlay_version) || 0) < 37;
-    const poseWristNorm = f.wrist;
-    const hlWristNorm = f.hl_wrist;
-    const applyWristOffset = (cpt) => {
-      if (!legacyWristOffset || !cpt || !poseWristNorm || !hlWristNorm) return cpt;
-      let pwx = poseWristNorm[0];
-      let pwy = poseWristNorm[1];
-      let hwx = hlWristNorm[0];
-      let hwy = hlWristNorm[1];
-      if (alpha > 0 && fNext?.wrist && fNext.wrist[0] != null) {
-        pwx += (fNext.wrist[0] - poseWristNorm[0]) * alpha;
-        pwy += (fNext.wrist[1] - poseWristNorm[1]) * alpha;
-      }
-      if (alpha > 0 && fNext?.hl_wrist && fNext.hl_wrist[0] != null) {
-        hwx += (fNext.hl_wrist[0] - hlWristNorm[0]) * alpha;
-        hwy += (fNext.hl_wrist[1] - hlWristNorm[1]) * alpha;
-      }
-      return [cpt[0] - pwx * cw + hwx * cw, cpt[1] - pwy * ch + hwy * ch];
-    };
-
     function jointToCanvas(pair, pairNext) {
       if (!pair || pair[0] == null || pair[1] == null) return null;
       let nx = pair[0];
@@ -1627,56 +1607,57 @@ export function ValidationOverlayPlayer({
       return [nx * cw, ny * ch];
     }
 
-    const jointDots = [];
-    const stickyFrames = Math.max(10, Math.round(0.4 * fps));
-    const smoothCache = fingerSmoothRef.current;
-    const stickyCache = fingerStickyRef.current;
+    // Pre-v37 overlays re-anchored HL tips onto pose wrist (floated off fingers).
+    // Undo: tip' = tip - poseWrist + hlWrist. v37+ already stores absolute HL.
+    const overlayVer = Number(overlayData?.overlay_version) || 0;
+    const needUndoReanchor = overlayVer < 37;
+    const poseWristPt = pt("wrist");
+    const hlWristPt = pt("hl_wrist");
+    const undoReanchor = (cpt) => {
+      if (!needUndoReanchor || !cpt || !poseWristPt || !hlWristPt) return cpt;
+      return [
+        cpt[0] - poseWristPt[0] + hlWristPt[0],
+        cpt[1] - poseWristPt[1] + hlWristPt[1],
+      ];
+    };
 
-    const smoothFingerCanvasPoint = (key, cpt, enableSmooth) => {
+    const smoothStore = fingerSmoothRef.current;
+    const smoothAlpha = 0.42;
+    const smoothFinger = (key, cpt, live) => {
       if (!cpt) return null;
-      if (!enableSmooth) return cpt;
-      const prev = smoothCache[key];
-      if (smoothCache._idx == null || Math.abs(idx - smoothCache._idx) > 8) {
-        Object.keys(smoothCache).forEach((k) => {
-          if (k !== "_idx") delete smoothCache[k];
-        });
+      if (!live) return cpt;
+      if (smoothStore._idx != null && Math.abs(idx - smoothStore._idx) > 8) {
+        Object.keys(smoothStore).forEach((k) => { if (k !== "_idx") delete smoothStore[k]; });
       }
-      smoothCache._idx = idx;
+      smoothStore._idx = idx;
+      const prev = smoothStore[key];
       if (!prev) {
-        smoothCache[key] = [...cpt];
+        smoothStore[key] = [...cpt];
         return cpt;
       }
-      const next = [prev[0] + 0.42 * (cpt[0] - prev[0]), prev[1] + 0.42 * (cpt[1] - prev[1])];
-      smoothCache[key] = next;
-      return next;
+      const out = [
+        prev[0] + (cpt[0] - prev[0]) * smoothAlpha,
+        prev[1] + (cpt[1] - prev[1]) * smoothAlpha,
+      ];
+      smoothStore[key] = out;
+      return out;
     };
 
-    const pushStickyOnly = (fid, jname, style) => {
+    const jointDots = [];
+    const stickyHoldFrames = Math.max(10, Math.round(fps * 0.4));
+    const stickyStore = fingerStickyRef.current;
+    const pushFingerDot = (fid, jname, cpt, style, live) => {
+      if (!cpt) return;
       const key = `${fid}:${jname}`;
-      const sticky = stickyCache[key];
-      if (sticky && idx <= sticky.untilIdx) {
-        jointDots.push({ fid, jname, cpt: sticky.cpt, style, sticky: true });
-      }
-    };
-
-    const queueJointDot = (fid, jname, rawCpt, style, visible) => {
-      const key = `${fid}:${jname}`;
-      if (!rawCpt) {
-        if (!visible) pushStickyOnly(fid, jname, style);
-        return;
-      }
-      const smoothed = smoothFingerCanvasPoint(key, rawCpt, visible);
-      if (!smoothed) return;
-      const inBounds = smoothed[0] > 2 && smoothed[1] > 2 && smoothed[0] < cw - 2 && smoothed[1] < ch - 2;
-      if (!inBounds) {
-        if (!visible) pushStickyOnly(fid, jname, style);
-        return;
-      }
-      if (visible) {
-        stickyCache[key] = { cpt: [...smoothed], untilIdx: idx + stickyFrames };
+      const smoothed = smoothFinger(key, cpt, live);
+      if (live) {
+        stickyStore[key] = { cpt: [...smoothed], untilIdx: idx + stickyHoldFrames };
         jointDots.push({ fid, jname, cpt: smoothed, style, sticky: false });
-      } else {
-        pushStickyOnly(fid, jname, style);
+        return;
+      }
+      const held = stickyStore[key];
+      if (held && idx <= held.untilIdx) {
+        jointDots.push({ fid, jname, cpt: held.cpt, style, sticky: true });
       }
     };
 
@@ -1688,21 +1669,33 @@ export function ValidationOverlayPlayer({
           const fjNext = fNext?.finger_joints?.[fid];
           let cpt = jointToCanvas(fj[jname], fjNext?.[jname]);
           if (!cpt && jname === "tip") cpt = pt(fid);
-          cpt = applyWristOffset(cpt);
-          const visFlag = fj.vis ? fj.vis[jname] !== false : true;
-          const visible = visFlag || Boolean(fj[jname]) || jname === "tip";
-          queueJointDot(fid, jname, cpt, JOINT_DOT[jname], visible);
+          cpt = undoReanchor(cpt);
+          const coordsOk = Boolean(cpt)
+            && cpt[0] > 2 && cpt[1] > 2
+            && cpt[0] < cw - 2 && cpt[1] < ch - 2;
+          if (!coordsOk) {
+            pushFingerDot(fid, jname, cpt, JOINT_DOT[jname], false);
+            return;
+          }
+          const visOk = fj.vis ? fj.vis[jname] !== false : true;
+          pushFingerDot(fid, jname, cpt, JOINT_DOT[jname], visOk || Boolean(fj[jname]) || jname === "tip");
         });
       });
     } else {
-      HAND_FINGER_ORDER.forEach((fid) => {
-        const tipCpt = applyWristOffset(pt(fid));
-        const visOk = !fingerVis || fingerVis[fid] !== false;
-        queueJointDot(fid, "tip", tipCpt, JOINT_DOT.tip, Boolean(tipCpt) && visOk);
+      HAND_FINGER_ORDER.forEach((id) => {
+        const tipPt = undoReanchor(pt(id));
+        const visOk = fingerVis ? fingerVis[id] !== false : true;
+        if (tipPt) pushFingerDot(id, "tip", tipPt, JOINT_DOT.tip, visOk || true);
+        else pushFingerDot(id, "tip", tipPt, JOINT_DOT.tip, false);
       });
     }
 
     if (jointDots.length > 0) {
+      ctx.save();
+      ctx.globalAlpha = useHandHl && Number.isFinite(fingerTrackConf) && fingerTrackConf > 0
+        ? Math.min(1, Math.max(0.82, fingerTrackConf))
+        : 1;
+
       if (overlayStyle === "chalk") {
         HAND_FINGER_ORDER.forEach((fid) => {
           const chain = JOINT_ORDER
@@ -1717,14 +1710,11 @@ export function ValidationOverlayPlayer({
           }
         });
       }
-      ctx.save();
-      ctx.globalAlpha = useHandHl && Number.isFinite(fingerTrackConf) && fingerTrackConf > 0
-        ? Math.min(1, Math.max(0.82, fingerTrackConf))
-        : 1;
+
       jointDots.forEach(({ cpt, style, sticky }) => {
-        const r = sticky ? Math.max(2, 0.8 * style.r) : style.r;
+        const r = sticky ? Math.max(2.0, style.r * 0.8) : style.r;
         if (overlayStyle === "chalk") {
-          drawChalkJoint(ctx, cpt, { r: Math.max(2.2, 0.85 * r), dim: sticky });
+          drawChalkJoint(ctx, cpt, { r: Math.max(2.2, r * 0.85), dim: sticky });
         } else {
           dot(cpt, {
             fill: sticky ? "rgba(255,255,255,0.55)" : style.fill,
@@ -1762,7 +1752,7 @@ export function ValidationOverlayPlayer({
       }
     }
 
-    // --- Metric evidence on skeleton: tremor halo + pinch aperture (explains the numbers) ---
+        // --- Metric evidence on skeleton: tremor halo + pinch aperture (explains the numbers) ---
     if (drawRich) {
       const fwPx = Number(overlayData?.frame_width_px) || cw;
       const fhPx = Number(overlayData?.frame_height_px) || ch;
