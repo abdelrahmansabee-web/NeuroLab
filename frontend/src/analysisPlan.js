@@ -64,6 +64,11 @@ export function orderedKinematicVars() {
   return KINEMATIC_DISPLAY_ORDER.map((k) => byKey[k]).filter(Boolean);
 }
 
+export function orderedKinematicResultsTableVars(opts = {}) {
+  void opts;
+  return orderedKinematicVars();
+}
+
 export const CLINICAL_VARS = [
   { pre: "WMFT_Rating_Pre", post: "WMFT_Rating_Post", label: "WMFT-4 rating sum", dir: "higher", test: "mixed", tier: "secondary" },
   { pre: "WMFT_Time_Pre", post: "WMFT_Time_Post", label: "WMFT-4 time sum (s)", dir: "lower", test: "mixed", tier: "secondary" },
@@ -242,6 +247,11 @@ export function kinCrossPhaseComparable(kinematicsResults, metricKey, armForPhas
   }
 
   return true;
+}
+
+export function kinCrossPhaseDeltaStatus(kinematicsResults, metricKey, armForPhase = null) {
+  const comparable = kinCrossPhaseComparable(kinematicsResults, metricKey, armForPhase);
+  return { comparable, reason: comparable ? null : "n/c" };
 }
 
 /** Key metrics for per-patient recovery summary. */
