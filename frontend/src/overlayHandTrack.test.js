@@ -1,9 +1,11 @@
 import {
   buildPoseRestHand,
   buildSmoothedTracks,
+  hlTipsOffPoseHand,
   interpPair,
   isHlOverlayKey,
   resolveHandDrawSource,
+  shouldDrawHlFingers,
 } from "./overlayHandTrack";
 
 describe("overlayHandTrack onset handoff", () => {
@@ -81,6 +83,49 @@ describe("overlayHandTrack onset handoff", () => {
     const tracks = buildSmoothedTracks(frames, 60);
     const mid = tracks.at("wrist", 20);
     expect(Math.abs(mid[0] - frames[20].wrist[0])).toBeLessThan(1e-6);
+  });
+
+  test("cup-latched tips are off the pose hand; resting digits are not", () => {
+    const poseWrist = [100, 200];
+    const palm = [120, 204];
+    const palmReach = Math.hypot(20, 4);
+    const onHand = [
+      [128, 201],
+      [130, 205],
+      [126, 208],
+      [122, 210],
+      [118, 206],
+    ];
+    const onCup = [
+      [210, 188],
+      [218, 180],
+      [205, 175],
+      [198, 190],
+      [225, 170],
+    ];
+    expect(hlTipsOffPoseHand({
+      poseWrist,
+      hlWrist: poseWrist,
+      tips: onHand,
+      forearmPx: 90,
+      palmReachPx: palmReach,
+      handSpan: 640,
+    })).toBe(false);
+    expect(hlTipsOffPoseHand({
+      poseWrist,
+      hlWrist: [210, 185],
+      tips: onCup,
+      forearmPx: 90,
+      palmReachPx: palmReach,
+      handSpan: 640,
+    })).toBe(true);
+  });
+
+  test("off-hand never draws HL joints even if the source flag still says hl", () => {
+    expect(shouldDrawHlFingers(true, "hl")).toBe(false);
+    expect(shouldDrawHlFingers(true, "pose")).toBe(false);
+    expect(shouldDrawHlFingers(false, "pose")).toBe(false);
+    expect(shouldDrawHlFingers(false, "hl")).toBe(true);
   });
 
   test("handoff waits for consecutive on-hand frames then snaps (no blend flag)", () => {

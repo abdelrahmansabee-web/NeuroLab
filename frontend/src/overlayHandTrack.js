@@ -177,9 +177,45 @@ export function buildPoseRestHand(wrist, palm, elbow, trunk) {
  * single cup flicker cannot yank the chalk. When the source *does* change,
  * callers must clear any causal finger EMA — never blend the two models.
  */
+export function hlTipsOffPoseHand({
+  poseWrist,
+  hlWrist,
+  tips = [],
+  forearmPx = 0,
+  palmReachPx = 0,
+  handSpan = 1,
+} = {}) {
+  const hypot = (a, b) => {
+    if (!a || !b) return null;
+    return Math.hypot(a[0] - b[0], a[1] - b[1]);
+  };
+  const poseMcp = palmReachPx > 3 ? palmReachPx * 2 : 0;
+  const handPx = poseMcp > 0 ? poseMcp * 1.65 : (forearmPx > 8 ? forearmPx * 0.64 : Math.max(1, handSpan) * 0.10);
+  const wristDrift = (hypot(poseWrist, hlWrist) || 0) > Math.max(handPx * 0.85, handSpan * 0.08)
+    || (forearmPx > 8 && (hypot(poseWrist, hlWrist) || 0) > forearmPx * 0.28);
+  const farLimit = handPx * 1.20;
+  let n = 0;
+  let far = 0;
+  let maxD = 0;
+  tips.forEach((tip) => {
+    const d = hypot(poseWrist, tip) || 0;
+    n += 1;
+    maxD = Math.max(maxD, d);
+    if (d > farLimit) far += 1;
+  });
+  const tipsMajorityFar = n >= 2 && far >= Math.ceil(n * 0.5);
+  const tipsStretched = handPx > 0 && maxD > Math.max(handPx * 1.35, forearmPx * 0.50);
+  return Boolean(wristDrift || tipsMajorityFar || tipsStretched || n === 0);
+}
+
+/** HL joints are drawn only after they sit on the pose hand. Never draw the cup. */
+export function shouldDrawHlFingers(hlOffHand, src) {
+  return !hlOffHand && src === "hl";
+}
+
 export function resolveHandDrawSource(state, hlOffHand, { offNeed = 1, onNeed = 4 } = {}) {
   const next = {
-    src: state?.src || "hl",
+    src: state?.src || "pose",
     offStreak: Number(state?.offStreak) || 0,
     onStreak: Number(state?.onStreak) || 0,
     switched: false,
