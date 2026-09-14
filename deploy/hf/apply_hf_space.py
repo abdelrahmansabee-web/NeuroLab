@@ -81,6 +81,12 @@ def main() -> int:
     if identity_src.is_file():
         shutil.copy2(identity_src, root / "drive_doc_identity.py")
         print("copied drive_doc_identity.py")
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from patch_list_patient_files import patch_list_patient_files
+
+    list_rc = patch_list_patient_files(root)
+    if list_rc != 0:
+        return list_rc
     for rel in ("main.py", "analyze_job_runner.py"):
         path = root / rel
         if not path.is_file():

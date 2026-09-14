@@ -105,6 +105,17 @@ export function clinicReportDriveName(patientKey) {
   return key ? `${key}.pdf` : "clinic_report.pdf";
 }
 
+/** Same folder key the clinic app uses when backing up a patient. */
+export function patientDriveKeyFromDemographics(demographics, fallbackId) {
+  const d = demographics || {};
+  const id = String(d.participantId || fallbackId || "").trim();
+  const name = String(d.name || d.fullName || "").trim();
+  if (!id && !name) return "";
+  const slug = (s) => String(s).replace(/[^\w.\-]/g, "_").slice(0, 100);
+  if (id && name) return slug(`${id}_${name}`);
+  return slug(id || name);
+}
+
 export function driveNameCandidates(primaryName) {
   const names = [primaryName];
   const mapped = canonicalDriveName(primaryName);

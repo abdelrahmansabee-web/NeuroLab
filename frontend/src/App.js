@@ -49,6 +49,11 @@ import {
 } from "./validationDriveSync";
 import { canonicalDriveName, clinicReportDriveName } from "./driveDocIdentity";
 import {
+  DRIVE_RECALL_EVENT,
+  formatRecallToast,
+  recallAnalyzedSessionsFromDrive,
+} from "./driveSessionRestore";
+import {
   resolveKinMetricValue,
   loadLiveKinResults,
   KIN_RESULTS_LS_KEY,
@@ -737,6 +742,21 @@ async function restoreFromDrive() {
   }
 }
 
+function startDriveSessionRecall(patients, { showToast, force = false } = {}) {
+  const list = Array.isArray(patients) && patients.length ? patients : loadPatients();
+  if (!list.length) return Promise.resolve(null);
+  return recallAnalyzedSessionsFromDrive(list, {
+    force,
+    onDone: (summary) => {
+      const msg = formatRecallToast(summary);
+      if (msg) showToast?.(msg, summary.incomplete ? "warning" : "success");
+    },
+  }).catch((err) => {
+    console.warn("Drive session recall failed:", err);
+    return null;
+  });
+}
+
 const PATIENTS_SYNC_EVENT = "neurolab-patients-synced";
 const SYNC_FETCH_MS = 90000;
 
@@ -1217,6 +1237,9 @@ async function restoreStudyDataFromServer({ showToast } = {}) {
   await applyIpadLocalStorageBackup();
   // Prefer server + Drive merge; empty local must not wipe server records.
   const result = await syncPatientsWithServer({ showToast, silent: false, skipDrive: false });
+  if (result?.patients?.length) {
+    startDriveSessionRecall(result.patients, { force: true });
+  }
   return result;
 }
 
@@ -1264,6 +1287,7 @@ async function restorePatientsFromDriveNow({ showToast } = {}) {
     }
     showToast?.(`? Restored ${merged.length} patient(s) from Drive${detail}`, "success");
     window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: merged.length } }));
+    startDriveSessionRecall(merged, { showToast, force: true });
     return { ok: true, patients: merged, pushed: true };
   } catch (err) {
     console.warn("Restore from Drive failed:", err);
@@ -4274,6 +4298,22 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     })();
     return () => { cancelled = true; };
   }, [patientCacheKey, kinematicsResults, overlayData, hydrateValidationFromCloud]);
+
+  useEffect(() => {
+    if (!patientCacheKey) return undefined;
+    const onRecall = () => {
+      phases.forEach((ph) => {
+        hydrateValidationFromCloud(ph.k, {
+          overlay: true,
+          original: true,
+          unified: true,
+          kinematics: true,
+        }).catch(() => {});
+      });
+    };
+    window.addEventListener(DRIVE_RECALL_EVENT, onRecall);
+    return () => window.removeEventListener(DRIVE_RECALL_EVENT, onRecall);
+  }, [patientCacheKey, hydrateValidationFromCloud]);
 
   // Load original video blobs for analyzed phases that don't have one yet.
   // This handles persisted sessions where the object URL was lost on reload.
@@ -8908,8 +8948,29 @@ export default function App() {
 
   const showToast = useCallback((msg, variant = "success") => {
     setToast({ visible: true, msg: formatUserMessage(msg), variant });
-    setTimeout(() => setToast({ visible: false, msg: "", variant: "success" }), 2800);
+    const ms = String(msg || "").length > 80 ? 5600 : 2800;
+    setTimeout(() => setToast({ visible: false, msg: "", variant: "success" }), ms);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = () => {
+      if (cancelled || isKinAnalyzeActive()) return;
+      startDriveSessionRecall(loadPatients(), { showToast });
+    };
+    const t = setTimeout(run, 2800);
+    const onSynced = (ev) => {
+      if (ev?.detail?.skipDriveRecall) return;
+      if (cancelled || isKinAnalyzeActive()) return;
+      startDriveSessionRecall(loadPatients(), { showToast });
+    };
+    window.addEventListener(PATIENTS_SYNC_EVENT, onSynced);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      window.removeEventListener(PATIENTS_SYNC_EVENT, onSynced);
+    };
+  }, [showToast]);
 
   // After Space rename (neurolab ? raedai): new browser origin is empty until server restore.
   useEffect(() => {

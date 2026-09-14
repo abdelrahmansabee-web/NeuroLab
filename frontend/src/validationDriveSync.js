@@ -38,9 +38,12 @@ function driveNameCandidates(primaryName, subfolder) {
   return identityDriveNameCandidates(primaryName);
 }
 
-async function fetchDriveFile(patientKey, name, subfolder = "videos") {
+export async function fetchDriveFile(patientKey, name, subfolder = "videos", opts = {}) {
   if (!patientKey || !name) return null;
+  const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : 180000;
   for (const candidate of driveNameCandidates(name, subfolder)) {
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
     try {
       const q = new URLSearchParams({
         patientKey,
@@ -51,12 +54,15 @@ async function fetchDriveFile(patientKey, name, subfolder = "videos") {
       const res = await fetch(`/auth/restore-file?${q.toString()}`, {
         credentials: "same-origin",
         headers: authHeaders(),
+        signal: ctrl?.signal,
       });
       if (res.status === 404 || !res.ok) continue;
       const blob = await res.blob();
       if (blob.size > 0) return blob;
     } catch (err) {
       console.warn("validationDriveSync restore failed:", candidate, err);
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
   return null;
