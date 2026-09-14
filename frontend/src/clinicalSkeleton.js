@@ -567,13 +567,9 @@ export function drawClinicalSkeleton(ctx, helpers, spec) {
   if (chalkMode) {
     if (pts.elbow && forearmEnd) {
       drawSeg(pts.elbow, forearmEnd, { width: 9, color: pal.clinical });
-    } else if (pts.shoulder && forearmEnd) {
-      drawSeg(pts.shoulder, forearmEnd, { width: 9, color: pal.clinical });
     }
-  } else if (pts.elbow) {
+  } else {
     drawForearmRadiusUlna(drawSeg, pts, phaseColor);
-  } else if (pts.shoulder && forearmEnd) {
-    drawSeg(pts.shoulder, forearmEnd, { width: 9, color: pal.clinical });
   }
   if (!useHandHl && pts.wrist && pts.palm) {
     drawSeg(pts.wrist, pts.palm, { width: 5, color: pal.bone, thin: chalkMode });
