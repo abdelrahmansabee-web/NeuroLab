@@ -77,6 +77,10 @@ import {
 
 const SAFE_TOP = "calc(env(safe-area-inset-top, 0px) + 8px)";
 
+const NA = "\u2014";
+const isMissing = (x) => x == null || x === "" || x === "?" || x === NA;
+const showVal = (x) => (isMissing(x) ? NA : String(x));
+
 const BG = "/bg.jpg";
 
 /* ?? Uniform liquid glass ? sidebar and all panels share the same near-clear token ?? */
@@ -265,33 +269,33 @@ const WMFT_ITEMS = [
 const BBT_TEST_SECONDS = 60;
 
 const COMORBIDITIES = [
-  { value:"hypertension", label:"Hypertension / Hipertansiyon" },
-  { value:"hypotension", label:"Hypotension / Hipotansiyon" },
-  { value:"diabetes", label:"Diabetes / Diyabet" },
-  { value:"cardiovascular", label:"Cardiovascular / Kardiyovask?ler" },
-  { value:"copd", label:"COPD / KOAH" },
-  { value:"arthritis", label:"Arthritis / Artrit" },
-  { value:"osteoporosis", label:"Osteoporosis / Osteoporoz" },
-  { value:"depression", label:"Depression / Depresyon" },
-  { value:"other", label:"Other / Di?er" },
+  { value:"hypertension", label:"Hypertension" },
+  { value:"hypotension", label:"Hypotension" },
+  { value:"diabetes", label:"Diabetes" },
+  { value:"cardiovascular", label:"Cardiovascular" },
+  { value:"copd", label:"COPD" },
+  { value:"arthritis", label:"Arthritis" },
+  { value:"osteoporosis", label:"Osteoporosis" },
+  { value:"depression", label:"Depression" },
+  { value:"other", label:"Other" },
 ];
 
 const VAS_FACES = [
-  { val:0, emoji:"??", en:"No hurt", tr:"Acı yok" },
-  { val:2, emoji:"??", en:"Hurts little bit", tr:"Biraz acıyor" },
-  { val:4, emoji:"??", en:"Hurts little more", tr:"Biraz daha acıyor" },
-  { val:6, emoji:"??", en:"Hurts even more", tr:"Daha çok acıyor" },
-  { val:8, emoji:"??", en:"Hurts whole lot", tr:"Çok acıyor" },
-  { val:10, emoji:"??", en:"Hurts worst", tr:"En kötü acı" },
+  { val:0, emoji:"😀", en:"No hurt", tr:"Acı yok" },
+  { val:2, emoji:"🙂", en:"Hurts little bit", tr:"Biraz acıyor" },
+  { val:4, emoji:"😐", en:"Hurts little more", tr:"Biraz daha acıyor" },
+  { val:6, emoji:"🙁", en:"Hurts even more", tr:"Daha çok acıyor" },
+  { val:8, emoji:"😣", en:"Hurts whole lot", tr:"Çok acıyor" },
+  { val:10, emoji:"😫", en:"Hurts worst", tr:"En kötü acı" },
 ];
 
 const VAMS_FACES = [
-  { val:0, emoji:"??", en:"Neutral", tr:"Nötr" },
-  { val:2, emoji:"??", en:"A little", tr:"Biraz" },
-  { val:4, emoji:"??", en:"Somewhat", tr:"Oldukça" },
-  { val:6, emoji:"??", en:"Moderately", tr:"Orta" },
-  { val:8, emoji:"??", en:"Very", tr:"Çok" },
-  { val:10, emoji:"??", en:"Extremely", tr:"Aşırı" },
+  { val:0, emoji:"😐", en:"Neutral", tr:"Nötr" },
+  { val:2, emoji:"🙂", en:"A little", tr:"Biraz" },
+  { val:4, emoji:"😊", en:"Somewhat", tr:"Oldukça" },
+  { val:6, emoji:"😄", en:"Moderately", tr:"Orta" },
+  { val:8, emoji:"😁", en:"Very", tr:"Çok" },
+  { val:10, emoji:"🤩", en:"Extremely", tr:"Aşırı" },
 ];
 
 const NAV_ITEMS = [
@@ -301,7 +305,7 @@ const NAV_ITEMS = [
   { id:"vams", icon:Heart, en:"Mood (VAMS-4)", tr:"Ruh Hali (VAMS-4)" },
   { id:"motorchange", icon:TrendingUp, en:"Muscle Control Scale", tr:"Kas Kontrol Ölçeği" },
 
-  { id:"kgia", icon:Brain, en:"Imagery Questionnaire", tr:"Motor ?mgeleme (KVIQ)" },
+  { id:"kgia", icon:Brain, en:"Imagery Questionnaire", tr:"Motor İmgeleme (KVIQ)" },
   { id:"wmft", icon:Timer, en:"Wolf Motor Function", tr:"Motor Fonksiyon (WMFT)" },
   { id:"kinematics", icon:Cpu, en:"Kinematics AI Lab", tr:"Kinematik AI Laboratuvarı" },
   { id:"report", icon:FileText, en:"Export Report", tr:"Rapor Dışa Aktarma" },
@@ -515,11 +519,11 @@ async function rebuildDriveFromDatabase(patients, { showToast, waitMs = 180000 }
     const startData = await start.json().catch(() => ({}));
     if (!start.ok) {
       const detail = driveRebuildErrorText(startData) || `HTTP ${start.status}`;
-      showToast?.(`Drive rebuild failed ? ${detail}`, "error");
+      showToast?.(`Drive rebuild failed — ${detail}`, "error");
       return { ok: false, detail };
     }
     const jobId = startData.jobId || null;
-    showToast?.("Rebuilding Drive folders from database?", "info");
+    showToast?.("Rebuilding Drive folders from database…", "info");
     const deadline = Date.now() + Math.max(15000, waitMs);
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 2500));
@@ -539,22 +543,22 @@ async function rebuildDriveFromDatabase(patients, { showToast, waitMs = 180000 }
         const result = status.result || {};
         if (status.error || result.ok === false) {
           const err = driveRebuildErrorText({ ...result, error: status.error || result.error });
-          showToast?.(`Drive rebuild error ? ${err}`, "warning");
+          showToast?.(`Drive rebuild error — ${err}`, "warning");
           return { ok: false, ...status };
         }
-        const before = result.beforeCount ?? "?";
-        const after = result.afterCount ?? "?";
+        const before = result.beforeCount ?? NA;
+        const after = result.afterCount ?? NA;
         const trashed = Array.isArray(result.trashedAliases) ? result.trashedAliases.length : 0;
         const merged = Array.isArray(result.mergedAliases) ? result.mergedAliases.length : 0;
         showToast?.(
-          `? Drive rebuilt ? folders ${before}?${after}, merged ${merged}, trashed aliases ${trashed}`,
+          `Drive rebuilt — folders ${before}→${after}, merged ${merged}, trashed aliases ${trashed}`,
           "success"
         );
         // Refresh per-task Excel under RAED_AI_Backups/Excel/ (active patients only).
         syncTaskExcelsToDrive(patients).then((ex) => {
           if (ex?.count) {
             showToast?.(
-              `? Excel synced ? ${ex.uploaded}/${ex.count} task file(s) ? Drive/Excel`,
+              `Excel synced — ${ex.uploaded}/${ex.count} task file(s) on Drive/Excel`,
               "success"
             );
           }
@@ -562,11 +566,11 @@ async function rebuildDriveFromDatabase(patients, { showToast, waitMs = 180000 }
         return { ok: true, ...result, status };
       }
     }
-    showToast?.("Drive rebuild still running in background ? check Drive in a few minutes", "info");
+    showToast?.("Drive rebuild still running in background — check Drive in a few minutes", "info");
     return { ok: true, running: true, ...startData };
   } catch (e) {
     console.warn("Drive reconcile failed:", e);
-    showToast?.(`Drive rebuild failed ? ${e?.message || e}`, "error");
+    showToast?.(`Drive rebuild failed — ${e?.message || e}`, "error");
     return { ok: false, detail: String(e?.message || e) };
   }
 }
@@ -886,7 +890,7 @@ function nameDuplicateGroups(list) {
     .map(([key, arr]) => ({
       key,
       name: patientDisplayName(arr[0]) || key,
-      ids: arr.map((p) => patientStudyId(p) || "?").sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b))),
+      ids: arr.map((p) => patientStudyId(p) || NA).sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b))),
       count: arr.length,
     }));
 }
@@ -1001,11 +1005,11 @@ function patientHasPhaseData(p, phase) {
 
 function formatPatientSavedAt(raw) {
   const ts = Date.parse(raw || "");
-  if (!Number.isFinite(ts) || ts <= 0) return "?";
+  if (!Number.isFinite(ts) || ts <= 0) return NA;
   try {
     return new Date(ts).toLocaleString();
   } catch {
-    return "?";
+    return NA;
   }
 }
 
@@ -1046,7 +1050,7 @@ async function syncPatientsWithServer({ showToast, silent = false, skipDrive = f
 async function syncPatientsWithServerInner({ showToast, silent = false, skipDrive = false } = {}) {
   const localPts = loadPatients();
   if (isKinAnalyzeActive()) {
-    console.log("Patient/Drive sync deferred ? video analysis in progress");
+    console.log("Patient/Drive sync deferred — video analysis in progress");
     return { ok: false, patients: localPts, skipped: true, reason: "analyze" };
   }
   try {
@@ -1125,7 +1129,7 @@ async function syncPatientsWithServerInner({ showToast, silent = false, skipDriv
       } else {
         console.warn("Drive backup skipped or failed", backupR?.detail);
         if (backupR?.detail) {
-          showToast?.(`Drive backup failed ? ${backupR.detail}`, "warning");
+          showToast?.(`Drive backup failed — ${backupR.detail}`, "warning");
         }
       }
       // Rebuild folders after JSON snapshot is on Drive (non-blocking).
@@ -1137,15 +1141,15 @@ async function syncPatientsWithServerInner({ showToast, silent = false, skipDriv
 
     if (!silent) {
       if (merged.length === 0) {
-        showToast?.("Sync OK ? no records yet. Save a session first.", "info");
+        showToast?.("Sync OK — no records yet. Save a session first.", "info");
       } else if (driveBackupOk) {
         showToast?.(
-          `? Synced ? ${merged.length} record(s) ? neurolab_patients JSON on Drive`,
+          `Synced — ${merged.length} record(s) — neurolab_patients JSON on Drive`,
           "success"
         );
       } else {
         showToast?.(
-          `? Synced ? ${merged.length} record(s) on server ? Connect Drive then Sync again`,
+          `Synced — ${merged.length} record(s) on server — Connect Drive then Sync again`,
           "success"
         );
       }
@@ -1156,8 +1160,8 @@ async function syncPatientsWithServerInner({ showToast, silent = false, skipDriv
     if (!silent) {
       showToast?.(
         timedOut
-          ? "Sync timed out ? server may be waking up. Wait ~1 min and retry."
-          : "Sync failed ? data kept on this device only",
+          ? "Sync timed out — server may be waking up. Wait ~1 min and retry."
+          : "Sync failed — data kept on this device only",
         "error"
       );
     }
@@ -1246,7 +1250,7 @@ async function restoreStudyDataFromServer({ showToast } = {}) {
 /** Explicit Database action: pull Drive folders/PDFs/Excel into app + server. */
 async function restorePatientsFromDriveNow({ showToast } = {}) {
   try {
-    showToast?.("Restoring from Drive JSON snapshot (not PDF)?", "info");
+    showToast?.("Restoring from Drive JSON snapshot (not PDF)…", "info");
     const drivePts = await restoreFromDrive();
     if (!drivePts.length) {
       showToast?.(
@@ -1281,17 +1285,17 @@ async function restorePatientsFromDriveNow({ showToast } = {}) {
     ].filter(Boolean);
     const detail = detailBits.length ? ` (${detailBits.join(", ")})` : "";
     if (!push.ok) {
-      showToast?.(`Restored ${merged.length} on device${detail} ? server save failed (${push.status})`, "warning");
+      showToast?.(`Restored ${merged.length} on device${detail} — server save failed (${push.status})`, "warning");
       window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: merged.length } }));
       return { ok: true, patients: merged, pushed: false };
     }
-    showToast?.(`? Restored ${merged.length} patient(s) from Drive${detail}`, "success");
+    showToast?.(`Restored ${merged.length} patient(s) from Drive${detail}`, "success");
     window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: merged.length } }));
     startDriveSessionRecall(merged, { showToast, force: true });
     return { ok: true, patients: merged, pushed: true };
   } catch (err) {
     console.warn("Restore from Drive failed:", err);
-    showToast?.("Drive restore failed ? check Connect Drive / Space awake", "error");
+    showToast?.("Drive restore failed — check Connect Drive / Space awake", "error");
     return { ok: false, patients: loadPatients() };
   }
 }
@@ -1322,7 +1326,6 @@ const SH = ({ icon: Icon, en, tr, badge }) => (
     </div>
     <div className="min-w-0 flex-1">
         <h2 className="text-base sm:text-xl font-extrabold text-white leading-snug">{en}</h2>
-        <p className="text-[10px] sm:text-xs font-light text-white/35 uppercase tracking-wide sm:tracking-widest mt-0.5">{tr}</p>
       </div>
     </div>
     {badge && (
@@ -1833,13 +1836,13 @@ const kinNcBadge = (reason) => ({
 /** Resolve Pre?Post cell: % / ? / n/c reason / empty dash only when values missing. */
 const resolveKinPrePostCell = (preVal, postVal, direction, metricKey, kinematicsResults, armForPhase) => {
   if (metricKey === "pause_stops_panel") {
-    return kinNcBadge("n/c ? compound row");
+    return kinNcBadge("n/c — compound row");
   }
-  if (preVal === "?" || postVal === "?" || preVal == null || postVal == null) {
+  if (isMissing(preVal) || isMissing(postVal)) {
     return null; // true missing data
   }
   if (typeof preVal === "string" || typeof postVal === "string") {
-    return kinNcBadge("n/c ? non-numeric");
+    return kinNcBadge("n/c — non-numeric");
   }
   const status = kinCrossPhaseDeltaStatus(kinematicsResults, metricKey, armForPhase);
   if (!status.comparable) {
@@ -2062,7 +2065,7 @@ const VASSlider = ({ value, onChange, color = "sky" }) => {
           const face = VAS_FACES.reduce((prev, curr) =>
             Math.abs(curr.val - v) < Math.abs(prev.val - v) ? curr : prev
           );
-          return `${v.toFixed(1)} / 10 ? ${face.en} / ${face.tr}`;
+          return `${v.toFixed(1)} / 10 — ${face.en}`;
         }}
       />
     </div>
@@ -2116,7 +2119,7 @@ const VAMSSlider = ({ value, onChange, color = "sky" }) => {
           const face = VAMS_FACES.reduce((prev, curr) =>
             Math.abs(curr.val - v) < Math.abs(prev.val - v) ? curr : prev
           );
-          return `${v.toFixed(1)} / 10 ? ${face.en} / ${face.tr}`;
+          return `${v.toFixed(1)} / 10 — ${face.en}`;
         }}
       />
     </div>
@@ -2127,12 +2130,12 @@ const MotorSlider = ({ value, onChange, color = "sky" }) => {
   const n = parseFloat(value) || 0;
 
   const getLabel = (v) => {
-    if (v === 0) return "No control / Kontrol yok";
-    if (v <= 2) return "Very limited / ?ok s?n?rl?";
-    if (v <= 4) return "Limited / S?n?rl?";
-    if (v <= 6) return "Moderate / Orta";
-    if (v <= 8) return "Good / ?yi";
-    return "Full control / Tam kontrol";
+    if (v === 0) return "No control";
+    if (v <= 2) return "Very limited";
+    if (v <= 4) return "Limited";
+    if (v <= 6) return "Moderate";
+    if (v <= 8) return "Good";
+    return "Full control";
   };
 
   return (
@@ -2148,7 +2151,7 @@ const MotorSlider = ({ value, onChange, color = "sky" }) => {
         step={0.5}
         color={color}
         onChange={onChange}
-        formatLabel={(v) => `${v.toFixed(1)} / 10 ? ${getLabel(v)}`}
+        formatLabel={(v) => `${v.toFixed(1)} / 10 — ${getLabel(v)}`}
       />
     </div>
   );
@@ -2188,7 +2191,7 @@ const KVIQSlider = ({ value, onChange, labels, color = "cyan" }) => {
         onChange={onChange}
         formatLabel={(v) => {
           const item = labels.find((l) => l.val === v);
-          return item ? `${v} ? ${item.en} / ${item.tr}` : "Select / Se?in";
+          return item ? `${v} — ${item.en}` : "Select";
         }}
       />
     </div>
@@ -2276,9 +2279,9 @@ const SWBlock = ({ phase, taskData, onUpdate, showInferenceBadge = true }) => {
       {showInferenceBadge && taskData?._inferred && (
         <div className="mb-3 px-2.5 py-2 rounded-lg bg-amber-500/10 border border-amber-400/20">
           <p className="text-[9px] font-bold text-amber-200/90 leading-snug">
-            vWMFT ? {Math.round((taskData._confidence ?? 0) * 100)}% confidence
-            {taskData._timeEstimated ? " ? time estimated" : ""}
-            {taskData._capped ? " ? capped" : ""}
+            vWMFT — {Math.round((taskData._confidence ?? 0) * 100)}% confidence
+            {taskData._timeEstimated ? " — time estimated" : ""}
+            {taskData._capped ? " — capped" : ""}
           </p>
           {taskData._source && (
             <p className="text-[9px] text-amber-100/45 mt-0.5 leading-snug">{taskData._source}</p>
@@ -2344,7 +2347,7 @@ const SWBlock = ({ phase, taskData, onUpdate, showInferenceBadge = true }) => {
 
       <div className="mt-3">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-[10px] font-extrabold uppercase tracking-widest text-white/40">Ability Rating (0?5)</p>
+          <p className="text-[10px] font-extrabold uppercase tracking-widest text-white/40">Ability Rating (0–5)</p>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${isPost ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-300" : "bg-sky-500/20 border-sky-400/30 text-sky-300"}`}>
             {rv}/5
           </span>
@@ -2357,7 +2360,7 @@ const SWBlock = ({ phase, taskData, onUpdate, showInferenceBadge = true }) => {
           step={1}
           color={isPost ? "emerald" : "sky"}
           onChange={(v) => onUpdate("rating", v)}
-          formatLabel={(v) => `${v} ? ${ratingLabels[v]}`}
+          formatLabel={(v) => `${v} — ${ratingLabels[v]}`}
         />
       </div>
     </div>
@@ -2373,7 +2376,7 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
     const errs = [];
     if (!data.participantId) errs.push("Study ID required");
     if (data.group !== "1" && data.group !== "2") errs.push("Group must be 1 (AOMI) or 2 (Control)");
-    if (data.age) { const a = parseInt(data.age); if (a < 40 || a > 80) errs.push("Age must be 40?80"); }
+    if (data.age) { const a = parseInt(data.age); if (a < 40 || a > 80) errs.push("Age must be 40–80"); }
     if (data.sex !== "1" && data.sex !== "2") errs.push("Gender must be 1 (Male) or 2 (Female)");
     if (data.strokeType !== "1" && data.strokeType !== "2") errs.push("Stroke type must be 1 (Ischemic) or 2 (Hemorrhagic)");
     if (data.side !== "1" && data.side !== "2") errs.push("Affected side must be 1 (Left) or 2 (Right)");
@@ -2388,59 +2391,59 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
       <SH icon={User} en="Participant Demographics" tr="Demografik Bilgiler" badge="Section 1" />
 
       <Glass className="p-5">
-        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Identification / Kimlik</p>
+        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Identification</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           <GI en="Full Name" tr="Ad Soyad" value={data.name} onChange={(e) => s("name", e.target.value)} />
-          <GI en="Study ID" tr="?al??ma Kimli?i" type="number" min="101" value={data.participantId} onChange={(e) => s("participantId", e.target.value)} placeholder="Auto" />
+          <GI en="Study ID" tr="Study ID" type="number" min="101" value={data.participantId} onChange={(e) => s("participantId", e.target.value)} placeholder="Auto" />
           <GSelect en="Group" tr="Grup" value={data.group} onChange={(e) => s("group", e.target.value)} options={[{ value:"1",label:"1 = AOMI (Intervention)" },{ value:"2",label:"2 = Control" }]} />
-          <GI en="Age (years)" tr="Ya? (y?l)" type="number" min="40" max="80" value={data.age} onChange={(e) => s("age", e.target.value)} placeholder="40?80" />
-          <GSelect en="Gender" tr="Cinsiyet" value={data.sex} onChange={(e) => s("sex", e.target.value)} options={[{ value:"1",label:"1 = Male / Erkek" },{ value:"2",label:"2 = Female / Kad?n" }]} />
-          <GI en="Time Since Stroke (months)" tr="?nme ?zerinden Ge?en S?re (ay)" type="number" min="1" value={data.timeSinceStroke} onChange={(e) => s("timeSinceStroke", e.target.value)} placeholder="months" />
+          <GI en="Age (years)" tr="Age (years)" type="number" min="40" max="80" value={data.age} onChange={(e) => s("age", e.target.value)} placeholder="40–80" />
+          <GSelect en="Gender" tr="Cinsiyet" value={data.sex} onChange={(e) => s("sex", e.target.value)} options={[{ value:"1",label:"1 = Male" },{ value:"2",label:"2 = Female" }]} />
+          <GI en="Time Since Stroke (months)" tr="Time since stroke (months)" type="number" min="1" value={data.timeSinceStroke} onChange={(e) => s("timeSinceStroke", e.target.value)} placeholder="months" />
         </div>
       </Glass>
 
       <Glass className="p-5">
-        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Clinical / Klinik</p>
+        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Clinical</p>
 
-        <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-3">Side &amp; Hemisphere / Taraf &amp; Hemisfer</p>
+        <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-3">Side &amp; Hemisphere</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <GSelect en="Dominant Hand" tr="Dominant El" value={data.dominantHand} onChange={(e) => s("dominantHand", e.target.value)} options={[{ value:"right",label:"Right / Sa?" },{ value:"left",label:"Left / Sol" },{ value:"both",label:"Both / ?ki El" }]} />
-          <GSelect en="Affected Hemisphere" tr="Etkilenen Hemisfer" value={data.hemisphere} onChange={(e) => s("hemisphere", e.target.value)} options={[{ value:"left",label:"Left / Sol" },{ value:"right",label:"Right / Sa?" },{ value:"bilateral",label:"Bilateral" }]} />
-          <GSelect en="Stroke Type" tr="?nme Tipi" value={data.strokeType} onChange={(e) => s("strokeType", e.target.value)} options={[{ value:"1",label:"1 = Ischemic / ?skemik" },{ value:"2",label:"2 = Hemorrhagic / Hemorajik" }]} />
-          <GSelect en="Affected Side" tr="Etkilenen Taraf" value={data.side} onChange={(e) => s("side", e.target.value)} options={[{ value:"1",label:"1 = Left / Sol" },{ value:"2",label:"2 = Right / Sa?" }]} />
+          <GSelect en="Dominant Hand" tr="Dominant El" value={data.dominantHand} onChange={(e) => s("dominantHand", e.target.value)} options={[{ value:"right",label:"Right" },{ value:"left",label:"Left" },{ value:"both",label:"Both" }]} />
+          <GSelect en="Affected Hemisphere" tr="Etkilenen Hemisfer" value={data.hemisphere} onChange={(e) => s("hemisphere", e.target.value)} options={[{ value:"left",label:"Left" },{ value:"right",label:"Right" },{ value:"bilateral",label:"Bilateral" }]} />
+          <GSelect en="Stroke Type" tr="Stroke type" value={data.strokeType} onChange={(e) => s("strokeType", e.target.value)} options={[{ value:"1",label:"1 = Ischemic" },{ value:"2",label:"2 = Hemorrhagic" }]} />
+          <GSelect en="Affected Side" tr="Etkilenen Taraf" value={data.side} onChange={(e) => s("side", e.target.value)} options={[{ value:"1",label:"1 = Left" },{ value:"2",label:"2 = Right" }]} />
         </div>
 
-        <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-3">Anthropometrics / Antropometri</p>
+        <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-3">Anthropometrics</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           <GI en="Height (cm)" tr="Boy (cm)" type="number" value={data.height} onChange={(e) => s("height", e.target.value)} placeholder="170" />
           <GI en="Weight (kg)" tr="Kilo (kg)" type="number" value={data.weight} onChange={(e) => s("weight", e.target.value)} placeholder="70" />
           <div className="flex flex-col gap-1.5">
-            <BL en="BMI (auto)" tr="VK? (otomatik)" />
+            <BL en="BMI (auto)" tr="BMI (auto)" />
             <div className={`w-full px-3 py-2.5 rounded-xl border text-sm font-extrabold text-center ${(() => { const h=parseFloat(data.height), w=parseFloat(data.weight); if(!h||!w) return "bg-white/[0.05] border-white/[0.04] text-white/25"; const b=(w/((h/100)**2)).toFixed(1); if(b<18.5) return "bg-sky-400/10 border-sky-400/20 text-sky-300"; if(b<25) return "bg-emerald-400/10 border-emerald-400/20 text-emerald-300"; if(b<30) return "bg-amber-400/10 border-amber-400/20 text-amber-300"; return "bg-rose-400/10 border-rose-400/20 text-rose-300"; })()}`}>
-              {(() => { const h=parseFloat(data.height), w=parseFloat(data.weight); return h&&w ? `${(w/((h/100)**2)).toFixed(1)} kg/m?` : "?"; })()}
+              {(() => { const h=parseFloat(data.height), w=parseFloat(data.weight); return h&&w ? `${(w/((h/100)**2)).toFixed(1)} kg/m²` : NA; })()}
             </div>
           </div>
         </div>
 
-        <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-3">Dates / Tarihler</p>
+        <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-3">Dates</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <GI en="Assessment Date" tr="De?erlendirme Tarihi" type="date" value={data.assessDate} onChange={(e) => s("assessDate", e.target.value)} />
-          <GI en="Stroke Date" tr="?nme Tarihi" type="date" value={data.strokeDate} onChange={(e) => s("strokeDate", e.target.value)} />
+          <GI en="Assessment Date" tr="Assessment date" type="date" value={data.assessDate} onChange={(e) => s("assessDate", e.target.value)} />
+          <GI en="Stroke Date" tr="Stroke date" type="date" value={data.strokeDate} onChange={(e) => s("strokeDate", e.target.value)} />
         </div>
 
-        <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-3">Clinical Assessment / Klinik De?erlendirme</p>
+        <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-3">Clinical Assessment</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
-          <GSelect en="MAS (Modified Ashworth)" tr="MAS" value={data.mas} onChange={(e) => s("mas", e.target.value)} options={[{ value:"0",label:"0 ? No increase" },{ value:"1",label:"1 ? Slight catch" },{ value:"1+",label:"1+ ? Catch + minimal resistance" },{ value:"2",label:"2 ? More marked" },{ value:"3",label:"3 ? Considerable" },{ value:"4",label:"4 ? Rigid" }]} />
-          <GSelect en="MRC Muscle Strength" tr="MRC Kas G?c?" value={data.mrc} onChange={(e) => s("mrc", e.target.value)} options={[{ value:"2",label:"2 ? Active, gravity eliminated" },{ value:"3",label:"3 ? Against gravity" },{ value:"4",label:"4 ? Against some resistance" },{ value:"5",label:"5 ? Normal power" }]} />
+          <GSelect en="MAS (Modified Ashworth)" tr="MAS" value={data.mas} onChange={(e) => s("mas", e.target.value)} options={[{ value:"0",label:"0 — No increase" },{ value:"1",label:"1 — Slight catch" },{ value:"1+",label:"1+ — Catch + minimal resistance" },{ value:"2",label:"2 — More marked" },{ value:"3",label:"3 — Considerable" },{ value:"4",label:"4 — Rigid" }]} />
+          <GSelect en="MRC Muscle Strength" tr="MRC muscle strength" value={data.mrc} onChange={(e) => s("mrc", e.target.value)} options={[{ value:"2",label:"2 — Active, gravity eliminated" },{ value:"3",label:"3 — Against gravity" },{ value:"4",label:"4 — Against some resistance" },{ value:"5",label:"5 — Normal power" }]} />
         </div>
       </Glass>
 
       <Glass className="p-5">
-        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Medical History / T?bbi Ge?mi?</p>
+        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Medical History</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          <GSelect en="Disease Stage" tr="Hastal?k Evresi" value={data.diseaseStage} onChange={(e) => s("diseaseStage", e.target.value)} options={[{ value:"acute",label:"Acute (<1 month) / Akut" },{ value:"subacute",label:"Subacute (1-6 months) / Subakut" },{ value:"chronic",label:"Chronic (>6 months) / Kronik" }]} />
+          <GSelect en="Disease Stage" tr="Disease stage" value={data.diseaseStage} onChange={(e) => s("diseaseStage", e.target.value)} options={[{ value:"acute",label:"Acute (<1 month)" },{ value:"subacute",label:"Subacute (1–6 months)" },{ value:"chronic",label:"Chronic (>6 months)" }]} />
           <div className="flex flex-col gap-1.5">
-            <BL en="Treatment Duration" tr="Tedavi S?resi" />
+            <BL en="Treatment Duration" tr="Treatment duration" />
             <div className="flex gap-2">
               <input type="number" value={data.treatValue ?? ""} onChange={(e) => s("treatValue", e.target.value)} placeholder="0" className="flex-1 min-w-0 px-3 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light focus:outline-none transition-all" />
               <GSelect
@@ -2455,8 +2458,8 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
       </Glass>
 
       <Glass className="p-5">
-        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-1">Comorbidities / E?lik Eden Hastal?klar</p>
-        <p className="text-xs text-white/30 mb-4">Select all that apply / Ge?erli t?m se?enekleri i?aretleyin</p>
+        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-1">Comorbidities</p>
+        <p className="text-xs text-white/30 mb-4">Select all that apply</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
           {COMORBIDITIES.map((opt) => {
             const active = (data.comorbidities || []).includes(opt.value);
@@ -2473,13 +2476,13 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
         </div>
         {(data.comorbidities || []).includes("other") && (
           <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }} className="mt-3">
-            <GI en="Specify other" tr="Di?erini belirtin" value={data.otherComorbidity} onChange={(e) => s("otherComorbidity", e.target.value)} placeholder="Other conditions?" />
+            <GI en="Specify other" tr="Specify other" value={data.otherComorbidity} onChange={(e) => s("otherComorbidity", e.target.value)} placeholder="Other conditions?" />
           </motion.div>
         )}
       </Glass>
 
       <Glass className="p-5">
-        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Clinical Notes / Klinik Notlar</p>
+        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Clinical Notes</p>
         <div className="flex flex-col gap-3">
           <textarea rows={2} value={data.notes ?? ""} onChange={(e) => s("notes", e.target.value)} placeholder="Medical history, comorbidities, assessment context?" className="w-full px-3 py-2.5 rounded-xl bg-white/[0.09] border border-white/12 text-white text-sm font-light placeholder-white/15 resize-none focus:outline-none transition-all" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2509,13 +2512,13 @@ const IPAQSection = ({ data, onChange }) => {
     const light = parseFloat(tot("light")) || 0;
 
     if (highDays >= 3 && totalMET >= 1500) {
-      return { level:"High", color:"emerald", text:"Vigorous activity ?3 days & ?1500 MET-min/week" };
+      return { level:"High", color:"emerald", text:"Vigorous activity ≥3 days and ≥1500 MET-min/week" };
     }
     if ((medDays + lightDays) >= 7 && totalMET >= 3000) {
-      return { level:"High", color:"emerald", text:"Mixed activities 7 days & ?3000 MET-min/week" };
+      return { level:"High", color:"emerald", text:"Mixed activities 7 days and ≥3000 MET-min/week" };
     }
     if (totalMET >= 600 || (medDays + lightDays >= 5 && (med + light) >= 150)) {
-      return { level:"Moderate", color:"amber", text:"?600 MET-min/week or 5+ days moderate/walking" };
+      return { level:"Moderate", color:"amber", text:"≥600 MET-min/week or 5+ days moderate/walking" };
     }
     return { level:"Low", color:"rose", text:"Not meeting moderate or high criteria" };
   };
@@ -2524,7 +2527,7 @@ const IPAQSection = ({ data, onChange }) => {
 
   return (
     <div className="space-y-5">
-      <SH icon={Activity} en="International Physical Activity Questionnaire (IPAQ)" tr="Uluslararas? Fiziksel Aktivite Anketi" />
+      <SH icon={Activity} en="International Physical Activity Questionnaire (IPAQ)" tr="IPAQ" />
 
       <Glass className="p-4 sm:p-5">
         {/* Mobile ? stacked cards (no horizontal squeeze) */}
@@ -2533,16 +2536,15 @@ const IPAQSection = ({ data, onChange }) => {
             <div key={a.id} className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 space-y-3">
               <div>
                 <p className="text-sm font-extrabold text-white/90 leading-snug">{a.en}</p>
-                <p className="text-[10px] text-white/35 italic mt-0.5">{a.tr}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-[10px] font-extrabold text-sky-300/90 uppercase mb-1.5">Min/day ? Dk/g?n</p>
-                  <input type="number" min="0" value={data[a.id]?.sure ?? ""} onChange={(e) => sv(a.id, "sure", e.target.value)} className={ic} placeholder="?" />
+                  <p className="text-[10px] font-extrabold text-sky-300/90 uppercase mb-1.5">Min/day</p>
+                  <input type="number" min="0" value={data[a.id]?.sure ?? ""} onChange={(e) => sv(a.id, "sure", e.target.value)} className={ic} placeholder="" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-extrabold text-violet-300/90 uppercase mb-1.5">Days/wk ? G?n</p>
-                  <input type="number" min="0" max="7" value={data[a.id]?.gun ?? ""} onChange={(e) => sv(a.id, "gun", e.target.value)} className={ic} placeholder="?" />
+                  <p className="text-[10px] font-extrabold text-violet-300/90 uppercase mb-1.5">Days/wk</p>
+                  <input type="number" min="0" max="7" value={data[a.id]?.gun ?? ""} onChange={(e) => sv(a.id, "gun", e.target.value)} className={ic} placeholder="" />
                 </div>
               </div>
               <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
@@ -2558,22 +2560,10 @@ const IPAQSection = ({ data, onChange }) => {
           <table className="w-full text-sm min-w-[580px]">
             <thead>
               <tr className="bg-white/[0.06] border-b border-white/[0.04]">
-                <th className="text-left px-3 py-3 font-extrabold text-white/70 text-xs uppercase w-1/2">Activity / Aktivite</th>
-                <th className="text-center px-3 py-3 text-sky-300 text-xs font-extrabold uppercase">
-                  Min/day
-                  <br />
-                  <span className="font-light text-white/30">Dk/g?n</span>
-                </th>
-                <th className="text-center px-3 py-3 text-violet-300 text-xs font-extrabold uppercase">
-                  Days/week
-                  <br />
-                  <span className="font-light text-white/30">G?n/hafta</span>
-                </th>
-                <th className="text-center px-3 py-3 text-emerald-300 text-xs font-extrabold uppercase">
-                  Total min/wk
-                  <br />
-                  <span className="font-light text-white/30">Toplam</span>
-                </th>
+                <th className="text-left px-3 py-3 font-extrabold text-white/70 text-xs uppercase w-1/2">Activity</th>
+                <th className="text-center px-3 py-3 text-sky-300 text-xs font-extrabold uppercase">Min/day</th>
+                <th className="text-center px-3 py-3 text-violet-300 text-xs font-extrabold uppercase">Days/week</th>
+                <th className="text-center px-3 py-3 text-emerald-300 text-xs font-extrabold uppercase">Total min/wk</th>
               </tr>
             </thead>
 
@@ -2582,13 +2572,12 @@ const IPAQSection = ({ data, onChange }) => {
                 <tr key={a.id} className={`border-b border-white/[0.06] hover:bg-white/[0.03] ${i % 2 === 0 ? "" : "bg-white/[0.02]"}`}>
                   <td className="px-3 py-3 text-xs text-white/80">
                     <span className="block">{a.en}</span>
-                    <span className="block text-white/35 text-[10px] italic mt-0.5">{a.tr}</span>
                   </td>
                   <td className="px-2 py-2">
-                    <input type="number" min="0" value={data[a.id]?.sure ?? ""} onChange={(e) => sv(a.id, "sure", e.target.value)} className={ic} placeholder="?" />
+                    <input type="number" min="0" value={data[a.id]?.sure ?? ""} onChange={(e) => sv(a.id, "sure", e.target.value)} className={ic} placeholder="" />
                   </td>
                   <td className="px-2 py-2">
-                    <input type="number" min="0" max="7" value={data[a.id]?.gun ?? ""} onChange={(e) => sv(a.id, "gun", e.target.value)} className={ic} placeholder="?" />
+                    <input type="number" min="0" max="7" value={data[a.id]?.gun ?? ""} onChange={(e) => sv(a.id, "gun", e.target.value)} className={ic} placeholder="" />
                   </td>
                   <td className="px-3 py-3 text-center">
                     <div className="px-3 py-1.5 rounded-lg bg-emerald-400/10 border border-emerald-400/20 text-emerald-300 font-extrabold">{tot(a.id)}</div>
@@ -2652,7 +2641,7 @@ const VASSection = ({ data, onChange }) => {
 
   return (
     <div className="space-y-5">
-      <SH icon={Sliders} en="Visual Analogue Scale (VAS)" tr="G?rsel Analog Skala" badge="0 ? 10 with Faces" />
+      <SH icon={Sliders} en="Visual Analogue Scale (VAS)" tr="VAS" badge="0–10 with faces" />
 
       {items.map((item) => (
         <Glass key={item.k} className="p-5">
@@ -2674,7 +2663,7 @@ const VASSection = ({ data, onChange }) => {
       <Glass className="p-5 border-l-2 border-amber-400/40">
         <div className="flex items-center gap-2 mb-3">
           <Edit3 className="w-4 h-4 text-amber-300" />
-          <p className="text-xs font-extrabold text-white/70 uppercase tracking-widest">Session Notes / Seans Notlar?</p>
+          <p className="text-xs font-extrabold text-white/70 uppercase tracking-widest">Session Notes</p>
         </div>
 
         <div className="flex flex-wrap gap-1.5 mb-3">
@@ -2709,7 +2698,7 @@ const VASSection = ({ data, onChange }) => {
                     : "bg-amber-400/10 border-amber-400/20 text-amber-300 hover:bg-amber-400/20"
                 }`}
               >
-                {exists ? "? " : "+ "}{btn.label}
+                {exists ? "✓ " : "+ "}{btn.label}
               </button>
             );
           })}
@@ -2745,7 +2734,7 @@ const VAMSSection = ({ data, onChange }) => {
 
   return (
     <div className="space-y-5">
-      <SH icon={Heart} en="Mood Scale (VAMS-4)" tr="Ruh Hali ?l?e?i" badge="0 ? 10" />
+      <SH icon={Heart} en="Mood Scale (VAMS-4)" tr="VAMS-4" badge="0–10" />
 
       <Glass className="p-5 border-l-2 border-violet-400/40">
         <div className="flex gap-3">
@@ -2754,7 +2743,7 @@ const VAMSSection = ({ data, onChange }) => {
             <p className="text-sm font-light text-white/75">
               Rate your current mood from <span className="font-bold text-white">0 (not at all)</span> to <span className="font-bold text-white">10 (extremely)</span>
             </p>
-            <p className="text-xs text-white/50 mt-1">VAMS-4 (Machado et al. 2019) ? Validated in stroke (Stern 1999, Barrows 2018)</p>
+            <p className="text-xs text-white/50 mt-1">VAMS-4 (Machado et al. 2019) — Validated in stroke (Stern 1999, Barrows 2018)</p>
           </div>
         </div>
       </Glass>
@@ -2762,11 +2751,7 @@ const VAMSSection = ({ data, onChange }) => {
       {items.map((item) => (
         <Glass key={item.k} className="p-5">
           <BL en={item.en} tr={item.tr} className="mb-1" />
-          <div className="flex items-center gap-2 mb-4 px-0.5">
-            <p className="text-xs text-white/60 italic">{item.qEN}</p>
-            <span className="text-white/20 text-[9px]">/</span>
-            <p className="text-xs text-white/35 italic">{item.qTR}</p>
-          </div>
+          <p className="text-xs text-white/55 italic mb-4">{item.qEN}</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {["pre","post"].map((ph) => (
@@ -2791,19 +2776,18 @@ const MotorSection = ({ data, onChange }) => {
 
   return (
     <div className="space-y-5">
-      <SH icon={TrendingUp} en="Patient Perceived Muscle Control Change Scale" tr="Hasta Alg?lanan Kas Kontrol De?i?im ?l?e?i" />
+      <SH icon={TrendingUp} en="Patient Perceived Muscle Control Change Scale" tr="Muscle control" />
 
       <Glass className="p-5 border-l-2 border-amber-400/40">
         <div className="flex gap-3">
           <Info className="w-5 h-5 text-amber-300 flex-shrink-0 mt-0.5" />
-          <p className="text-sm font-light text-white/75 italic">0 = no control, 10 = full normal control. / 0 = hi? kontrol yok, 10 = tam kontrol.</p>
+          <p className="text-sm font-light text-white/75 italic">0 = no control, 10 = full normal control.</p>
         </div>
       </Glass>
 
       {MOTOR_ITEMS.map((item) => (
         <Glass key={item.key} className="p-5">
           <p className="font-extrabold text-white/90 text-sm mb-0.5">{item.en}</p>
-          <p className="text-xs font-light text-white/35 mb-4">{item.tr}</p>
 
           <div className={`p-4 rounded-xl border ${item.phase === "pre" ? "bg-sky-400/[0.05] border-sky-400/15" : "bg-emerald-400/[0.05] border-emerald-400/15"}`}>
             <p className={`text-[10px] font-extrabold uppercase tracking-widest mb-3 ${item.phase === "pre" ? "text-sky-300" : "text-emerald-300"}`}>
@@ -2827,16 +2811,16 @@ const KGIASection = ({ data, onChange }) => {
 
   return (
     <div className="space-y-5">
-      <SH icon={Brain} en="Kinesthetic & Visual Imagery Questionnaire (KVIQ-10)" tr="Kinestetik ve G?rsel ?mgeleme Anketi" badge="5 Movements ? 2 Types" />
+      <SH icon={Brain} en="Kinesthetic & Visual Imagery Questionnaire (KVIQ-10)" tr="KVIQ" badge="5 movements · 2 types" />
 
       <div className="flex gap-3 flex-wrap">
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-400/20">
           <span className="w-3 h-3 rounded-full bg-amber-400 flex-shrink-0" />
-          <span className="text-xs font-bold text-amber-300">Upper Extremity / ?st Ekstremite</span>
+          <span className="text-xs font-bold text-amber-300">Upper Extremity</span>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.04]">
           <span className="w-3 h-3 rounded-full bg-white/30 flex-shrink-0" />
-          <span className="text-xs font-bold text-white/50">Other / Di?er</span>
+          <span className="text-xs font-bold text-white/50">Other</span>
         </div>
       </div>
 
@@ -2859,7 +2843,6 @@ const KGIASection = ({ data, onChange }) => {
                     </span>
                   )}
                 </div>
-                <p className="text-xs font-light text-white/40 mt-0.5">{mov.tr}</p>
               </div>
             </div>
 
@@ -2877,16 +2860,14 @@ const KGIASection = ({ data, onChange }) => {
                     }`}>
                       {t.en}
                     </span>
-                    <span className="text-[10px] text-white/35">{t.tr}</span>
                   </div>
 
-                  <p className="text-xs font-semibold text-white/65 mb-0.5">{t.qEN}</p>
-                  <p className="text-[10px] font-light text-white/35 mb-4 italic">{t.qTR}</p>
+                  <p className="text-xs font-semibold text-white/65 mb-4">{t.qEN}</p>
 
                   {["once","sonra"].map((f, fi) => (
                     <div key={f} className={fi === 1 ? "mt-4" : ""}>
                       <p className={`text-[10px] font-extrabold uppercase tracking-widest mb-2 ${fi === 0 ? "text-sky-300" : "text-emerald-300"}`}>
-                        {fi === 0 ? "Pre (1?5) / ?nce" : "Post (1?5) / Sonra"}
+                        {fi === 0 ? "Pre (1–5)" : "Post (1–5)"}
                       </p>
 
                       <KVIQSlider
@@ -2923,11 +2904,11 @@ const BBTPhaseBlock = ({ phase, phaseData, onUpdate }) => {
   return (
     <div className={`p-4 rounded-xl border ${isPost ? "bg-emerald-400/[0.05] border-emerald-400/15" : "bg-sky-400/[0.05] border-sky-400/15"}`}>
       <p className={`text-[10px] font-extrabold uppercase tracking-widest mb-3 ${isPost ? "text-emerald-300" : "text-sky-300"}`}>
-        {isPost ? "Post / Sonra" : "Pre / ?nce"}
+        {isPost ? "Post" : "Pre"}
       </p>
 
       <p className="text-[10px] text-white/45 mb-2">
-        {BBT_TEST_SECONDS}s timer ? count blocks transferred over the partition (paretic hand primary).
+        {BBT_TEST_SECONDS}s timer — count blocks transferred over the partition (paretic hand primary).
       </p>
 
       <div className="flex items-center gap-2 mb-4">
@@ -2967,7 +2948,7 @@ const BBTPhaseBlock = ({ phase, phaseData, onUpdate }) => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <div className="flex flex-col gap-1.5">
-          <BL en="Paretic hand ? blocks" tr="Etkilenen el ? blok say?s?" />
+          <BL en="Paretic hand — blocks" tr="Paretic hand" />
           <input
             type="number"
             min="0"
@@ -2980,14 +2961,14 @@ const BBTPhaseBlock = ({ phase, phaseData, onUpdate }) => {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <BL en="Unaffected hand ? blocks (optional)" tr="Etkilenmeyen el ? opsiyonel" />
+          <BL en="Unaffected hand — blocks (optional)" tr="Unaffected hand" />
           <input
             type="number"
             min="0"
             inputMode="numeric"
             value={phaseData?.unaffectedBlocks ?? ""}
             onChange={(e) => onUpdate("unaffectedBlocks", e.target.value)}
-            placeholder="?"
+            placeholder=""
             className={ic}
             style={GLASS_FIELD}
           />
@@ -3031,9 +3012,6 @@ const BBTSection = ({ data, onChange, demographics }) => {
           {BBT_TEST_SECONDS} seconds. Record the <strong className="text-white/80">paretic hand</strong> count for the study outcome
           {side ? ` (affected side: ${side})` : ""}. Unaffected-hand count is optional for reference norms.
         </p>
-        <p className="text-[10px] text-white/40 mt-2 italic">
-          Protokol: {BBT_TEST_SECONDS} saniyede m?mk?n oldu?unca ?ok blok aktar?m?; birincil skor etkilenen el.
-        </p>
       </Glass>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -3074,15 +3052,15 @@ const WMFTSection = ({ data, onChange, kinematics, showToast }) => {
     const applied = next._inferenceMeta?.applied ?? 0;
     onChange(next);
     if (applied === 0) {
-      showToast?.("No WMFT fields filled ? check ADL phases or re-analyze", "error");
+      showToast?.("No WMFT fields filled — check ADL phases or re-analyze", "error");
     } else {
-      showToast?.(`? vWMFT-4: filled ${applied} field${applied === 1 ? "" : "s"} from kinematics`);
+      showToast?.(`WMFT-4: filled ${applied} field${applied === 1 ? "" : "s"} from kinematics`);
     }
   };
 
   return (
     <div className="space-y-5">
-      <SH icon={Timer} en="Wolf Motor Function Test (WMFT-4)" tr="Wolf Motor Fonksiyon Testi ? K?sa Form" badge="4 Tasks" />
+      <SH icon={Timer} en="Wolf Motor Function Test (WMFT-4)" tr="WMFT-4" badge="4 Tasks" />
 
       <Glass className="p-4 border border-violet-400/15 bg-violet-500/[0.06]">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
@@ -3132,7 +3110,6 @@ const WMFTSection = ({ data, onChange, kinematics, showToast }) => {
             </div>
             <div>
               <p className="font-extrabold text-white/90 text-sm">{t.en}</p>
-              <p className="text-xs font-light text-white/35 mt-0.5">{t.tr}</p>
             </div>
           </div>
 
@@ -3511,14 +3488,14 @@ function InlineValidationVideo({ src, phaseLabel, autoPlay = false, onEnded, onE
             onClick={togglePlay}
             className="text-white/90 hover:text-white text-xs font-bold px-2 py-1 rounded bg-white/10 hover:bg-white/20"
           >
-            {isPlaying ? "? Pause" : "? Play"}
+            {isPlaying ? "Pause" : "Play"}
           </button>
           <button
             type="button"
             onClick={requestFullscreen}
             className="text-white/90 hover:text-white text-xs font-bold px-2 py-1 rounded bg-white/10 hover:bg-white/20"
           >
-            ? Full
+            Full
           </button>
         </div>
         <div
@@ -3571,13 +3548,13 @@ function KinAnalyzeProgressGlyph({
         />
       </svg>
       <span className={`relative z-[1] ${labelClass} font-extrabold tabular-nums text-white tracking-tight`}>
-        {pctClamped != null ? `${pctClamped}%` : "?"}
+        {pctClamped != null ? `${pctClamped}%` : NA}
       </span>
     </div>
   );
 }
 
-function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyzing video?" }) {
+function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyzing video…" }) {
   const a = KIN_PHASE_ACCENT[accent] || KIN_PHASE_ACCENT.sky;
   const film = KIN_FILM_ACCENT[accent] || KIN_FILM_ACCENT.sky;
   const pctRounded = pct != null && !Number.isNaN(Number(pct)) ? Math.round(Number(pct)) : null;
@@ -3603,7 +3580,7 @@ function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyz
             style={{ boxShadow: `0 0 10px ${film.glow}` }}
           />
         </div>
-        <p className="text-[8px] text-white/35 mt-1">Server processing ? keep tab open</p>
+        <p className="text-[8px] text-white/35 mt-1">Server processing — keep tab open</p>
       </div>
     </div>
   );
@@ -3633,7 +3610,7 @@ const kinShortFileName = (name, max = 22) => {
   const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
   const stem = ext ? name.slice(0, name.length - ext.length) : name;
   const keep = Math.max(6, max - ext.length - 1);
-  return `${stem.slice(0, keep)}?${ext}`;
+  return `${stem.slice(0, keep)}…${ext}`;
 };
 
 const armSideLabel = (side) => (side === "left" ? "Left" : side === "right" ? "Right" : "\u2014");
@@ -4211,7 +4188,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         if (await applyCachedOriginal()) return;
         const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
         if (validationCacheMatchesResult(cloud, phaseResult) && cloud?.originalVideoBlob?.size) return;
-        showToast("Original video expired on server ? please re-upload", "error");
+        showToast("Original video expired on server — please re-upload", "error");
         return;
       }
       const objectUrl = URL.createObjectURL(loaded);
@@ -4433,11 +4410,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       return next;
     });
     onChange({ ...data, [statusKey(phase)]: "analyzing" });
-    setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 5, step: "Uploading?" } }));
+    setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 5, step: "Uploading…" } }));
     try {
       sessionStorage.setItem(
         "neuro_kin_analyze_ui",
-        JSON.stringify({ phase, pct: 5, step: "Uploading?" }),
+        JSON.stringify({ phase, pct: 5, step: "Uploading…" }),
       );
     } catch { /* ignore */ }
 
@@ -4499,7 +4476,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
               ...prev,
               [phase]: {
                 pct: typeof prog.pct === "number" ? prog.pct : 5,
-                step: prog.step || "Analyzing?",
+                step: prog.step || "Analyzing…",
               },
             }));
           });
@@ -4509,7 +4486,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
               JSON.stringify({
                 phase,
                 pct: prog.pct,
-                step: prog.step || "Analyzing?",
+                step: prog.step || "Analyzing…",
               }),
             );
           } catch { /* ignore */ }
@@ -4558,19 +4535,19 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         [resultKey(phase)]: stripKinPhaseForSync(resultWithoutB64),
         [statusKey(phase)]: "completed",
       });
-      showToast(`? Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials ? mean)` : ""}${(result.warnings || []).length ? " ? see warnings" : ""}`);
+      showToast(`Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials — mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
       setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
       try {
         sessionStorage.removeItem("neuro_kin_analyze_ui");
       } catch { /* ignore */ }
 
       if (!isCsv && result.csv_filename) {
-        setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Loading validation overlay?" } }));
+        setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Loading validation overlay…" } }));
         fetchOverlayDataWithRetry(phase, result.csv_filename, { syncResults: true }, 8).catch(() => {});
       }
     } catch (err) {
       if (err.name === "AbortError") {
-        showToast(`? Analysis cancelled for ${phase}`, "info");
+        showToast(`Analysis cancelled for ${phase}`, "info");
       } else {
         const errorMsg = err.message || "Analysis failed";
         showToast(errorMsg, "error");
@@ -4595,12 +4572,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     if (type === "video") filename = result.validation_video;
     if (type === "unified" || type === "unified-download") filename = result.unified_validation_video;
     if (type === "trc") {
-      showToast("TRC export removed ? use CSV or MOT", "info");
+      showToast("TRC export removed — use CSV or MOT", "info");
       return;
     }
     if (!filename) {
-      if (type === "video") showToast("Skeleton validation video not available ? re-analyze the video file", "error");
-      if (type === "unified" || type === "unified-download") showToast("Unified validation video not available ? generate it first", "error");
+      if (type === "video") showToast("Skeleton validation video not available — re-analyze the video file", "error");
+      if (type === "unified" || type === "unified-download") showToast("Unified validation video not available — generate it first", "error");
       return;
     }
 
@@ -4638,7 +4615,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       try {
         const res = await fetch(url);
         if (res.status === 404) {
-          showToast("Validation video expired on server ? please re-analyze the video", "error");
+          showToast("Validation video expired on server — please re-analyze the video", "error");
           return;
         }
         if (!res.ok) throw new Error(`Download failed (${res.status})`);
@@ -4672,13 +4649,13 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         setMediaPreview({
           phase,
           url: blobUrl,
-          title: `${phases.find((p) => p.k === phase)?.l || phase} ? ${title}`,
+          title: `${phases.find((p) => p.k === phase)?.l || phase} — ${title}`,
           filename,
         });
       } else {
         const uv = kinematicsResults[phase]?.unified_validation_video;
         if (uv) loadVideoBlob(phase, uv);
-        showToast("Loading validation video ? try again in a moment", "info");
+        showToast("Loading validation video — try again in a moment", "info");
       }
       return;
     }
@@ -4719,7 +4696,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         if (await applyCachedUnified()) return;
         const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
         if (validationCacheMatchesResult(cloud, phaseResult) && cloud?.unifiedVideoBlob?.size) return;
-        if (!silent) showToast("Validation video expired on server ? please re-analyze", "error");
+        if (!silent) showToast("Validation video expired on server — please re-analyze", "error");
         setVideoBlobs((prev) => {
           if (prev[phase]) URL.revokeObjectURL(prev[phase]);
           return { ...prev, [phase]: null };
@@ -4744,7 +4721,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       if (await applyCachedUnified()) return;
       const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
       if (validationCacheMatchesResult(cloud, phaseResult) && cloud?.unifiedVideoBlob?.size) return;
-      if (!silent) showToast("Validation video could not be loaded ? try expanding it", "error");
+      if (!silent) showToast("Validation video could not be loaded — try expanding it", "error");
       setVideoBlobs((prev) => {
         if (prev[phase]) URL.revokeObjectURL(prev[phase]);
         return { ...prev, [phase]: null };
@@ -4910,45 +4887,45 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     nvp_transport: "Velocity peaks during the transport / drink-lift phase (same as NVP drink for drink task).",
     nvp_return: "Velocity peaks while returning the cup/hand to the table.",
     nvp_total: "Sum of NVP across reach + drink/transport + return phases.",
-    drink_lift_height_cm: "How high the palm rose during drink (table ? peak), in cm using the 85 cm table width scale. Higher = greater lift.",
+    drink_lift_height_cm: "How high the palm rose during drink (table → peak), in cm using the 85 cm table width scale. Higher = greater lift.",
     lift_height_cm: "Peak vertical lift during transport, in cm (85 cm table scale).",
     drink_lift_height_sw: "Drink lift height in shoulder-width units (secondary / normalized).",
     lift_height_sw: "Peak vertical lift during transport, in shoulder-width units.",
     straightness_reach: "Path straightness on the reach window only.",
-    pause_time_sec_reach: "Path pauses during reach only ? excludes grasp fixation and drink sips.",
+    pause_time_sec_reach: "Path pauses during reach only — excludes grasp fixation and drink sips.",
     number_of_stops_reach: "Path stops during reach only (sips excluded).",
-    sip_bout_count: "How many times the cup approached the mouth during drink. Descriptive only ? does not make NVP worse.",
-    grasp_dwell_sec: "Terminal low-speed time at the end of reach (cup grasp fixation). Functional ? not counted as path pause.",
+    sip_bout_count: "How many times the cup approached the mouth during drink. Descriptive only — does not make NVP worse.",
+    grasp_dwell_sec: "Terminal low-speed time at the end of reach (cup grasp fixation). Functional — not counted as path pause.",
     functional_hold_sec: "Grasp dwell + mouth/face hold during transport. Functional time, not path pause.",
     pause_time_sec_total: "All low-speed time including grasp/mouth dwell (exploratory).",
     nvp: "Primary NVP = reach window (extra sips excluded). Same as NVP (reach) after re-analysis.",
     straightness: "Primary straightness = reach window.",
     pause_time_sec: "Primary path pause (grasp/mouth dwell and sip holds excluded).",
     number_of_stops: "Primary path stops (dwell/sips excluded).",
-    nvp_full_task: "NVP on the whole recording including all sip approaches ? exploratory only; do not treat higher values from extra sips as worse movement.",
+    nvp_full_task: "NVP on the whole recording including all sip approaches — exploratory only; do not treat higher values from extra sips as worse movement.",
     trunk_ratio: "Trunk displacement / palm displacement. Lower = less trunk compensation.",
-    shoulder_elevation_cm: "How much the affected shoulder rose (rest ? peak), in cm using the 85 cm table scale. Lower = less shoulder hike.",
+    shoulder_elevation_cm: "How much the affected shoulder rose (rest → peak), in cm using the 85 cm table scale. Lower = less shoulder hike.",
     shoulder_elevation_palm_ratio: "Shoulder elevation as a unitless palm-anchor ratio (exploratory).",
     elbow_angle_mean_deg: "Mean elbow flexion angle during the movement window.",
-    shoulder_flexion_mean_deg: "Mean shoulder flexion angle (trunk?shoulder?elbow) during the movement window.",
+    shoulder_flexion_mean_deg: "Mean shoulder flexion angle (trunk–shoulder–elbow) during the movement window.",
     movement_time_sec: "Active movement duration (onset to offset).",
     peak_velocity_cm_s: "Peak hand speed during reach (cm/s), scaled with the 85 cm table width. Higher = faster reach.",
     peak_elbow_ang_vel_deg_s: "Peak elbow angular velocity during the reach (deg/s).",
     peak_shoulder_flexion_vel_deg_s: "Peak shoulder flexion angular velocity during the reach (deg/s).",
     peak_velocity_panel: "Peak hand velocity (cm/s) from table calibration.",
-    tremor_8_12hz_power: "Hand-speed power in 8?12 Hz from the validation video overlay (same as Tremor 8?12 Hz on the skeleton). Lower = less tremor. Index/ADL tremor stay under Show all.",
-    fine_motor_quality_index: "Hand / finger quality 0?100 from the validation overlay: index-tip smoothness (fewer peaks/micro-stops, lower speed CV) plus pinch opening when available. Higher = better.",
+    tremor_8_12hz_power: "Hand-speed power in 8–12 Hz from the validation video overlay (same as Tremor 8–12 Hz on the skeleton). Lower = less tremor. Index/ADL tremor stay under Show all.",
+    fine_motor_quality_index: "Hand / finger quality 0–100 from the validation overlay: index-tip smoothness (fewer peaks/micro-stops, lower speed CV) plus pinch opening when available. Higher = better.",
     shoulder_abduction_rom_deg: "Shoulder abduction range during the reach (validation overlay).",
     forearm_pronation_supination_rom_deg: "Forearm pronation/supination ROM (validation overlay).",
-    fine_motor_quality_index: "Fine motor quality index 0?100 (validation overlay).",
+    fine_motor_quality_index: "Fine motor quality index 0–100 (validation overlay).",
     adl_shoulder_abduction_mean_deg: "Mean shoulder abduction during drink transport (lower = less compensatory lift).",
     adl_shoulder_abduction_rom_deg: "Shoulder abduction ROM during ADL transport phase (lower = better for drink).",
-    adl_finger_flex_ext_quality_index: "Finger open/close smoothness and ROM during drink (0?100; higher = better).",
-    adl_head_forward_flexion_compensation_index: "Head lean toward cup + neck flexion during drink (0?1; lower = more stable head).",
-    finger_flex_ext_quality_index: "Finger open/close quality index from movement profile (0?100).",
-    head_forward_flexion_compensation_index: "Combined head forward displacement and flexion compensation (0?1; lower = better).",
-    adl_tremor_8_12hz_power: "Tremor 8?12 Hz during ADL phase (relative power).",
-    pause_stops_panel: "Path pause time (s) and stops ? grasp/mouth dwell excluded (same definition as primary pause).",
+    adl_finger_flex_ext_quality_index: "Finger open/close smoothness and ROM during drink (0–100; higher = better).",
+    adl_head_forward_flexion_compensation_index: "Head lean toward cup + neck flexion during drink (0–1; lower = more stable head).",
+    finger_flex_ext_quality_index: "Finger open/close quality index from movement profile (0–100).",
+    head_forward_flexion_compensation_index: "Combined head forward displacement and flexion compensation (0–1; lower = better).",
+    adl_tremor_8_12hz_power: "Tremor 8–12 Hz during ADL phase (relative power).",
+    pause_stops_panel: "Path pause time (s) and stops — grasp/mouth dwell excluded (same definition as primary pause).",
   };
 
   const CARD_PREVIEW_KEYS = ["task_complete", "nvp_reach", "nvp_drink", "nvp_total", "drink_lift_height_cm"];
@@ -4972,7 +4949,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     if (mismatch) return mismatch;
     const lowAmp = activeResultPhases.filter((ph) => kinematicsResults[ph.k]?.sparc_comparable === false);
     if (lowAmp.length) {
-      return `Reach amplitude low in ${lowAmp.map((ph) => ph.label).join(", ")} ? kinematic smoothness metrics may be less reliable`;
+      return `Reach amplitude low in ${lowAmp.map((ph) => ph.label).join(", ")}  — kinematic smoothness metrics may be less reliable`;
     }
     return null;
   })();
@@ -5094,7 +5071,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
           {kinematicDomain === "le" ? (
             <>
               <span className="font-bold text-white/70">Lower extremity:</span>{" "}
-              Full body must stay in frame. Use sit-to-stand, squat, gait, or quiet stance ? UE reach tasks stay under Upper Extremity.
+              Full body must stay in frame. Use sit-to-stand, squat, gait, or quiet stance — UE reach tasks stay under Upper Extremity.
             </>
           ) : (
             <>
@@ -5106,7 +5083,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         <div className="mb-4 max-w-xl mx-auto space-y-3">
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-widest text-white/40 mb-2 text-center sm:text-left">
-              Extremity / Ekstremite
+              Extremity
             </p>
             <div className="grid grid-cols-2 gap-2">
               {(["ue", "le"]).map((domain) => {
@@ -5126,7 +5103,6 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                     }`}
                   >
                     <span className="block text-xs font-extrabold tracking-wide">{meta.en}</span>
-                    <span className="block text-[10px] font-light opacity-70 mt-0.5">{meta.tr}</span>
                   </button>
                 );
               })}
@@ -5134,7 +5110,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
           </div>
           <GSelect
             en={`${CLINICAL_DOMAIN_LABELS[kinematicDomain].short} movement task`}
-            tr={`${CLINICAL_DOMAIN_LABELS[kinematicDomain].tr} g?rev`}
+            tr=""
             value={clinicalMovementTask}
             onChange={(e) => setClinicalMovementTask(e.target.value)}
             options={domainTasks.map((t) => ({ value: t.id, label: t.label }))}
@@ -5213,7 +5189,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                       <KinPhaseAnalyzeProgressBar
                         accent={ph.c}
                         pct={analysisProgress[ph.k]?.pct}
-                        step={analysisProgress[ph.k]?.step || "Analyzing video?"}
+                        step={analysisProgress[ph.k]?.step || "Analyzing video…"}
                       />
                     ) : (
                     <GBtn variant={ph.c} onClick={() => analyzeVideo(ph.k)} disabled={!data[vidKey(ph.k)]} className="w-full text-xs py-2.5" title="Analyze">
@@ -5231,7 +5207,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                       </GBtn>
                         <GBtn variant="default" onClick={() => kinematicsResults[ph.k]?.unified_validation_video ? downloadFile(ph.k, "unified") : generateUnifiedValidation(ph.k)} disabled={analysisStatus[ph.k] === "generating_unified"} className="!py-1.5 !px-2 min-w-[2.25rem] shrink-0" title={kinematicsResults[ph.k]?.unified_validation_video ? "Unified Validation Video" : "Generate Unified Validation Video"}>
                           {analysisStatus[ph.k] === "generating_unified" ? (
-                            <span className="text-[10px] font-bold leading-none">?</span>
+                            <span className="text-[10px] font-bold leading-none">…</span>
                           ) : (
                             <span className="text-[10px] font-bold leading-none">UV</span>
                           )}
@@ -5336,7 +5312,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                           await downloadFile(ph.k, "unified-download");
                           return;
                         }
-                        showToast("Generating validation video on server?", "info");
+                        showToast("Generating validation video on server…", "info");
                         await generateUnifiedValidation(ph.k);
                       }}
                       onDownloadReady={(_url, blob) => {
@@ -5352,7 +5328,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                         if (!patientKey) {
                           if (!driveBakeToastRef.current[`${ph.k}-nopatient`]) {
                             driveBakeToastRef.current[`${ph.k}-nopatient`] = true;
-                            showToast("Validation ready ? set patient ID/name to auto-save on Drive", "info");
+                            showToast("Validation ready — set patient ID/name to auto-save on Drive", "info");
                           }
                           return;
                         }
@@ -5535,12 +5511,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                   ))}
                   {kinematicsResults.pre && kinematicsResults.post && (
                     <th className="text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap">
-                      <span className="text-sky-300">Pre</span> <span className="text-white/60">?</span> <span className="text-emerald-300">Post</span>
+                      <span className="text-sky-300">Pre</span> <span className="text-white/60">→</span> <span className="text-emerald-300">Post</span>
                     </th>
                   )}
                   {kinematicsResults.post && kinematicsResults.baseline && (
                     <th className="text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap">
-                      <span className="text-emerald-300">Post</span> <span className="text-white/60">?</span> <span className="text-amber-300">Healthy</span>
+                      <span className="text-emerald-300">Post</span> <span className="text-white/60">→</span> <span className="text-amber-300">Healthy</span>
                     </th>
                   )}
                 </tr>
@@ -5602,7 +5578,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                               <span className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-72 px-3 py-2 text-[11px] leading-relaxed text-white bg-slate-800/95 border border-white/[0.04] rounded-lg shadow-xl pointer-events-none">
                                 {metric.direction === "higher" && <span className="text-emerald-400 font-bold block mb-1">\u2191 Higher = Better</span>}
                                 {metric.direction === "lower" && <span className="text-emerald-400 font-bold block mb-1">\u2193 Lower = Better</span>}
-                                ? {metric.tip}
+                                {metric.tip}
                               </span>
                             </span>
                           )}
@@ -5627,7 +5603,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                                 {deltaPrePost.text}
                               </span>
                             ) : (
-                              <span className="text-white/20 text-xs">?</span>
+                              <span className="text-white/20 text-xs">{NA}</span>
                             )}
                           </td>
                         )}
@@ -5639,7 +5615,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                                 {deltaPostHealthy.text}
                               </span>
                             ) : (
-                              <span className="text-white/20 text-xs">?</span>
+                              <span className="text-white/20 text-xs">{NA}</span>
                             )}
                           </td>
                         )}
@@ -5660,13 +5636,13 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                       </td>
                     ))}
                     {kinematicsResults.pre && kinematicsResults.baseline && (
-                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">?</td>
+                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">{NA}</td>
                     )}
                     {kinematicsResults.pre && kinematicsResults.post && (
-                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">?</td>
+                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">{NA}</td>
                     )}
                     {hasKinTriple && (
-                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">?</td>
+                      <td className="px-2 py-2.5 text-center text-white/20 text-xs">{NA}</td>
                     )}
                   </tr>
                 )}
@@ -5680,7 +5656,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         <Glass className="p-4 sm:p-5">
           <p className="text-sm font-extrabold text-white/80 mb-1">Movement quality &amp; joint specs</p>
           <p className="text-[11px] text-white/45 mb-4 leading-relaxed">
-            Fine motor (index path, micro-stops, pinch), forearm pronation/supination (3D palm normal or index?pinky 2D), shoulder abduction (both shoulders visible), plus flexion/elbow ? and ?/s. Re-analyze after updates. Side-only camera: abduction/rotation flags may show low reliability ? use oblique/frontal clips for rotation tasks.
+            Fine motor (index path, micro-stops, pinch), forearm pronation/supination (3D palm normal or index–pinky 2D), shoulder abduction (both shoulders visible), plus flexion/elbow ? and ?/s. Re-analyze after updates. Side-only camera: abduction/rotation flags may show low reliability ? use oblique/frontal clips for rotation tasks.
           </p>
           <div className="space-y-4">
             {activeResultPhases.map((ph) => {
@@ -5697,7 +5673,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                 <div key={ph.k} className={`rounded-xl border p-3 sm:p-4 ${phaseValueCls(ph.c)}`}>
                   <p className={`text-xs font-extrabold uppercase mb-3 ${phaseLabelCls(ph.c)}`}>{ph.l}</p>
                   {reliabilityNotes.length > 0 && (
-                    <p className="text-[10px] text-amber-200/70 mb-3 leading-snug">{reliabilityNotes.join(" ? ")}</p>
+                    <p className="text-[10px] text-amber-200/70 mb-3 leading-snug">{reliabilityNotes.join(" — ")}</p>
                   )}
                   <div className="space-y-4">
                     {MOVEMENT_PROFILE_GROUP_ORDER.map((groupId) => {
@@ -5710,7 +5686,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                             <div key={f.key} className="rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-2">
                               <p className="text-[9px] font-bold text-white/45 leading-tight">{f.label}</p>
                               <p className="text-sm font-mono font-extrabold text-white/90 mt-0.5">
-                                {formatProfileValue(f.key, val ?? "?")}
+                                {formatProfileValue(f.key, val ?? NA)}
                                 {f.unit ? <span className="text-[9px] font-normal text-white/35 ml-0.5">{f.unit}</span> : null}
                               </p>
                             </div>
@@ -5845,7 +5821,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                 className="w-full max-h-full rounded-xl bg-black"
                 style={{ maxHeight: "calc(100dvh - 5rem)" }}
                 onError={() => {
-                  showToast("Validation video expired on server ? please re-analyze", "error");
+                  showToast("Validation video expired on server — please re-analyze", "error");
                   setMediaPreview(null);
                 }}
               />
@@ -5959,7 +5935,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
     persistList(
       updated,
       removed > 0
-        ? `Merged ${removed} same-name duplicate(s) ? kept preferred Study ID`
+        ? `Merged ${removed} same-name duplicate(s) — kept preferred Study ID`
         : "No same-name duplicates to merge"
     );
     const curId = fd._loadedId || fd.demographics?.participantId;
@@ -6020,21 +5996,21 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
 
             <div className="flex flex-wrap gap-2 text-[10px] text-white/40 mb-2">
               {d.age && <span>Age: {d.age}</span>}
-              {d.sex && <span>? {d.sex === "1" ? "Male" : "Female"}</span>}
-              {d.strokeType && <span>? {d.strokeType === "1" ? "Ischemic" : "Hemorrhagic"}</span>}
-              {d.side && <span>? {d.side === "1" ? "Left" : "Right"} side</span>}
+              {d.sex && <span>{d.sex === "1" ? "Male" : "Female"}</span>}
+              {d.strokeType && <span>{d.strokeType === "1" ? "Ischemic" : "Hemorrhagic"}</span>}
+              {d.side && <span>{d.side === "1" ? "Left" : "Right"} side</span>}
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
                 hasPre ? "bg-sky-500/20 border-sky-400/30 text-sky-300" : "bg-white/[0.05] border-white/[0.04] text-white/25"
               }`}>
-                {hasPre ? "? Pre-Assessment" : "? Pre missing"}
+                {hasPre ? "Pre-Assessment" : "Pre missing"}
               </span>
               <span className={`text-[9px] font-bold px-2 py-1 rounded-full border ${
                 hasPost ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-300" : "bg-white/[0.05] border-white/[0.04] text-white/25"
               }`}>
-                {hasPost ? "? Post-Assessment" : "? Post missing"}
+                {hasPost ? "Post-Assessment" : "Post missing"}
               </span>
               <span className="text-[9px] text-white/25 ml-auto">Saved: {formatPatientSavedAt(p._savedAt)}</span>
             </div>
@@ -6046,7 +6022,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
                   onChange={(e) => e.target.value && setGroup(p._id, e.target.value)}
                   className="text-[11px] px-2 py-1.5 rounded-lg bg-white/[0.09] border border-white/[0.08] text-white/80"
                 >
-                  <option value="">Set group?</option>
+                  <option value="">Set group</option>
                   <option value="1">Intervention / AOMI</option>
                   <option value="2">Control</option>
                 </select>
@@ -6055,7 +6031,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
 
             <div className="flex items-center gap-2 flex-shrink-0 flex-wrap mt-3">
               <GBtn variant="sky" onClick={() => onLoadSession(p)} className="text-xs px-3 py-2">
-                <Edit3 className="w-3.5 h-3.5" /> Load / Edit
+                <Edit3 className="w-3.5 h-3.5" /> Load
               </GBtn>
               {mode === "archive" ? (
                 <GBtn variant="default" onClick={() => setArchived(p._id, false)} className="text-xs px-3 py-2">
@@ -6103,7 +6079,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
 
   return (
     <div className="space-y-5">
-      <SH icon={Database} en={archiveOpen ? "Archive" : "Patient Database"} tr={archiveOpen ? "Ar?iv" : "Hasta Veritaban?"} badge={archiveOpen ? `${archived.length}` : `${activeCount} Records`} />
+      <SH icon={Database} en={archiveOpen ? "Archive" : "Patient Database"} tr="" badge={archiveOpen ? `${archived.length}` : `${activeCount} Records`} />
 
       <Glass className="p-4">
         <div className="flex items-center gap-3 flex-wrap">
@@ -6112,7 +6088,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name or Participant ID?"
+              placeholder="Search by name or Participant ID"
               className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/[0.09] border border-white/[0.06] text-white placeholder-white/15 text-sm font-light focus:outline-none focus:bg-white/[0.06] transition-all"
             />
             {search && (
@@ -6175,7 +6151,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
           {confirm === "reorder" ? (
             <div className="flex items-center gap-1.5">
               <GBtn variant="sky" onClick={applyReorder} className="text-xs px-3 py-2">
-                <Check className="w-3.5 h-3.5" /> Confirm reorder 101?
+                <Check className="w-3.5 h-3.5" /> Confirm reorder 101+
               </GBtn>
               <GBtn variant="default" onClick={() => setConfirm(null)} className="text-xs px-3 py-2">
                 <X className="w-3.5 h-3.5" />
@@ -6208,7 +6184,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
           <GBtn
             variant="default"
             onClick={() => { window.location.href = "/connect-drive"; }}
-            title="Reconnect Google Drive (same window ? keeps PWA session)"
+            title="Reconnect Google Drive (same window — keeps PWA session)"
           >
             <HardDrive className="w-4 h-4" />
             Connect Drive
@@ -6230,7 +6206,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
               title="Align Google Drive folders 1:1 with this patient list (merge alias folders, keep files)"
             >
               <RefreshCw className={`w-4 h-4 ${rebuildingDrive ? "animate-spin" : ""}`} />
-              {rebuildingDrive ? "Rebuilding Drive?" : "Rebuild Drive from Database"}
+              {rebuildingDrive ? "Rebuilding Drive…" : "Rebuild Drive from Database"}
             </GBtn>
           )}
           <button
@@ -6252,16 +6228,16 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
         {nameDupes.length > 0 && (
           <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2.5 text-[11px] text-amber-100/90 leading-relaxed">
             <p className="font-semibold text-amber-100 mb-1">
-              Same name, different Study IDs (legacy duplicates) ? {nameDupes.length} name(s)
+              Same name, different Study IDs (legacy duplicates) — {nameDupes.length} name(s)
             </p>
             <p className="text-amber-100/70 mb-1">
-              Use ?Merge same names? (prefers 101+), then Sync or ?Rebuild Drive from Database? to merge alias folders on Google Drive (files moved first; empty aliases trashed).
+              Use Merge same names (prefers 101+), then Sync or Rebuild Drive from Database to merge alias folders on Google Drive (files moved first; empty aliases trashed).
             </p>
             <ul className="list-disc pl-4 space-y-0.5 text-amber-50/80">
               {nameDupes.slice(0, 8).map((g) => (
                 <li key={g.key}>{g.name}: Study IDs {g.ids.join(", ")}</li>
               ))}
-              {nameDupes.length > 8 && <li>?and {nameDupes.length - 8} more</li>}
+              {nameDupes.length > 8 && <li>and {nameDupes.length - 8} more</li>}
             </ul>
           </div>
         )}
@@ -6314,13 +6290,13 @@ function buildSummaryRows(fd) {
   const calcDelta = (pre, post, metricName) => {
     const p = parseFloat(pre);
     const q = parseFloat(post);
-    if (isNaN(p) || isNaN(q)) return "?";
+    if (isNaN(p) || isNaN(q)) return NA;
     const d = q - p;
     if (d === 0) return "0.00";
     return (d > 0 ? "+" : "") + d.toFixed(2);
   };
 
-  const v = (x) => (x !== undefined && x !== null && x !== "" ? String(x) : "?");
+  const v = (x) => (x !== undefined && x !== null && x !== "" ? String(x) : NA);
 
   // VAS
   const vas = fd.vas || {};
@@ -6331,7 +6307,7 @@ function buildSummaryRows(fd) {
     const pre = v(vas[item.k]?.pre);
     const post = v(vas[item.k]?.post);
     const pNum = parseFloat(pre), qNum = parseFloat(post);
-    const improving = (pre !== "?" && post !== "?")
+    const improving = (!isMissing(pre) && !isMissing(post))
       ? (pNum === qNum ? null : (lowerIsBetter(item.en) ? pNum > qNum : qNum > pNum))
       : null;
     rows.push({ tool:"VAS", metric:item.en, pre, post, delta:calcDelta(pre, post, item.en), improving });
@@ -6348,7 +6324,7 @@ function buildSummaryRows(fd) {
     const pre = v(vams[item.k]?.pre);
     const post = v(vams[item.k]?.post);
     const pNum = parseFloat(pre), qNum = parseFloat(post);
-    const improving = (pre !== "?" && post !== "?")
+    const improving = (!isMissing(pre) && !isMissing(post))
       ? (pNum === qNum ? null : (lowerIsBetter(item.en) ? pNum > qNum : qNum > pNum))
       : null;
     rows.push({ tool:"VAMS", metric:item.en, pre, post, delta:calcDelta(pre, post, item.en), improving });
@@ -6361,9 +6337,9 @@ function buildSummaryRows(fd) {
     rows.push({
       tool:"Muscle Control",
       metric:item.en,
-      pre: item.phase === "pre" ? val : "?",
-      post: item.phase === "post" ? val : "?",
-      delta:"?"
+      pre: item.phase === "pre" ? val : NA,
+      post: item.phase === "post" ? val : NA,
+      delta: NA
     });
   });
 
@@ -6373,7 +6349,7 @@ function buildSummaryRows(fd) {
     KGIA_TYPES.forEach((t) => {
       const pre = v(kgia[`${mi}_${t.key}`]?.once);
       const post = v(kgia[`${mi}_${t.key}`]?.sonra);
-      const improving = (pre !== "?" && post !== "?") ? (parseFloat(pre) === parseFloat(post) ? null : parseFloat(post) > parseFloat(pre)) : null;
+      const improving = (!isMissing(pre) && !isMissing(post)) ? (parseFloat(pre) === parseFloat(post) ? null : parseFloat(post) > parseFloat(pre)) : null;
       rows.push({ tool:"KVIQ", metric:`${t.en}: ${mov.en}`, pre, post, delta:calcDelta(pre, post), improving });
     })
   );
@@ -6386,10 +6362,10 @@ function buildSummaryRows(fd) {
     const preR = v(wmft[t.id]?.pre?.rating);
     const postR = v(wmft[t.id]?.post?.rating);
 
-    const improvingT = (preT !== "?" && postT !== "?") ? (parseFloat(preT) === parseFloat(postT) ? null : parseFloat(preT) > parseFloat(postT)) : null;
-    const improvingR = (preR !== "?" && postR !== "?") ? (parseFloat(preR) === parseFloat(postR) ? null : parseFloat(postR) > parseFloat(preR)) : null;
-    rows.push({ tool:"WMFT", metric:`${t.en} ? Time (sec)`, pre:preT, post:postT, delta:calcDelta(preT, postT), improving: improvingT });
-    rows.push({ tool:"WMFT", metric:`${t.en} ? Ability Rating (0?5)`, pre:preR, post:postR, delta:calcDelta(preR, postR), improving: improvingR });
+    const improvingT = (!isMissing(preT) && !isMissing(postT)) ? (parseFloat(preT) === parseFloat(postT) ? null : parseFloat(preT) > parseFloat(postT)) : null;
+    const improvingR = (!isMissing(preR) && !isMissing(postR)) ? (parseFloat(preR) === parseFloat(postR) ? null : parseFloat(postR) > parseFloat(preR)) : null;
+    rows.push({ tool:"WMFT", metric:`${t.en} — Time (sec)`, pre:preT, post:postT, delta:calcDelta(preT, postT), improving: improvingT });
+    rows.push({ tool:"WMFT", metric:`${t.en} — Ability Rating (0–5)`, pre:preR, post:postR, delta:calcDelta(preR, postR), improving: improvingR });
   });
 
   const bbt = fd.bbt || {};
@@ -6397,15 +6373,15 @@ function buildSummaryRows(fd) {
   const bbtPostP = v(bbt.post?.pareticBlocks);
   const bbtPreU = v(bbt.pre?.unaffectedBlocks);
   const bbtPostU = v(bbt.post?.unaffectedBlocks);
-  const bbtImpP = (bbtPreP !== "?" && bbtPostP !== "?")
+  const bbtImpP = (!isMissing(bbtPreP) && !isMissing(bbtPostP))
     ? (parseFloat(bbtPreP) === parseFloat(bbtPostP) ? null : parseFloat(bbtPostP) > parseFloat(bbtPreP))
     : null;
-  rows.push({ tool:"BBT", metric:"Paretic hand ? blocks / 60s", pre:bbtPreP, post:bbtPostP, delta:calcDelta(bbtPreP, bbtPostP), improving: bbtImpP });
-  if (bbtPreU !== "?" || bbtPostU !== "?") {
-    const bbtImpU = (bbtPreU !== "?" && bbtPostU !== "?")
+  rows.push({ tool:"BBT", metric:"Paretic hand — blocks / 60s", pre:bbtPreP, post:bbtPostP, delta:calcDelta(bbtPreP, bbtPostP), improving: bbtImpP });
+  if (!isMissing(bbtPreU) || !isMissing(bbtPostU)) {
+    const bbtImpU = (!isMissing(bbtPreU) && !isMissing(bbtPostU))
       ? (parseFloat(bbtPreU) === parseFloat(bbtPostU) ? null : parseFloat(bbtPostU) > parseFloat(bbtPreU))
       : null;
-    rows.push({ tool:"BBT", metric:"Unaffected hand ? blocks / 60s (optional)", pre:bbtPreU, post:bbtPostU, delta:calcDelta(bbtPreU, bbtPostU), improving: bbtImpU });
+    rows.push({ tool:"BBT", metric:"Unaffected hand — blocks / 60s (optional)", pre:bbtPreU, post:bbtPostU, delta:calcDelta(bbtPreU, bbtPostU), improving: bbtImpU });
   }
 
   // Kinematics (video overlay metrics ? same source as Kinematic Lab)
@@ -6418,10 +6394,10 @@ function buildSummaryRows(fd) {
   kinDisplay.forEach((item) => {
     const preRaw = resolveKinMetricValue(krLive.pre, item.k);
     const postRaw = resolveKinMetricValue(krLive.post, item.k);
-    const pre = preRaw != null ? formatKinValue(item.k, preRaw) : "?";
-    const post = postRaw != null ? formatKinValue(item.k, postRaw) : "?";
+    const pre = preRaw != null ? formatKinValue(item.k, preRaw) : NA;
+    const post = postRaw != null ? formatKinValue(item.k, postRaw) : NA;
     const pNum = parseFloat(pre), qNum = parseFloat(post);
-    const improving = (pre !== "?" && post !== "?")
+    const improving = (!isMissing(pre) && !isMissing(post))
       ? (pNum === qNum ? null : (item.dir === "lower" ? pNum > qNum : qNum > pNum))
       : null;
     rows.push({ tool:"Kinematics", metric:item.en, pre, post, delta:calcDelta(pre, post, item.en), improving });
@@ -6493,7 +6469,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
   const calcKinDelta = (pre, post) => {
     const p = parseFloat(pre);
     const q = parseFloat(post);
-    if (isNaN(p) || isNaN(q)) return "?";
+    if (isNaN(p) || isNaN(q)) return NA;
     const delta = q - p;
     return (delta >= 0 ? "+" : "") + delta.toFixed(2);
   };
@@ -6520,37 +6496,37 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       if (tool === "VAS") {
         const imp = items.filter((r) => r.improving === true).length;
         const wors = items.filter((r) => r.improving === false).length;
-        if (imp && !wors) { en.push("Pain decreased"); tr.push("A?r? azald?"); }
-        else if (wors && !imp) { en.push("Pain increased"); tr.push("A?r? artt?"); }
-        else if (imp && wors) { en.push("Mixed pain results"); tr.push("Kar???k a?r? sonu?lar?"); }
-        else { en.push("Pain stable"); tr.push("A?r? sabit"); }
+        if (imp && !wors) { en.push("Pain decreased"); tr.push("Ağrı azaldı"); }
+        else if (wors && !imp) { en.push("Pain increased"); tr.push("Ağrı arttı"); }
+        else if (imp && wors) { en.push("Mixed pain results"); tr.push("Karışık ağrı sonuçları"); }
+        else { en.push("Pain stable"); tr.push("Ağrı sabit"); }
       } else if (tool === "VAMS") {
         const pos = ["Happy","Calm"]; const neg = ["Sad","Tense"];
         const posUp = items.filter((r) => pos.some((n) => r.metric.includes(n)) && r.improving).length;
         const negDown = items.filter((r) => neg.some((n) => r.metric.includes(n)) && r.improving).length;
-        if (posUp) { en.push("Positive mood improved"); tr.push("Olumlu ruh hali iyile?ti"); }
-        if (negDown) { en.push("Negative mood decreased"); tr.push("Olumsuz ruh hali azald?"); }
+        if (posUp) { en.push("Positive mood improved"); tr.push("Olumlu ruh hali iyileşti"); }
+        if (negDown) { en.push("Negative mood decreased"); tr.push("Olumsuz ruh hali azaldı"); }
         if (!en.length) { en.push("Mood stable"); tr.push("Ruh hali sabit"); }
       } else if (tool === "Muscle Control") {
-        const preVal = trows.find(r => r.pre !== "?")?.pre;
-        const postVal = trows.find(r => r.post !== "?")?.post;
-        if (preVal && postVal && parseFloat(postVal) > parseFloat(preVal)) { en.push("Muscle control improved"); tr.push("Kas kontrol? iyile?ti"); }
-        else if (preVal && postVal && parseFloat(postVal) < parseFloat(preVal)) { en.push("Muscle control declined"); tr.push("Kas kontrol? azald?"); }
-        else if (preVal || postVal) { en.push("Muscle control stable"); tr.push("Kas kontrol? sabit"); }
+        const preVal = trows.find(r => !isMissing(r.pre))?.pre;
+        const postVal = trows.find(r => !isMissing(r.post))?.post;
+        if (preVal && postVal && parseFloat(postVal) > parseFloat(preVal)) { en.push("Muscle control improved"); tr.push("Kas kontrolü iyileşti"); }
+        else if (preVal && postVal && parseFloat(postVal) < parseFloat(preVal)) { en.push("Muscle control declined"); tr.push("Kas kontrolü azaldı"); }
+        else if (preVal || postVal) { en.push("Muscle control stable"); tr.push("Kas kontrolü sabit"); }
       } else if (tool === "KVIQ") {
         const imp = items.filter((r) => r.improving).length;
         const tot = items.length;
-        if (imp > tot / 2) { en.push("Imagery improved in most items"); tr.push("?o?u ??ede imgeleme iyile?ti"); }
-        else if (imp > 0) { en.push("Imagery improved in some items"); tr.push("Baz? ??elerde imgeleme iyile?ti"); }
-        else { en.push("Imagery stable"); tr.push("?mgeleme sabit"); }
+        if (imp > tot / 2) { en.push("Imagery improved in most items"); tr.push("Çoğu öğede imgeleme iyileşti"); }
+        else if (imp > 0) { en.push("Imagery improved in some items"); tr.push("Bazı öğelerde imgeleme iyileşti"); }
+        else { en.push("Imagery stable"); tr.push("İmgeleme sabit"); }
       } else if (tool === "WMFT") {
         const time = items.filter((r) => r.metric.includes("Time"));
         const rate = items.filter((r) => r.metric.includes("Rating"));
-        if (time.some((r) => r.improving)) { en.push("Faster task time"); tr.push("Daha h?zl? g?rev s?resi"); }
-        if (time.some((r) => r.improving === false)) { en.push("Slower task time"); tr.push("Daha yava? g?rev s?resi"); }
-        if (rate.some((r) => r.improving)) { en.push("Functional ability improved"); tr.push("Fonksiyonel yetenek iyile?ti"); }
-        if (rate.some((r) => r.improving === false)) { en.push("Functional ability declined"); tr.push("Fonksiyonel yetenek azald?"); }
-        if (!en.length && items.length) { en.push("No notable change in WMFT"); tr.push("WMFT'de kayda de?er de?i?iklik yok"); }
+        if (time.some((r) => r.improving)) { en.push("Faster task time"); tr.push("Daha hızlı görev süresi"); }
+        if (time.some((r) => r.improving === false)) { en.push("Slower task time"); tr.push("Daha yavaş görev süresi"); }
+        if (rate.some((r) => r.improving)) { en.push("Functional ability improved"); tr.push("Fonksiyonel yetenek iyileşti"); }
+        if (rate.some((r) => r.improving === false)) { en.push("Functional ability declined"); tr.push("Fonksiyonel yetenek azaldı"); }
+        if (!en.length && items.length) { en.push("No notable change in WMFT"); tr.push("WMFT'de kayda değer değişiklik yok"); }
       } else if (tool === "BBT") {
         const paretic = items.find((r) => r.metric.includes("Paretic"));
         if (paretic?.improving === true) { en.push("More blocks transferred (paretic hand)"); tr.push("Etkilenen elde daha fazla blok"); }
@@ -6559,8 +6535,8 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       } else if (tool === "Kinematics") {
         const imp = items.filter((r) => r.improving).length;
         const tot = items.length;
-        if (imp > tot / 2) { en.push("Kinematics improved"); tr.push("Kinematik iyile?ti"); }
-        else if (imp > 0) { en.push("Kinematics partially improved"); tr.push("Kinematik k?smen iyile?ti"); }
+        if (imp > tot / 2) { en.push("Kinematics improved"); tr.push("Kinematik iyileşti"); }
+        else if (imp > 0) { en.push("Kinematics partially improved"); tr.push("Kinematik kısmen iyileşti"); }
         else if (tot > 0) { en.push("Kinematics stable"); tr.push("Kinematik sabit"); }
       }
       if (!en.length) return "";
@@ -6568,10 +6544,10 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     };
 
     const toolMeta = {
-      "VAS":            { label: "Pain Scale (VAS) / A?r? Skalas?",            color: "#800020", bg: "#fdf2f4" },
+      "VAS":            { label: "Pain Scale (VAS) / Ağrı Skalası",            color: "#800020", bg: "#fdf2f4" },
       "VAMS":           { label: "Mood Scale (VAMS-4) / Ruh Hali",             color: "#0ea5e9", bg: "#f0f9ff" },
-      "Muscle Control": { label: "Muscle Control Scale / Kas Kontrol?",        color: "#10b981", bg: "#ecfdf5" },
-      "KVIQ":           { label: "Motor Imagery (KVIQ) / Motor ?mgeleme",      color: "#0d9488", bg: "#f0fdfa" },
+      "Muscle Control": { label: "Muscle Control Scale / Kas Kontrolü",        color: "#10b981", bg: "#ecfdf5" },
+      "KVIQ":           { label: "Motor Imagery (KVIQ) / Motor İmgeleme",      color: "#0d9488", bg: "#f0fdfa" },
       "WMFT":           { label: "Wolf Motor Function (WMFT) / Motor Fonksiyon",color: "#0ea5e9", bg: "#ecfeff" },
       "BBT":            { label: "Box & Block Test (BBT) / Kutu Blok Testi",     color: "#ea580c", bg: "#fff7ed" },
       "Kinematics":     { label: "Kinematic Analysis / Kinematik Analiz",        color: "#f43f5e", bg: "#fff1f2" },
@@ -6588,7 +6564,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
         if (text) all.push(`<p class="sum-item"><span class="sum-badge" style="background:${(toolMeta[tool] || toolMeta.VAS).color}88">${esc(tool)}</span> ${text.replace(/<\/?div[^>]*>/g, "").trim()}</p>`);
       });
       if (!all.length) return "";
-      return `<div class="singlecol pagebreak"><div class="card" style="border-left:6px solid #0d9488"><div class="badge" style="background:#0d948888;font-size:11px;padding:5px 18px">Summary / ?zet</div>${all.join("")}</div></div>`;
+      return `<div class="singlecol pagebreak"><div class="card" style="border-left:6px solid #0d9488"><div class="badge" style="background:#0d948888;font-size:11px;padding:5px 18px">Summary / Özet</div>${all.join("")}</div></div>`;
     };
 
     const buildNarrativeSummary = () => {
@@ -6597,31 +6573,31 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
       Object.entries(grouped).forEach(([tool, trows]) => {
         if (tool === "VAS") {
-          const items = trows.filter(r => r.delta !== "?" && r.delta !== "\u2014" && r.pre !== "?" && r.post !== "?");
+          const items = trows.filter(r => !isMissing(r.delta) && r.delta !== "\u2014" && !isMissing(r.pre) && !isMissing(r.post));
           if (!items.length) return;
           const parts = items.map(r => {
             const p = parseFloat(r.pre), q = parseFloat(r.post);
             const d = q - p;
             const trend = trendWord(-d, "decreased (improvement)", "increased (worsening)");
-            return `${esc(r.metric)} went from ${r.pre} to ${r.post} (?${r.delta}), indicating pain ${trend}`;
+            return `${esc(r.metric)} went from ${r.pre} to ${r.post} (Δ ${r.delta}), indicating pain ${trend}`;
           });
           sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#0d9488">Pain Scale (VAS):</strong> ${parts.join("; ")}.</p>`);
           return;
         }
 
         if (tool === "VAMS") {
-          const items = trows.filter(r => r.delta !== "?" && r.delta !== "\u2014" && r.pre !== "?" && r.post !== "?");
+          const items = trows.filter(r => !isMissing(r.delta) && r.delta !== "\u2014" && !isMissing(r.pre) && !isMissing(r.post));
           if (!items.length) return;
           const positive = ["Happy","Calm"]; const negative = ["Sad","Tense"];
           const posItems = items.filter(r => positive.some(n => r.metric.includes(n)));
           const negItems = items.filter(r => negative.some(n => r.metric.includes(n)));
           const parts = [];
           if (posItems.length) {
-            const trends = posItems.map(r => `${r.pre}?${r.post} (?${r.delta})`).join(", ");
+            const trends = posItems.map(r => `${r.pre}→${r.post} (Δ ${r.delta})`).join(", ");
             parts.push(`positive moods (${trends})`);
           }
           if (negItems.length) {
-            const trends = negItems.map(r => `${r.pre}?${r.post} (?${r.delta})`).join(", ");
+            const trends = negItems.map(r => `${r.pre}→${r.post} (Δ ${r.delta})`).join(", ");
             parts.push(`negative moods (${trends})`);
           }
           sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#0ea5e9">Mood Scale (VAMS-4):</strong> ${parts.join("; ")}.</p>`);
@@ -6629,18 +6605,18 @@ const ReportSection = ({ fd, onChange, showToast }) => {
         }
 
         if (tool === "Muscle Control") {
-          const preRow = trows.find(r => r.pre !== "?");
-          const postRow = trows.find(r => r.post !== "?");
+          const preRow = trows.find(r => !isMissing(r.pre));
+          const postRow = trows.find(r => !isMissing(r.post));
           const preVal = preRow?.pre, postVal = postRow?.post;
           if (!preVal || !postVal) return;
           const d = parseFloat(postVal) - parseFloat(preVal);
           const trend = trendWord(d, "improved", "declined");
-          sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#10b981">Muscle Control:</strong> The participant's perceived muscle control changed from ${preVal} to ${postVal} (?${d > 0 ? "+" : ""}${d.toFixed(2)}), indicating the feeling of control has ${trend}.</p>`);
+          sections.push(`<p style="font-size:12px;color:#334155;line-height:1.8;margin:0 0 12px 0"><strong style="color:#10b981">Muscle Control:</strong> The participant's perceived muscle control changed from ${preVal} to ${postVal} (Δ ${d > 0 ? "+" : ""}${d.toFixed(2)}), indicating the feeling of control has ${trend}.</p>`);
           return;
         }
 
         if (tool === "KVIQ") {
-          const items = trows.filter(r => r.delta !== "?" && r.delta !== "\u2014" && r.pre !== "?" && r.post !== "?");
+          const items = trows.filter(r => !isMissing(r.delta) && r.delta !== "\u2014" && !isMissing(r.pre) && !isMissing(r.post));
           if (!items.length) return;
           const imp = items.filter(r => r.improving === true).length;
           const wors = items.filter(r => r.improving === false).length;
@@ -6661,7 +6637,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
         }
 
         if (tool === "WMFT") {
-          const items = trows.filter(r => r.delta !== "?" && r.delta !== "\u2014" && r.pre !== "?" && r.post !== "?");
+          const items = trows.filter(r => !isMissing(r.delta) && r.delta !== "\u2014" && !isMissing(r.pre) && !isMissing(r.post));
           if (!items.length) return;
           const timeItems = items.filter(r => r.metric.includes("Time"));
           const rateItems = items.filter(r => r.metric.includes("Rating"));
@@ -6681,7 +6657,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
         }
 
         if (tool === "BBT") {
-          const paretic = trows.find(r => r.metric.includes("Paretic") && r.pre !== "?" && r.post !== "?");
+          const paretic = trows.find(r => r.metric.includes("Paretic") && !isMissing(r.pre) && !isMissing(r.post));
           if (!paretic) return;
           const preN = parseFloat(paretic.pre);
           const postN = parseFloat(paretic.post);
@@ -6692,7 +6668,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
         }
 
         if (tool === "Kinematics") {
-          const items = trows.filter(r => r.delta !== "?" && r.delta !== "\u2014" && r.pre !== "?" && r.post !== "?");
+          const items = trows.filter(r => !isMissing(r.delta) && r.delta !== "\u2014" && !isMissing(r.pre) && !isMissing(r.post));
           if (!items.length) return;
           const improved = items.filter(r => r.improving === true).map(r => r.metric);
           const worsened = items.filter(r => r.improving === false).map(r => r.metric);
@@ -6705,7 +6681,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       });
 
       if (!sections.length) return "";
-      return `<div class="singlecol pagebreak"><div class="card" style="border-left:6px solid #0d9488"><div class="badge" style="background:#0d948888;font-size:11px;padding:5px 18px">Clinical Narrative / Klinik Anlat?m</div><div style="padding:4px 0">${sections.join("")}</div></div></div>`;
+      return `<div class="singlecol pagebreak"><div class="card" style="border-left:6px solid #0d9488"><div class="badge" style="background:#0d948888;font-size:11px;padding:5px 18px">Clinical Narrative / Klinik Anlatım</div><div style="padding:4px 0">${sections.join("")}</div></div></div>`;
     };
     const deltaCell = (r) => {
       if (!r.delta || r.delta === "\u2014") return `<span class="delta neutral">\u2014</span>`;
@@ -6715,19 +6691,19 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
     let toolSections = "";
     Object.entries(grouped).filter(([tool]) => tool !== "Kinematics").forEach(([tool, trows]) => {
-      const hasData = trows.some(r => r.pre !== "?" || r.post !== "?");
+      const hasData = trows.some(r => !isMissing(r.pre) || !isMissing(r.post));
       if (!hasData) return;
       const meta = toolMeta[tool] || { label: tool, color: "#0d9488" };
       const interp = buildToolInterp(tool, trows);
       let body;
       if (tool === "Muscle Control") {
-        const preRow = trows.find(r => r.pre !== "?");
-        const postRow = trows.find(r => r.post !== "?");
-        const preVal = preRow ? preRow.pre : "?";
-        const postVal = postRow ? postRow.post : "?";
-        const delta = preVal !== "?" && postVal !== "?"
+        const preRow = trows.find(r => !isMissing(r.pre));
+        const postRow = trows.find(r => !isMissing(r.post));
+        const preVal = preRow ? preRow.pre : NA;
+        const postVal = postRow ? postRow.post : NA;
+        const delta = !isMissing(preVal) && !isMissing(postVal)
           ? (parseFloat(postVal) - parseFloat(preVal)).toFixed(2)
-          : "?";
+          : NA;
         body = `<tr><td class="metric">Felt Difference</td><td class="num">${preVal}</td><td class="num">${postVal}</td><td class="num">${delta}</td></tr>`;
       } else {
         body = trows.map((r) => `
@@ -6771,8 +6747,8 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       const postIdx = videoKin.headers.indexOf("Post");
       const healthyIdx = videoKin.headers.indexOf("Healthy side");
       const head = videoKin.headers.map((h) => `<th>${esc(h)}</th>`).join("")
-        + (preIdx >= 0 && postIdx >= 0 ? '<th style="text-align:center">Pre ? Post</th>' : "")
-        + (postIdx >= 0 && healthyIdx >= 0 ? '<th style="text-align:center">Post ? Healthy</th>' : "");
+        + (preIdx >= 0 && postIdx >= 0 ? '<th style="text-align:center">Pre → Post</th>' : "")
+        + (postIdx >= 0 && healthyIdx >= 0 ? '<th style="text-align:center">Post → Healthy</th>' : "");
       const body = fBody.map((row, ri) => {
         const dir = videoKin.varMeta?.[ri]?.dir || kinDirectionMap(row[0]);
         let prePostHtml = "";
@@ -6785,9 +6761,9 @@ const ReportSection = ({ fd, onChange, showToast }) => {
             const badge = resolveKinPrePostCell(
               preVal, postVal, dir, metricKey || "unknown", videoKin.kr, null,
             );
-            prePostHtml = `<td class="num">${esc(badge?.text || "?")}</td>`;
+            prePostHtml = `<td class="num">${esc(badge?.text || NA)}</td>`;
           } else {
-            prePostHtml = '<td class="num">?</td>';
+            prePostHtml = `<td class="num">${NA}</td>`;
           }
         }
         if (postIdx >= 0 && healthyIdx >= 0) {
@@ -6795,9 +6771,9 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           const helVal = parseFloat(row[healthyIdx]);
           if (!isNaN(postVal) && !isNaN(helVal)) {
             const badge = kinPostHealthyBadge(null, postVal, helVal, dir);
-            postHealthyHtml = `<td class="num">${esc(badge?.text || "?")}</td>`;
+            postHealthyHtml = `<td class="num">${esc(badge?.text || NA)}</td>`;
           } else {
-            postHealthyHtml = '<td class="num">?</td>';
+            postHealthyHtml = `<td class="num">${NA}</td>`;
           }
         }
         return `<tr>${row.map((c, i) => `<td class="${i < 2 ? "metric" : "num"}">${esc(c)}</td>`).join("")}${prePostHtml}${postHealthyHtml}</tr>`;
@@ -6840,7 +6816,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     }
 
     const demoItems = [
-      ["Age / Ya?", d.age ? `${d.age} yrs` : "\u2014"],
+      ["Age / Yaş", d.age ? `${d.age} yrs` : "\u2014"],
       ["Sex", d.sex === "1" ? "Male" : d.sex === "2" ? "Female" : "\u2014"],
       ["Stroke Type", d.strokeType === "1" ? "Ischemic" : d.strokeType === "2" ? "Hemorrhagic" : "\u2014"],
       ["Affected Side", d.side === "1" ? "Left" : d.side === "2" ? "Right" : "\u2014"],
@@ -6870,9 +6846,9 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       const medTotal = ((parseFloat(ipaq.medium?.sure)||0)*(parseFloat(ipaq.medium?.gun)||0)) || 0;
       const lightTotal = ((parseFloat(ipaq.light?.sure)||0)*(parseFloat(ipaq.light?.gun)||0)) || 0;
       let clsLevel, clsColor, clsText;
-      if (highDays >= 3 && ipaqTotalMET >= 1500) { clsLevel="High"; clsColor="#10b981"; clsText="Vigorous activity ?3 days & ?1500 MET-min/week"; }
-      else if ((medDays+lightDays) >= 7 && ipaqTotalMET >= 3000) { clsLevel="High"; clsColor="#10b981"; clsText="Mixed activities 7 days & ?3000 MET-min/week"; }
-      else if (ipaqTotalMET >= 600 || (medDays+lightDays >= 5 && (medTotal+lightTotal) >= 150)) { clsLevel="Moderate"; clsColor="#f59e0b"; clsText="?600 MET-min/week or 5+ days moderate/walking"; }
+      if (highDays >= 3 && ipaqTotalMET >= 1500) { clsLevel="High"; clsColor="#10b981"; clsText="Vigorous activity ≥3 days and ≥1500 MET-min/week"; }
+      else if ((medDays+lightDays) >= 7 && ipaqTotalMET >= 3000) { clsLevel="High"; clsColor="#10b981"; clsText="Mixed activities 7 days and ≥3000 MET-min/week"; }
+      else if (ipaqTotalMET >= 600 || (medDays+lightDays >= 5 && (medTotal+lightTotal) >= 150)) { clsLevel="Moderate"; clsColor="#f59e0b"; clsText="≥600 MET-min/week or 5+ days moderate/walking"; }
       else { clsLevel="Low"; clsColor="#f43f5e"; clsText="Not meeting moderate or high criteria"; }
       ipaqSection = '<div class="singlecol"><div class="card"><div class="badge" style="background:#0ea5e988">Physical Activity (IPAQ) / Fiziksel Aktivite</div><div class="tblwrap"><table><thead><tr style="background:#0ea5e988;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)"><th>Activity</th><th>Days/wk</th><th>Min/day</th><th>Total min/wk</th><th>MET</th><th>MET-min/wk</th></tr></thead><tbody>' + ipaqRows + '</tbody></table></div>'
         + '<hr style="border:none;border-top:1px solid rgba(0,0,0,0.06);margin:14px 0">'
@@ -6894,9 +6870,9 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     const notesSrc = (d.notes || "").trim();
     const fmtNotes = notesSrc ? esc(notesSrc) : "";
     const notesHtml = d.antispasticDrugs || d.otherDrugs || notesSrc ? '<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.3)">' +
-      (d.antispasticDrugs ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Antispastic Drugs / Antispastik ?la?lar:</strong><br>' + esc(d.antispasticDrugs) + '</p>' : "") +
-      (d.otherDrugs ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Other Medications / Di?er ?la?lar:</strong><br>' + esc(d.otherDrugs) + '</p>' : "") +
-      (fmtNotes ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Clinical Notes / Klinik Notlar:</strong><br><div style="margin-top:4px;white-space:pre-wrap">' + fmtNotes + '</div></p>' : "") +
+      (d.antispasticDrugs ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Antispastic Drugs / Antispastik İlaçlar:</strong><br>' + esc(d.antispasticDrugs) + '</p>' : "") +
+      (d.otherDrugs ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Other Medications / Diğer İlaçlar:</strong><br>' + esc(d.otherDrugs) + '</p>' : "") +
+      (fmtNotes ? '<p style="font-size:11px;color:#334155;margin:0 0 4px"><strong style="color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:0.05em">Clinical Notes:</strong><br><div style="margin-top:4px;white-space:pre-wrap">' + fmtNotes + '</div></p>' : "") +
     '</div>' : "";
 
     const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
@@ -6959,7 +6935,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
   }
 </style></head><body><div class="wrap">
   <div class="header" style="background:${d.group === "1" ? "rgba(167,243,208,0.3)" : "rgba(251,207,232,0.4)"}">
-    <div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik De?erlendirme Raporu</div></div>
+    <div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div>
     <div class="meta">${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}<br>${esc(d.name || "Participant")}</div>
   </div>
   <div class="patient">
@@ -6982,7 +6958,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     if (isMobile) {
       downloadBlob(blob, `report_${d.participantId || d.name || "participant"}.html`);
-      alert("? Report downloaded ? open the file and print to PDF");
+      alert("Report downloaded — open the file and print to PDF");
     } else {
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank");
@@ -7067,17 +7043,17 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     rr(M, y, CW, 32, R, C.white, C.gray200);
     rr(M + 2, y + 2, 4, 28, 2, C.teal, null);
 
-    txt(d.name || "?", M + 10, y + 9, 13, true, C.gray900);
+    txt(d.name || NA, M + 10, y + 9, 13, true, C.gray900);
     txt(d.participantId ? `ID: ${d.participantId}` : "", M + 10, y + 15, 7.5, false, C.gray500);
 
     const demoGrid = [
-      ["Age",        d.age ? `${d.age} yrs` : "?"],
-      ["Sex",        d.sex === "1" ? "Male" : d.sex === "2" ? "Female" : "?"],
-      ["Stroke",     d.strokeType === "1" ? "Ischemic" : d.strokeType === "2" ? "Hemorrhagic" : "?"],
-      ["Side",       d.side === "1" ? "Left" : d.side === "2" ? "Right" : "?"],
-      ["TSS",        d.timeSinceStroke ? `${d.timeSinceStroke}m` : "?"],
-      ["MAS",        d.mas || "?"],
-      ["MRC",        d.mrc || "?"],
+      ["Age",        d.age ? `${d.age} yrs` : NA],
+      ["Sex",        d.sex === "1" ? "Male" : d.sex === "2" ? "Female" : NA],
+      ["Stroke",     d.strokeType === "1" ? "Ischemic" : d.strokeType === "2" ? "Hemorrhagic" : NA],
+      ["Side",       d.side === "1" ? "Left" : d.side === "2" ? "Right" : NA],
+      ["TSS",        d.timeSinceStroke ? `${d.timeSinceStroke}m` : NA],
+      ["MAS",        d.mas || NA],
+      ["MRC",        d.mrc || NA],
     ];
     const colW = CW / 4;
     demoGrid.forEach((item, i) => {
@@ -7144,7 +7120,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           if (data.column.index === 3 && data.section === "body") {
             const delta = data.row.raw[3];
             const imp   = data.row.raw[4];
-            if (delta && delta !== "?") {
+            if (delta && !isMissing(delta)) {
               data.cell.styles.textColor = imp === true ? C.green : imp === false ? C.red : C.gray700;
             }
           }
@@ -7252,13 +7228,13 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
     // Sheet 2: Clinical Summary
     const ws2 = XLSX.utils.aoa_to_sheet([
-      ["Tool", "Metric / Task", "Pre-Assessment", "Post-Assessment", "? Change"],
+      ["Tool", "Metric / Task", "Pre-Assessment", "Post-Assessment", "Change"],
       ...rows.map((r) => [
         r.tool,
         r.metric,
-        r.pre === "?" ? "" : r.pre,
-        r.post === "?" ? "" : r.post,
-        r.delta === "?" ? "" : r.delta,
+        isMissing(r.pre) ? "" : r.pre,
+        isMissing(r.post) ? "" : r.post,
+        isMissing(r.delta) ? "" : r.delta,
       ]),
     ]);
     ws2["!cols"] = [{ wch: 20 }, { wch: 55 }, { wch: 18 }, { wch: 18 }, { wch: 12 }];
@@ -7266,7 +7242,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
     // Sheet 3: VAS
     const vas = fd.vas || {};
-    const vasSheet = [["Metric", "Pre (0-10)", "Post (0-10)", "?"]];
+    const vasSheet = [["Metric", "Pre (0-10)", "Post (0-10)", "Change"]];
     [
       { k:"rest", en:"Pain at Rest" },
       { k:"activity", en:"Pain During Activity" },
@@ -7275,7 +7251,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
     // Sheet 4: VAMS-4
     const vams = fd.vams || {};
-    const vamsSheet = [["Metric", "Pre (0-10)", "Post (0-10)", "?"]];
+    const vamsSheet = [["Metric", "Pre (0-10)", "Post (0-10)", "Change"]];
     [
       { k:"happy", en:"Happy" },
       { k:"sad", en:"Sad" },
@@ -7286,7 +7262,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
     // Sheet 5: KVIQ
     const kgia = fd.kgia || {};
-    const kviqSheet = [["#", "Movement", "Type", "Pre (1-5)", "Post (1-5)", "?"]];
+    const kviqSheet = [["#", "Movement", "Type", "Pre (1-5)", "Post (1-5)", "Change"]];
     KGIA_MOVEMENTS.forEach((mov, mi) =>
       KGIA_TYPES.forEach((t) =>
         kviqSheet.push([
@@ -7327,7 +7303,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       XLSX.utils.book_append_sheet(
         wb,
         XLSX.utils.aoa_to_sheet([
-          ["Task", "Variable", "Unit", "Pre", "Post", "Healthy", "? Pre?Post"],
+          ["Task", "Variable", "Unit", "Pre", "Post", "Healthy", "Δ Pre→Post"],
           ...taskKinRows.map((r) => [
             r.taskId || "",
             r.name || "",
@@ -7345,7 +7321,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       XLSX.utils.book_append_sheet(
         wb,
         XLSX.utils.aoa_to_sheet([
-          ["Variable", "Unit", "Pre", "Post", "?"],
+          ["Variable", "Unit", "Pre", "Post", "Change"],
           ...kinRows.map((r) => [r.name || "", r.unit || "", r.pre || "", r.post || "", calcKinDelta(r.pre, r.post)]),
         ]),
         "Kinematics"
@@ -7363,7 +7339,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     }
     const result = await syncTaskExcelsToDrive(allPts, { showToast, downloadLocal: true });
     if (result.count) {
-      showToast(`? Excel ? ${result.count} task file(s); Drive ${result.uploaded}/${result.count}`, "success");
+      showToast(`Excel — ${result.count} task file(s); Drive ${result.uploaded}/${result.count}`, "success");
     }
   };
 
@@ -7401,7 +7377,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       "neuro_study_analysis.sps"
     ), count * 400);
 
-    showToast("? Exported master + group CSVs + SPSS syntax");
+    showToast("Exported master + group CSVs + SPSS syntax");
   };
 
   // ?? JSON Export (all patients) ??
@@ -7425,12 +7401,12 @@ const ReportSection = ({ fd, onChange, showToast }) => {
     const syn = generateStudySPSSyntax("master_study_data.csv", masterRows[0]);
     const blob = new Blob(["\uFEFF" + syn], { type: "text/plain;charset=utf-8" });
     downloadBlob(blob, "neuro_study_analysis.sps");
-    showToast("? SPSS syntax downloaded (neuro_study_analysis.sps)");
+    showToast("SPSS syntax downloaded (neuro_study_analysis.sps)");
   };
 
   return (
     <div className="space-y-5">
-      <SH icon={FileText} en="Clinical Report & Export" tr="Klinik Rapor ve D??a Aktarma" />
+      <SH icon={FileText} en="Clinical Report & Export" tr="Export" />
 
       {d.name && (
         <Glass className="p-4 border-l-2 border-violet-400/40">
@@ -7442,7 +7418,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
             <div className="min-w-0">
               <p className="font-extrabold text-white text-sm">{d.name}</p>
               <p className="text-xs text-white/40 truncate">
-                {d.participantId} ? {d.age} yrs ? {d.strokeType} ? {d.side} side
+                {d.participantId} — {d.age} yrs — {d.strokeType} — {d.side} side
               </p>
             </div>
 
@@ -7463,20 +7439,20 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           <div className="flex items-start gap-3 mb-4">
             <FileText className="w-5 h-5 text-violet-300 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-extrabold text-white/90">Clinical Notes / Klinik Notlar</p>
+              <p className="text-sm font-extrabold text-white/90">Clinical Notes</p>
               <p className="text-xs font-light text-white/40 mt-0.5">Medical history, medications, and clinician observations</p>
             </div>
           </div>
           <div className="space-y-3">
             {d.antispasticDrugs && (
               <div className="glass-float bg-white/[0.09] border border-white/12 rounded-xl px-4 py-2.5">
-                <p className="text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-1">Antispastic Drugs / Antispastik ?la?lar</p>
+                <p className="text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-1">Antispastic Drugs</p>
                 <p className="text-sm text-white/80 font-medium">{d.antispasticDrugs}</p>
               </div>
             )}
             {d.otherDrugs && (
               <div className="glass-float bg-white/[0.09] border border-white/12 rounded-xl px-4 py-2.5">
-                <p className="text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-1">Other Medications / Di?er ?la?lar</p>
+                <p className="text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-1">Other Medications</p>
                 <p className="text-sm text-white/80 font-medium">{d.otherDrugs}</p>
               </div>
             )}
@@ -7498,7 +7474,6 @@ const ReportSection = ({ fd, onChange, showToast }) => {
               <Activity className="w-5 h-5 text-sky-300 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-extrabold text-white/90">International Physical Activity Questionnaire (IPAQ)</p>
-                <p className="text-xs font-light text-white/40 mt-0.5">Uluslararas? Fiziksel Aktivite Anketi</p>
               </div>
             </div>
             <div className="glass-float overflow-x-auto rounded-xl border border-white/[0.08]">
@@ -7537,9 +7512,9 @@ const ReportSection = ({ fd, onChange, showToast }) => {
               const med = totMin(IPAQ_ACTS.find(a=>a.id==="medium")) || 0;
               const light = totMin(IPAQ_ACTS.find(a=>a.id==="light")) || 0;
               let cls;
-              if (highDays >= 3 && totalMET >= 1500) cls = { level:"High", color:"emerald", text:"Vigorous activity ?3 days & ?1500 MET-min/week" };
-              else if ((medDays + lightDays) >= 7 && totalMET >= 3000) cls = { level:"High", color:"emerald", text:"Mixed activities 7 days & ?3000 MET-min/week" };
-              else if (totalMET >= 600 || (medDays + lightDays >= 5 && (med + light) >= 150)) cls = { level:"Moderate", color:"amber", text:"?600 MET-min/week or 5+ days moderate/walking" };
+              if (highDays >= 3 && totalMET >= 1500) cls = { level:"High", color:"emerald", text:"Vigorous activity ≥3 days and ≥1500 MET-min/week" };
+              else if ((medDays + lightDays) >= 7 && totalMET >= 3000) cls = { level:"High", color:"emerald", text:"Mixed activities 7 days and ≥3000 MET-min/week" };
+              else if (totalMET >= 600 || (medDays + lightDays >= 5 && (med + light) >= 150)) cls = { level:"Moderate", color:"amber", text:"≥600 MET-min/week or 5+ days moderate/walking" };
               else cls = { level:"Low", color:"rose", text:"Not meeting moderate or high criteria" };
               return (
                 <><div className="my-4 border-t border-white/[0.06]" />
@@ -7569,7 +7544,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
           <BarChart3 className="w-5 h-5 text-amber-300 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-extrabold text-white/90">Clinical Summary Dashboard</p>
-            <p className="text-xs font-light text-white/40 mt-0.5">All assessment tools ? Pre vs Post results ? Auto-calculated ?</p>
+            <p className="text-xs font-light text-white/40 mt-0.5">All assessment tools — Pre vs Post results — auto-calculated</p>
           </div>
         </div>
 
@@ -7590,24 +7565,24 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                       <th className="text-left px-4 py-2.5 text-xs font-extrabold text-white/50 uppercase">Metric / Task</th>
                       <th className="text-center px-3 py-2.5 text-xs font-extrabold text-sky-300 uppercase">Pre</th>
                       <th className="text-center px-3 py-2.5 text-xs font-extrabold text-emerald-300 uppercase">Post</th>
-                      <th className="text-center px-3 py-2.5 text-xs font-extrabold text-amber-300 uppercase">? Change</th>
+                      <th className="text-center px-3 py-2.5 text-xs font-extrabold text-amber-300 uppercase">Change</th>
                     </tr>
                   </thead>
 
                   <tbody>
                     {tool === "Muscle Control" ? (() => {
-                      const preRow = toolRows.find(r => r.pre !== "?");
-                      const postRow = toolRows.find(r => r.post !== "?");
-                      const preVal = preRow ? preRow.pre : "?";
-                      const postVal = postRow ? postRow.post : "?";
-                      const delta = preVal !== "?" && postVal !== "?" ? (parseFloat(postVal) - parseFloat(preVal)).toFixed(2) : "?";
-                      const imp = preVal !== "?" && postVal !== "?" ? (parseFloat(postVal) > parseFloat(preVal) ? true : parseFloat(postVal) < parseFloat(preVal) ? false : null) : null;
+                      const preRow = toolRows.find(r => !isMissing(r.pre));
+                      const postRow = toolRows.find(r => !isMissing(r.post));
+                      const preVal = preRow ? preRow.pre : NA;
+                      const postVal = postRow ? postRow.post : NA;
+                      const delta = !isMissing(preVal) && !isMissing(postVal) ? (parseFloat(postVal) - parseFloat(preVal)).toFixed(2) : NA;
+                      const imp = !isMissing(preVal) && !isMissing(postVal) ? (parseFloat(postVal) > parseFloat(preVal) ? true : parseFloat(postVal) < parseFloat(preVal) ? false : null) : null;
                       return (
                         <tr className="border-b border-white/[0.05] bg-white/[0.02]">
                           <td className="px-4 py-2.5 text-xs text-white/75 font-medium">Felt Difference</td>
                           <td className="px-3 py-2.5 text-center"><span className="px-2.5 py-1 rounded-lg border bg-sky-500/10 border-sky-400/20 text-sky-200 text-xs font-bold">{preVal}</span></td>
                           <td className="px-3 py-2.5 text-center"><span className="px-2.5 py-1 rounded-lg border bg-emerald-500/10 border-emerald-400/20 text-emerald-200 text-xs font-bold">{postVal}</span></td>
-                          <td className="px-3 py-2.5 text-center"><span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${delta === "?" ? "text-white/25 bg-white/[0.03] border-white/[0.06]" : imp === true ? "text-emerald-300 bg-emerald-500/20 border-emerald-400/30" : imp === false ? "text-rose-300 bg-rose-500/20 border-rose-400/30" : "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>{delta}</span></td>
+                          <td className="px-3 py-2.5 text-center"><span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${isMissing(delta) ? "text-white/25 bg-white/[0.03] border-white/[0.06]" : imp === true ? "text-emerald-300 bg-emerald-500/20 border-emerald-400/30" : imp === false ? "text-rose-300 bg-rose-500/20 border-rose-400/30" : "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>{delta}</span></td>
                         </tr>
                       );
                     })() : (
@@ -7619,7 +7594,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                             <td className="px-4 py-2.5 text-xs text-white/75 font-medium">{row.metric}</td>
                             <td className="px-3 py-2.5 text-center"><span className="px-2.5 py-1 rounded-lg border bg-sky-500/10 border-sky-400/20 text-sky-200 text-xs font-bold">{row.pre}</span></td>
                             <td className="px-3 py-2.5 text-center"><span className="px-2.5 py-1 rounded-lg border bg-emerald-500/10 border-emerald-400/20 text-emerald-200 text-xs font-bold">{row.post}</span></td>
-                            <td className="px-3 py-2.5 text-center"><span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${dVal === "?" ? "text-white/25 bg-white/[0.03] border-white/[0.06]" : imp === true ? "text-emerald-300 bg-emerald-500/20 border-emerald-400/30" : imp === false ? "text-rose-300 bg-rose-500/20 border-rose-400/30" : "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>{dVal}</span></td>
+                            <td className="px-3 py-2.5 text-center"><span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${isMissing(dVal) ? "text-white/25 bg-white/[0.03] border-white/[0.06]" : imp === true ? "text-emerald-300 bg-emerald-500/20 border-emerald-400/30" : imp === false ? "text-rose-300 bg-rose-500/20 border-rose-400/30" : "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>{dVal}</span></td>
                           </tr>
                         );
                       })
@@ -7669,7 +7644,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                     <th className="text-left px-3 py-2.5 text-xs font-extrabold text-white/50 uppercase">Unit</th>
                     <th className="text-center px-3 py-2.5 text-sky-300 uppercase">Pre</th>
                     <th className="text-center px-3 py-2.5 text-emerald-300 uppercase">Post</th>
-                    <th className="text-center px-3 py-2.5 text-amber-300 uppercase">?</th>
+                    <th className="text-center px-3 py-2.5 text-amber-300 uppercase">Δ</th>
                   </tr>
                 </thead>
 
@@ -7677,17 +7652,17 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                   {kinRows.map((r, i) => (
                     <tr key={r.id || i} className={`border-b border-white/[0.05] hover:bg-white/[0.03] ${i % 2 === 0 ? "" : "bg-white/[0.02]"}`}>
                       <td className="px-4 py-2.5 text-xs text-white/75 font-bold">{r.name}</td>
-                      <td className="px-3 py-2.5 text-center text-xs text-white/40">{r.unit || "?"}</td>
+                      <td className="px-3 py-2.5 text-center text-xs text-white/40">{r.unit || NA}</td>
 
                       <td className="px-3 py-2.5 text-center">
                         <span className="px-2.5 py-1 rounded-lg border bg-sky-500/10 border-sky-400/20 text-sky-200 text-xs font-bold">
-                          {r.pre || "?"}
+                          {showVal(r.pre)}
                         </span>
                       </td>
 
                       <td className="px-3 py-2.5 text-center">
                         <span className="px-2.5 py-1 rounded-lg border bg-emerald-500/10 border-emerald-400/20 text-emerald-200 text-xs font-bold">
-                          {r.post || "?"}
+                          {showVal(r.post)}
                         </span>
                       </td>
 
@@ -7696,7 +7671,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                           className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${
                             (() => {
                               const d = calcKinDelta(r.pre, r.post);
-                              if (d === "?") return "text-white/25 bg-white/[0.03] border-white/[0.06]";
+                              if (isMissing(d)) return "text-white/25 bg-white/[0.03] border-white/[0.06]";
                               const dir = kinDirectionMap(r.name);
                               const isImprovement = dir === "lower" ? d.startsWith("-") : d.startsWith("+");
                               return isImprovement
@@ -7762,7 +7737,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                       </th>
                     ))}
                     {preIdx >= 0 && postIdx >= 0 && <th className="text-center px-3 py-2.5 text-xs font-extrabold text-white/50 uppercase">Pre → Post</th>}
-                    {postIdx >= 0 && healthyIdx >= 0 && <th className="text-center px-3 py-2.5 text-xs font-extrabold text-white/50 uppercase">Post ? Healthy</th>}
+                    {postIdx >= 0 && healthyIdx >= 0 && <th className="text-center px-3 py-2.5 text-xs font-extrabold text-white/50 uppercase">Post → Healthy</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -7780,7 +7755,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                         );
                         prePostHtml = (
                           <span className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold ${badge?.colorClass || "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>
-                            {badge?.text || "?"}
+                            {badge?.text || NA}
                           </span>
                         );
                       }
@@ -7792,7 +7767,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                         const badge = kinPostHealthyBadge(null, postVal, helVal, dir);
                         postHealthyHtml = (
                           <span className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold ${badge?.colorClass || "text-white/40 bg-white/[0.05] border-white/[0.08]"}`}>
-                            {badge?.text || "?"}
+                            {badge?.text || NA}
                           </span>
                         );
                       }
@@ -7809,10 +7784,10 @@ const ReportSection = ({ fd, onChange, showToast }) => {
                           </td>
                         ))}
                         {preIdx >= 0 && postIdx >= 0 && (
-                          <td className="px-3 py-2.5 text-center">{prePostHtml || <span className="text-white/25 text-xs">?</span>}</td>
+                          <td className="px-3 py-2.5 text-center">{prePostHtml || <span className="text-white/25 text-xs">{NA}</span>}</td>
                         )}
                         {postIdx >= 0 && healthyIdx >= 0 && (
-                          <td className="px-3 py-2.5 text-center">{postHealthyHtml || <span className="text-white/25 text-xs">?</span>}</td>
+                          <td className="px-3 py-2.5 text-center">{postHealthyHtml || <span className="text-white/25 text-xs">{NA}</span>}</td>
                         )}
                       </tr>
                     );
@@ -7842,7 +7817,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
               </div>
               <div>
                 <p className="font-extrabold text-rose-200 text-sm">Download PDF</p>
-                <p className="text-[10px] text-rose-300/60">Glassmorphism Report ? Print/Save PDF</p>
+                <p className="text-[10px] text-rose-300/60">Glassmorphism Report — Print/Save PDF</p>
               </div>
             </div>
             <p className="text-xs text-white/45 leading-relaxed">
@@ -7863,11 +7838,11 @@ const ReportSection = ({ fd, onChange, showToast }) => {
               </div>
               <div>
                 <p className="font-extrabold text-teal-200 text-sm">Export Excel (per task)</p>
-                <p className="text-[10px] text-teal-300/60">One file / clinical task ? Drive/Excel</p>
+                <p className="text-[10px] text-teal-300/60">One file / clinical task — Drive/Excel</p>
               </div>
             </div>
             <p className="text-xs text-white/45 leading-relaxed">
-              Active patients only. Each workbook has <strong className="text-white/60">one task</strong> and that task?s kinematic columns (no archive, no mixed tasks).
+              Active patients only. Each workbook has <strong className="text-white/60">one task</strong> and that task's kinematic columns (no archive, no mixed tasks).
             </p>
           </motion.button>
 
@@ -7884,7 +7859,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
               </div>
               <div>
                 <p className="font-extrabold text-sky-200 text-sm">This patient Excel</p>
-                <p className="text-[10px] text-sky-300/60">Clinical sheets + this task?s kinematics</p>
+                <p className="text-[10px] text-sky-300/60">Clinical sheets + this task's kinematics</p>
               </div>
             </div>
             <p className="text-xs text-white/45 leading-relaxed">
@@ -7951,7 +7926,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
               </div>
             </div>
             <p className="text-xs text-white/45 leading-relaxed">
-              Run this syntax before analysis ? auto-defines all variable labels, value labels, and measure levels.
+              Run this syntax before analysis — auto-defines all variable labels, value labels, and measure levels.
             </p>
           </motion.button>
         </div>
@@ -8124,7 +8099,7 @@ const AnalysisDashboard = () => {
   const missingFields = [];
   pts.forEach((pt) => {
     const d = pt.demographics || {};
-    const id = d.participantId || "?";
+    const id = d.participantId || NA;
     if (!d.participantId) missingFields.push({ id, field: "Study ID" });
     if (!d.group) missingFields.push({ id, field: "Group" });
     if (!getPatientKinPhase(pt, "pre")) missingFields.push({ id, field: "Kinematics Pre" });
@@ -8143,7 +8118,7 @@ const AnalysisDashboard = () => {
       alert("No active task kinematics for Excel export (archived sessions are excluded)");
       return;
     }
-    alert(`Exported ${result.count} task Excel file(s). Drive upload: ${result.uploaded}/${result.count} ? RAED_AI_Backups/Excel/`);
+    alert(`Exported ${result.count} task Excel file(s). Drive upload: ${result.uploaded}/${result.count} — RAED_AI_Backups/Excel/`);
   };
 
   const downloadSpssSyntax = () => {
@@ -8185,7 +8160,7 @@ const AnalysisDashboard = () => {
 
   return (
     <div className="space-y-5">
-      <SH icon={BarChart3} en="Analysis Dashboard" tr="Analiz Paneli" badge="RCT v6" />
+      <SH icon={BarChart3} en="Analysis Dashboard" tr="Analysis" badge="RCT v6" />
 
       <div className="flex flex-wrap gap-2">
         <TabBtn id="plan" label="Analysis Plan" />
@@ -8196,14 +8171,14 @@ const AnalysisDashboard = () => {
 
       {/* Enrollment ? always visible */}
       <Glass className="p-5">
-        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Enrollment / Kay?t (target n={STUDY_DESIGN.targetN})</p>
+        <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Enrollment (target n={STUDY_DESIGN.targetN})</p>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
             { label: "Total", val: n, color: "text-white" },
             { label: "AOMI", val: aomi.length, color: "text-teal-300" },
             { label: "Control", val: ctrl.length, color: "text-rose-300" },
             { label: "Kin complete", val: kinComplete, color: "text-sky-300" },
-            { label: "Ready for ANOVA", val: rows.length >= 8 && aomi.length >= 2 && ctrl.length >= 2 ? "?" : "?", color: "text-amber-300" },
+            { label: "Ready for ANOVA", val: rows.length >= 8 && aomi.length >= 2 && ctrl.length >= 2 ? "Yes" : "No", color: "text-amber-300" },
           ].map((item) => (
             <div key={item.label} className="glass-float p-3 rounded-xl bg-white/[0.09] border border-white/12 text-center">
               <p className={`text-xl font-black ${item.color}`}>{item.val}</p>
@@ -8229,29 +8204,29 @@ const AnalysisDashboard = () => {
                 min="0"
                 className="mt-1 w-full bg-transparent text-lg font-black text-white outline-none"
                 value={val}
-                placeholder={auto != null ? String(auto) : "?"}
+                placeholder={auto != null ? String(auto) : ""}
                 onChange={(e) => saveConsort({ [k]: e.target.value === "" ? "" : parseInt(e.target.value, 10) })}
               />
               {auto != null && <p className="text-[9px] text-white/30 mt-1">Auto: {auto}</p>}
             </div>
           ))}
         </div>
-        <p className="text-[10px] text-white/35">Healthy side collected: {healthyComplete} ? LOCF export: {locfExport ? "on" : "off"}</p>
+        <p className="text-[10px] text-white/35">Healthy side collected: {healthyComplete} — LOCF export: {locfExport ? "on" : "off"}</p>
       </Glass>
 
       {tab === "plan" && (
         <>
           <Glass className="p-5">
             <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-3">Study Design</p>
-            <p className="text-sm text-white/70 leading-relaxed mb-4">{STUDY_DESIGN.design} ? Primary: <strong className="text-violet-300">{STUDY_DESIGN.primaryOutcome}</strong> ? ?={STUDY_DESIGN.alpha}</p>
+            <p className="text-sm text-white/70 leading-relaxed mb-4">{STUDY_DESIGN.design} — Primary: <strong className="text-violet-300">{STUDY_DESIGN.primaryOutcome}</strong> — α={STUDY_DESIGN.alpha}</p>
             <div className="grid md:grid-cols-2 gap-4 text-xs">
               <div>
-                <p className="font-bold text-teal-300 mb-2">Kinematic ({KINEMATIC_VARS.length} vars ? manuscript tiers)</p>
+                <p className="font-bold text-teal-300 mb-2">Kinematic ({KINEMATIC_VARS.length} vars — manuscript tiers)</p>
                 <ul className="space-y-1 text-white/60">
                   {KINEMATIC_VARS.map((k) => (
                     <li key={k.key}>
-                      ? {k.label} ({k.key}) ? {k.tier}
-                      {k.dir === "lower" ? " ?" : k.dir === "higher" ? " ?" : ""}
+                      • {k.label} ({k.key}) — {k.tier}
+                      {k.dir === "lower" ? " ↓" : k.dir === "higher" ? " ↑" : ""}
                     </li>
                   ))}
                 </ul>
@@ -8260,7 +8235,7 @@ const AnalysisDashboard = () => {
                 <p className="font-bold text-amber-300 mb-2">Clinical & moderators</p>
                 <ul className="space-y-1 text-white/60">
                   {CLINICAL_VARS.map((c) => (
-                    <li key={c.label}>? {c.label} ({c.tier})</li>
+                    <li key={c.label}>• {c.label} ({c.tier})</li>
                   ))}
                 </ul>
               </div>
@@ -8290,12 +8265,12 @@ const AnalysisDashboard = () => {
           <Glass className="p-5">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <div>
-                <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest">Preliminary 2?2 Analysis</p>
-                <p className="text-[10px] text-amber-400/80 font-bold mt-1">? between groups ? Group?Time interaction ? Confirm in SPSS GLM</p>
+                <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest">Preliminary 2×2 Analysis</p>
+                <p className="text-[10px] text-amber-400/80 font-bold mt-1">Δ between groups — Group×Time interaction — confirm in SPSS GLM</p>
               </div>
               <button type="button" onClick={runBackendAnalysis} disabled={runningBackend || rows.length < 4}
                 className="px-4 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-extrabold disabled:opacity-40">
-                {runningBackend ? "Running?" : "Run Python ANOVA (backend)"}
+                {runningBackend ? "Running…" : "Run Python ANOVA (backend)"}
               </button>
             </div>
 
@@ -8304,31 +8279,31 @@ const AnalysisDashboard = () => {
             <thead>
               <tr className="bg-white/[0.04] border-b border-white/[0.08]">
                     <th className="text-left px-3 py-2 font-extrabold text-white/50">Outcome</th>
-                    <th className="text-center px-2 py-2 text-emerald-200">Normal?</th>
+                    <th className="text-center px-2 py-2 text-emerald-200">Normal</th>
                     <th className="text-center px-2 py-2 text-sky-300">AOMI Pre</th>
                     <th className="text-center px-2 py-2 text-emerald-300">AOMI Post</th>
                     <th className="text-center px-2 py-2 text-rose-300">Ctrl Pre</th>
                     <th className="text-center px-2 py-2 text-amber-300">Ctrl Post</th>
-                    <th className="text-center px-2 py-2 text-violet-300">AOMI ? p</th>
-                    <th className="text-center px-2 py-2 text-violet-300">Ctrl ? p</th>
-                    <th className="text-center px-2 py-2 font-extrabold text-white">Group ? p</th>
+                    <th className="text-center px-2 py-2 text-violet-300">AOMI Δ p</th>
+                    <th className="text-center px-2 py-2 text-violet-300">Ctrl Δ p</th>
+                    <th className="text-center px-2 py-2 font-extrabold text-white">Group Δ p</th>
                     <th className="text-center px-2 py-2">d</th>
               </tr>
             </thead>
             <tbody>
                   {outcomes.map((r) => {
-                    const fmtM = (s) => s ? `${s.mean}?${s.sd}` : "?";
+                    const fmtM = (s) => s ? `${s.mean}±${s.sd}` : NA;
                     const norm = normalityForOutcome(r);
                 return (
                       <tr key={r.label} className={`border-b border-white/[0.04] ${r.isPrimary ? "bg-violet-500/10" : ""}`}>
                         <td className="px-3 py-2 text-white/70 font-medium">
-                          {r.isPrimary ? "? " : ""}{r.label}
+                          {r.isPrimary ? "★ " : ""}{r.label}
                           {r.pre?.includes("_Pre") && r.label && (
                             <span className="block text-[9px] text-white/30 font-normal">{r.pre?.replace("_Pre", "")}</span>
                           )}
                         </td>
                         <td className="px-2 py-2 text-center text-[10px]">
-                          {norm ? (norm.normal ? <span className="text-emerald-400" title={`skew=${norm.skew} kurt=${norm.kurt}`}>?</span> : <span className="text-amber-400" title={`skew=${norm.skew} kurt=${norm.kurt}`}>NP</span>) : "?"}
+                          {norm ? (norm.normal ? <span className="text-emerald-400" title={`skew=${norm.skew} kurt=${norm.kurt}`}>Yes</span> : <span className="text-amber-400" title={`skew=${norm.skew} kurt=${norm.kurt}`}>NP</span>) : NA}
                         </td>
                         <td className="px-2 py-2 text-center text-white/55">{fmtM(r.aomiPre)}</td>
                         <td className="px-2 py-2 text-center text-white/55">{fmtM(r.aomiPost)}</td>
@@ -8337,7 +8312,7 @@ const AnalysisDashboard = () => {
                         <td className="px-2 py-2 text-center">{fmtP(r.withinAomi?.p)}{sigStars(r.withinAomi?.p)}</td>
                         <td className="px-2 py-2 text-center">{fmtP(r.withinCtrl?.p)}{sigStars(r.withinCtrl?.p)}</td>
                         <td className="px-2 py-2 text-center font-bold text-white">{fmtP(r.betweenDelta?.p)}{sigStars(r.betweenDelta?.p)}</td>
-                        <td className="px-2 py-2 text-center text-white/50">{r.betweenDelta?.es != null ? Math.abs(r.betweenDelta.es).toFixed(2) : "?"}</td>
+                        <td className="px-2 py-2 text-center text-white/50">{r.betweenDelta?.es != null ? Math.abs(r.betweenDelta.es).toFixed(2) : NA}</td>
                   </tr>
                 );
               })}
@@ -8349,7 +8324,7 @@ const AnalysisDashboard = () => {
           {backendReport?.outcomes && (
             <>
         <Glass className="p-5">
-              <p className="text-xs font-extrabold text-emerald-300 uppercase tracking-widest mb-4">Backend Mixed ANOVA (Group ? Time)</p>
+              <p className="text-xs font-extrabold text-emerald-300 uppercase tracking-widest mb-4">Backend Mixed ANOVA (Group × Time)</p>
               <div className="overflow-x-auto rounded-xl border border-emerald-500/20">
             <table className="w-full text-xs">
               <thead>
@@ -8357,7 +8332,7 @@ const AnalysisDashboard = () => {
                       <th className="text-left px-3 py-2 text-emerald-200">Outcome</th>
                       <th className="text-center px-3 py-2">F (interaction)</th>
                       <th className="text-center px-3 py-2">p</th>
-                      <th className="text-center px-3 py-2">?p?</th>
+                      <th className="text-center px-3 py-2">ηp²</th>
                 </tr>
               </thead>
               <tbody>
@@ -8366,9 +8341,9 @@ const AnalysisDashboard = () => {
                   return (
                         <tr key={o.base} className="border-b border-white/[0.04]">
                           <td className="px-3 py-2 text-white/70">{o.label}</td>
-                          <td className="px-3 py-2 text-center text-white/60">{ix ? ix.F.toFixed(3) : "?"}</td>
-                          <td className="px-3 py-2 text-center font-bold">{ix ? fmtP(ix.p) : "?"}</td>
-                          <td className="px-3 py-2 text-center text-white/50">{ix ? ix.eta_p2 : "?"}</td>
+                          <td className="px-3 py-2 text-center text-white/60">{ix ? ix.F.toFixed(3) : NA}</td>
+                          <td className="px-3 py-2 text-center font-bold">{ix ? fmtP(ix.p) : NA}</td>
+                          <td className="px-3 py-2 text-center text-white/50">{ix ? ix.eta_p2 : NA}</td>
                     </tr>
                   );
                 })}
@@ -8378,15 +8353,15 @@ const AnalysisDashboard = () => {
         </Glass>
           {backendReport?.holm_secondary_kinematic && (
         <Glass className="p-5">
-              <p className="text-xs font-extrabold text-amber-300 uppercase tracking-widest mb-4">Holm?Bonferroni (secondary kinematic, k={KINEMATIC_VARS.filter((k) => k.tier === "secondary").length})</p>
+              <p className="text-xs font-extrabold text-amber-300 uppercase tracking-widest mb-4">Holm–Bonferroni (secondary kinematic, k={KINEMATIC_VARS.filter((k) => k.tier === "secondary").length})</p>
               <div className="overflow-x-auto rounded-xl border border-amber-500/20">
             <table className="w-full text-xs">
               <thead>
                     <tr className="bg-amber-500/10">
                       <th className="text-left px-3 py-2 text-amber-200">Variable</th>
                       <th className="text-center px-3 py-2">p (interaction)</th>
-                      <th className="text-center px-3 py-2">Holm ?</th>
-                      <th className="text-center px-3 py-2">Sig?</th>
+                      <th className="text-center px-3 py-2">Holm α</th>
+                      <th className="text-center px-3 py-2">Sig</th>
                 </tr>
               </thead>
               <tbody>
@@ -8395,7 +8370,7 @@ const AnalysisDashboard = () => {
                         <td className="px-3 py-2 text-white/70">{h.name}</td>
                         <td className="px-3 py-2 text-center">{fmtP(h.p)}</td>
                         <td className="px-3 py-2 text-center text-white/50">{h.holm_alpha}</td>
-                        <td className="px-3 py-2 text-center font-bold">{h.significant ? "?" : "?"}</td>
+                        <td className="px-3 py-2 text-center font-bold">{h.significant ? "Yes" : "No"}</td>
                     </tr>
                     ))}
               </tbody>
@@ -8415,10 +8390,10 @@ const AnalysisDashboard = () => {
             <p className="text-sm text-white/60 mb-4">Literature review (condensed Introduction) and CONSORT + SAP for committee review.</p>
             <div className="flex flex-wrap gap-3">
               <button type="button" onClick={() => downloadBlob(new Blob(["\uFEFF" + generateLiteratureReviewMarkdown()], { type: "text/markdown;charset=utf-8" }), "THESIS_LITERATURE_REVIEW.md")} className="px-5 py-2.5 rounded-xl bg-teal-500/20 border border-teal-400/30 text-teal-200 text-xs font-extrabold">
-                ? Literature Review
+                Literature Review
               </button>
               <button type="button" onClick={() => downloadBlob(new Blob(["\uFEFF" + generateConsortSapMarkdown()], { type: "text/markdown;charset=utf-8" }), "THESIS_CONSORT_SAP.md")} className="px-5 py-2.5 rounded-xl bg-violet-500/20 border border-violet-400/30 text-violet-200 text-xs font-extrabold">
-                ? CONSORT + SAP
+                CONSORT + SAP
               </button>
           </div>
         </Glass>
@@ -8443,26 +8418,26 @@ const AnalysisDashboard = () => {
       {tab === "export" && (
       <Glass className="p-5">
           <p className="text-xs font-extrabold text-white/50 uppercase tracking-widest mb-4">Post-Study Export Package</p>
-          <p className="text-sm text-white/60 mb-4">After data collection: export master CSV ? open in SPSS ? run syntax ? copy GLM tables to manuscript.</p>
+          <p className="text-sm text-white/60 mb-4">After data collection: export master CSV → open in SPSS → run syntax → copy GLM tables to manuscript.</p>
           <label className="flex items-center gap-2 text-xs text-white/60 mb-4 cursor-pointer">
             <input type="checkbox" checked={locfExport} onChange={(e) => setLocfExport(e.target.checked)} className="rounded" />
-            Apply LOCF imputation (missing Post ? Pre) for ITT export
+            Apply LOCF imputation (missing Post → Pre) for ITT export
           </label>
         <div className="flex flex-wrap gap-3">
             <button type="button" onClick={downloadTaskExcels} className="px-5 py-2.5 rounded-xl bg-teal-500/20 border border-teal-400/30 text-teal-200 text-xs font-extrabold hover:bg-teal-500/30">
-              ? Excel per task ? Drive/Excel
+              Excel per task — Drive/Excel
             </button>
             <button type="button" onClick={downloadMasterCsv} className="px-5 py-2.5 rounded-xl bg-violet-500/20 border border-violet-400/30 text-violet-200 text-xs font-extrabold hover:bg-violet-500/30">
-              ? master_study_data.csv
+              master_study_data.csv
             </button>
             <button type="button" onClick={downloadSpssSyntax} className="px-5 py-2.5 rounded-xl bg-sky-500/20 border border-sky-400/30 text-sky-200 text-xs font-extrabold hover:bg-sky-500/30">
-              ? neuro_study_analysis.sps
+              neuro_study_analysis.sps
             </button>
             <button type="button" onClick={() => {
             const allPts = activePatients();
               downloadBlob(new Blob([JSON.stringify(allPts, null, 2)], { type: "application/json" }), `neuro_backup_${allPts.length}pts.json`);
             }} className="px-5 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-extrabold">
-              ? JSON backup
+              JSON backup
             </button>
           </div>
           <p className="text-[10px] text-white/35 mt-4 font-mono">Excel: one file per clinical task (task variables only; archive excluded). Path: RAED_AI_Backups/Excel/</p>
@@ -8476,7 +8451,7 @@ const AnalysisDashboard = () => {
             {missingFields.slice(0, 20).map((m, i) => (
               <p key={i}>{m.id}: {m.field}</p>
             ))}
-            {missingFields.length > 20 && <p>?and {missingFields.length - 20} more</p>}
+            {missingFields.length > 20 && <p>and {missingFields.length - 20} more</p>}
         </div>
       </Glass>
       )}
@@ -8987,7 +8962,7 @@ export default function App() {
       } catch {}
       if (done && !pending && !localEmpty) return;
       if (cancelled) return;
-      setOriginRestoreBanner("Restoring your study data from the server?");
+      setOriginRestoreBanner("Restoring your study data from the server…");
       const { ok, patients: merged } = await restoreStudyDataFromServer({
         showToast: (msg, variant) => {
           if (!cancelled) showToast(msg, variant);
@@ -9007,10 +8982,10 @@ export default function App() {
         setOriginRestoreBanner(
           count
             ? `Restored ${count} record(s) from server / Google Drive.`
-            : "No records yet ? open Database ? Restore from Drive (PDFs are on Drive)."
+            : "No records yet — open Database → Restore from Drive (PDFs are on Drive)."
         );
       } else {
-        setOriginRestoreBanner("Could not restore yet ? tap Restore from Drive in Database when the Space is awake.");
+        setOriginRestoreBanner("Could not restore yet — tap Restore from Drive in Database when the Space is awake.");
       }
       hideTimer = setTimeout(() => {
         if (!cancelled) setOriginRestoreBanner("");
@@ -9084,10 +9059,10 @@ export default function App() {
       const cleaned = savePatients(patients);
       setFd((prev) => ({ ...prev, _loadedId: existing._id }));
       window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: cleaned.length } }));
-      showToast("? Session updated");
+      showToast("Session updated");
       backupSessionKinematicsVideosToDrive(fdWithKin.kinematics, d);
       syncPatientsWithServer({ silent: true }).then(({ ok }) => {
-        if (!ok) showToast("Saved locally ? server sync pending. Tap Sync in Database.", "error");
+        if (!ok) showToast("Saved locally — server sync pending. Tap Sync in Database.", "error");
       });
     } else {
       // Soft-block: same full name + new Study ID was the main clinic duplicate source.
@@ -9096,7 +9071,7 @@ export default function App() {
       });
       if (nameHits.length > 0) {
         const hit = nameHits[0];
-        const hitId = patientStudyId(hit) || "?";
+        const hitId = patientStudyId(hit) || NA;
         const hitName = patientDisplayName(hit) || "this patient";
         const okUpdate = window.confirm(
           `"${hitName}" already exists as Study ID ${hitId}.\n\n` +
@@ -9104,7 +9079,7 @@ export default function App() {
             `Cancel = abort save (will not create a duplicate)`
         );
         if (!okUpdate) {
-          showToast("Save cancelled ? open the existing patient from Database", "error");
+          showToast("Save cancelled — open the existing patient from Database", "error");
           return;
         }
         const fdWithKin = {
@@ -9139,10 +9114,10 @@ export default function App() {
           },
         }));
         window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: cleaned.length } }));
-        showToast(`? Updated existing Study ID ${hitId} (same name)`);
+        showToast(`Updated existing Study ID ${hitId} (same name)`);
         backupSessionKinematicsVideosToDrive(fdWithKin.kinematics, cleanFd.demographics || d);
         syncPatientsWithServer({ silent: true }).then(({ ok }) => {
-          if (!ok) showToast("Saved locally ? server sync pending. Tap Sync in Database.", "error");
+          if (!ok) showToast("Saved locally — server sync pending. Tap Sync in Database.", "error");
         });
       } else {
         const fdWithKin = { ...fd, kinematics: { ...fd.kinematics, analysisResults: kinResults } };
@@ -9158,10 +9133,10 @@ export default function App() {
         const cleaned = savePatients(patients);
         setFd((prev) => ({ ...prev, _loadedId: newId }));
         window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: cleaned.length } }));
-        showToast("? New patient saved");
+        showToast("New patient saved");
         backupSessionKinematicsVideosToDrive(fdWithKin.kinematics, d);
         syncPatientsWithServer({ silent: true }).then(({ ok }) => {
-          if (!ok) showToast("Saved locally ? server sync pending. Tap Sync in Database.", "error");
+          if (!ok) showToast("Saved locally — server sync pending. Tap Sync in Database.", "error");
         });
         // Stay on the saved patient ? do NOT bump Study ID while keeping the same name/data
         // (that created duplicate people with different Study IDs, especially on iPad).
@@ -9192,7 +9167,7 @@ export default function App() {
     });
     goToSection("demographics");
     if (!isDesktop) setSidebar(false);
-    showToast("? New session started / Yeni seans ba?lat?ld?");
+    showToast("New session started");
     requestAnimationFrame(() => {
       suppressDirtyRef.current = false;
     });
@@ -9370,9 +9345,8 @@ export default function App() {
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <Icon className="w-4 h-4 text-white/60 flex-shrink-0" />
         <span className="text-sm font-extrabold text-white truncate">{nav.en}</span>
-        <span className="text-xs font-light text-white/30 hidden md:inline truncate">/{nav.tr}</span>
         <span className="hidden lg:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-light text-white/40 bg-white/[0.04] border border-white/[0.04]">
-          {new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" })}
+          {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
         </span>
         {readNlVersion() && (
           <span
@@ -9760,7 +9734,7 @@ export default function App() {
                 <div>
                   <p className="text-sm font-medium text-white">{u.name || u.email}</p>
                   <p className="text-xs text-white/50">{u.email}</p>
-                  <p className="text-xs text-white/40">{u.is_approved ? "Approved" : "Pending approval"} {u.is_admin ? "? Admin" : ""}</p>
+                  <p className="text-xs text-white/40">{u.is_approved ? "Approved" : "Pending approval"} {u.is_admin ? " · Admin" : ""}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {!u.is_approved && (
@@ -9997,9 +9971,6 @@ export default function App() {
                       <div className="flex-1 min-w-0 relative z-10">
                         <p className={`text-sm font-extrabold leading-snug sm:truncate ${on ? "text-white" : "text-white/60 group-hover:text-white/85"}`}>
                           {item.en}
-                        </p>
-                        <p className={`text-[10px] font-light leading-snug sm:truncate ${on ? "text-white/40" : "text-white/20"}`}>
-                          {item.tr}
                         </p>
                       </div>
 
@@ -10416,7 +10387,7 @@ export default function App() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b border-white/10 flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-white">Import Preview ? No fields found</h3>
+              <h3 className="text-sm font-extrabold text-white">Import Preview — No fields found</h3>
               <button onClick={cancelImportPreview} className="text-white/50 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
             <div className="flex-1 overflow-auto p-4 space-y-4">
@@ -10426,7 +10397,7 @@ export default function App() {
               <div className="rounded-xl bg-black/40 border border-white/10 p-3">
                 <p className="text-[10px] uppercase tracking-wider text-white/40 mb-1">Extracted text ({importPreview.extractedText.length} chars)</p>
                 <pre className="text-xs text-white/70 whitespace-pre-wrap font-mono max-h-[40vh] overflow-auto">
-                  {importPreview.extractedText || "(empty ? PDF is likely an image)"}
+                  {importPreview.extractedText || "(empty — PDF is likely an image)"}
                 </pre>
               </div>
               <div className="rounded-xl bg-black/40 border border-white/10 p-3">
