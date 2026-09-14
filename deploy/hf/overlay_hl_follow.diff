@@ -1,0 +1,527 @@
+diff --git a/hand_landmarker_extract.py b/hand_landmarker_extract.py
+index 6ae227d..610c7e9 100644
+--- a/hand_landmarker_extract.py
++++ b/hand_landmarker_extract.py
+@@ -16,6 +16,8 @@ import mediapipe as mp
+ import numpy as np
+ import pandas as pd
+ 
++from hl_overlay_resample import MAX_HL_POSE_WRIST, wrist_roi_box
++
+ if sys.platform == "win32":
+     try:
+         sys.stdout.reconfigure(encoding="utf-8")
+@@ -84,32 +86,20 @@ def _crop_hand_roi(
+     fw: int,
+     fh: int,
+     *,
+-    pad: float = 2.2,
++    pad: float = 1.65,
+     tx: Optional[float] = None,
+     ty: Optional[float] = None,
+ ) -> Tuple[np.ndarray, int, int, int, int]:
+-    """Crop a square ROI around wrist–index (and thumb when raised) for tighter HL detection."""
+-    pts_x = [wx * fw, ix * fw]
+-    pts_y = [wy * fh, iy * fh]
+-    if tx is not None and ty is not None and np.isfinite(tx) and np.isfinite(ty):
+-        pts_x.append(tx * fw)
+-        pts_y.append(ty * fh)
+-    cx = float(np.mean(pts_x))
+-    cy = float(np.mean(pts_y))
+-    span_x = max(abs(px - cx) for px in pts_x) if len(pts_x) > 1 else abs(ix - wx) * fw
+-    span_y = max(abs(py - cy) for py in pts_y) if len(pts_y) > 1 else abs(iy - wy) * fh
+-    span = max(span_x, span_y, abs(ix - wx) * fw, abs(iy - wy) * fh, 0.07 * min(fw, fh), 56.0)
+-    if wy < 0.55 or iy < 0.55:
+-        span *= 1.45
+-        pad = max(pad, 3.0)
+-    span *= pad
+-    x0 = int(max(0, round(cx - span * 0.5)))
+-    y0 = int(max(0, round(cy - span * 0.5)))
+-    x1 = int(min(fw, round(cx + span * 0.5)))
+-    y1 = int(min(fh, round(cy + span * 0.5)))
+-    if x1 - x0 < 40 or y1 - y0 < 40:
++    """Crop around the pose wrist. Ignore pose INDEX/THUMB stuck on the table."""
++    x0, y0, cw, ch = wrist_roi_box(
++        wx, wy, ix, iy, fw, fh,
++        tx if tx is not None else float("nan"),
++        ty if ty is not None else float("nan"),
++        pad=pad,
++    )
++    if cw < 40 or ch < 40:
+         return bgr, 0, 0, fw, fh
+-    return bgr[y0:y1, x0:x1], x0, y0, x1 - x0, y1 - y0
++    return bgr[y0:y0 + ch, x0:x0 + cw], x0, y0, cw, ch
+ 
+ 
+ def _handedness_label(result, hand_idx: int) -> str:
+@@ -162,25 +152,27 @@ def _score_hand_candidate(
+     hand_lms = result.hand_landmarks[hand_idx]
+     wx, wy = _hl_wrist_norm(hand_lms, x0, y0, cw, ch, fw, fh)
+     mp_side = _handedness_label(result, hand_idx)
+-    best_side = None
+-    best_dist = float("inf")
+-    for side in ("LEFT", "RIGHT"):
+-        d = _pose_wrist_dist(raw, frame_i, side, wx, wy)
+-        if d < best_dist:
+-            best_dist = d
+-            best_side = side
++    if prefer_side:
++        store_side = prefer_side
++        best_dist = _pose_wrist_dist(raw, frame_i, prefer_side, wx, wy)
++    else:
++        store_side = None
++        best_dist = float("inf")
++        for side in ("LEFT", "RIGHT"):
++            d = _pose_wrist_dist(raw, frame_i, side, wx, wy)
++            if d < best_dist:
++                best_dist = d
++                store_side = side
++        store_side = store_side or mp_side
+     score = 2.5 - best_dist * 12.0
+-    if prefer_side and best_side == prefer_side:
+-        score += 1.0
+-    if mp_side == best_side:
++    if mp_side == store_side:
+         score += 0.35
+     if best_dist > 0.09:
+         score -= 5.0
+     elif best_dist > 0.06:
+         score -= 2.0
+-    if best_dist > 0.14:
+-        score -= 3.0
+-    store_side = best_side or mp_side
++    if best_dist > MAX_HL_POSE_WRIST:
++        score -= 8.0
+     return score, store_side, wx, wy
+ 
+ 
+@@ -203,6 +195,47 @@ def _write_hand_landmarks(
+         raw.at[frame_i, f"{store_side}_HL_{name}_Z"] = float(lm.z)
+ 
+ 
++def _run_landmarker(landmarker, bgr: np.ndarray):
++    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
++    return landmarker.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb))
++
++
++def _pick_result_hand(
++    result,
++    raw: pd.DataFrame,
++    frame_i: int,
++    x0: int,
++    y0: int,
++    cw: int,
++    ch: int,
++    fw: int,
++    fh: int,
++    prefer_side: Optional[str],
++):
++    if not result or not result.hand_landmarks:
++        return None, None, float("inf"), -1e9
++    best_score = -1e9
++    best_side: Optional[str] = None
++    best_lms = None
++    best_dist = float("inf")
++    for hi in range(len(result.hand_landmarks)):
++        score, store_side, hl_wx, hl_wy = _score_hand_candidate(
++            result, hi, raw, frame_i, x0, y0, cw, ch, fw, fh, prefer_side,
++        )
++        if prefer_side:
++            cand_dist = _pose_wrist_dist(raw, frame_i, prefer_side, hl_wx, hl_wy)
++        else:
++            cand_dist = min(
++                _pose_wrist_dist(raw, frame_i, s, hl_wx, hl_wy) for s in ("LEFT", "RIGHT")
++            )
++        if score > best_score:
++            best_score = score
++            best_side = store_side
++            best_dist = cand_dist
++            best_lms = result.hand_landmarks[hi]
++    return best_lms, best_side, best_dist, best_score
++
++
+ def _detect_best_hand(
+     landmarker,
+     bgr: np.ndarray,
+@@ -213,11 +246,13 @@ def _detect_best_hand(
+     fh: int,
+     prefer_side: Optional[str],
+ ) -> Tuple[Optional[str], str]:
+-    """One HL pass per frame; store the hand whose wrist is nearest pose."""
++    """IMAGE-mode HL on a wrist crop so VIDEO tracking cannot stay on the table."""
++    del ts_ms  # IMAGE mode; kept so call sites stay stable
+     detect_bgr = bgr
+     x0, y0, cw, ch = 0, 0, fw, fh
+     tag = "full"
+     roi_side = prefer_side or _resolve_roi_side(raw, frame_i, prefer_side)
++    wx = wy = ix = iy = tx = ty = float("nan")
+     if roi_side:
+         wx = _pose_norm_xy(raw, frame_i, roi_side, "WRIST", "X")
+         wy = _pose_norm_xy(raw, frame_i, roi_side, "WRIST", "Y")
+@@ -225,39 +260,30 @@ def _detect_best_hand(
+         iy = _pose_norm_xy(raw, frame_i, roi_side, "INDEX", "Y")
+         tx = _pose_norm_xy(raw, frame_i, roi_side, "THUMB", "X")
+         ty = _pose_norm_xy(raw, frame_i, roi_side, "THUMB", "Y")
+-        if np.isfinite(wx) and np.isfinite(ix) and np.isfinite(wy) and np.isfinite(iy):
++        if np.isfinite(wx) and np.isfinite(wy):
+             detect_bgr, x0, y0, cw, ch = _crop_hand_roi(
+                 bgr, wx, wy, ix, iy, fw, fh, tx=tx, ty=ty,
+             )
+             if cw < fw or ch < fh:
+                 tag = "roi"
+ 
+-    rgb = cv2.cvtColor(detect_bgr, cv2.COLOR_BGR2RGB)
+-    result = landmarker.detect_for_video(
+-        mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb),
+-        timestamp_ms=int(ts_ms),
++    result = _run_landmarker(landmarker, detect_bgr)
++    best_lms, best_side, best_dist, best_score = _pick_result_hand(
++        result, raw, frame_i, x0, y0, cw, ch, fw, fh, roi_side,
+     )
+-    if not result.hand_landmarks:
+-        return None, tag
+ 
+-    best_score = -1e9
+-    best_side: Optional[str] = None
+-    best_lms = None
+-    best_dist = float("inf")
+-    for hi in range(len(result.hand_landmarks)):
+-        score, store_side, _wx, _wy = _score_hand_candidate(
+-            result, hi, raw, frame_i, x0, y0, cw, ch, fw, fh, roi_side,
++    # One wider wrist crop if the tight box missed the grasping hand — still not full-frame.
++    if (best_lms is None or best_dist > MAX_HL_POSE_WRIST) and tag == "roi" and np.isfinite(wx):
++        detect_bgr, x0, y0, cw, ch = _crop_hand_roi(
++            bgr, wx, wy, ix, iy, fw, fh, tx=tx, ty=ty, pad=2.15,
+         )
+-        cand_dist = min(
+-            _pose_wrist_dist(raw, frame_i, s, _wx, _wy) for s in ("LEFT", "RIGHT")
++        result = _run_landmarker(landmarker, detect_bgr)
++        best_lms, best_side, best_dist, best_score = _pick_result_hand(
++            result, raw, frame_i, x0, y0, cw, ch, fw, fh, roi_side,
+         )
+-        if score > best_score:
+-            best_score = score
+-            best_side = store_side
+-            best_dist = cand_dist
+-            best_lms = result.hand_landmarks[hi]
++        tag = "roi_wide"
+ 
+-    if best_lms is None or best_side is None or best_score < -1.0 or best_dist > 0.11:
++    if best_lms is None or best_side is None or best_score < -1.0 or best_dist > MAX_HL_POSE_WRIST:
+         return None, tag
+ 
+     _write_hand_landmarks(raw, frame_i, best_side, best_lms, x0, y0, cw, ch, fw, fh)
+@@ -333,11 +359,11 @@ def merge_hand_landmarks_into_raw_csv(
+     base_options = python.BaseOptions(model_asset_path=str(mp_path))
+     options = vision.HandLandmarkerOptions(
+         base_options=base_options,
+-        running_mode=vision.RunningMode.VIDEO,
++        running_mode=vision.RunningMode.IMAGE,
+         num_hands=2,
+-        min_hand_detection_confidence=0.30,
+-        min_hand_presence_confidence=0.30,
+-        min_tracking_confidence=0.35,
++        min_hand_detection_confidence=0.25,
++        min_hand_presence_confidence=0.25,
++        min_tracking_confidence=0.25,
+     )
+     landmarker = vision.HandLandmarker.create_from_options(options)
+ 
+@@ -370,7 +396,7 @@ def merge_hand_landmarks_into_raw_csv(
+ 
+         if store_side:
+             detected += 1
+-            if tag == "roi":
++            if tag in ("roi", "roi_wide"):
+                 roi_hits += 1
+         else:
+             rejected_far += 1
+diff --git a/hl_overlay_resample.py b/hl_overlay_resample.py
+new file mode 100644
+index 0000000..1d54f73
+--- /dev/null
++++ b/hl_overlay_resample.py
+@@ -0,0 +1,127 @@
++# -*- coding: utf-8 -*-
++"""HL overlay resampling that does not invent a hand across long dropouts.
++
++``np.interp`` over all finite samples turns a lost-tracking gap (table rest →
++table return) into a fake hand parked on the table for the whole lift.
++"""
++from __future__ import annotations
++
++from typing import Tuple
++
++import numpy as np
++
++
++# Reject a Hand Landmarker wrist that is this far (normalized) from pose wrist.
++MAX_HL_POSE_WRIST = 0.11
++
++
++def resample_with_max_gap(
++    y: np.ndarray,
++    old_t: np.ndarray,
++    new_t: np.ndarray,
++    max_gap_sec: float,
++) -> np.ndarray:
++    """Linear interp only between samples closer than ``max_gap_sec``; else NaN."""
++    y = np.asarray(y, dtype=float)
++    old_t = np.asarray(old_t, dtype=float)
++    new_t = np.asarray(new_t, dtype=float)
++    out = np.full(len(new_t), np.nan)
++    if len(y) == 0 or len(old_t) == 0 or len(new_t) == 0:
++        return out
++    mask = np.isfinite(y) & np.isfinite(old_t)
++    if int(np.count_nonzero(mask)) == 0:
++        return out
++    ot = old_t[mask]
++    oy = y[mask]
++    order = np.argsort(ot)
++    ot = ot[order]
++    oy = oy[order]
++    idx = np.searchsorted(ot, new_t)
++    max_gap = float(max_gap_sec)
++    for i, t in enumerate(new_t):
++        j = int(idx[i])
++        tt = float(t)
++        if j <= 0:
++            if abs(float(ot[0]) - tt) <= max_gap:
++                out[i] = float(oy[0])
++            continue
++        if j >= len(ot):
++            if abs(float(ot[-1]) - tt) <= max_gap:
++                out[i] = float(oy[-1])
++            continue
++        t0 = float(ot[j - 1])
++        t1 = float(ot[j])
++        y0 = float(oy[j - 1])
++        y1 = float(oy[j])
++        left_ok = (tt - t0) <= max_gap
++        right_ok = (t1 - tt) <= max_gap
++        if left_ok and right_ok:
++            if t1 == t0:
++                out[i] = y1
++            else:
++                w = (tt - t0) / (t1 - t0)
++                out[i] = y0 * (1.0 - w) + y1 * w
++        elif left_ok:
++            out[i] = y0
++        elif right_ok:
++            out[i] = y1
++    return out
++
++
++def hl_close_to_pose_wrist(
++    hl_wx: float,
++    hl_wy: float,
++    pose_wx: float,
++    pose_wy: float,
++    max_dist: float = MAX_HL_POSE_WRIST,
++) -> bool:
++    if not all(np.isfinite(v) for v in (hl_wx, hl_wy, pose_wx, pose_wy)):
++        return False
++    return float(np.hypot(hl_wx - pose_wx, hl_wy - pose_wy)) <= float(max_dist)
++
++
++def helper_near_wrist(
++    wx: float,
++    wy: float,
++    hx: float,
++    hy: float,
++    max_dist: float = 0.14,
++) -> bool:
++    """Pose INDEX/THUMB may stay on the table after the wrist lifts — ignore them."""
++    if not all(np.isfinite(v) for v in (wx, wy, hx, hy)):
++        return False
++    return float(np.hypot(hx - wx, hy - wy)) <= float(max_dist)
++
++
++def wrist_roi_box(
++    wx: float,
++    wy: float,
++    ix: float,
++    iy: float,
++    fw: int,
++    fh: int,
++    tx: float = float("nan"),
++    ty: float = float("nan"),
++    *,
++    pad: float = 1.65,
++    min_frac: float = 0.11,
++    max_frac: float = 0.26,
++) -> Tuple[int, int, int, int]:
++    """Pixel box around the pose wrist. Stuck table INDEX cannot enlarge it."""
++    pts_x = [float(wx) * fw]
++    pts_y = [float(wy) * fh]
++    for hx, hy in ((ix, iy), (tx, ty)):
++        if helper_near_wrist(wx, wy, hx, hy):
++            pts_x.append(float(hx) * fw)
++            pts_y.append(float(hy) * fh)
++    cx = float(np.mean(pts_x))
++    cy = float(np.mean(pts_y))
++    span = max(abs(px - cx) for px in pts_x)
++    span = max(span, max(abs(py - cy) for py in pts_y), min_frac * min(fw, fh), 64.0)
++    span *= pad
++    span = min(span, max_frac * min(fw, fh))
++    x0 = int(max(0, round(cx - span * 0.5)))
++    y0 = int(max(0, round(cy - span * 0.5)))
++    x1 = int(min(fw, round(cx + span * 0.5)))
++    y1 = int(min(fh, round(cy + span * 0.5)))
++    return x0, y0, max(0, x1 - x0), max(0, y1 - y0)
+diff --git a/main.py b/main.py
+index 6b6a1d1..5ea5593 100644
+--- a/main.py
++++ b/main.py
+@@ -1250,7 +1250,9 @@ def _build_and_cache_overlay(csv_path: Path, analysis: dict, video_path: Optiona
+ 
+ def _overlay_cache_stale(cached: dict, analysis: Optional[Dict[str, Any]], video_path: Optional[Path]) -> bool:
+     """Discard cached overlay when it was built for a different served video file."""
+-    if int(cached.get("overlay_version") or 0) < 36:
++    from overlay_data import OVERLAY_VERSION
++
++    if int(cached.get("overlay_version") or 0) < int(OVERLAY_VERSION):
+         return True
+     want = (analysis or {}).get("video_filename")
+     if not want and video_path:
+diff --git a/overlay_data.py b/overlay_data.py
+index 842dd09..f4b4f68 100644
+--- a/overlay_data.py
++++ b/overlay_data.py
+@@ -17,6 +17,9 @@ import cv2
+ 
+ from unified_kinematics import _interpolate_small_gaps, _butter_lowpass_filter
+ from table_calibrator import find_video_for_csv
++from hl_overlay_resample import MAX_HL_POSE_WRIST, resample_with_max_gap
++
++OVERLAY_VERSION = 40
+ 
+ # Shown on validation overlay (reach window + optional ADL transport phase).
+ OVERLAY_JOINT_METRIC_KEYS = (
+@@ -498,20 +501,23 @@ def _hl_overlay_pair(
+     filter_hz: float = 6.0,
+     gap_max: int = 15,
+ ) -> Tuple[np.ndarray, np.ndarray]:
+-    """Resample Hand Landmarker tip to overlay timeline (normalized 0–1)."""
++    """Resample Hand Landmarker tip to overlay timeline (normalized 0–1).
++
++    Do not interpolate across long dropouts — that parks leftover fingers on
++    the table while the real hand is at the mouth.
++    """
+     name = f"{aff}_HL_{tip}"
+-    x = _resample(_norm_series(raw_df, name, "x"), old_t, new_t)
+-    y = _resample(_norm_series(raw_df, name, "y"), old_t, new_t)
+-    if gap_max > 0:
+-        x = _interpolate_small_gaps(x, max_gap=gap_max)
+-        y = _interpolate_small_gaps(y, max_gap=gap_max)
++    max_gap_sec = float(gap_max) / max(float(target_fs), 1.0)
++    x = resample_with_max_gap(_norm_series(raw_df, name, "x").values, old_t, new_t, max_gap_sec)
++    y = resample_with_max_gap(_norm_series(raw_df, name, "y").values, old_t, new_t, max_gap_sec)
+     if filter_hz > 0:
+         x = _butter_lowpass_filter(x, cutoff_hz=filter_hz, fs=target_fs, order=2)
+         y = _butter_lowpass_filter(y, cutoff_hz=filter_hz, fs=target_fs, order=2)
+     fw = max(float(frame_w), 1.0)
+     fh = max(float(frame_h), 1.0)
+-    # Legacy CSVs stored pixel coords (lm * frame size); new CSVs store 0–1 normalized.
+-    if np.nanmax(x) > 1.5 or np.nanmax(y) > 1.5:
++    xmax = float(np.nanmax(x)) if np.isfinite(x).any() else 0.0
++    ymax = float(np.nanmax(y)) if np.isfinite(y).any() else 0.0
++    if xmax > 1.5 or ymax > 1.5:
+         x = x / fw
+         y = y / fh
+     return x, y
+@@ -778,7 +784,7 @@ def _direct_hl_joint(
+     anchor_y: np.ndarray,
+     *,
+     joint_kind: str = "tip",
+-    max_hl_anchor_dist: float = 0.18,
++    max_hl_anchor_dist: float = MAX_HL_POSE_WRIST,
+     ema_alpha: float = 0.72,
+     max_hold: int = 8,
+ ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+@@ -804,6 +810,7 @@ def _direct_hl_joint(
+         jx_raw = float(hl_x[i]) if np.isfinite(hl_x[i]) else np.nan
+         jy_raw = float(hl_y[i]) if np.isfinite(hl_y[i]) else np.nan
+         live = False
++        off_hand = False
+         if np.isfinite(jx_raw) and np.isfinite(jy_raw) and 0.001 <= jx_raw <= 0.999 and 0.001 <= jy_raw <= 0.999:
+             geom_ok = True
+             soft_conf = 1.0
+@@ -816,7 +823,8 @@ def _direct_hl_joint(
+                     and np.isfinite(anchor_y[i])
+                     and float(np.hypot(hl_wx[i] - anchor_x[i], hl_wy[i] - anchor_y[i])) > max_hl_anchor_dist
+                 ):
+-                    soft_conf = 0.78
++                    geom_ok = False
++                    off_hand = True
+             if geom_ok:
+                 jx, jy = jx_raw, jy_raw
+                 if np.isfinite(prev_x) and np.isfinite(prev_y) and ema_alpha < 1.0:
+@@ -828,7 +836,11 @@ def _direct_hl_joint(
+                 prev_x, prev_y = jx, jy
+                 hold = 0
+                 live = True
+-        if not live and np.isfinite(prev_x) and np.isfinite(prev_y) and hold < max_hold:
++        if off_hand:
++            prev_x = np.nan
++            prev_y = np.nan
++            hold = 0
++        elif not live and np.isfinite(prev_x) and np.isfinite(prev_y) and hold < max_hold:
+             out_x[i] = prev_x
+             out_y[i] = prev_y
+             conf[i] = 0.55
+@@ -881,9 +893,10 @@ def _pick_hl_side_window(
+     wrist_x: Optional[np.ndarray] = None,
+     wrist_y: Optional[np.ndarray] = None,
+ ) -> Tuple[Optional[str], float]:
+-    """Lock HL handedness — prefer affected side when wrist proximity agrees."""
++    """Lock HL to the CSV side whose wrist stays on the analyzed pose wrist."""
+     best_side = None
+     best_score = -1e9
++    n_win = max(1, min(len(new_t), end + 1) - max(0, start))
+     for cand in (aff, opp):
+         if not _hl_column_present(raw_df, cand, "INDEX_TIP"):
+             continue
+@@ -891,23 +904,24 @@ def _pick_hl_side_window(
+             raw_df, cand, "INDEX_TIP", old_t, new_t, target_fs, frame_w, frame_h, filter_hz=0.0,
+         )
+         cov = _hl_overlay_coverage(cx, cy, start, end)
+-        score = cov
++        close_frac = 0.0
+         if wrist_x is not None and wrist_y is not None and _hl_column_present(raw_df, cand, "WRIST"):
+             wx, wy = _hl_overlay_pair(
+                 raw_df, cand, "WRIST", old_t, new_t, target_fs, frame_w, frame_h, filter_hz=0.0,
+             )
+-            dists = []
++            n_close = 0
+             seg = slice(max(0, start), min(len(wrist_x), end + 1))
+             for i in range(seg.start, seg.stop):
+                 if not (np.isfinite(wx[i]) and np.isfinite(wy[i]) and np.isfinite(wrist_x[i]) and np.isfinite(wrist_y[i])):
+                     continue
+-                dists.append(float(np.hypot(wx[i] - wrist_x[i], wy[i] - wrist_y[i])))
+-            if dists:
+-                med = float(np.median(dists))
+-                if med <= 0.07:
+-                    score += 0.35
+-                elif med > 0.12:
+-                    score -= 0.45
++                if float(np.hypot(wx[i] - wrist_x[i], wy[i] - wrist_y[i])) <= MAX_HL_POSE_WRIST:
++                    n_close += 1
++            close_frac = n_close / float(max(n_win, 1))
++            if close_frac < 0.08:
++                continue
++            score = close_frac
++        else:
++            score = cov
+         if cand == aff:
+             score += 0.08
+         if score > best_score:
+@@ -2174,7 +2188,7 @@ def build_overlay_data(
+                 }
+ 
+         return {
+-            "overlay_version": 39,
++            "overlay_version": OVERLAY_VERSION,
+             "finger_coords": "hl_absolute",
+             "face_mesh": "mediapipe_pose_face",
+             "finger_overlay_mode": "joint_dots",
