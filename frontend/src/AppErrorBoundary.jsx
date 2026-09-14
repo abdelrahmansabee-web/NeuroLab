@@ -18,6 +18,11 @@ export default class AppErrorBoundary extends React.Component {
           className="min-h-screen flex flex-col items-center justify-center px-6 text-center"
           style={{ background: "#121820", color: "#fff", fontFamily: "Inter, system-ui, sans-serif" }}
         >
+          <img
+            src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.50`}
+            alt="RA.ED AI"
+            className="w-36 h-auto object-contain mb-4"
+          />
           <p className="text-base font-semibold text-white/90 mb-2">RA.ED AI stopped unexpectedly</p>
           <p className="text-xs text-white/55 max-w-md leading-relaxed mb-4">
             {String(this.state.error?.message || this.state.error || "Unknown error")}

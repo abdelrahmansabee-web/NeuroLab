@@ -1,24 +1,32 @@
 {
-  "short_name": "NeuroLab",
-  "name": "NeuroLab — Stroke Rehab Platform",
+  "short_name": "RA.ED AI",
+  "name": "RA.ED AI - Stroke Rehab Platform",
   "icons": [
     {
-      "src": "favicon.ico",
+      "src": "favicon.ico?v=32.50",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
     },
     {
-      "src": "logo192.png",
+      "src": "apple-touch-icon.png?v=32.50",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "180x180",
+      "purpose": "any"
     },
     {
-      "src": "logo512.png",
+      "src": "logo192.png?v=32.50",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "logo512.png?v=32.50",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": "./?v=6.8.0-pwa",
+  "start_url": "./?_v=32.50",
   "scope": ".",
   "display": "standalone",
   "theme_color": "#121820",
