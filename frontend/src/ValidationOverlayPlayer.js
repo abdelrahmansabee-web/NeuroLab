@@ -24,6 +24,9 @@ import {
   SKELETON_PALETTE,
 } from "./clinicalSkeleton";
 
+/** Burned into the player UI so a cached PWA cannot hide a deploy. */
+export const OVERLAY_PLAYER_BUILD = "32.75";
+
 /** Same background treatment as App.js shell (bg.jpg + blur/dim). */
 const APP_BG_URL = "/bg.jpg";
 const APP_BG_FILTER = "blur(24px) brightness(0.55) saturate(0.80)";
@@ -2519,7 +2522,10 @@ export function ValidationOverlayPlayer({
       <div className="validation-player-chrome relative z-[1] flex flex-col flex-1 min-h-0 w-full">
       {isExpanded && (
         <div className="validation-player-topbar flex items-center justify-between px-4 pb-2.5 pt-[max(10px,env(safe-area-inset-top,0px))] flex-shrink-0 glass-float app-topbar-glass bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border-b border-white/[0.03]">
-          <p className="text-sm font-bold text-white/90 truncate pr-3">{phaseLabel || "Validation"} — Validation</p>
+          <p className="text-sm font-bold text-white/90 truncate pr-3">
+            {phaseLabel || "Validation"} — Validation
+            <span className="ml-2 text-yellow-200">{OVERLAY_PLAYER_BUILD}</span>
+          </p>
           <button
             type="button"
             onPointerDown={controlTap(exitExpanded)}
@@ -2540,6 +2546,12 @@ export function ValidationOverlayPlayer({
           }`}
         >
           <AppShellBackground className="z-0 rounded-[inherit]" />
+          <div
+            className="pointer-events-none absolute top-2 left-2 z-[50] px-2.5 py-1 rounded-md text-[13px] sm:text-[15px] font-black tracking-wide text-black bg-yellow-300 shadow"
+            data-overlay-player-build={OVERLAY_PLAYER_BUILD}
+          >
+            {OVERLAY_PLAYER_BUILD} LIVE
+          </div>
           <canvas ref={ambientCanvasRef} className="validation-ambient-canvas" aria-hidden="true" />
           <div ref={gutterLeftRef} className="validation-gutter-pane validation-gutter-fill" aria-hidden="true" />
           <div ref={gutterRightRef} className="validation-gutter-pane validation-metrics-gutter glass-float content-panel-glass rounded-2xl overflow-hidden">

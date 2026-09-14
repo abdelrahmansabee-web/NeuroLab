@@ -32,7 +32,7 @@ import {
   PROGRAM_GAPS, generateLiteratureReviewMarkdown, generateConsortSapMarkdown,
 } from "./thesisDocs";
 import { importPatientFile, buildImportRecord } from "./patientImport";
-import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
+import { ValidationOverlayPlayer, computeOverlayMetrics, OVERLAY_PLAYER_BUILD } from "./ValidationOverlayPlayer";
 import PtrIosSpinner from "./PtrIosSpinner";
 import AuthGate, { authHeaders, clearAuthToken, rememberLoginEmail } from "./AuthGate";
 import { downloadBlob as downloadBlobUtil, blobToBase64 } from "./downloadUtils";
@@ -3469,6 +3469,12 @@ function InlineValidationVideo({ src, phaseLabel, autoPlay = false, onEnded, onE
 
   return (
     <div className="relative w-full rounded-lg bg-black overflow-hidden group">
+      <div
+        className="pointer-events-none absolute top-2 left-2 z-[40] px-2.5 py-1 rounded-md text-[13px] font-black tracking-wide text-black bg-yellow-300 shadow"
+        data-overlay-player-build={`${OVERLAY_PLAYER_BUILD}-baked`}
+      >
+        {OVERLAY_PLAYER_BUILD} BAKED
+      </div>
       <video
         ref={ref}
         src={src}
@@ -5255,7 +5261,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         <Glass className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3 gap-2">
             <p className="text-sm font-extrabold text-white/80">Validation Video</p>
-            <p className="text-[10px] text-white/40 hidden sm:block">Re-analyze after overlay v36 deploy</p>
+            <p
+              className="text-[12px] font-black text-black bg-yellow-300 border border-yellow-200 px-2 py-0.5 rounded-md flex-shrink-0"
+              data-overlay-player-build={OVERLAY_PLAYER_BUILD}
+            >
+              {OVERLAY_PLAYER_BUILD}
+            </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {phases.filter((ph) => kinematicsResults[ph.k]).map((ph) => (
@@ -9298,8 +9309,8 @@ export default function App() {
         </span>
         {readNlVersion() && (
           <span
-            className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold tracking-wide text-sky-200/80 bg-sky-400/10 border border-sky-400/20 flex-shrink-0"
-            title="App build version ? confirm this on iPad after update"
+            className="inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-black tracking-wide text-black bg-yellow-300 border border-yellow-200 flex-shrink-0"
+            title="App build version — confirm this on iPad after update"
             data-nl-version={readNlVersion()}
           >
             v{readNlVersion()}
