@@ -1,0 +1,280 @@
+{
+  "pins": {
+    "name": "REFERENCE_SNAPSHOT_2026-09-14_validation_overlay",
+    "created_at_utc": "2026-09-14T07:09:38Z",
+    "quality_note": "User asked to freeze the current ~90% good validation overlay (skeleton + motion tracking).",
+    "do_not_edit": true,
+    "github": {
+      "repo": "abdelrahmansabee-web/NeuroLab",
+      "branch_at_copy": "cursor/backup-sept14-overlay-f95a",
+      "commit": "ce65e72cc6e6fb71607012e60df7764657aca53a",
+      "tag": "backup/2026-09-14-validation-overlay"
+    },
+    "huggingface": {
+      "space": "AbdelrahmanSabee/raedai",
+      "url": "https://abdelrahmansabee-raedai.hf.space/",
+      "commit": "4f0e5b1d191c287b85a1e88f7a87e578e407ecc5",
+      "frontend_bundle_commit": "0a35f61",
+      "tag": "backup-2026-09-14-validation-overlay"
+    },
+    "live_validation_player": {
+      "nl_version": "32.43",
+      "js": "main.a0625928.js",
+      "css": "main.23ef7b0e.css",
+      "js_query": "?v=32.43",
+      "overlay_version": 40,
+      "finger_coords": "hl_absolute",
+      "note": "Exact 10 Sep player + 14 Sep Hand Landmarker follow-moving-wrist backend."
+    },
+    "missing_hf_files": [],
+    "file_count": 49,
+    "total_bytes": 11500685
+  },
+  "files": [
+    {
+      "path": "PINS.json",
+      "bytes": 1121,
+      "sha256": "f868c8e0e9bae167771e232d9a9cb311eb639a18c2f58400182e4c7de5936a84"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1807,
+      "sha256": "3509714b3de6dba9231123f45749496891adb1bf5188e3041fdef319224f5f20"
+    },
+    {
+      "path": "deploy/hf/hand_landmarker_extract.py",
+      "bytes": 13357,
+      "sha256": "95343f644e7143860a640f240f0ed8fd3b742a99c35ebe30e7d9b175b3586e86"
+    },
+    {
+      "path": "deploy/hf/hl_overlay_resample.py",
+      "bytes": 3783,
+      "sha256": "aee6474567039fad2d03e012090a05ebdbe229db742c85ad0c227a1b94ebeb51"
+    },
+    {
+      "path": "deploy/hf/overlay_hl_follow.diff",
+      "bytes": 20040,
+      "sha256": "4eaecf8487034bf0c28525f5318b7deb0fe488e82888e6ab6b3d05a7a097bfb4"
+    },
+    {
+      "path": "deploy/hf/test_hand_follow.py",
+      "bytes": 3135,
+      "sha256": "022512f4caf9fe98e42ecd415f472ab90a0039de07d2843ff92cee0b82c38530"
+    },
+    {
+      "path": "frontend/src/App.js",
+      "bytes": 473437,
+      "sha256": "e599ab46856dc0745be6b2596c5367737fd61c8600d5c372f30f8548a6024c5c"
+    },
+    {
+      "path": "frontend/src/ValidationOverlayPlayer.js",
+      "bytes": 107309,
+      "sha256": "f256a9ec0f12122967ccb75d59ab0fc478bad1dc7f5918c4f4779b896e24e775"
+    },
+    {
+      "path": "frontend/src/clinicalSkeleton.js",
+      "bytes": 20358,
+      "sha256": "2efb3b5a789aa018ccd532fa0bf0338706b3ed3aaf79c76e49fcbdb65c2c508c"
+    },
+    {
+      "path": "frontend/src/handSkeletonTemplate.js",
+      "bytes": 4139,
+      "sha256": "275bf8538d215100f1d0f932006bbc8c053f2eee3fc153b6b6ca8befb18e3199"
+    },
+    {
+      "path": "frontend/src/overlayMetricEvidence.js",
+      "bytes": 6677,
+      "sha256": "1cfdaae4fe858d9cf63a9e9c2979463d5eda5bc42010f0034765fc57930b0db5"
+    },
+    {
+      "path": "frontend_build_live/index.html",
+      "bytes": 3949,
+      "sha256": "be8e2e7596405008c3ba64a54f021b36a08624f78cd39e415de18c03f6965ef4"
+    },
+    {
+      "path": "frontend_build_live/static/css/main.23ef7b0e.css",
+      "bytes": 59168,
+      "sha256": "2e4eb7d7f032553c18382d0afa27bd610d03bdfdd8f493794b1cedef290ba499"
+    },
+    {
+      "path": "frontend_build_live/static/css/main.23ef7b0e.css.map",
+      "bytes": 42173,
+      "sha256": "be72ee56a4e6555696949deb8f34a18f215ddcdc176f4c29a24f01d1443ca09b"
+    },
+    {
+      "path": "frontend_build_live/static/js/main.a0625928.js",
+      "bytes": 1942748,
+      "sha256": "d348b36da666e3ee61bd2d5ff517e2c7fa361055243f9e9ddcb7e11693c63e4b"
+    },
+    {
+      "path": "frontend_build_live/static/js/main.a0625928.js.map",
+      "bytes": 8029875,
+      "sha256": "050bf7ebd5c75585ba94066cb9752b336f72a0f7d424ccee4e1d8b165fc5607c"
+    },
+    {
+      "path": "hf_repo/adl_task_phases.py",
+      "bytes": 27669,
+      "sha256": "d3b1e7525557d831d8db149a31e11a50d0b9036a0589baf9305ee7a6794f0e4f"
+    },
+    {
+      "path": "hf_repo/analyze_job_runner.py",
+      "bytes": 18313,
+      "sha256": "baabd2b44df0121c81e7a352cb4247b561b4fc21bac1b0c0cca79344acd264f6"
+    },
+    {
+      "path": "hf_repo/analyze_video.py",
+      "bytes": 4134,
+      "sha256": "a1f6a966a6589d183f367588cc1e64563fa149beb3b216ad752884478a90cc0a"
+    },
+    {
+      "path": "hf_repo/analyze_worker.py",
+      "bytes": 927,
+      "sha256": "fae8c6c10fb022ceb22d3966fb82ca900061cc30cb3e2c423f7f425a82508b20"
+    },
+    {
+      "path": "hf_repo/best_reach_pipeline.py",
+      "bytes": 5686,
+      "sha256": "8dc01bd6b20f46bca7a01b404e2bfb473d28d69c1b75b3405cc42af4a1f930a4"
+    },
+    {
+      "path": "hf_repo/extract_pose_csv_robust.py",
+      "bytes": 19759,
+      "sha256": "c2104124a5de30404e9815c2a250e62958319b5c32f5a4da52447e12a6da0c3b"
+    },
+    {
+      "path": "hf_repo/generate_skeleton_assets_v4.py",
+      "bytes": 7674,
+      "sha256": "948ac87f11d929a8f626d50934aae4dc509c1250588b078089e12bc8bad4e4de"
+    },
+    {
+      "path": "hf_repo/hand_landmarker_extract.py",
+      "bytes": 13357,
+      "sha256": "95343f644e7143860a640f240f0ed8fd3b742a99c35ebe30e7d9b175b3586e86"
+    },
+    {
+      "path": "hf_repo/hl_overlay_resample.py",
+      "bytes": 3783,
+      "sha256": "aee6474567039fad2d03e012090a05ebdbe229db742c85ad0c227a1b94ebeb51"
+    },
+    {
+      "path": "hf_repo/kinematic_locked_config.py",
+      "bytes": 1101,
+      "sha256": "65c013521e87db9cd214c2244356506bb0234a6ff599d549ddfdd323a32ad6e3"
+    },
+    {
+      "path": "hf_repo/kinematics_analyzer.py",
+      "bytes": 2242,
+      "sha256": "7fe97a5958edf6a04c953d6b2b9483012b4a0851e8bd53de6245f9d47575072d"
+    },
+    {
+      "path": "hf_repo/landmark_tracker_enhance.py",
+      "bytes": 7749,
+      "sha256": "5a502bb09ed09689a25f21af55d77604a1170192491da47c9fb3fe9e6e6eca4e"
+    },
+    {
+      "path": "hf_repo/local_drive_fallback.py",
+      "bytes": 7152,
+      "sha256": "f76a37df76248118573954e2574180f643b0c7c86a7c5c4f6bd926adf960b7df"
+    },
+    {
+      "path": "hf_repo/main.py",
+      "bytes": 67403,
+      "sha256": "abac78ab60d472d23457ae79e037edc10d80ed947ac309c2e32b388903f87647"
+    },
+    {
+      "path": "hf_repo/mediapipe_csv_extractor.py",
+      "bytes": 29380,
+      "sha256": "4b70ecc6f55b28c63712f70cf781a1f8ea754463cbf6248098277d9ac43d5c15"
+    },
+    {
+      "path": "hf_repo/motion_invariants.py",
+      "bytes": 80952,
+      "sha256": "0440ede095b592ea3baa0d5ba1810490e413a2803d025d86101b1ac5d3dc2e4a"
+    },
+    {
+      "path": "hf_repo/movement_profile.py",
+      "bytes": 48704,
+      "sha256": "878d9b1443326b7c2f7721b1a9a59b59a37f22207ccb49a80c47beaf2f91bbad"
+    },
+    {
+      "path": "hf_repo/neuro_kinematics.py",
+      "bytes": 21425,
+      "sha256": "9f20b89ccb08fc683b311d89ccc4f7bbf8b21043f97b71c4cc02489025a3ba50"
+    },
+    {
+      "path": "hf_repo/neurolab_kinematics.py",
+      "bytes": 20906,
+      "sha256": "684bf4c5cb9c4865492c5c42b914f1fc9889f7c9d4ab1c6f11645914470e0790"
+    },
+    {
+      "path": "hf_repo/overlay_coord_diag.py",
+      "bytes": 16655,
+      "sha256": "adb725954f17cd01b36c678f1ed85edaf99d5c4e4d850a22c337ff8f84fe19e1"
+    },
+    {
+      "path": "hf_repo/overlay_data.py",
+      "bytes": 95441,
+      "sha256": "81c12a04b51c86de4d21c9acd50aea42334f799718e5aa3818f51df85852c27a"
+    },
+    {
+      "path": "hf_repo/persist_validation.py",
+      "bytes": 5482,
+      "sha256": "35a33b14ae8f330360e3ae78a0e71b41cbe85f2e09385e441b85fb6cbe48fce3"
+    },
+    {
+      "path": "hf_repo/robust_reach_analysis.py",
+      "bytes": 12849,
+      "sha256": "810119f7e55020ff327f96f6d57bed26641b90cd1de25cf8e8618b402eee2ad8"
+    },
+    {
+      "path": "hf_repo/skeleton_3d_renderer.py",
+      "bytes": 7510,
+      "sha256": "05e9aef1884a6d4994227a8d07c6adc5c00cb9f7360aecb102d17d45090fff60"
+    },
+    {
+      "path": "hf_repo/sparc_production.py",
+      "bytes": 10251,
+      "sha256": "7d6268cbcc075decb4bbbfefc13c2bf04b87cbe018ebf30b2641713a9e45d922"
+    },
+    {
+      "path": "hf_repo/stroke_kinematic_pipeline.py",
+      "bytes": 87199,
+      "sha256": "a3b946beb64372b4ccea7d94d2ddb5f8249c5fb050b5209cec323533129081e8"
+    },
+    {
+      "path": "hf_repo/table_calibrator.py",
+      "bytes": 8922,
+      "sha256": "ac24ff75f600f938f75c4712246b9906feb210f008285338639634ad8a5634fa"
+    },
+    {
+      "path": "hf_repo/unified_kinematics.py",
+      "bytes": 17578,
+      "sha256": "4a36bd6d863523f7f95e4bce34204e4269ce8d081fdf01e88db17adb3f0c6012"
+    },
+    {
+      "path": "hf_repo/unified_validation_renderer.py",
+      "bytes": 87378,
+      "sha256": "29371123860c081599c0dd1735d8ed2846dc7d7024700738121330e672d6722b"
+    },
+    {
+      "path": "hf_repo/validation_cache.py",
+      "bytes": 13239,
+      "sha256": "7da824f398266467ddd245343919e5f1cde0eb731dc55e659d8bdf5e9387d7be"
+    },
+    {
+      "path": "hf_repo/video_orientation.py",
+      "bytes": 4116,
+      "sha256": "6c47b19e079e86066298fa9d86dc0ef9af0fc2121251ea377dafb5ec9fedfec9"
+    },
+    {
+      "path": "hf_repo/video_quality_validator.py",
+      "bytes": 9715,
+      "sha256": "69e28d0bc8fc7a77b586f3d76dbce3f58c7a3523c4c40d74b4ec82269621e733"
+    },
+    {
+      "path": "restore.py",
+      "bytes": 2958,
+      "sha256": "0207151b7d07323870bb885f4d4717bc31a0241eca7fd12943dde3454729a833"
+    }
+  ]
+}
