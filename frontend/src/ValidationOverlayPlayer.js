@@ -23,9 +23,10 @@ import {
   HAND_FINGER_ORDER,
   SKELETON_PALETTE,
 } from "./clinicalSkeleton";
+import { pickForearmEnd, pointNear, shouldSnapSmooth } from "./overlayFollow";
 
 /** Burned into the player UI so a cached PWA cannot hide a deploy. */
-export const OVERLAY_PLAYER_BUILD = "32.75";
+export const OVERLAY_PLAYER_BUILD = "32.76";
 
 /** Same background treatment as App.js shell (bg.jpg + blur/dim). */
 const APP_BG_URL = "/bg.jpg";
@@ -1167,9 +1168,17 @@ export function ValidationOverlayPlayer({
     };
 
     const useHandHlEarly = Boolean(overlayData?.hand_landmarker_overlay || f?.hand_hl);
+    const minSide = Math.min(cw, ch);
+    const hlWristNow = pt("hl_wrist");
+    const handRootPt = pickForearmEnd(elbow, wrist, hlWristNow, minSide);
+    const maxFingerPx = 0.22 * minSide;
+    const ptSkel = (name) => {
+      if (name === "wrist" && handRootPt) return handRootPt;
+      return pt(name);
+    };
 
     const skel = drawClinicalSkeleton(ctx, {}, {
-      pt,
+      pt: ptSkel,
       cw,
       ch,
       drawBone,
@@ -1464,6 +1473,7 @@ export function ValidationOverlayPlayer({
 
     const smoothStore = fingerSmoothRef.current;
     const smoothAlpha = 0.42;
+    const followRoot = handRootPt || poseWristPt;
     const smoothFinger = (key, cpt, live) => {
       if (!cpt) return null;
       if (!live) return cpt;
@@ -1475,7 +1485,7 @@ export function ValidationOverlayPlayer({
         Object.keys(smoothStore).forEach((k) => { if (k !== "_idx") delete smoothStore[k]; });
       }
       smoothStore._idx = idx;
-      if (!prev) {
+      if (!prev || shouldSnapSmooth(prev, cpt, minSide)) {
         smoothStore[key] = [...cpt];
         return cpt;
       }
@@ -1491,9 +1501,17 @@ export function ValidationOverlayPlayer({
     // Hold last-good finger dots across ~0.4s of video frames (not paint FPS).
     const stickyHoldFrames = Math.max(10, Math.round(fps * 0.4));
     const stickyStore = fingerStickyRef.current;
+    const dropFarFinger = (key) => {
+      delete stickyStore[key];
+      delete smoothStore[key];
+    };
     const pushFingerDot = (fid, jname, cpt, style, live) => {
       if (!cpt) return;
       const key = `${fid}:${jname}`;
+      if (followRoot && !pointNear(cpt, followRoot, maxFingerPx)) {
+        dropFarFinger(key);
+        return;
+      }
       const smoothed = smoothFinger(key, cpt, live);
       if (live) {
         stickyStore[key] = { cpt: [...smoothed], untilIdx: idx + stickyHoldFrames };
@@ -1501,7 +1519,7 @@ export function ValidationOverlayPlayer({
         return;
       }
       const held = stickyStore[key];
-      if (held && idx <= held.untilIdx) {
+      if (held && idx <= held.untilIdx && (!followRoot || pointNear(held.cpt, followRoot, maxFingerPx))) {
         jointDots.push({ fid, jname, cpt: held.cpt, style, sticky: true });
       }
     };
