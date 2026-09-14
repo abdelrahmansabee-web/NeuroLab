@@ -33,6 +33,7 @@ import {
 } from "./thesisDocs";
 import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
+import SessionStatusBar, { revealSessionStatusBar } from "./SessionStatusBar";
 import PtrIosSpinner from "./PtrIosSpinner";
 import AuthGate, { authHeaders, clearAuthToken, rememberLoginEmail } from "./AuthGate";
 import { downloadBlob as downloadBlobUtil, blobToBase64 } from "./downloadUtils";
@@ -9127,7 +9128,7 @@ export default function App() {
     });
   }, [fd, showToast, isDesktop, goToSection]);
 
-  const handleLoadSession = useCallback((record) => {
+  const handleLoadSession = useCallback((record, opts = {}) => {
     const { _id, _savedAt, _hasPre, _hasPost, ...sessionData } = record;
     suppressDirtyRef.current = true;
     setSessionDirty(false);
@@ -9135,8 +9136,11 @@ export default function App() {
     if (sessionData.kinematics?.analysisResults) {
       localStorage.setItem(KIN_LS_KEY, JSON.stringify(sessionData.kinematics.analysisResults));
     }
-    goToSection("demographics");
-    showToast(`? Loaded: ${record.demographics?.name || record.demographics?.participantId || "patient"}`);
+    const nextSection = opts.section && ACTIVE_SECTION_IDS.has(opts.section)
+      ? opts.section
+      : "demographics";
+    goToSection(nextSection);
+    showToast(`Loaded: ${record.demographics?.name || record.demographics?.participantId || "patient"}`);
     requestAnimationFrame(() => {
       suppressDirtyRef.current = false;
     });
@@ -9211,6 +9215,7 @@ export default function App() {
 
     const menuItems = [
       { onClick: () => { goToSection("analysis"); if (!isDesktop) setSidebar(false); }, icon: <BarChart3 />, label: "Analysis Dashboard", colorClass: "hover:text-amber-300" },
+      { onClick: () => revealSessionStatusBar(), icon: <Video />, label: "Loaded sessions", colorClass: "hover:text-sky-300" },
       { onClick: () => importRef.current?.click(), icon: <FileUp />, label: "Import patient", colorClass: "hover:text-emerald-300" },
       { onClick: () => bgRef.current?.click(), icon: <ImageIcon />, label: "Background" },
       { onClick: () => { goToSection("database"); if (!isDesktop) setSidebar(false); }, icon: <Database />, label: "Database" },
@@ -9412,6 +9417,11 @@ export default function App() {
                 onSave={saveSession}
                 dirty={sessionDirty}
               />
+              <SessionStatusBar
+                getPatients={loadPatients}
+                restoreBusy={Boolean(originRestoreBanner)}
+                onOpenSession={(record) => handleLoadSession(record, { section: "kinematics" })}
+              />
 
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -9439,7 +9449,7 @@ export default function App() {
     <DesktopUnifiedTopBar />
   ) : (
     <div
-      className={`app-topbar-glass glass-float relative flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl overflow-visible ${GLASS_CLS}`}
+      className={`app-topbar-glass glass-float relative flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl overflow-visible ${sidebar && !isDesktop ? "" : "pr-[7.5rem]"} ${GLASS_CLS}`}
       style={{ boxShadow: FLOAT_M }}
     >
       {topBarMenuBtn}
@@ -9454,6 +9464,11 @@ export default function App() {
         {topBarHiddenInputs}
 
         <div className="flex items-start gap-2">
+          <SessionStatusBar
+            getPatients={loadPatients}
+            restoreBusy={Boolean(originRestoreBanner)}
+            onOpenSession={(record) => handleLoadSession(record, { section: "kinematics" })}
+          />
           <motion.button
             whileHover={{ scale: 1.08 }}
             whileTap={nlMotionTap(0.92)}
