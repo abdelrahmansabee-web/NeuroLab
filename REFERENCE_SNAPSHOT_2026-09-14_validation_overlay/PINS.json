@@ -1,0 +1,32 @@
+{
+  "name": "REFERENCE_SNAPSHOT_2026-09-14_validation_overlay",
+  "revision": 4,
+  "updated_at_utc": "2026-09-14T10:08:17Z",
+  "quality_note": "Refreshed after 32.44 zero-lag player + overlay v44 centered Gaussian. Current good freeze.",
+  "supersedes": "backup/2026-09-14-validation-overlay-v3",
+  "do_not_edit": true,
+  "github": {
+    "repo": "abdelrahmansabee-web/NeuroLab",
+    "branch_at_copy": "cursor/backup-validation-v4-f95a",
+    "commit_at_copy": "b69bb4f7a50df02749abc784451b3c6be815fbb1",
+    "tag": "backup/2026-09-14-validation-overlay-v4",
+    "previous_tag": "backup/2026-09-14-validation-overlay-v3"
+  },
+  "huggingface": {
+    "space": "AbdelrahmanSabee/raedai",
+    "commit": "e725a545d3324d362487584519e7f4fe03ce2d38",
+    "frontend_bundle_commit": "8ccb5ab0edd0f3aead141b980daf72f2cd73b964",
+    "tag": "backup-2026-09-14-validation-overlay-v4",
+    "previous_tag": "backup-2026-09-14-validation-overlay-v3"
+  },
+  "live_validation_player": {
+    "nl_version": "32.44",
+    "js": "main.c85d1d13.js",
+    "css": "main.23ef7b0e.css",
+    "overlay_version": 44,
+    "note": "32.44 player (no EMA, RVFC mediaTime) + VIDEO distal HL + overlay v44 zero-phase joints."
+  },
+  "missing_hf_files": [],
+  "file_count": 53,
+  "total_bytes": 11531370
+}

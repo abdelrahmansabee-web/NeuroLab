@@ -1,0 +1,22 @@
+--- a/overlay_data.py
++++ b/overlay_data.py
+@@ -17,9 +17,9 @@
+ 
+ from unified_kinematics import _interpolate_small_gaps, _butter_lowpass_filter
+ from table_calibrator import find_video_for_csv
+-from hl_overlay_resample import MAX_HL_POSE_WRIST, one_euro_xy, resample_with_max_gap
++from hl_overlay_resample import MAX_HL_POSE_WRIST, resample_with_max_gap
+ 
+-OVERLAY_VERSION = 42
++OVERLAY_VERSION = 43
+ 
+ # Shown on validation overlay (reach window + optional ADL transport phase).
+ OVERLAY_JOINT_METRIC_KEYS = (
+@@ -845,7 +845,6 @@
+             prev_x = np.nan
+             prev_y = np.nan
+             hold = 0
+-    out_x, out_y = one_euro_xy(out_x, out_y)
+     return out_x, out_y, conf
+ 
+ 
