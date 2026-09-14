@@ -24,6 +24,7 @@ from hl_overlay_resample import (  # noqa: E402
     one_euro_xy,
     resample_with_max_gap,
     smooth_xy_series,
+    smooth_xy_zero_phase,
     wrist_roi_box,
 )
 
@@ -145,6 +146,50 @@ class OverlayZeroLagPatchTests(unittest.TestCase):
         self.assertIn("+OVERLAY_VERSION = 43", text)
         self.assertIn("-    out_x, out_y = one_euro_xy(out_x, out_y)", text)
         self.assertNotIn("+    out_x, out_y = one_euro_xy", text)
+
+
+class ZeroPhaseSmoothTests(unittest.TestCase):
+    def test_high_freq_jitter_is_damped(self):
+        t = np.linspace(0.0, 1.0, 61)
+        xs = 0.50 + 0.02 * np.sin(2.0 * np.pi * 12.0 * t)
+        ys = np.full_like(xs, 0.40)
+        ox, _ = smooth_xy_zero_phase(xs, ys)
+        self.assertLess(float(np.nanstd(ox)), 0.55 * float(np.nanstd(xs)))
+
+    def test_ramp_stays_on_the_true_sample(self):
+        true = 0.40 + np.linspace(0.0, 0.08, 80)
+        xs = true.copy()
+        ys = np.full(len(xs), 0.50, dtype=float)
+        zp_x, _ = smooth_xy_zero_phase(xs, ys)
+        euro_x, _ = one_euro_xy(xs, ys, fs=60.0)
+        mid = 40
+        self.assertLess(abs(float(zp_x[mid]) - float(true[mid])), 0.001)
+        self.assertLess(
+            abs(float(zp_x[mid]) - float(true[mid])),
+            abs(float(euro_x[mid]) - float(true[mid])),
+        )
+
+    def test_teleport_is_not_blended(self):
+        xs = np.array([0.50, 0.50, 0.20, 0.20])
+        ys = np.array([0.60, 0.60, 0.30, 0.30])
+        ox, oy = smooth_xy_zero_phase(xs, ys, max_jump=0.07)
+        self.assertAlmostEqual(float(ox[2]), 0.20, places=5)
+        self.assertAlmostEqual(float(oy[2]), 0.30, places=5)
+
+    def test_nan_gap_is_not_filled(self):
+        xs = np.array([0.50, 0.51, np.nan, np.nan, 0.52, 0.53])
+        ys = np.array([0.40, 0.40, np.nan, np.nan, 0.41, 0.41])
+        ox, oy = smooth_xy_zero_phase(xs, ys)
+        self.assertTrue(np.isnan(ox[2]) and np.isnan(ox[3]))
+        self.assertTrue(np.isfinite(ox[0]) and np.isfinite(ox[-1]))
+
+
+class OverlayZeroPhasePatchTests(unittest.TestCase):
+    def test_overlay_diff_uses_zero_phase_and_bumps_version(self):
+        p = Path(__file__).resolve().parent / "overlay_zero_phase.diff"
+        text = p.read_text(encoding="utf-8")
+        self.assertIn("+OVERLAY_VERSION = 44", text)
+        self.assertIn("+    out_x, out_y = smooth_xy_zero_phase(out_x, out_y)", text)
 
 
 class PoseWristLockTests(unittest.TestCase):

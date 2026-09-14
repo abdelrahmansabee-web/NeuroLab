@@ -25,6 +25,12 @@ HL_EURO_FS = 60.0
 HL_SMOOTH_ALPHA = 0.72
 HL_SMOOTH_MAX_JUMP = 0.055
 
+# Centered Gaussian on recorded overlay joints: damps detector jitter with
+# no playback lag (uses past and future samples of the already-captured clip).
+HL_ZP_RADIUS = 3
+HL_ZP_SIGMA = 1.2
+HL_ZP_MAX_JUMP = 0.07
+
 
 def resample_with_max_gap(
     y: np.ndarray,
@@ -156,6 +162,60 @@ def wrist_roi_box(
 def _euro_alpha(dt: float, cutoff: float) -> float:
     tau = 1.0 / (2.0 * np.pi * max(float(cutoff), 1e-6))
     return float(dt) / (tau + float(dt))
+
+
+def _gaussian_kernel(radius: int, sigma: float) -> np.ndarray:
+    xs = np.arange(-int(radius), int(radius) + 1, dtype=float)
+    k = np.exp(-0.5 * (xs / max(float(sigma), 1e-6)) ** 2)
+    s = float(np.sum(k))
+    return k / s if s > 0 else k
+
+
+def _smooth_1d_run(vals: np.ndarray, kernel: np.ndarray) -> np.ndarray:
+    r = (len(kernel) - 1) // 2
+    n = len(vals)
+    if n == 0:
+        return np.asarray(vals, dtype=float)
+    if n == 1 or r <= 0:
+        return np.asarray(vals, dtype=float).copy()
+    pad = np.pad(np.asarray(vals, dtype=float), r, mode="reflect")
+    return np.convolve(pad, kernel, mode="valid")
+
+
+def smooth_xy_zero_phase(
+    xs: np.ndarray,
+    ys: np.ndarray,
+    *,
+    radius: int = HL_ZP_RADIUS,
+    sigma: float = HL_ZP_SIGMA,
+    max_jump: float = HL_ZP_MAX_JUMP,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Centered Gaussian per contiguous run. Splits on NaN or a teleport.
+
+    Causal filters (EMA / 1€) trail the hand. This clip is already recorded, so
+    a symmetric window stays on the true joint at time t.
+    """
+    xs = np.asarray(xs, dtype=float)
+    ys = np.asarray(ys, dtype=float)
+    n = min(len(xs), len(ys))
+    out_x = np.full(n, np.nan)
+    out_y = np.full(n, np.nan)
+    kernel = _gaussian_kernel(int(radius), float(sigma))
+    jump = float(max_jump)
+    i = 0
+    while i < n:
+        if not (np.isfinite(xs[i]) and np.isfinite(ys[i])):
+            i += 1
+            continue
+        j = i + 1
+        while j < n and np.isfinite(xs[j]) and np.isfinite(ys[j]):
+            if float(np.hypot(xs[j] - xs[j - 1], ys[j] - ys[j - 1])) > jump:
+                break
+            j += 1
+        out_x[i:j] = _smooth_1d_run(xs[i:j], kernel)
+        out_y[i:j] = _smooth_1d_run(ys[i:j], kernel)
+        i = j
+    return out_x, out_y
 
 
 def one_euro_xy(
