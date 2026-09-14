@@ -23,13 +23,18 @@ ALLOWED_VALIDATION_VIDEOS = {
 }
 
 
-def clinic_drive_filename(name: str) -> Optional[str]:
+def clinic_drive_filename(name: str, patient_key: str = "") -> Optional[str]:
     """Keep only the patient PDF and pre / post / healthy-side overlay mp4s."""
     raw = (name or "").strip()
     if not raw:
         return None
     lower = raw.lower()
     if lower.endswith(".pdf"):
+        from drive_doc_identity import canonicalize_upload_name
+
+        mapped = canonicalize_upload_name(name, patient_key=patient_key)
+        if mapped:
+            return mapped
         stem = _sanitize(Path(raw).stem) or "report"
         return f"{stem}.pdf"
     if lower.endswith((".mp4", ".mov", ".m4v", ".webm")):
@@ -262,11 +267,16 @@ def _upsert_bytes(service, parent_id: str, name: str, content: bytes, mime: str)
     files = res.get("files") or []
     media = MediaIoBaseUpload(BytesIO(content), mimetype=mime, resumable=True)
     if files:
+        keep_id = files[0]["id"]
         service.files().update(
-            fileId=files[0]["id"], media_body=media, **_write_flags()
+            fileId=keep_id, media_body=media, **_write_flags()
         ).execute()
-        _share_with_owner(service, files[0]["id"])
-        return files[0]["id"]
+        _share_with_owner(service, keep_id)
+        for extra in files[1:]:
+            extra_id = extra.get("id") or ""
+            if extra_id and extra_id != keep_id:
+                _trash_file(service, extra_id)
+        return keep_id
     created = service.files().create(
         body={"name": name, "parents": [parent_id]},
         media_body=media,
@@ -275,6 +285,62 @@ def _upsert_bytes(service, parent_id: str, name: str, content: bytes, mime: str)
     ).execute()
     _share_with_owner(service, created["id"])
     return created["id"]
+
+
+_DOC_SUBFOLDERS = {"videos", "reports", "data"}
+
+
+def trash_same_kind_aliases(
+    service,
+    folder_id: str,
+    keep_name: str,
+    *,
+    keep_id: str = "",
+    folder_key: str = "",
+) -> List[str]:
+    """Trash leftover files of the same document kind; keep ``keep_id`` / ``keep_name``."""
+    from drive_doc_identity import should_trash_as_alias
+
+    trashed: List[str] = []
+    if not folder_id or not keep_name:
+        return trashed
+    folders = [folder_id]
+    try:
+        for child in _list_direct_children(service, folder_id):
+            mime = child.get("mimeType") or ""
+            name = (child.get("name") or "").strip().lower()
+            cid = child.get("id") or ""
+            if mime == FOLDER_MIME and name in _DOC_SUBFOLDERS and cid:
+                folders.append(cid)
+    except Exception as exc:
+        print(f"Drive alias folder scan skipped: {exc}", flush=True)
+        folders = [folder_id]
+    seen: set[str] = set()
+    for fid in folders:
+        try:
+            children = _list_direct_children(service, fid)
+        except Exception as exc:
+            print(f"Drive alias list skipped: {exc}", flush=True)
+            continue
+        for child in children:
+            cid = child.get("id") or ""
+            cname = child.get("name") or ""
+            if not cid or cid in seen:
+                continue
+            if not should_trash_as_alias(
+                cname,
+                keep_name,
+                folder_key=folder_key,
+                keep_id=keep_id,
+                child_id=cid,
+            ):
+                continue
+            _trash_file(service, cid)
+            seen.add(cid)
+            trashed.append(cname)
+    if trashed:
+        print(f"Drive replaced {keep_name}; trashed aliases {trashed}", flush=True)
+    return trashed
 
 
 def upload_named_files(
@@ -316,7 +382,7 @@ def upload_named_files(
         src = Path(path)
         if not src.is_file() or src.stat().st_size <= 0:
             continue
-        drive_name = clinic_drive_filename(_sanitize(name) or src.name)
+        drive_name = clinic_drive_filename(_sanitize(name) or src.name, patient_key=key)
         if not drive_name:
             continue
         payload.append((drive_name, src, src.read_bytes()))
@@ -329,6 +395,9 @@ def upload_named_files(
     parent = _patient_folder(service, parent_id, key)
     for drive_name, src, content in payload:
         file_id = _upsert_bytes(service, parent, drive_name, content, _mime_for(drive_name))
+        trash_same_kind_aliases(
+            service, parent, drive_name, keep_id=file_id, folder_key=key
+        )
         result["locations"].append({"patientKey": key, "name": drive_name, "id": file_id})
         result["files"][drive_name] = {"bytes": src.stat().st_size}
         uploaded += 1
@@ -1015,7 +1084,7 @@ def reorganize_clinic_folder(
         if lower in {n.lower() for n in keep_json} or name in keep_json:
             json_candidates.setdefault(key, []).append(item)
             continue
-        mapped = clinic_drive_filename(name)
+        mapped = clinic_drive_filename(name, patient_key=key)
         if mapped and mapped.endswith(".mp4"):
             bucket["videos"].append({**item, "driveName": mapped})
         elif mapped and mapped.endswith(".pdf"):
@@ -1092,12 +1161,17 @@ def reorganize_clinic_folder(
                 pdf_name = patient_pdf_filename(patient)
                 pdf_bytes = build_patient_pdf(patient)
                 file_id = _upsert_bytes(service, dest_id, pdf_name, pdf_bytes, "application/pdf")
+                trash_same_kind_aliases(
+                    service, dest_id, pdf_name, keep_id=file_id, folder_key=folder_name
+                )
                 rec["files"].append({"name": pdf_name, "id": file_id})
                 out["pdfs"] += 1
             placed: Dict[str, str] = {}
             for video in bucket["videos"]:
                 vid = video.get("id") or ""
-                mapped = video.get("driveName") or clinic_drive_filename(video.get("name") or "")
+                mapped = video.get("driveName") or clinic_drive_filename(
+                    video.get("name") or "", patient_key=folder_name
+                )
                 if not vid:
                     continue
                 if mapped and mapped.lower() in ALLOWED_VALIDATION_VIDEOS:
@@ -1124,7 +1198,7 @@ def reorganize_clinic_folder(
                     continue
                 if not lower.endswith((".mp4", ".mov", ".m4v", ".webm")):
                     continue
-                mapped = clinic_drive_filename(child_name)
+                mapped = clinic_drive_filename(child_name, patient_key=folder_name)
                 if mapped and mapped.lower() in ALLOWED_VALIDATION_VIDEOS:
                     if mapped in placed and placed[mapped] != child_id:
                         _trash_file(service, child_id)
@@ -1138,6 +1212,10 @@ def reorganize_clinic_folder(
                     continue
                 _trash_file(service, child_id)
                 out["trashed"].append(child_id)
+            for mapped_name, vid in list(placed.items()):
+                trash_same_kind_aliases(
+                    service, dest_id, mapped_name, keep_id=vid, folder_key=folder_name
+                )
         except Exception as exc:
             rec["error"] = str(exc)[:200]
             print(f"Drive rebuild patient {canon}: {exc}", flush=True)

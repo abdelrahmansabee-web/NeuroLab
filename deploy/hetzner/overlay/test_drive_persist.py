@@ -53,6 +53,25 @@ class DrivePersistTests(unittest.TestCase):
         service.files.return_value.update.assert_called()
         service.files.return_value.delete.assert_not_called()
 
+    def test_dated_pdf_upserts_one_patient_file(self) -> None:
+        service = MagicMock()
+        service.files.return_value.list.return_value.execute.return_value = {"files": []}
+        service.files.return_value.create.return_value.execute.return_value = {"id": "pdf1"}
+        with self._tmp_mp4() as path:
+            out = upload_named_files(
+                "105_Ahmet_sever",
+                [
+                    ("report_105_Ahmet_2026-09-14.pdf", path, "reports"),
+                    ("clinic_report.pdf", path, "reports"),
+                ],
+                service=service,
+                folder_id="root",
+            )
+        self.assertTrue(out["ok"])
+        self.assertEqual(list(out["files"]), ["105_Ahmet_sever.pdf"])
+        self.assertNotIn("report_105_Ahmet_2026-09-14.pdf", out["files"])
+        self.assertNotIn("clinic_report.pdf", out["files"])
+
     def test_sanitize(self) -> None:
         self.assertEqual(_sanitize("pre/../x"), "pre_.._x")
 
@@ -70,6 +89,14 @@ class DrivePersistTests(unittest.TestCase):
         self.assertIsNone(clinic_drive_filename("session.json"))
         self.assertEqual(clinic_drive_filename("pre_validation.mp4"), "pre_validation.mp4")
         self.assertEqual(clinic_drive_filename("105_Ahmet_sever.pdf"), "105_Ahmet_sever.pdf")
+        self.assertEqual(
+            clinic_drive_filename("report_115_Ahmet_2026-09-14.pdf", "115_Ahmet_sever"),
+            "115_Ahmet_sever.pdf",
+        )
+        self.assertEqual(
+            clinic_drive_filename("clinic_report.pdf", "105_Ahmet_sever"),
+            "105_Ahmet_sever.pdf",
+        )
 
     def test_recovered_video_names(self) -> None:
         from drive_persist import recovered_drive_video_name

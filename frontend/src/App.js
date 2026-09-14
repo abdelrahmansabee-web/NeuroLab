@@ -47,6 +47,7 @@ import {
   restoreValidationArtifactsFromDrive,
   validationUnifiedDriveName,
 } from "./validationDriveSync";
+import { canonicalDriveName, clinicReportDriveName } from "./driveDocIdentity";
 import {
   resolveKinMetricValue,
   loadLiveKinResults,
@@ -651,7 +652,8 @@ async function backupPatientVideoToDrive(demographics, phase, blobOrFile, filena
   const blob = blobOrFile instanceof Blob ? blobOrFile : blobOrFile;
   const base = filename || `${phase}_video`;
   const safeName = String(base).replace(/[^\w.\-]/g, "_").slice(0, 160);
-  scheduleDriveFileBackup(safeName, blob, { patientKey, subfolder: "videos" });
+  const driveName = canonicalDriveName(safeName, patientKey) || canonicalDriveName(`${phase}_validation_original.mp4`, patientKey) || safeName;
+  scheduleDriveFileBackup(driveName, blob, { patientKey, subfolder: "videos", force: true });
   return true;
 }
 
@@ -4580,9 +4582,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
               : new Blob([blob], { type: "video/mp4" });
           await downloadBlob(typed, baseName || "validation.mp4");
           showToast("Validation video downloaded", "success");
-          scheduleDriveFileBackup(filename, blob, {
-            patientKey: patientDriveKeyFromDemographics(demographics),
+          const patientKey = patientDriveKeyFromDemographics(demographics);
+          const driveName = canonicalDriveName(baseName, patientKey) || validationUnifiedDriveName(phase, typed);
+          scheduleDriveFileBackup(driveName, typed, {
+            patientKey,
             subfolder: "videos",
+            force: true,
           });
         } catch (err) {
           console.error("Download from blob error:", err);
@@ -4605,9 +4610,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
             : new Blob([blob], { type: "video/mp4" });
         await downloadBlob(typed, baseName || "validation.mp4");
         showToast("Validation video downloaded", "success");
-        scheduleDriveFileBackup(filename, blob, {
-          patientKey: patientDriveKeyFromDemographics(demographics),
+        const patientKey = patientDriveKeyFromDemographics(demographics);
+        const driveName = canonicalDriveName(baseName, patientKey) || validationUnifiedDriveName(phase, typed);
+        scheduleDriveFileBackup(driveName, typed, {
+          patientKey,
           subfolder: "videos",
+          force: true,
         });
       } catch (err) {
         console.error("Download error:", err);
@@ -7168,12 +7176,13 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       txt(`Stroke Rehab Platform  |  Confidential  |  Page ${i} of ${totalPages}`, W / 2, 290, 6.5, false, C.gray500, "center");
     }
 
-    const pdfName = `report_${d.participantId || d.name || "participant"}_${new Date().toISOString().split("T")[0]}.pdf`;
+    const pdfName = `report_${d.participantId || d.name || "participant"}.pdf`;
     const pdfBlob = doc.output("blob");
     downloadBlob(pdfBlob, pdfName);
-    scheduleDriveFileBackup(pdfName, pdfBlob, {
-      patientKey: patientDriveKeyFromDemographics(d),
-      subfolder: "reports",
+    const patientKey = patientDriveKeyFromDemographics(d);
+    scheduleDriveFileBackup(clinicReportDriveName(patientKey), pdfBlob, {
+      patientKey,
+      force: true,
     });
   };
 
