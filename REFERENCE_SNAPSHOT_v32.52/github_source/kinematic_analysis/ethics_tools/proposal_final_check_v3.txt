@@ -1,0 +1,18 @@
+=== References 8 and 14-18 ===
+8.   Wagh V, Scott MW, Andrushko JW, Jones CB, Larssen BC, Boyd LA, Kraeutner SN. Using MediaPipe to track upper-limb reaching movements after stroke: a proof-of-principle study. J Neuroeng Rehabil. 2025 Nov 25;22(1):268.
+14. Staacks S, Hütz S, Heinke H, Stampfer C. Advanced tools for smartphone-based experiments: phyphox. Phys Teach. 2021;59(3):214-215.
+15. Dobkin BH, Dorsch A. The promise of mHealth: physical activity, fitness, and stroke. Neurorehabil Neural Repair. 2011;25(8):711-715.
+16. Dobkin BH. Wearable motion sensors to continuously measure real-world physical activities. Curr Opin Neurol. 2013;26(6):602-608.
+17. Balasubramanian S, Melendez-Calderon A, Burdet E. A robust and sensitive metric for quantifying movement smoothness. IEEE Trans Biomed Eng. 2012;59(8):2126-2136.
+18. Balasubramanian S, Melendez-Calderon A, Roby-Brami A, Burdet E. On the analysis of movement smoothness. J NeuroEngineering Rehabil. 2015;12:112.
+
+=== In-text citations containing 14-18 ===
+[55] A priori power analysis was conducted by using G*Power 3.1.9.2 for a 2 (Group: Motor Imagery vs. Control) × 2 (Time: Pre vs. Post) repeated measures ANOVA. An effect size of f = 0.40 (Cohen’s d ≈ 1.2) was used as reference according to results from a comparable acute motor imagery study. Yet,“given 
+
+[61] A total of 28 stroke patients (14 people in each group) who meet the criteria for inclusion will be included in the study and divided into two groups by randomised method.
+
+[113] ·     The primary outcome of this study is the change in movement smoothness of the affected upper limb, as measured by the Spectral Arc Length (SPARC) derived from the Phyphox wrist accelerometer recording. The smartphone, secured on the affected-side wrist, records tri-axial linear acceleration at
+
+
+=== OpenCap/OpenSim remaining ===
+None.

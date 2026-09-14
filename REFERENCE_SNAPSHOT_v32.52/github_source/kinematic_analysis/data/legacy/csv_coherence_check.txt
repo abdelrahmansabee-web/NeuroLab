@@ -1,0 +1,30 @@
+=== baseline ===
+rows: 358
+wrist X range: 871.3 px
+wrist Y range: 44.9 px
+max single-frame wrist jump: 52.3 px
+total wrist path: 4056.8 px
+low-visibility wrist frames (<0.5): 0/358
+estimated shoulder width: 426.8 px
+shoulder width as % of frame width: 22.2%
+
+=== pre ===
+rows: 758
+wrist X range: 453.8 px
+wrist Y range: 87.0 px
+max single-frame wrist jump: 76.7 px
+total wrist path: 5871.0 px
+low-visibility wrist frames (<0.5): 0/758
+estimated shoulder width: 254.5 px
+shoulder width as % of frame width: 23.6%
+
+=== post ===
+rows: 562
+wrist X range: 284.0 px
+wrist Y range: 53.5 px
+max single-frame wrist jump: 45.9 px
+total wrist path: 3570.9 px
+low-visibility wrist frames (<0.5): 0/562
+estimated shoulder width: 265.0 px
+shoulder width as % of frame width: 24.5%
+

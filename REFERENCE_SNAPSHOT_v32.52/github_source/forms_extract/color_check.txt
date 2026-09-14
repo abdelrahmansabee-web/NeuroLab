@@ -1,0 +1,7 @@
+'REVİZYON': [6, 6]
+'Biruni': [0, 0, 6, 6, 6, 6, 6, 6]
+'WMFT-4': [6, 6, 6, 6, 6, 6]
+'smoothness_pause_pct': [6, 6, 6, 6, 6, 6, 6, 6]
+'Holmes PS': [0]
+'Lugaresi C': [6]
+'World Stroke': [0, 0]

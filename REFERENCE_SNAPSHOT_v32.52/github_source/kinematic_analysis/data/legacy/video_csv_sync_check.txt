@@ -1,0 +1,7 @@
+video frames: 758
+fps: 29.996
+size: 1080 x 1920
+csv rows: 758
+csv duration: 25.24 s
+expected duration from video: 25.27 s
+csv-video frame diff: 0

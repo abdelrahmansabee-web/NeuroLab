@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>NeuroLab — Connect Google Drive</title>
+  <style>
+    body { margin:0; background:#121820; color:#e8eef6; font-family: Inter, system-ui, sans-serif; }
+    .wrap { max-width: 32rem; margin: 8vh auto; padding: 0 1.25rem 3rem; }
+    .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px; padding: 1.4rem 1.3rem 1.5rem; }
+    h1 { font-size: 1.25rem; margin: 0 0 .35rem; }
+    p, li { line-height: 1.55; color: rgba(255,255,255,0.78); font-size: 0.95rem; }
+    code { font-size: .8rem; background: rgba(0,0,0,.35); padding: .12rem .35rem; border-radius: 6px; direction: ltr; display: inline-block; }
+    .ok { color: #86efac; }
+    .warn { color: #fcd34d; }
+    .btn { display: inline-block; margin-top: 1rem; background: #3b82f6; color: white; border: 0;
+           border-radius: 10px; padding: .7rem 1.1rem; font-size: 1rem; cursor: pointer; text-decoration: none; }
+    .btn[disabled] { opacity: .45; cursor: not-allowed; }
+    [hidden] { display: none !important; }
+    a { color: #7dd3fc; }
+    ol { padding-left: 1.2rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Connect Google Drive</h1>
+      <p id="status">Checking…</p>
+      <div id="setup" hidden>
+        <p>Google OAuth keys are needed once (Client ID + Secret). The button will not work without them.</p>
+        <ol>
+          <li>Open <a href="https://console.cloud.google.com/apis/credentials?project=neurolab-502305" target="_blank" rel="noopener">Google Cloud → Credentials</a></li>
+          <li>Create credentials → OAuth client ID → Web application</li>
+          <li>Authorized redirect URI:
+            <br/><code id="redir"></code></li>
+          <li>In Hugging Face Space → Settings → Variables and secrets, add:
+            <br/><code>GOOGLE_OAUTH_CLIENT_ID</code>
+            <br/><code>GOOGLE_OAUTH_CLIENT_SECRET</code></li>
+          <li>Restart the Space, then come back to this page.</li>
+        </ol>
+      </div>
+      <p id="folder"></p>
+      <p id="detail"></p>
+      <button class="btn" id="connect" type="button" hidden>Connect Drive</button>
+      <p style="margin-top:1.2rem;font-size:.85rem;color:rgba(255,255,255,.55)">
+        Open this page from the Home Screen icon, not from Safari.
+        Inside each patient folder: the clinic PDF, and validation videos when they exist:
+        <code>pre_validation.mp4</code>
+        <code>post_validation.mp4</code>
+        <code>healthy_validation.mp4</code>
+        Do not use a folder named <code>videos</code>. If a phase has no video, an empty folder is fine.
+      </p>
+      <p style="margin-top:1.2rem"><a href="/">Back to NeuroLab</a></p>
+    </div>
+  </div>
+  <script>
+    const statusEl = document.getElementById("status");
+    const setupEl = document.getElementById("setup");
+    const folderEl = document.getElementById("folder");
+    const detailEl = document.getElementById("detail");
+    const btn = document.getElementById("connect");
+    document.getElementById("redir").textContent =
+      "https://abdelrahmansabee-neurolab.hf.space/auth/drive/callback";
+    const params = new URLSearchParams(location.search);
+    if (params.get("ok") === "1") {
+      statusEl.className = "ok";
+      statusEl.textContent = "Drive is connected. Wait a few seconds for a file to appear in the folder.";
+    }
+    if (params.get("error")) {
+      statusEl.className = "warn";
+      statusEl.textContent = "Connect failed: " + params.get("error");
+    }
+    const token = (() => { try { return localStorage.getItem("neurolab_token") || ""; } catch (e) { return ""; } })();
+    const headers = token ? { Authorization: "Bearer " + token } : {};
+    function showFolder(inv) {
+      if (!inv || inv.error && !inv.folderName) {
+        folderEl.textContent = "Could not list Drive folder files right now.";
+        return;
+      }
+      const name = inv.folderName || "NeuroLab_Backups";
+      const videos = inv.videoCount || 0;
+      const jsons = inv.jsonCount || 0;
+      const files = inv.fileCount || 0;
+      const pdfs = inv.pdfCount || 0;
+      const patients = (inv.patientFolders || []).length;
+      if (inv.empty || files === 0) {
+        folderEl.className = "warn";
+        folderEl.textContent =
+          "Folder \u201c" + name + "\u201d is empty: " + files + " files, " + videos + " videos, " + pdfs + " PDFs.";
+      } else {
+        folderEl.className = jsons > 0 ? "warn" : "ok";
+        const folders = (inv.patientFolders || []).slice(0, 8).join(", ");
+        folderEl.textContent =
+          "Folder \u201c" + name + "\u201d: " + patients + " patients, " + files + " files, " + videos + " validation videos, " + pdfs + " PDFs, " + jsons + " JSON."
+          + (folders ? " Folders: " + folders : "")
+          + (jsons > 0 ? " JSON is still present \u2014 rebuild needed." : "")
+          + (videos === 0 ? " No validation videos yet." : "");
+      }
+    }
+    Promise.all([
+      fetch("/auth/drive/oauth-status", { credentials: "same-origin", headers }).then((r) => r.json()),
+      fetch("/auth/drive/folder-status", { credentials: "same-origin", headers }).then((r) => r.json()).catch(() => null),
+    ])
+      .then(([d, inv]) => {
+        showFolder(inv);
+        if (d.ready) {
+          statusEl.className = "ok";
+          statusEl.textContent = "Drive is connected" + (d.email ? " (" + d.email + ")" : "") + ".";
+          if (d.folderName) detailEl.textContent = "Folder: " + d.folderName;
+          return;
+        }
+        if (!d.clientConfigured) {
+          statusEl.className = "warn";
+          statusEl.textContent = "Google keys are still missing from Space settings.";
+          setupEl.hidden = false;
+          return;
+        }
+        if (!token) {
+          statusEl.className = "warn";
+          statusEl.textContent = "Sign in to NeuroLab from the Home Screen icon first, then open this page again.";
+          return;
+        }
+        statusEl.className = "warn";
+        statusEl.textContent = "Drive is not connected, so the folder is empty. Tap the button and sign in with the Gmail that has the 5 TB.";
+        btn.hidden = false;
+        btn.onclick = async () => {
+          btn.disabled = true;
+          const r = await fetch("/auth/drive/connect-cookie", {
+            method: "POST",
+            credentials: "same-origin",
+            headers,
+          });
+          if (!r.ok) {
+            statusEl.className = "warn";
+            statusEl.textContent = "Sign in to NeuroLab first.";
+            btn.disabled = false;
+            return;
+          }
+          window.location.href = "/auth/drive/connect";
+        };
+      })
+      .catch(() => {
+        statusEl.className = "warn";
+        statusEl.textContent = "The app is still waking up. Wait a minute and refresh.";
+      });
+  </script>
+</body>
+</html>
