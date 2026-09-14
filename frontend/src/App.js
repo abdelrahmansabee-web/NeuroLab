@@ -5263,7 +5263,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                 <div className="flex items-center justify-between mb-2 gap-2">
                   <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>{`${ph.l} \u00b7 Validation`}</p>
                 </div>
-                {overlayData[ph.k] && !overlaySourceBad[ph.k] ? (
+                {overlayData[ph.k] ? (
                   originalVideoBlobs[ph.k] ? (
                     overlayMountReady[ph.k] ? (
                     <KinOverlayErrorBoundary key={`ov-${ph.k}-${overlayData[ph.k]?.version || "v"}`}>
@@ -5273,7 +5273,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                       clinicalTask={kinematicsResults[ph.k]?.clinical_task || clinicalMovementTask}
                       phaseLabel={ph.l}
                       autoPlay={false}
-                      autoRender={false}
+                      autoRender={Boolean(
+                        overlayData[ph.k]?.frames?.length
+                        && originalVideoBlobs[ph.k]
+                        && !driveBakeDone[ph.k],
+                      )}
                       serverExportFilename={
                         kinematicsResults[ph.k]?.unified_validation_video || null
                       }
@@ -5310,7 +5314,6 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                         }
                       }}
                       onError={(msg) => showToast(msg || `${ph.l} overlay error`, "error")}
-                      onSourceMismatch={() => handleOverlaySourceMismatch(ph.k)}
                     />
                     </KinOverlayErrorBoundary>
                     ) : (
@@ -9299,7 +9302,7 @@ export default function App() {
         {readNlVersion() && (
           <span
             className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold tracking-wide text-sky-200/80 bg-sky-400/10 border border-sky-400/20 flex-shrink-0"
-            title="App build version ? confirm this on iPad after update"
+            title="App build version — confirm this on iPad after update"
             data-nl-version={readNlVersion()}
           >
             v{readNlVersion()}
