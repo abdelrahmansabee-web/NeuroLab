@@ -24,9 +24,6 @@ import {
   SKELETON_PALETTE,
 } from "./clinicalSkeleton";
 
-/** Burned into the player UI so a cached PWA cannot hide a deploy. */
-export const OVERLAY_PLAYER_BUILD = "32.78";
-
 /** Same background treatment as App.js shell (bg.jpg + blur/dim). */
 const APP_BG_URL = "/bg.jpg";
 const APP_BG_FILTER = "blur(24px) brightness(0.55) saturate(0.80)";
@@ -2522,10 +2519,7 @@ export function ValidationOverlayPlayer({
       <div className="validation-player-chrome relative z-[1] flex flex-col flex-1 min-h-0 w-full">
       {isExpanded && (
         <div className="validation-player-topbar flex items-center justify-between px-4 pb-2.5 pt-[max(10px,env(safe-area-inset-top,0px))] flex-shrink-0 glass-float app-topbar-glass bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border-b border-white/[0.03]">
-          <p className="text-sm font-bold text-white/90 truncate pr-3">
-            {phaseLabel || "Validation"} — Validation
-            <span style={{ marginLeft: 8, color: "#fde047", fontWeight: 800 }}>{OVERLAY_PLAYER_BUILD}</span>
-          </p>
+          <p className="text-sm font-bold text-white/90 truncate pr-3">{phaseLabel || "Validation"} — Validation</p>
           <button
             type="button"
             onPointerDown={controlTap(exitExpanded)}
@@ -2546,26 +2540,6 @@ export function ValidationOverlayPlayer({
           }`}
         >
           <AppShellBackground className="z-0 rounded-[inherit]" />
-          <div
-            data-overlay-player-build={OVERLAY_PLAYER_BUILD}
-            style={{
-              position: "absolute",
-              top: 8,
-              left: 8,
-              zIndex: 50,
-              pointerEvents: "none",
-              padding: "6px 10px",
-              borderRadius: 8,
-              fontSize: 15,
-              fontWeight: 900,
-              letterSpacing: 0.4,
-              color: "#111",
-              background: "#fde047",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.45)",
-            }}
-          >
-            {OVERLAY_PLAYER_BUILD} LIVE
-          </div>
           <canvas ref={ambientCanvasRef} className="validation-ambient-canvas" aria-hidden="true" />
           <div ref={gutterLeftRef} className="validation-gutter-pane validation-gutter-fill" aria-hidden="true" />
           <div ref={gutterRightRef} className="validation-gutter-pane validation-metrics-gutter glass-float content-panel-glass rounded-2xl overflow-hidden">

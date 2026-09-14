@@ -32,7 +32,7 @@ import {
   PROGRAM_GAPS, generateLiteratureReviewMarkdown, generateConsortSapMarkdown,
 } from "./thesisDocs";
 import { importPatientFile, buildImportRecord } from "./patientImport";
-import { ValidationOverlayPlayer, computeOverlayMetrics, OVERLAY_PLAYER_BUILD } from "./ValidationOverlayPlayer";
+import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import PtrIosSpinner from "./PtrIosSpinner";
 import AuthGate, { authHeaders, clearAuthToken, rememberLoginEmail } from "./AuthGate";
 import { downloadBlob as downloadBlobUtil, blobToBase64 } from "./downloadUtils";
@@ -3469,26 +3469,6 @@ function InlineValidationVideo({ src, phaseLabel, autoPlay = false, onEnded, onE
 
   return (
     <div className="relative w-full rounded-lg bg-black overflow-hidden group">
-      <div
-        data-overlay-player-build={`${OVERLAY_PLAYER_BUILD}-baked`}
-        style={{
-          position: "absolute",
-          top: 8,
-          left: 8,
-          zIndex: 40,
-          pointerEvents: "none",
-          padding: "6px 10px",
-          borderRadius: 8,
-          fontSize: 15,
-          fontWeight: 900,
-          letterSpacing: 0.4,
-          color: "#111",
-          background: "#fde047",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.45)",
-        }}
-      >
-        {OVERLAY_PLAYER_BUILD} BAKED
-      </div>
       <video
         ref={ref}
         src={src}
@@ -5275,21 +5255,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         <Glass className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3 gap-2">
             <p className="text-sm font-extrabold text-white/80">Validation Video</p>
-            <p
-              data-overlay-player-build={OVERLAY_PLAYER_BUILD}
-              className="flex-shrink-0"
-              style={{
-                fontSize: 12,
-                fontWeight: 900,
-                color: "#111",
-                background: "#fde047",
-                border: "1px solid #facc15",
-                padding: "4px 8px",
-                borderRadius: 6,
-              }}
-            >
-              {OVERLAY_PLAYER_BUILD}
-            </p>
+            <p className="text-[10px] text-white/40 hidden sm:block">Re-analyze after overlay v36 deploy</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {phases.filter((ph) => kinematicsResults[ph.k]).map((ph) => (
@@ -5297,7 +5263,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                 <div className="flex items-center justify-between mb-2 gap-2">
                   <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>{`${ph.l} \u00b7 Validation`}</p>
                 </div>
-                {overlayData[ph.k] && !overlaySourceBad[ph.k] ? (
+                {overlayData[ph.k] ? (
                   originalVideoBlobs[ph.k] ? (
                     overlayMountReady[ph.k] ? (
                     <KinOverlayErrorBoundary key={`ov-${ph.k}-${overlayData[ph.k]?.version || "v"}`}>
@@ -5307,7 +5273,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                       clinicalTask={kinematicsResults[ph.k]?.clinical_task || clinicalMovementTask}
                       phaseLabel={ph.l}
                       autoPlay={false}
-                      autoRender={false}
+                      autoRender={Boolean(
+                        overlayData[ph.k]?.frames?.length
+                        && originalVideoBlobs[ph.k]
+                        && !driveBakeDone[ph.k],
+                      )}
                       serverExportFilename={
                         kinematicsResults[ph.k]?.unified_validation_video || null
                       }
@@ -5344,7 +5314,6 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                         }
                       }}
                       onError={(msg) => showToast(msg || `${ph.l} overlay error`, "error")}
-                      onSourceMismatch={() => handleOverlaySourceMismatch(ph.k)}
                     />
                     </KinOverlayErrorBoundary>
                     ) : (
@@ -9332,17 +9301,7 @@ export default function App() {
         </span>
         {readNlVersion() && (
           <span
-            className="inline-flex items-center flex-shrink-0"
-            style={{
-              padding: "4px 10px",
-              borderRadius: 6,
-              fontSize: 12,
-              fontWeight: 900,
-              letterSpacing: 0.4,
-              color: "#111",
-              background: "#fde047",
-              border: "1px solid #facc15",
-            }}
+            className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold tracking-wide text-sky-200/80 bg-sky-400/10 border border-sky-400/20 flex-shrink-0"
             title="App build version — confirm this on iPad after update"
             data-nl-version={readNlVersion()}
           >
