@@ -4,6 +4,7 @@ Does not change clinic glass colors. Does not rewrite the Space wake-up boot cop
 """
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -76,6 +77,10 @@ def main() -> int:
     motion_rc = patch_motion(root)
     if motion_rc != 0:
         return motion_rc
+    identity_src = OVERLAY / "drive_doc_identity.py"
+    if identity_src.is_file():
+        shutil.copy2(identity_src, root / "drive_doc_identity.py")
+        print("copied drive_doc_identity.py")
     for rel in ("main.py", "analyze_job_runner.py"):
         path = root / rel
         if not path.is_file():

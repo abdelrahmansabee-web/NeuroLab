@@ -5,6 +5,7 @@
 
 import { authHeaders } from "./AuthGate";
 import { blobToBase64 } from "./downloadUtils";
+import { canonicalDriveName, driveNameCandidates as identityDriveNameCandidates } from "./driveDocIdentity";
 
 const DRIVE_FILE_MAX_BYTES = 32 * 1024 * 1024;
 const LARGE_UPLOAD_BYTES = 28 * 1024 * 1024;
@@ -22,13 +23,8 @@ export function validationOverlayDriveName(phase) {
 /** Canonical Drive playback name for baked validation (overlay burned in). */
 export function validationUnifiedDriveName(phase, blobOrExt) {
   const p = phase === "baseline" ? "healthy" : phase;
-  let ext = "mp4";
-  if (typeof blobOrExt === "string") {
-    ext = blobOrExt.replace(/^\./, "") || "mp4";
-  } else if (blobOrExt && typeof blobOrExt === "object" && blobOrExt.type) {
-    if (String(blobOrExt.type).includes("webm")) ext = "webm";
-  }
-  return `${p}_validation.${ext}`;
+  void blobOrExt;
+  return `${p}_validation.mp4`;
 }
 
 export function validationKinematicsDriveName(phase) {
@@ -38,33 +34,8 @@ export function validationKinematicsDriveName(phase) {
 
 /** Alternate Drive names used by older uploads / clinic_drive_filename aliases. */
 function driveNameCandidates(primaryName, subfolder) {
-  const names = [primaryName];
-  const lower = String(primaryName || "").toLowerCase();
-  if (lower.endsWith("_validation_original.mp4")) {
-    const phase = primaryName.slice(0, -"_validation_original.mp4".length);
-    names.push(`${phase}_original.mp4`, `${phase}_validation_original.mp4`);
-  }
-  if (/^(pre|post|healthy|baseline)_validation\.(mp4|webm)$/i.test(lower)) {
-    const m = lower.match(/^(pre|post|healthy|baseline)_validation\.(mp4|webm)$/i);
-    if (m) {
-      const phase = m[1] === "baseline" ? "healthy" : m[1];
-      const ext = m[2];
-      names.push(
-        `${phase}_validation.${ext}`,
-        `${phase}_validation_unified.${ext}`,
-        `${phase}_validation.mp4`,
-        `${phase}_validation.webm`,
-        `${phase}_validation_unified.mp4`,
-        `${phase}_validation_unified.webm`,
-      );
-    }
-  }
-  if (lower.endsWith("_validation_unified.mp4") || lower.endsWith("_validation_unified.webm")) {
-    const phase = primaryName.replace(/_validation_unified\.(mp4|webm)$/i, "");
-    const short = phase === "baseline" || phase === "healthy" ? "healthy" : phase;
-    names.push(`${short}_validation.mp4`, `${short}_validation.webm`);
-  }
-  return [...new Set(names.filter(Boolean))];
+  void subfolder;
+  return identityDriveNameCandidates(primaryName);
 }
 
 async function fetchDriveFile(patientKey, name, subfolder = "videos") {
@@ -235,8 +206,7 @@ export async function restoreValidationArtifactsFromDrive(patientKey, phase, nee
   }
 
   if (wantUnified) {
-    const blob = await fetchDriveFile(patientKey, validationUnifiedDriveName(phase, "mp4"), "videos")
-      || await fetchDriveFile(patientKey, validationUnifiedDriveName(phase, "webm"), "videos");
+    const blob = await fetchDriveFile(patientKey, validationUnifiedDriveName(phase), "videos");
     if (blob) out.unifiedVideoBlob = blob;
   }
 

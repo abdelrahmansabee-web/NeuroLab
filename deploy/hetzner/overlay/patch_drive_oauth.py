@@ -304,7 +304,7 @@ BACKUP_FILE_OLD = '''        drive_name = name
 BACKUP_FILE_NEW = '''        try:
             from drive_persist import clinic_drive_filename
 
-            mapped = clinic_drive_filename(name)
+            mapped = clinic_drive_filename(name, patient_key=safe_key)
         except Exception:
             mapped = name
         if mapped is None:
@@ -335,7 +335,7 @@ BACKUP_UPLOAD_NEW = '''    drive_name = _drive_sanitize_name(name)
     try:
         from drive_persist import clinic_drive_filename
 
-        mapped = clinic_drive_filename(drive_name)
+        mapped = clinic_drive_filename(drive_name, patient_key=safe_key)
     except Exception:
         mapped = drive_name
     if mapped is None:
@@ -363,7 +363,7 @@ RESTORE_FILE_NEW = '''    names = [name]
     try:
         from drive_persist import clinic_drive_filename
 
-        mapped = clinic_drive_filename(name)
+        mapped = clinic_drive_filename(name, patient_key=safe_key)
         if mapped and mapped not in names:
             names.append(mapped)
     except Exception:
