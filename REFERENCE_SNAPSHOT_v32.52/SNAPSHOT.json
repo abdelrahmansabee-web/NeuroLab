@@ -1,0 +1,43 @@
+{
+  "snapshot_id": "REFERENCE_SNAPSHOT_v32.52",
+  "created_at": "2026-09-14T19:11:59Z",
+  "purpose": "Full restore point of the working RA.ED AI / NeuroLab program (Hugging Face Space + GitHub source) at clinic UI 32.52.",
+  "nl_version": "32.52",
+  "hf_space": {
+    "url": "https://huggingface.co/spaces/AbdelrahmanSabee/raedai",
+    "app_url": "https://abdelrahmansabee-raedai.hf.space/",
+    "git_url": "https://huggingface.co/spaces/AbdelrahmanSabee/raedai.git",
+    "commit": "deceee5977f09e9e8e3d58521fc638d43fc83d18",
+    "commit_title": "v32.52: use the supplied transparent Raed logo PNG",
+    "frontend_nl_version": "32.52",
+    "js": "main.d669af20.js",
+    "css": "main.6977eca3.css",
+    "sdk": "docker",
+    "app_port": 7860
+  },
+  "github": {
+    "url": "https://github.com/abdelrahmansabee-web/NeuroLab",
+    "ref": "cursor/backup-full-v3252-f95a",
+    "source_commit": "63e0cd56faf8ce1aa0f48a05b86c94e5e0c8839e",
+    "frontend_nl_version": "32.52",
+    "note": "github_source includes the working-tree copies of AuthGate.jsx / analysisPlan.js / index.js / patientImport.js / thesisDocs.js that were used to compile the live 32.52 bundle, plus frontend/build."
+  },
+  "bytes": {
+    "github_source": 35015936,
+    "hf_space": 7254866,
+    "total": 42371804
+  },
+  "file_count": 774,
+  "excluded": [
+    ".git",
+    "venv/",
+    "node_modules/",
+    "uploads/ outputs/ data/ (patient runtime data)",
+    "backend/results and kinematic_analysis/videos (kept on the git tag, too large to duplicate here)",
+    "*.task MediaPipe models (Dockerfile downloads at build)",
+    "*.js.map source maps",
+    "stale HF main.<hash>.js bundles other than the live 32.52 files",
+    "HF Space secrets (JWT_SECRET, MFA_ENCRYPTION_KEY, Google Drive credentials)",
+    "nested REFERENCE_SNAPSHOT_v28.81 and backups/ (still on the git tag)"
+  ]
+}

@@ -1,0 +1,84 @@
+/* Fast clinic paint. Keep the photo/glass look — do not fill panels solid black.
+   Live CSS filter/backdrop-filter on iPad is what made the UI heavy. */
+
+html.nl-clinic-smooth {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.nl-clinic-smooth,
+html.nl-clinic-smooth body {
+  overscroll-behavior: none;
+}
+
+html.nl-clinic-smooth,
+html.nl-clinic-smooth *,
+html.nl-clinic-smooth *::before,
+html.nl-clinic-smooth *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.nl-clinic-smooth .fixed.inset-0.z-0 > .absolute.inset-0:first-child,
+html.nl-clinic-smooth [style*="blur(24px)"] {
+  filter: none !important;
+  -webkit-filter: none !important;
+  transform: none !important;
+  background-image: url("/bg_soft.jpg") !important;
+}
+
+/* Middle frost: cards readable, photo still in the page. */
+html.nl-clinic-smooth .content-shell {
+  background-color: rgba(24, 34, 48, 0.22) !important;
+}
+
+html.nl-clinic-smooth .sidebar-shell,
+html.nl-clinic-smooth .section-header,
+html.nl-clinic-smooth .app-topbar-glass {
+  background-color: rgba(24, 34, 48, 0.50) !important;
+}
+
+html.nl-clinic-smooth .glass-float {
+  background-color: rgba(24, 34, 48, 0.44) !important;
+}
+
+html.nl-clinic-smooth .gselect-trigger,
+html.nl-clinic-smooth .gselect-menu {
+  background-color: rgba(36, 44, 56, 0.90) !important;
+}
+
+html.nl-clinic-smooth .sidebar-shell::before,
+html.nl-clinic-smooth .glass-float::before,
+html.nl-clinic-smooth .content-shell::before,
+html.nl-clinic-smooth .sidebar-shell::after,
+html.nl-clinic-smooth .glass-float::after,
+html.nl-clinic-smooth .content-shell::after {
+  mix-blend-mode: normal !important;
+}
+
+html.nl-clinic-smooth button,
+html.nl-clinic-smooth a,
+html.nl-clinic-smooth [role="button"],
+html.nl-clinic-smooth .gselect-trigger {
+  touch-action: manipulation;
+}
+
+html.nl-clinic-smooth * {
+  scroll-behavior: auto !important;
+}
+
+html.nl-clinic-smooth .kin-analyzing-ring,
+html.nl-clinic-smooth .kin-film-strip__track {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.nl-clinic-smooth *,
+  html.nl-clinic-smooth *::before,
+  html.nl-clinic-smooth *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

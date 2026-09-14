@@ -1,0 +1,196 @@
+	                                                                                                                                              Tarih:15/06/2026
+İNSAN ARASTIRMALARI ETİK KURULU BASVURU FORMU
+PROJENİN ADI:
+İnme Sonrası Tek Seans PETTLEP Temelli Eylem Gözlemi ve Motor İmgeleme (AOMI) Uygulamasının Üst Ekstremite Kinematiği Üzerindeki Anlık Etkileri: Randomize Kontrollü Çalışma 
+BAŞVURU BİLGİLERİ
+Başvurunun Şekli
+ İlk Başvuru  
+ Düzeltme
+ Onaylanmış Projenin Devamı
+ Onaylanan Projede Değişiklik Bildirimi
+ Bu araştırmanın sonuçları bilimsel bir dergide yayınlanacaktır.
+Araştırmanın Niteliği
+ Öğretim Üyesi Araştırması
+ Yüksek Lisans   Doktora Tez Çalışması
+ Bu Araştırmanın Sonuçları Bilimsel Bir Dergide Yayınlanacaktır
+ Diğer (Lütfen açıklayınız)
+PROJE DANIŞMANI ÖĞRETİM ÜYESİ
+Unvanı,/Adı Soyadı
+Kurum / Fakülte / Bölüm / Uzmanlık Alanı
+Cep Telefonu ve E-posta
+İmza
+Dr. Öğr. Üyesi Begüm Kara Kaya
+Biruni Üniversitesi, Sağlık Bilimleri Fakültesi, Fizyoterapi ve Rehabilitasyon Bölümü
+0535 572 00 21 / begum.kara@biruni.edu.tr
+SORUMLU ARAŞTIRMACI
+Unvanı,/Adı Soyadı
+Kurum / Fakülte / Bölüm / Uzmanlık Alanı
+Cep Telefonu ve E-posta
+İmza
+Fzt. / Yüksek Lisans Öğrencisi
+Abdelrahman Walid Hamza Mohamed Elsayed Sabee
+İstinye Üniversitesi, Lisansüstü Eğitim Enstitüsü, Fizyoterapi ve Rehabilitasyon Anabilim Dalı
++90 537 960 05 20 / abdelrahman.sabee@stu.istinye.edu.tr
+YARDIMCI ARAŞTIRMACILAR
+Unvanı,/Adı Soyadı
+Kurum / Fakülte / Bölüm / Uzmanlık Alanı
+Cep Telefonu ve E-posta
+İmza
+Prof. Dr. Yakup Krespi
+İstinye Üniversitesi Tıp Fakültesi, Nöroloji Anabilim Dalı
++90 530 469 81 18 / ykrespi@gmail.com
+Doç. Dr. Çiğdem Çınar
+Biruni Üniversitesi Hastanesi, Fiziksel Tıp ve Rehabilitasyon Anabilim Dalı
+0507 783464 / ccinar@biruni.edu.tr
+(Sayısına göre satır ekleyiniz)
+ARAŞTIRMANIN GEREKÇESİ, AMACI VE KAYNAKLARI
+İnme, dünya genelinde yetişkin engelliliğinin üçüncü önde gelen nedenidir ve hastaların büyük bir kısmında uzun vadeli motor, kas tonusu ve üst ekstremite fonksiyon kontrolü ve koordinasyon bozukluğu görülmektedir (1). Bu eksiklikler, kortikal ve subkortikal motor sistemlerdeki hasara bağlı olarak etkili motor komutların üretimindeki bozulmadan kaynaklanmaktadır. Sonuç olarak, sarsıntılı yörüngelerle (hareket pürüzsüzlüğünün kaybı) karakterize patolojik hareket modelleri inme sonrasında oldukça tipiktir; hastalar zayıflığın üstesinden gelmek için gövdeyi hareket ettirme veya omzu yukarı kaldırma (omuz kuşağı elevasyonu) gibi uyumsuz stratejilerle telafi ederler (2,3).
+Geleneksel tedavilerde vurgu görev pratiği üzerinedir; ancak inme geçirenlerin büyük bir kısmı, özellikle şiddetli hemiplejisi olanlar, bu tür eğitimlere katılmak için gereken istemli motor çıktıyı üretemezler (4). Bu grupta, fiziksel çıktı olmaksızın motor komutların bilişsel simülasyonu olan Motor İmgeleme (Mİ) önemli bir alternatif sunar. Mİ, fiziksel icra için kullandığımızla aynı nöral substratı kullanır (4,5). Yeni kanıtlar, Mİ'nin Eylem Gözlemi (AO) ile birleştirilmesinin (AOMI protokolü) motor plan için tek başına Mİ'den daha fazla destek sağladığını öne sürmektedir (6).
+Ancak Mİ'deki zihinsel simülasyonun kalitesi ve titizliği, onun ne kadar güçlü olacağını belirleyecektir. İcra edilen ve hayal edilen eylemler arasındaki nöral substrat benzerliğini artırmak için PETTLEP modeli tanıtılmıştır (7). AOMI'nin PETTLEP ilkeleriyle sunulması, protokolün katılımcı odaklı olmasını ve motor yolları aktive edecek pragmatik bir destek olmasını sağlayacaktır.
+Bu amaçla, MediaPipe tabanlı işaretsiz hareket yakalama ve ZoeDepth metrik ölçekleme içeren NeuroLab Stroke Rehabilitation Research Platform entegrasyonu önerilmektedir (8). Hareket pürüzsüzlüğü (smoothness_pause_pct), gövde-kompanzasyon oranı (total_trunk_palm_ratio) ve omuz dikey yer değiştirmesi (shoulder_vert_norm) gibi parametreler objektif olarak ölçülecektir. WMFT-4 ile kombinasyon, hareket kalitesinin fonksiyonel üst ekstremite performansı ile ilişkilendirilmesine olanak tanır (9).
+Dolayısıyla, bu çalışmanın beklentisi nöro-rehabilitasyon literatüründeki kritik bir boşluğu doldurmaktır. Özelleştirilmiş PETTLEP tabanlı AOMI protokolü ile birlikte, spesifik zihinsel pratiğin inme sonrası bireylerde hareket pürüzsüzlüğü, telafi edici stratejiler ve fonksiyonel el becerisinde ölçülebilir kısa vadeli değişikliklere yol açıp açmadığı araştırılacaktır.
+Anahtar Kelimeler: Motor imgeleme, eylem gözlemi, AOMI, PETTLEP, inme, MediaPipe, kinematik, üst ekstremite rehabilitasyonu.
+Araştırma Sorusu:
+Tek seanslık PETTLEP tabanlı AOMI; bilişsel ve somatik kontrol grubuna kıyasla, inme geçiren bireylerde etkilenen üst ekstremitenin hareket pürüzsüzlüğü (smoothness_pause_pct), gövde kompanzasyonu, omuz kuşağı elevasyonu ve üst ekstremite fonksiyonunda (WMFT-4) anlık iyileşmelere yol açar mı?
+Hipotezler:
+H₀: Tek seanslık PETTLEP tabanlı AOMI, kontrol grubuna kıyasla inme sonrası bireylerde paretik üst ekstremitenin kinematik parametrelerinde (smoothness_pause_pct, total_duration_s, total_trunk_palm_ratio, shoulder_vert_norm, total_peak_velocity) veya WMFT-4 skorunda anlamlı değişikliklere yol açmayacaktır.
+H₁:
+KAYNAKLAR:
+1. World Stroke Organization (WSO). Global Stroke Fact Sheet 2022. Geneva: World Stroke Organization; 2022.
+2. Facciorusso S, Guanziroli E, Brambilla C, Spina S, Giraud M, Molinari Tosatti L, et al. Muscle synergies in upper limb stroke rehabilitation: a scoping review. Eur J Phys Rehabil Med. 2024 Oct;60(5):767-792.
+3. Schwarz A, Bhagubai MMC, Nies SHG, Held JPO, Veltink PH, Buurke JH, Luft AR. Characterization of stroke-related upper limb motor impairments across various upper limb activities by use of kinematic core set measures. J Neuroeng Rehabil. 2022 Jan 12;19(1):2.
+4. Guerra ZF, Lucchetti AL, Lucchetti G. Motor Imagery Training After Stroke: A Systematic Review. J Neurol Phys Ther. 2017;41(4):205-214.
+5. Lakshminarayanan K, Shahbazi M, Janouch C, Ladda AM. Editorial: Recent advancements in motor imagery. Front Neurol. 2023;14:1248023.
+6. Kim JH, Lee BH. The Effect of Action Observation Combined with Motor Imagery Training on Upper Extremity Function and Corticospinal Excitability in Stroke Patients: A Randomized Controlled Trial. Int J Environ Res Public Health. 2022;19(19):12048.
+7. Holmes PS, Collins DJ. The PETTLEP Approach to Motor Imagery: A Functional Equivalence Model for Sport Psychologists. J Appl Sport Psychol. 2001;13(1):60–83.
+8. Lugaresi C, Tang J, Nash H, et al. MediaPipe: A Framework for Building Perception Pipelines. arXiv:1906.08172. 2019.
+9. Wolf SL, Catlin PA, Ellis M, et al. Assessing Wolf Motor Function Test scores against normative values. Arch Phys Med Rehabil. 2001;82(5):609-614.
+10. Caires TA, Fernandes LFRM, Patrizzi LJ, de Almeida Oliveira R, de Souza LAPS. Immediate effect of mental practice with and without mirror therapy on muscle activation in hemiparetic stroke patients. J Bodyw Mov Ther. 2017;21(4):1024-1027.
+11. Bijur PE, Silver W, Gallagher EJ. Reliability of the visual analog scale for measurement of acute pain. Acad Emerg Med. 2001;8(12):1153–1157.
+12. Malouin F, Richards CL, Jackson PL, et al. The Kinesthetic and Visual Imagery Questionnaire (KVIQ) for assessing motor imagery in persons with physical disabilities: a reliability and construct validity study. J Neurol Phys Ther. 2007;31(1):20-29.
+13. Schuster C, Hilfiker R, Amft O, Scheidhauer A, Andrews B, Butler J, et al. Best practice for motor imagery: a systematic literature review on motor imagery training elements in five different disciplines. BMC Med. 2011;9:75.
+REVİZYON (onaylanmış protokolde değişiklik): Çalışma çok merkezli hale getirilmiş; Biruni Üniversitesi Hastanesi ikinci veri toplama merkezi olarak eklenmiş ve Doç. Dr. Çiğdem Çınar yardımcı araştırmacı olarak ekibe dahil edilmiştir. Bilimsel tasarım, örneklem (n=28) ve birincil sonuç (smoothness_pause_pct) değiştirilmemiştir.
+ Tek seanslık PETTLEP tabanlı AOMI, kontrol grubuna kıyasla inme sonrası bireylerde bu kinematik parametrelerde ve WMFT-4 skorunda anlamlı iyileşmelere yol açar.
+  (Ayrıntılı olarak yazılmalıdır.)
+Çalışma ile ilgili gördüğünüz literatür başlıkları yazılmalıdır.               
+GÖNÜLLÜLERİN NİTELİĞİ 
+Çalışmaya Alınacak Minimum Gönüllü Sayısı
+Gönüllü Sayısı
+Yaş Aralığı
+Etik Kurul Onayı Sonrası
+Sağlıklı
+12 ay (Şubat 2026 – Şubat 2027)
+Hasta (İnme / Stroke)
+28
+40–80
+Çocuk 
+Toplam
+28
+ARAŞTIRMANIN YAPILACAĞI YER
+Kurum/Kuruluş Adı ve Adresi:
+1) İstinye Üniversitesi Liv Bahçeşehir Hastanesi, Nörorehabilitasyon Kliniği, İstanbul
+2) Biruni Üniversitesi Hastanesi, Fiziksel Tıp ve Rehabilitasyon Polikliniği, İstanbul (çok merkezli veri toplama merkezi — revizyon kapsamında eklenmiştir)
+(Varsa birden fazla belirtiniz):
+ Hastane (İzin Yazısı Alınmalıdır)		Saha 
+   Poliklinik (İzin Yazısı Alınmalıdır)		Diğer (lütfen belirtiniz)
+ Sağlık Ocağı (İzin Yazısı Alınmalıdır)
+VERİ TOPLAMA YÖNTEMİ
+Yöntem ve Değerlendirme Araçları — Materyal ve Metot:
+Çalışma Tasarımı:
+Bu çalışmada, iki koşulun (deneysel: PETTLEP tabanlı AOMI; kontrol: bilişsel ve somatik kontrol) yürütüleceği tek kör, ön test–son test, prospektif randomize kontrollü çalışma (RCT) tasarımı kullanılacaktır. Çalışma çok merkezlidir: İstinye Üniversitesi Liv Bahçeşehir Hastanesi Nörorehabilitasyon Kliniği ve Biruni Üniversitesi Hastanesi FTR Polikliniği. Etik kurul onayı sonrası bilgilendirilmiş onam alınacaktır. Toplam süre: Şubat 2026 – Şubat 2027 (12 ay).
+Örneklem Büyüklüğü ve Randomizasyon:
+2 (Grup: AOMI vs. Kontrol) × 2 (Zaman: Ön vs. Son) tekrarlı ölçümler ANOVA için G*Power 3.1.9.2 kullanılarak a priori güç analizi yapılmıştır. Benzer akut motor imgeleme çalışmalarına göre f = 0.40 (Cohen's d ≈ 1.2) referans alınmıştır. α = 0.05, güç (1−β) = 0.95 için N = 24; %15 dropout telafisi ile n = 28 (grup başına 14) hedeflenmiştir. Katılımcılar permütasyon blok randomizasyonu ile 1:1 randomize edilecektir. Tabakalandırma: (i) cinsiyet; (ii) MAS (0–1+ / 2). Opak kapalı zarf; bağımsız araştırmacı tarafından bilgisayarlı randomizasyon listesi.
+Değerlendirmeler:
+Güvenilirlik için çevresel koşullar standardize edilecektir. Her katılımcı müdahale öncesi ve hemen sonrasında değerlendirilecektir. Her merkezde bir eğitimli fizyoterapist klinik ölçümleri yürütür; kinematik çıkarım NeuroLab ile otomatik ve kör yapılır.
+Deneysel Koşulların Standardizasyonu:
+Katılımcılara uzun kollu koyu mor tişört giydirilecektir. Saç/atkuyruğu omuz landmark'larını kapatmayacak şekilde sabitlenecektir. Sandalye, masa yüksekliği ve hedef mesafesi sabit kalacaktır. Test günü ek üst ekstremite rehabilitasyonu yapılmaması istenecektir.
+Görevin Yürütülmesi (Reach & Wipe):
+Ulaş-Sil görevi için standart sözlü talimat kullanılacaktır. Her değerlendirme zaman noktasında üç deneme kaydedilecek; analiz için ortalama kullanılacaktır. Katılımcılar kendileri için doğal hızda hareket edeceklerdir.
+Veri Toplama Kurulumu:
+Tek akıllı telefon veya web kamerası ile 1080p, 30 fps frontal kayıt; tutarlı dağınık aydınlatma. NeuroLab MediaPipe Pose Landmarker (33 landmark) + ZoeDepth metrik ölçekleme. İsteğe bağlı OpenSim IK (14 DOF). Tüm katılımcılarda aynı işleme parametreleri.
+Birincil Sonuç:
+Hareket pürüzsüzlüğü (smoothness_pause_pct): Aktif hareket penceresinde el hızının normalize eşik altında kaldığı sürenin yüzdesi (düşük = daha pürüzsüz). Klasik marker sistemlerinin aksine MediaPipe tabanlı pipeline akıllı telefon videosundan kinematik türetir.
+İkincil Kinematik Sonuçlar:
+• Omuz Kuşağı Elevasyonu (telafi stratejisi): Omuz dikey yer değiştirmesi (shoulder_vert_norm).
+• Gövde Yer Değiştirmesi (telafi stratejisi): Gövde-kompanzasyon oranı (total_trunk_palm_ratio).
+• total_duration_s, total_peak_velocity, total_path_length, lateral_hand_range, maksimum dirsek açısı.
+Üst Ekstremite Fonksiyonu — WMFT-4:
+Amaç: Kinematik iyileşmelerin fonksiyonel faydaya dönüşüp dönüşmediğini değerlendirmek. 4 maddelik kısa form; etkilenen üst ekstremite performansı.
+Ağrı — Görsel Analog Skalası (VAS):
+Etkilenen üst ekstremitede ağrı şiddeti; müdahale güvenliği için pre/post.
+Hareket İmgeleme Yeteneği — KVIQ-10:
+Kinestetik ve görsel alt ölçekler; baseline'da uygulanır.
+Duygu Durumu — VAMS-4 (mutlu, sakin, üzgün, gergin); IPAQ (baseline); MDRS (post).
+Müdahale (Intervention) — PETTLEP-AOMI (~17 dk; müdahale sırasında fiziksel uygulama YOK):
+Prosedür: ön değerlendirme → müdahale → son değerlendirme.
+1. Temel Değerlendirme: Kalibrasyon sonrası Reach & Wipe'nin 3 denemesi; kinematikler NeuroLab ile kaydedilir.
+2. Müdahale Aşaması (toplam ~17 dk):
+Faz 1 — Kalibrasyon (120 sn): notice–name–transfer. Script: gözleri kapat; sandalyeyi hisset; derin nefes (15 sn). Etkilenmemiş elde havlu hissi; pürüzsüz silme imgesi — 'rahatlık' etiketi (45 sn). 'Rahatlık' sinyalinin etkilenen uzva aktarımı (60 sn).
+Faz 2 — Eğitim Blokları (5 × 180 sn):
+• Watch (45 sn): Ayna ters çevrilmiş birinci şahıs video; dış perspektif; omuz-gövde-görev gözlemi.
+• Imagine (75 sn): Göz kapalı; iç perspektif; gerçek zamanlı: ulaş 1-2-3, sil 1-2-3, dön 1-2-3 (3–5 döngü).
+• Rest (60 sn): Hareket imgelemesi yok; zihinsel dinlenme.
+Kontrol Grubu (~17 dk eşleştirilmiş):
+2 dk giriş gevşemesi + 5 blok × 3 dk Beden Taraması / Mekânsal Navigasyon (alternatif).
+Müdahale Uyumu:
+Standart kulaklık ses dosyaları; blok sonu zihinsel kronometri ('Hayal ettiğiniz hareket normal hızınızda mıydı?'); fizyoterapist fidelity checklist (katılım, göz kapalı, overt hareket yok, advers olay).
+PETTLEP Çerçevesi:
+P – Gerçek oturma, normal kıyafet, gerçek havlu. E – Değerlendirme ile aynı oda/masa. T – Reach & Wipe. T – Gerçek zamanlı imgeleme (kritik). L – Bloklar arası düzeltici rehberlik. E – Rahatlık, güven, akıcılık. P – Watch'ta dış, Imagine'da iç perspektif.
+Fonksiyonel Uygunluk — Reach & Wipe:
+Ekolojik geçerlilik; tek kamera markerless takip; telafi stratejilerine duyarlılık; GYA bağımsızlığı ile ilişkili üst ekstremite kontrolü.
+Diğer veri toplama: Görüntü kaydı, Ölçek, Test, Bilgisayar ortamında uygulama (NeuroLab). Anket/ölçekler anonim değildir; araştırma kodu kullanılır.
+BAP Destek Talebi: Yok
+Anket*
+Ölçek*
+Test
+Mülakat
+Gözlem
+Bilgisayar ortamında uygulamak**
+Görüntü kaydı
+Ses kaydı
+Diğer (Lütfen belirtiniz)
+*Uygulanacak anket ve ölçekler anonim midir? Anonim değil ise izin belgesi eklenmelidir
+Anket Soruları tarafınızca hazırlandıysa ‘veri toplama aidiyet dilekçesi’ doldurulup dosyaya eklenmelidir. 
+**Online veri toplama form örneği dosyaya eklenmelidir.
+ARAŞTIRMAYA DAHİL EDİLME, HARİÇ TUTULMA VE ARAŞTIRMADAN ÇIKARILMA KRİTERLERİ
+Dahil edilme kriterlerini karşılayan toplam 28 inme hastası (her grupta 14 kişi) çalışmaya dahil edilecek ve randomize yöntemle iki gruba ayrılacaktır.
+Çalışma popülasyonu, İstanbul'daki İstinye Üniversitesi Liv Bahçeşehir Hastanesi Nörorehabilitasyon Kliniği ve Biruni Üniversitesi Hastanesi FTR Polikliniği'ne başvuran veya takipli inme hastalarından oluşmaktadır (çok merkezli). Katılımcılar uygunluk taraması sonrası gönüllü katılım yoluyla alınacak; bilgilendirilmiş onam imzalanacaktır. Hasta alımı etik kurul onayından sonra başlayacaktır.
+Araştırmaya Dahil Olma Kriterleri:
+• 40–80 yaş arası kadın/erkek yetişkinler
+• Tek taraflı iskemik veya hemorajik inme tanısı
+• Etkilenen üst ekstremitede artık gönüllü hareket bulunması
+• Hafif-orta spastisite (Modified Ashworth Skalası ≤ 2)
+• Sözlü talimatları anlayabilecek yeterli bilişsel fonksiyon (MMSE ≥ 21)
+• Tıbbi olarak stabil olma
+• Desteksiz en az 30 dk oturabilme ve kısa bilişsel-motor egzersizleri tolere edebilme
+Araştırmaya Hariç Olma Kriterleri:
+• İnme dışı santral sinir sistemi patolojileri (Parkinson, MS, TBI vb.)
+• Üst ekstremite hareketini kısıtlayan kas-iskelet sistemi veya ortopedik durumlar (sabit kontraktür, ciddi eklem deformitesi, omuz subluksasyonu)
+• Görev uygulamasını veya motor imgeleme katılımını etkileyen ciddi duyu kaybı, görsel ihmal veya dikkat eksikliği
+• Kontrolsüz epilepsi, ciddi kardiyovasküler instabilite veya imgelemeye kontrendikasyon
+• Araştırma protokolüne uyum sağlayamama veya gönüllü geri çekilme
+UYGULANACAK YAKLAŞIM VE İSTATİSTİKSEL YÖNTEM
+Araştırmanın tasarımı, örnekleme yöntemi ve istatistiksel analiz yöntemleri:
+Tüm analizler IBM SPSS Statistics for Mac, sürüm 24.0 ile yapılacaktır.
+Tanımlayıcı istatistikler: Normal dağılım için ortalama (SS); non-normal/ordinal için medyan (IQR). Shapiro-Wilk testi.
+Birincil ve İkincil Sonuç Analizi:
+• Parametrik: Normalliği sağlayan sürekli değişkenler için 2 × 2 Karma ANOVA; birincil odak Grup × Zaman etkileşimi.
+• Parametrik olmayan: VAS, ordinal veriler için Mann-Whitney U / Wilcoxon Signed-Rank.
+Korelasyonlar: KVIQ-10 skorları ile kinematik Δ skorları (smoothness_pause_pct, total_trunk_palm_ratio); Pearson r veya Spearman ρ.
+Etki büyüklüğü: ηp² (ANOVA); Cohen's d veya rank-biserial korelasyon. α = 0.05. İkincil kinematik ailesi için Holm–Bonferroni (k = 8).
+Eksik Veriler: ITT analizi; LOCF birincil imputation; Linear Mixed Models duyarlılık analizi.
+Araştırmanın tasarımı, örnekleme yöntemi ve kullanılacak istatistiksel analiz yöntemleri açıkça belirtilmelidir.
+ DESTEK VE BÜTÇE BİLGİSİ
+Bu araştırma herhangi bir kurum tarafından desteklenmemektedir (TÜBİTAK/BAP: Hayır).
+Gider Kalemleri:
+Baskı maliyeti (bilgilendirilmiş onam formları, veri formları): 1000 TL
+Genel Toplam: 1000 TL — Sorumlu araştırmacı tarafından karşılanacaktır.
+Bu araştırma herhangi bir kurum veya kuruluş (TÜBİTAK, BAP vb.) tarafından destekleniyor mu? Bütçe miktarı ve kaynağı belirtilmelidir.
+Evet
+Kurum veya kuruluş bilgisi eklenmelidir.
+Hayır
+*** Bu formda yer alan araştırma projesine ait veri toplama yöntemi ve çalışma dizaynına sadık kalınacağını, bilgilerin doğruluğunu, başka amaçla kullanılmayacağını taahhüt ederim.
+Sorumlu Araştırmacı   					
+El yazısıyla adı soyadı: Abdelrahman Walid Hamza Mohamed Elsayed Sabee 					
+Tarih (gün/ay/yıl olarak): …/…/….                              	
+İmza:							

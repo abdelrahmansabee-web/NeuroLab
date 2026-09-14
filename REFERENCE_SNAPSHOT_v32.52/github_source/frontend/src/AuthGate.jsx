@@ -1,0 +1,283 @@
+import { useEffect, useState } from "react";
+import PtrIosSpinner from "./PtrIosSpinner";
+
+const GLASS = "bg-[rgba(220,235,255,0.04)] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
+const INPUT = "w-full bg-[rgba(220,235,255,0.04)] border border-white/[0.03] rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/30";
+const BUTTON = "w-full rounded-lg px-4 py-3 text-sm font-medium text-white bg-white/15 hover:bg-white/25 active:bg-white/20 transition border border-white/30";
+const LINK = "text-xs text-white/50 hover:text-white/80 transition";
+
+const AUTH_TOKEN_KEY = "neurolab_token";
+export const RAED_LAST_EMAIL_KEY = "raed_last_email";
+
+export function getAuthToken() {
+  try { return localStorage.getItem(AUTH_TOKEN_KEY); } catch { return null; }
+}
+
+export function clearAuthToken() {
+  try { localStorage.removeItem(AUTH_TOKEN_KEY); } catch {}
+}
+
+export function rememberLoginEmail(email) {
+  const cleaned = String(email || "").trim().toLowerCase();
+  if (!cleaned) return;
+  try { localStorage.setItem(RAED_LAST_EMAIL_KEY, cleaned); } catch {}
+}
+
+export function readRememberedEmail() {
+  try { return localStorage.getItem(RAED_LAST_EMAIL_KEY) || ""; } catch { return ""; }
+}
+
+export function authHeaders() {
+  const token = getAuthToken();
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+}
+
+export default function AuthGate({ children }) {
+  const [state, setState] = useState("loading");
+  const [mode, setMode] = useState("login");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState(() => readRememberedEmail());
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [totpCode, setTotpCode] = useState("");
+
+  useEffect(() => {
+    fetch("/auth/me", { credentials: "same-origin", headers: authHeaders() })
+      .then((r) => {
+        if (r.ok) return r.json();
+        throw new Error("not authenticated");
+      })
+      .then((data) => {
+        const remembered = data?.last_login_email || data?.email;
+        if (remembered) rememberLoginEmail(remembered);
+        setState("unlocked");
+      })
+      .catch(() => setState("locked"));
+  }, []);
+
+  const resetForm = () => {
+    setError("");
+    setSuccess("");
+    setPassword("");
+    setConfirmPassword("");
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    const endpoint = mode === "login" ? "/auth/login" : mode === "register" ? "/auth/register" : "/auth/reset-password";
+    const body = { email: email.trim().toLowerCase(), password };
+    if (mode === "login" && mfaRequired) {
+      body.totp_code = totpCode.trim();
+    }
+    if (mode === "register") body.name = name.trim();
+    if (mode === "reset") {
+      if (password !== confirmPassword) {
+        setError("Passwords do not match");
+        return;
+      }
+    }
+
+    try {
+      const r = await fetch(endpoint, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.status === 403 && data.detail === "Account pending approval") {
+        setSuccess("Account created and is pending admin approval.");
+        return;
+      }
+      if (!r.ok) {
+        setError(data.detail || "Request failed");
+        return;
+      }
+      if (mode === "login" && data.mfa_required) {
+        setMfaRequired(true);
+        setSuccess(data.message || "Enter the 6-digit code from your authenticator app.");
+        setTotpCode("");
+        return;
+      }
+      if (mode === "register" && data.pending_approval) {
+        setSuccess(data.message || "Account created and is pending admin approval.");
+        return;
+      }
+      if (data.token) {
+        try { localStorage.setItem(AUTH_TOKEN_KEY, data.token); } catch {}
+      }
+      const loginEmail = data?.user?.last_login_email || data?.user?.email || body.email;
+      if (loginEmail && (mode === "login" || (mode === "register" && data.token))) {
+        rememberLoginEmail(loginEmail);
+        // Mark that this new origin still needs a server restore after reload.
+        try { localStorage.setItem("raed_origin_restore_pending", "1"); } catch {}
+      }
+      if (mode === "reset") {
+        setSuccess(data.message || "Password updated.");
+        setPassword("");
+        setConfirmPassword("");
+        return;
+      }
+      window.location.reload();
+    } catch (err) {
+      setError(err?.message || "Network error");
+    }
+  };
+
+  if (state === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#121820]">
+        <PtrIosSpinner spinning size={22} />
+      </div>
+    );
+  }
+
+  if (state === "unlocked") {
+    return children;
+  }
+
+  const title = mfaRequired ? "Two-factor authentication" : mode === "login" ? "Sign in" : mode === "register" ? "Create account" : "Reset password";
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#121820] relative overflow-hidden px-4">
+      <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[#1a2533] to-[#121820]" />
+      <form onSubmit={handleSubmit} className={`w-full max-w-sm rounded-2xl p-6 ${GLASS}`}>
+        <div className="flex flex-col items-center text-center gap-2 mb-1">
+          <img
+            src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.52`}
+            alt="RA.ED AI"
+            className="w-44 h-auto object-contain"
+            style={{ background: "transparent" }}
+          />
+          <h1 className="text-xl font-semibold text-white">RA.ED AI</h1>
+        </div>
+        <p className="text-xs text-center text-white/50 mb-4">Upper Extremity</p>
+        <p className="text-sm text-white/70 mb-5 text-center">{title} to continue.</p>
+
+        {error && (
+          <p className="text-red-300 text-sm mb-3 text-center">{error}</p>
+        )}
+
+        {success && (
+          <p className="text-green-300 text-sm mb-3 text-center">{success}</p>
+        )}
+
+        {!mfaRequired && (
+          <>
+            {mode === "register" && (
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={INPUT}
+                placeholder="Your name"
+                required
+              />
+            )}
+
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={`${INPUT} mt-3`}
+              placeholder="Email"
+              required
+              autoComplete="username"
+            />
+
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={`${INPUT} mt-3`}
+              placeholder={mode === "reset" ? "New password" : "Password"}
+              required
+              minLength={12}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+            />
+
+            {mode === "reset" && (
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={`${INPUT} mt-3`}
+                placeholder="Confirm new password"
+                required
+                minLength={12}
+              />
+            )}
+
+            {(mode === "register" || mode === "reset") && (
+              <p className="text-xs text-white/40 mt-2 text-center">
+                Password must be at least 12 characters with uppercase, lowercase, digit, and special character.
+              </p>
+            )}
+          </>
+        )}
+
+        {mfaRequired && (
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={totpCode}
+            onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            className={`${INPUT} mt-3`}
+            placeholder="6-digit code"
+            required
+            maxLength={6}
+          />
+        )}
+
+        <button type="submit" className={`${BUTTON} mt-4`}>
+          {mfaRequired ? "Verify" : mode === "reset" ? "Update password" : title}
+        </button>
+
+        {mfaRequired && (
+          <button
+            type="button"
+            onClick={() => { setMfaRequired(false); setTotpCode(""); setError(""); setSuccess(""); }}
+            className={`${LINK} mt-3`}
+          >
+            Back to sign in
+          </button>
+        )}
+
+        {!mfaRequired && (
+          <div className="mt-4 text-center flex flex-col gap-1">
+            {mode === "login" ? (
+              <>
+                <button type="button" onClick={() => { setMode("register"); resetForm(); }} className={LINK}>
+                  Don’t have an account? Create one
+                </button>
+                <button type="button" onClick={() => { setMode("reset"); resetForm(); }} className={LINK}>
+                  Forgot password?
+                </button>
+              </>
+            ) : mode === "register" ? (
+              <button type="button" onClick={() => { setMode("login"); resetForm(); }} className={LINK}>
+                Already have an account? Sign in
+              </button>
+            ) : (
+              <button type="button" onClick={() => { setMode("login"); resetForm(); }} className={LINK}>
+                Back to sign in
+              </button>
+            )}
+          </div>
+        )}
+
+        <p className="text-xs text-white/40 mt-4 text-center">
+          Patient data is tied to your account. After sign-in, study records are restored from the server (not from the old home-screen icon).
+        </p>
+      </form>
+    </div>
+  );
+}
