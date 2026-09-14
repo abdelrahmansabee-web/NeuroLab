@@ -3470,8 +3470,22 @@ function InlineValidationVideo({ src, phaseLabel, autoPlay = false, onEnded, onE
   return (
     <div className="relative w-full rounded-lg bg-black overflow-hidden group">
       <div
-        className="pointer-events-none absolute top-2 left-2 z-[40] px-2.5 py-1 rounded-md text-[13px] font-black tracking-wide text-black bg-yellow-300 shadow"
         data-overlay-player-build={`${OVERLAY_PLAYER_BUILD}-baked`}
+        style={{
+          position: "absolute",
+          top: 8,
+          left: 8,
+          zIndex: 40,
+          pointerEvents: "none",
+          padding: "6px 10px",
+          borderRadius: 8,
+          fontSize: 15,
+          fontWeight: 900,
+          letterSpacing: 0.4,
+          color: "#111",
+          background: "#fde047",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.45)",
+        }}
       >
         {OVERLAY_PLAYER_BUILD} BAKED
       </div>
@@ -5262,8 +5276,17 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
           <div className="flex items-center justify-between mb-3 gap-2">
             <p className="text-sm font-extrabold text-white/80">Validation Video</p>
             <p
-              className="text-[12px] font-black text-black bg-yellow-300 border border-yellow-200 px-2 py-0.5 rounded-md flex-shrink-0"
               data-overlay-player-build={OVERLAY_PLAYER_BUILD}
+              className="flex-shrink-0"
+              style={{
+                fontSize: 12,
+                fontWeight: 900,
+                color: "#111",
+                background: "#fde047",
+                border: "1px solid #facc15",
+                padding: "4px 8px",
+                borderRadius: 6,
+              }}
             >
               {OVERLAY_PLAYER_BUILD}
             </p>
@@ -9309,7 +9332,17 @@ export default function App() {
         </span>
         {readNlVersion() && (
           <span
-            className="inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-black tracking-wide text-black bg-yellow-300 border border-yellow-200 flex-shrink-0"
+            className="inline-flex items-center flex-shrink-0"
+            style={{
+              padding: "4px 10px",
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 900,
+              letterSpacing: 0.4,
+              color: "#111",
+              background: "#fde047",
+              border: "1px solid #facc15",
+            }}
             title="App build version — confirm this on iPad after update"
             data-nl-version={readNlVersion()}
           >

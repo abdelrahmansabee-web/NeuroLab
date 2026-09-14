@@ -2524,7 +2524,7 @@ export function ValidationOverlayPlayer({
         <div className="validation-player-topbar flex items-center justify-between px-4 pb-2.5 pt-[max(10px,env(safe-area-inset-top,0px))] flex-shrink-0 glass-float app-topbar-glass bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border-b border-white/[0.03]">
           <p className="text-sm font-bold text-white/90 truncate pr-3">
             {phaseLabel || "Validation"} — Validation
-            <span className="ml-2 text-yellow-200">{OVERLAY_PLAYER_BUILD}</span>
+            <span style={{ marginLeft: 8, color: "#fde047", fontWeight: 800 }}>{OVERLAY_PLAYER_BUILD}</span>
           </p>
           <button
             type="button"
@@ -2547,8 +2547,22 @@ export function ValidationOverlayPlayer({
         >
           <AppShellBackground className="z-0 rounded-[inherit]" />
           <div
-            className="pointer-events-none absolute top-2 left-2 z-[50] px-2.5 py-1 rounded-md text-[13px] sm:text-[15px] font-black tracking-wide text-black bg-yellow-300 shadow"
             data-overlay-player-build={OVERLAY_PLAYER_BUILD}
+            style={{
+              position: "absolute",
+              top: 8,
+              left: 8,
+              zIndex: 50,
+              pointerEvents: "none",
+              padding: "6px 10px",
+              borderRadius: 8,
+              fontSize: 15,
+              fontWeight: 900,
+              letterSpacing: 0.4,
+              color: "#111",
+              background: "#fde047",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.45)",
+            }}
           >
             {OVERLAY_PLAYER_BUILD} LIVE
           </div>
