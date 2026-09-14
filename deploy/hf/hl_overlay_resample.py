@@ -14,8 +14,15 @@ import numpy as np
 # Reject a Hand Landmarker wrist that is this far (normalized) from pose wrist.
 MAX_HL_POSE_WRIST = 0.11
 
-# IMAGE-mode HL jitters every frame; blend toward the new point but snap on a teleport.
-HL_SMOOTH_ALPHA = 0.36
+# 1€ filter: damp detector jitter, stay on MCP/IP/TIP (no stacked heavy EMA lag).
+HL_EURO_MIN_CUTOFF = 10.0
+HL_EURO_BETA = 0.04
+HL_EURO_DCUTOFF = 1.0
+HL_EURO_MAX_JUMP = 0.07
+HL_EURO_FS = 60.0
+
+# Kept for tests / optional callers; do not stack this on top of 1€.
+HL_SMOOTH_ALPHA = 0.72
 HL_SMOOTH_MAX_JUMP = 0.055
 
 
@@ -146,6 +153,63 @@ def wrist_roi_box(
     return x0, y0, max(0, x1 - x0), max(0, y1 - y0)
 
 
+def _euro_alpha(dt: float, cutoff: float) -> float:
+    tau = 1.0 / (2.0 * np.pi * max(float(cutoff), 1e-6))
+    return float(dt) / (tau + float(dt))
+
+
+def one_euro_xy(
+    xs: np.ndarray,
+    ys: np.ndarray,
+    *,
+    fs: float = HL_EURO_FS,
+    min_cutoff: float = HL_EURO_MIN_CUTOFF,
+    beta: float = HL_EURO_BETA,
+    dcutoff: float = HL_EURO_DCUTOFF,
+    max_jump: float = HL_EURO_MAX_JUMP,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """1€ filter on image-space joints. Resets on a teleport so a table lock cannot blend in."""
+    xs = np.asarray(xs, dtype=float)
+    ys = np.asarray(ys, dtype=float)
+    n = min(len(xs), len(ys))
+    out_x = np.full(n, np.nan)
+    out_y = np.full(n, np.nan)
+    dt = 1.0 / max(float(fs), 1.0)
+    hat_x = hat_y = np.nan
+    hat_dx = hat_dy = 0.0
+    for i in range(n):
+        x = float(xs[i]) if np.isfinite(xs[i]) else np.nan
+        y = float(ys[i]) if np.isfinite(ys[i]) else np.nan
+        if not (np.isfinite(x) and np.isfinite(y)):
+            hat_x = hat_y = np.nan
+            hat_dx = hat_dy = 0.0
+            continue
+        if not (np.isfinite(hat_x) and np.isfinite(hat_y)):
+            hat_x, hat_y = x, y
+            hat_dx = hat_dy = 0.0
+            out_x[i] = x
+            out_y[i] = y
+            continue
+        if float(np.hypot(x - hat_x, y - hat_y)) > float(max_jump):
+            hat_x, hat_y = x, y
+            hat_dx = hat_dy = 0.0
+            out_x[i] = x
+            out_y[i] = y
+            continue
+        dx = (x - hat_x) / dt
+        dy = (y - hat_y) / dt
+        ad = _euro_alpha(dt, dcutoff)
+        hat_dx = ad * dx + (1.0 - ad) * hat_dx
+        hat_dy = ad * dy + (1.0 - ad) * hat_dy
+        cutoff = float(min_cutoff) + float(beta) * float(np.hypot(hat_dx, hat_dy))
+        a = _euro_alpha(dt, cutoff)
+        hat_x = a * x + (1.0 - a) * hat_x
+        hat_y = a * y + (1.0 - a) * hat_y
+        out_x[i] = hat_x
+        out_y[i] = hat_y
+    return out_x, out_y
+
+
 def smooth_xy_series(
     xs: np.ndarray,
     ys: np.ndarray,
@@ -153,7 +217,7 @@ def smooth_xy_series(
     alpha: float = HL_SMOOTH_ALPHA,
     max_jump: float = HL_SMOOTH_MAX_JUMP,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """EMA in image space; snap if the point teleports (hand switch / lost lock)."""
+    """Light EMA; snap if the point teleports. Prefer one_euro_xy for overlay joints."""
     xs = np.asarray(xs, dtype=float).copy()
     ys = np.asarray(ys, dtype=float).copy()
     n = min(len(xs), len(ys))
