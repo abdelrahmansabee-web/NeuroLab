@@ -16,7 +16,7 @@ import mediapipe as mp
 import numpy as np
 import pandas as pd
 
-from hl_overlay_resample import MAX_HL_POSE_WRIST, wrist_roi_box
+from hl_overlay_resample import MAX_HL_POSE_WRIST, smooth_xy_series, wrist_roi_box
 
 if sys.platform == "win32":
     try:
@@ -86,15 +86,19 @@ def _crop_hand_roi(
     fw: int,
     fh: int,
     *,
-    pad: float = 1.65,
+    pad: float = 1.7,
     tx: Optional[float] = None,
     ty: Optional[float] = None,
+    ex: Optional[float] = None,
+    ey: Optional[float] = None,
 ) -> Tuple[np.ndarray, int, int, int, int]:
-    """Crop around the pose wrist. Ignore pose INDEX/THUMB stuck on the table."""
+    """Crop around the pose hand. Ignore pose INDEX/THUMB stuck on the table."""
     x0, y0, cw, ch = wrist_roi_box(
         wx, wy, ix, iy, fw, fh,
         tx if tx is not None else float("nan"),
         ty if ty is not None else float("nan"),
+        ex if ex is not None else float("nan"),
+        ey if ey is not None else float("nan"),
         pad=pad,
     )
     if cw < 40 or ch < 40:
@@ -195,9 +199,24 @@ def _write_hand_landmarks(
         raw.at[frame_i, f"{store_side}_HL_{name}_Z"] = float(lm.z)
 
 
-def _run_landmarker(landmarker, bgr: np.ndarray):
+def _smooth_written_hl(raw: pd.DataFrame, sides: Tuple[str, str]) -> None:
+    for side in sides:
+        for name in _HAND_LM:
+            xcol = f"{side}_HL_{name}_X"
+            ycol = f"{side}_HL_{name}_Y"
+            if xcol not in raw.columns or ycol not in raw.columns:
+                continue
+            sx, sy = smooth_xy_series(raw[xcol].to_numpy(dtype=float), raw[ycol].to_numpy(dtype=float))
+            raw[xcol] = sx
+            raw[ycol] = sy
+
+
+def _run_landmarker(landmarker, bgr: np.ndarray, ts_ms: int):
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-    return landmarker.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb))
+    return landmarker.detect_for_video(
+        mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb),
+        timestamp_ms=int(ts_ms),
+    )
 
 
 def _pick_result_hand(
@@ -246,13 +265,12 @@ def _detect_best_hand(
     fh: int,
     prefer_side: Optional[str],
 ) -> Tuple[Optional[str], str]:
-    """IMAGE-mode HL on a wrist crop so VIDEO tracking cannot stay on the table."""
-    del ts_ms  # IMAGE mode; kept so call sites stay stable
+    """VIDEO-mode HL on a distal wrist crop: smooth tracking, table stays outside."""
     detect_bgr = bgr
     x0, y0, cw, ch = 0, 0, fw, fh
     tag = "full"
     roi_side = prefer_side or _resolve_roi_side(raw, frame_i, prefer_side)
-    wx = wy = ix = iy = tx = ty = float("nan")
+    wx = wy = ix = iy = tx = ty = ex = ey = float("nan")
     if roi_side:
         wx = _pose_norm_xy(raw, frame_i, roi_side, "WRIST", "X")
         wy = _pose_norm_xy(raw, frame_i, roi_side, "WRIST", "Y")
@@ -260,28 +278,19 @@ def _detect_best_hand(
         iy = _pose_norm_xy(raw, frame_i, roi_side, "INDEX", "Y")
         tx = _pose_norm_xy(raw, frame_i, roi_side, "THUMB", "X")
         ty = _pose_norm_xy(raw, frame_i, roi_side, "THUMB", "Y")
+        ex = _pose_norm_xy(raw, frame_i, roi_side, "ELBOW", "X")
+        ey = _pose_norm_xy(raw, frame_i, roi_side, "ELBOW", "Y")
         if np.isfinite(wx) and np.isfinite(wy):
             detect_bgr, x0, y0, cw, ch = _crop_hand_roi(
-                bgr, wx, wy, ix, iy, fw, fh, tx=tx, ty=ty,
+                bgr, wx, wy, ix, iy, fw, fh, tx=tx, ty=ty, ex=ex, ey=ey,
             )
             if cw < fw or ch < fh:
                 tag = "roi"
 
-    result = _run_landmarker(landmarker, detect_bgr)
+    result = _run_landmarker(landmarker, detect_bgr, ts_ms)
     best_lms, best_side, best_dist, best_score = _pick_result_hand(
         result, raw, frame_i, x0, y0, cw, ch, fw, fh, roi_side,
     )
-
-    # One wider wrist crop if the tight box missed the grasping hand — still not full-frame.
-    if (best_lms is None or best_dist > MAX_HL_POSE_WRIST) and tag == "roi" and np.isfinite(wx):
-        detect_bgr, x0, y0, cw, ch = _crop_hand_roi(
-            bgr, wx, wy, ix, iy, fw, fh, tx=tx, ty=ty, pad=2.15,
-        )
-        result = _run_landmarker(landmarker, detect_bgr)
-        best_lms, best_side, best_dist, best_score = _pick_result_hand(
-            result, raw, frame_i, x0, y0, cw, ch, fw, fh, roi_side,
-        )
-        tag = "roi_wide"
 
     if best_lms is None or best_side is None or best_score < -1.0 or best_dist > MAX_HL_POSE_WRIST:
         return None, tag
@@ -359,11 +368,11 @@ def merge_hand_landmarks_into_raw_csv(
     base_options = python.BaseOptions(model_asset_path=str(mp_path))
     options = vision.HandLandmarkerOptions(
         base_options=base_options,
-        running_mode=vision.RunningMode.IMAGE,
+        running_mode=vision.RunningMode.VIDEO,
         num_hands=2,
-        min_hand_detection_confidence=0.25,
-        min_hand_presence_confidence=0.25,
-        min_tracking_confidence=0.25,
+        min_hand_detection_confidence=0.28,
+        min_hand_presence_confidence=0.28,
+        min_tracking_confidence=0.45,
     )
     landmarker = vision.HandLandmarker.create_from_options(options)
 
@@ -392,7 +401,7 @@ def merge_hand_landmarks_into_raw_csv(
         store_side, tag = _detect_best_hand(
             landmarker, bgr, ts_ms, raw, frame_i, fw, fh, prefer_side,
         )
-        ts_ms += int(round(1000.0 / max(fps, 1.0)))
+        ts_ms += max(1, int(round(1000.0 / max(fps, 1.0))))
 
         if store_side:
             detected += 1
@@ -407,6 +416,7 @@ def merge_hand_landmarks_into_raw_csv(
 
     cap.release()
     landmarker.close()
+    _smooth_written_hl(raw, sides)
     raw.to_csv(raw_csv_path, index=False)
 
     return {

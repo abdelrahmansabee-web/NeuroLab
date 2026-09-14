@@ -14,6 +14,10 @@ import numpy as np
 # Reject a Hand Landmarker wrist that is this far (normalized) from pose wrist.
 MAX_HL_POSE_WRIST = 0.11
 
+# IMAGE-mode HL jitters every frame; blend toward the new point but snap on a teleport.
+HL_SMOOTH_ALPHA = 0.36
+HL_SMOOTH_MAX_JUMP = 0.055
+
 
 def resample_with_max_gap(
     y: np.ndarray,
@@ -102,12 +106,19 @@ def wrist_roi_box(
     fh: int,
     tx: float = float("nan"),
     ty: float = float("nan"),
+    ex: float = float("nan"),
+    ey: float = float("nan"),
     *,
-    pad: float = 1.65,
-    min_frac: float = 0.11,
-    max_frac: float = 0.26,
+    pad: float = 1.7,
+    min_frac: float = 0.13,
+    max_frac: float = 0.34,
+    distal_shift_frac: float = 0.09,
 ) -> Tuple[int, int, int, int]:
-    """Pixel box around the pose wrist. Stuck table INDEX cannot enlarge it."""
+    """Pixel box around the pose hand.
+
+    Stuck table INDEX cannot enlarge it. Shift the box along elbow→wrist so
+    fingertips at the mouth stay inside instead of collapsing toward the wrist.
+    """
     pts_x = [float(wx) * fw]
     pts_y = [float(wy) * fh]
     for hx, hy in ((ix, iy), (tx, ty)):
@@ -116,8 +127,16 @@ def wrist_roi_box(
             pts_y.append(float(hy) * fh)
     cx = float(np.mean(pts_x))
     cy = float(np.mean(pts_y))
+    if all(np.isfinite(v) for v in (ex, ey, wx, wy)):
+        dx = float(wx) - float(ex)
+        dy = float(wy) - float(ey)
+        n = float(np.hypot(dx, dy))
+        if n > 1e-5:
+            shift = distal_shift_frac * min(fw, fh)
+            cx += (dx / n) * shift
+            cy += (dy / n) * shift
     span = max(abs(px - cx) for px in pts_x)
-    span = max(span, max(abs(py - cy) for py in pts_y), min_frac * min(fw, fh), 64.0)
+    span = max(span, max(abs(py - cy) for py in pts_y), min_frac * min(fw, fh), 72.0)
     span *= pad
     span = min(span, max_frac * min(fw, fh))
     x0 = int(max(0, round(cx - span * 0.5)))
@@ -125,3 +144,38 @@ def wrist_roi_box(
     x1 = int(min(fw, round(cx + span * 0.5)))
     y1 = int(min(fh, round(cy + span * 0.5)))
     return x0, y0, max(0, x1 - x0), max(0, y1 - y0)
+
+
+def smooth_xy_series(
+    xs: np.ndarray,
+    ys: np.ndarray,
+    *,
+    alpha: float = HL_SMOOTH_ALPHA,
+    max_jump: float = HL_SMOOTH_MAX_JUMP,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """EMA in image space; snap if the point teleports (hand switch / lost lock)."""
+    xs = np.asarray(xs, dtype=float).copy()
+    ys = np.asarray(ys, dtype=float).copy()
+    n = min(len(xs), len(ys))
+    out_x = np.full(n, np.nan)
+    out_y = np.full(n, np.nan)
+    prev_x = np.nan
+    prev_y = np.nan
+    a = float(np.clip(alpha, 0.0, 1.0))
+    jump = float(max_jump)
+    for i in range(n):
+        x = float(xs[i]) if np.isfinite(xs[i]) else np.nan
+        y = float(ys[i]) if np.isfinite(ys[i]) else np.nan
+        if not (np.isfinite(x) and np.isfinite(y)):
+            prev_x = np.nan
+            prev_y = np.nan
+            continue
+        if np.isfinite(prev_x) and np.isfinite(prev_y):
+            dist = float(np.hypot(x - prev_x, y - prev_y))
+            if dist <= jump:
+                x = a * x + (1.0 - a) * prev_x
+                y = a * y + (1.0 - a) * prev_y
+        out_x[i] = x
+        out_y[i] = y
+        prev_x, prev_y = x, y
+    return out_x, out_y
