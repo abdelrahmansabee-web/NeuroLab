@@ -9285,7 +9285,7 @@ export default function App() {
 
     const menuItems = [
       { onClick: () => { goToSection("analysis"); if (!isDesktop) setSidebar(false); }, icon: <BarChart3 />, label: "Analysis Dashboard", colorClass: "hover:text-amber-300" },
-      { onClick: () => revealSessionStatusBar(), icon: <Video />, label: "Loaded sessions", colorClass: "hover:text-sky-300" },
+      { onClick: () => revealSessionStatusBar(), icon: <Video />, label: "Sessions from Drive", colorClass: "hover:text-sky-300" },
       { onClick: () => importRef.current?.click(), icon: <FileUp />, label: "Import patient", colorClass: "hover:text-emerald-300" },
       { onClick: () => bgRef.current?.click(), icon: <ImageIcon />, label: "Background" },
       { onClick: () => { goToSection("database"); if (!isDesktop) setSidebar(false); }, icon: <Database />, label: "Database" },
