@@ -1,0 +1,36 @@
+{
+  "name": "REFERENCE_SNAPSHOT_2026-09-14_validation_overlay",
+  "revision": 2,
+  "created_at_utc": "2026-09-14T07:20:00Z",
+  "updated_at_utc": "2026-09-14T08:38:19Z",
+  "quality_note": "Refreshed after finger-chalk smoothness + drink-fingertip crop. User asked to freeze this before the next edit.",
+  "supersedes": "backup/2026-09-14-validation-overlay (morning freeze, overlay v40)",
+  "do_not_edit": true,
+  "github": {
+    "repo": "abdelrahmansabee-web/NeuroLab",
+    "branch_at_copy": "cursor/backup-validation-now-f95a",
+    "commit_at_copy": "9c67c4832827c79d5c96d95c7b0815cadacc6027",
+    "tag": "backup/2026-09-14-validation-overlay-v2",
+    "previous_tag": "backup/2026-09-14-validation-overlay"
+  },
+  "huggingface": {
+    "space": "AbdelrahmanSabee/raedai",
+    "url": "https://abdelrahmansabee-raedai.hf.space/",
+    "commit": "ed41d67816cc040d4747624e9b25245b60e8e886",
+    "frontend_bundle_commit": "0a35f61",
+    "tag": "backup-2026-09-14-validation-overlay-v2",
+    "previous_tag": "backup-2026-09-14-validation-overlay"
+  },
+  "live_validation_player": {
+    "nl_version": "32.43",
+    "js": "main.a0625928.js",
+    "css": "main.23ef7b0e.css",
+    "js_query": "?v=32.43",
+    "overlay_version": 41,
+    "finger_coords": "hl_absolute",
+    "note": "Exact 10 Sep player + follow-moving-wrist HL + VIDEO distal crop + finger EMA."
+  },
+  "missing_hf_files": [],
+  "file_count": 50,
+  "total_bytes": 11507761
+}
