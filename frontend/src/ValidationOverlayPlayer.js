@@ -23,10 +23,10 @@ import {
   HAND_FINGER_ORDER,
   SKELETON_PALETTE,
 } from "./clinicalSkeleton";
-import { pickForearmEnd, pointNear, shouldSnapSmooth } from "./overlayFollow";
+import { pickMovingHandRoot, pointNear, shouldSnapSmooth, splitMovedFromRest, elbowOnArm, centroid, overlayDist, REST_STAY_NORM } from "./overlayFollow";
 
 /** Burned into the player UI so a cached PWA cannot hide a deploy. */
-export const OVERLAY_PLAYER_BUILD = "32.76";
+export const OVERLAY_PLAYER_BUILD = "32.77";
 
 /** Same background treatment as App.js shell (bg.jpg + blur/dim). */
 const APP_BG_URL = "/bg.jpg";
@@ -1169,11 +1169,47 @@ export function ValidationOverlayPlayer({
 
     const useHandHlEarly = Boolean(overlayData?.hand_landmarker_overlay || f?.hand_hl);
     const minSide = Math.min(cw, ch);
+    const restPt = toCanvas(startPalm) || toCanvas(frames[win.start_idx]?.palm);
     const hlWristNow = pt("hl_wrist");
-    const handRootPt = pickForearmEnd(elbow, wrist, hlWristNow, minSide);
+    const indexNow = pt("index");
+    const rawFingerPts = [];
+    const liveJoints = f.finger_joints || null;
+    if (liveJoints) {
+      HAND_FINGER_ORDER.forEach((fid) => {
+        const fj = liveJoints[fid];
+        if (!fj) return;
+        ["mcp", "ip", "tip"].forEach((jname) => {
+          const pair = fj[jname];
+          if (pair && pair[0] != null && pair[1] != null) {
+            rawFingerPts.push([pair[0] * cw, pair[1] * ch]);
+          }
+        });
+      });
+    } else {
+      HAND_FINGER_ORDER.forEach((id) => {
+        const tip = pt(id);
+        if (tip) rawFingerPts.push(tip);
+      });
+    }
+    const { moved: movedFingerPts } = splitMovedFromRest(rawFingerPts, restPt, minSide);
+    const handRootPt = pickMovingHandRoot({
+      shoulder,
+      elbow,
+      poseWrist: wrist,
+      hlWrist: hlWristNow,
+      palm,
+      indexTip: indexNow,
+      movedCentroid: centroid(movedFingerPts),
+      restPt,
+      minSide,
+    });
     const maxFingerPx = 0.22 * minSide;
+    const restPx = REST_STAY_NORM * minSide;
+    const restLeft = Boolean(restPt && handRootPt && overlayDist(handRootPt, restPt) > restPx);
+    const elbowForSkel = elbowOnArm(shoulder, elbow, handRootPt, minSide) ? elbow : null;
     const ptSkel = (name) => {
       if (name === "wrist" && handRootPt) return handRootPt;
+      if (name === "elbow") return elbowForSkel;
       return pt(name);
     };
 
@@ -1512,6 +1548,10 @@ export function ValidationOverlayPlayer({
         dropFarFinger(key);
         return;
       }
+      if (restLeft && restPt && pointNear(cpt, restPt, restPx)) {
+        dropFarFinger(key);
+        return;
+      }
       const smoothed = smoothFinger(key, cpt, live);
       if (live) {
         stickyStore[key] = { cpt: [...smoothed], untilIdx: idx + stickyHoldFrames };
@@ -1520,6 +1560,7 @@ export function ValidationOverlayPlayer({
       }
       const held = stickyStore[key];
       if (held && idx <= held.untilIdx && (!followRoot || pointNear(held.cpt, followRoot, maxFingerPx))) {
+        if (restLeft && restPt && pointNear(held.cpt, restPt, restPx)) return;
         jointDots.push({ fid, jname, cpt: held.cpt, style, sticky: true });
       }
     };
