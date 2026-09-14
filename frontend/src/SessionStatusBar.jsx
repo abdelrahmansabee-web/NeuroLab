@@ -17,6 +17,12 @@ import {
   formatPhaseMetricLine,
   summarizeInventory,
 } from "./sessionInventory";
+import {
+  DRIVE_RECALL_EVENT,
+  DRIVE_RECALL_START_EVENT,
+  isDriveRecallRunning,
+  readLastDriveRecall,
+} from "./driveSessionRestore";
 
 const PATIENTS_SYNC_EVENT = "neurolab-patients-synced";
 
@@ -66,7 +72,9 @@ function PhasePills({ phases }) {
     <div className="flex items-center gap-1 flex-shrink-0">
       {SESSION_PHASES.map((meta, i) => {
         const ph = phases[i];
-        const title = `${meta.l}: ${ph.hasKin ? "kinematics" : "no analysis"}${ph.hasVideo ? ", video" : ", no video"}`;
+        const title = `${meta.l}: ${ph.hasKin ? "analysis" : "no analysis"}${
+          ph.hasOriginal ? ", original video" : ""
+        }${ph.hasOverlay ? ", overlay" : ""}${ph.hasUnified ? ", validation video" : ph.hasVideo && !ph.hasOriginal ? ", video name only" : ""}`;
         return (
           <span
             key={meta.k}
@@ -75,7 +83,9 @@ function PhasePills({ phases }) {
           >
             <span className={`w-1.5 h-1.5 rounded-full ${TONE_DOT[ph.tone]}`} />
             {meta.l[0]}
-            {ph.hasVideo ? <Video className="w-2.5 h-2.5 text-sky-300/80" /> : null}
+            {ph.hasVideo || ph.hasOriginal || ph.hasUnified ? (
+              <Video className="w-2.5 h-2.5 text-sky-300/80" />
+            ) : null}
           </span>
         );
       })}
@@ -101,9 +111,19 @@ function SessionRow({ row, expanded, onToggle, onOpen }) {
               {row.name ? <span className="text-white/50 font-medium"> · {row.name}</span> : null}
             </div>
             <div className="text-[10px] text-white/40">
-              {row.kinCount ? `${row.kinCount} analysis` : "No kinematics"}
-              {" · "}
-              {row.videoCount ? `${row.videoCount} video` : "No video"}
+              {row.recalled
+                ? row.bucket === "ready"
+                  ? "Fully recalled from Drive"
+                  : (row.missing || []).slice(0, 2).join(" · ") || "Incomplete on Drive"
+                : row.kinCount
+                  ? `${row.kinCount} analysis`
+                  : "No kinematics"}
+              {!row.recalled ? (
+                <>
+                  {" · "}
+                  {row.videoCount ? `${row.videoCount} video name` : "No video"}
+                </>
+              ) : null}
             </div>
           </div>
           <PhasePills phases={row.phases} />
@@ -118,16 +138,32 @@ function SessionRow({ row, expanded, onToggle, onOpen }) {
       </div>
       {expanded ? (
         <div className="px-3 pb-2.5 pt-0 space-y-1.5 border-t border-white/[0.05]">
+          {row.missing?.length ? (
+            <div className="text-[10px] text-amber-200/90 leading-snug">
+              Missing: {row.missing.join(" · ")}
+            </div>
+          ) : row.recalled ? (
+            <div className="text-[10px] text-emerald-200/80">All Drive pieces recalled</div>
+          ) : null}
           {SESSION_PHASES.map((meta, i) => {
             const ph = row.phases[i];
             const line = formatPhaseMetricLine(ph);
+            const bits = [
+              ph.hasOriginal ? "Original video" : null,
+              ph.hasOverlay ? "Overlay" : null,
+              ph.hasUnified ? "Validation video" : null,
+            ].filter(Boolean);
             return (
               <div key={meta.k} className="flex items-start justify-between gap-2 text-[11px]">
                 <span className="text-white/55 w-14 flex-shrink-0 pt-0.5">{meta.l}</span>
                 <div className="flex-1 min-w-0 text-white/80">
                   {ph.hasKin ? (line || "Analysis saved") : "No analysis"}
                   <div className="text-[10px] text-white/40 truncate">
-                    {ph.hasVideo ? ph.videoName || "Video on file" : "Video not restored"}
+                    {bits.length
+                      ? bits.join(" · ")
+                      : ph.hasVideo
+                        ? ph.videoName || "Video name on file, bytes not recalled"
+                        : "Video not recalled"}
                   </div>
                 </div>
               </div>
@@ -146,23 +182,35 @@ export default function SessionStatusBar({
 }) {
   const chipRef = useRef(null);
   const panelRef = useRef(null);
-  const [inventory, setInventory] = useState(() => summarizeInventory(getPatients?.() || []));
+  const [inventory, setInventory] = useState(() => summarizeInventory(getPatients?.() || [], readLastDriveRecall()));
   const [open, setOpen] = useState(false);
   const [chipHidden, setChipHidden] = useState(() => ssGet(SESSION_STATUS_SS.chipHidden));
   const [filter, setFilter] = useState("all");
   const [expandedKey, setExpandedKey] = useState("");
   const [noAutoOpen, setNoAutoOpen] = useState(() => lsGet(SESSION_STATUS_LS.noAutoOpen));
   const [panelPos, setPanelPos] = useState({ top: 56, right: 12 });
+  const [recalling, setRecalling] = useState(() => isDriveRecallRunning());
 
   const refresh = useCallback(() => {
-    setInventory(summarizeInventory(getPatients?.() || []));
+    setInventory(summarizeInventory(getPatients?.() || [], readLastDriveRecall()));
   }, [getPatients]);
 
   useEffect(() => {
     refresh();
     const onSync = () => refresh();
+    const onRecallStart = () => setRecalling(true);
+    const onRecallDone = () => {
+      setRecalling(false);
+      refresh();
+    };
     window.addEventListener(PATIENTS_SYNC_EVENT, onSync);
-    return () => window.removeEventListener(PATIENTS_SYNC_EVENT, onSync);
+    window.addEventListener(DRIVE_RECALL_START_EVENT, onRecallStart);
+    window.addEventListener(DRIVE_RECALL_EVENT, onRecallDone);
+    return () => {
+      window.removeEventListener(PATIENTS_SYNC_EVENT, onSync);
+      window.removeEventListener(DRIVE_RECALL_START_EVENT, onRecallStart);
+      window.removeEventListener(DRIVE_RECALL_EVENT, onRecallDone);
+    };
   }, [refresh]);
 
   const placePanel = useCallback(() => {
@@ -211,10 +259,11 @@ export default function SessionStatusBar({
   }, [open]);
 
   useEffect(() => {
-    if (restoreBusy || noAutoOpen || chipHidden) return undefined;
+    if (restoreBusy || recalling || noAutoOpen || chipHidden) return undefined;
     if (ssGet(SESSION_STATUS_SS.autoShown)) return undefined;
     if (inventory.total === 0) return undefined;
-    if (inventory.partial + inventory.empty === 0) return undefined;
+    const issues = inventory.fromDrive ? inventory.incomplete : inventory.partial + inventory.empty;
+    if (issues === 0) return undefined;
     const t = setTimeout(() => {
       if (ssGet(SESSION_STATUS_SS.autoShown)) return;
       ssSet(SESSION_STATUS_SS.autoShown, true);
@@ -222,7 +271,7 @@ export default function SessionStatusBar({
       setOpen(true);
     }, 1400);
     return () => clearTimeout(t);
-  }, [restoreBusy, noAutoOpen, chipHidden, inventory.total, inventory.partial, inventory.empty]);
+  }, [restoreBusy, recalling, noAutoOpen, chipHidden, inventory.total, inventory.fromDrive, inventory.incomplete, inventory.partial, inventory.empty]);
 
   useEffect(() => {
     const show = () => {
@@ -241,8 +290,17 @@ export default function SessionStatusBar({
     return inventory.rows;
   }, [filter, inventory.rows]);
 
-  const issueCount = inventory.partial + inventory.empty;
-  const chipLabel = inventory.total === 1 ? "1 session" : `${inventory.total} sessions`;
+  const issueCount = inventory.fromDrive ? inventory.incomplete : inventory.partial + inventory.empty;
+  const completeCount = inventory.fromDrive ? inventory.complete : inventory.ready;
+  const busy = restoreBusy || recalling;
+  const chipLabel = busy
+    ? "Recalling"
+    : inventory.fromDrive
+      ? `${completeCount} recalled`
+      : inventory.total === 1
+        ? "1 session"
+        : `${inventory.total} sessions`;
+  const chipCount = inventory.fromDrive ? completeCount : inventory.total;
 
   const openPanel = () => {
     setChipHidden(false);
@@ -278,12 +336,16 @@ export default function SessionStatusBar({
             ? "bg-white/[0.10] border-white/15 text-white"
             : "bg-white/[0.04] border-white/[0.06] text-white/75 hover:bg-white/[0.07]"
         }`}
-        title="Loaded sessions, videos, and kinematics"
+        title={
+          inventory.fromDrive
+            ? `${completeCount} session${completeCount === 1 ? "" : "s"} fully recalled from Drive${issueCount ? `, ${issueCount} incomplete` : ""}`
+            : "Loaded sessions, videos, and kinematics"
+        }
         aria-label={`${chipLabel}. ${issueCount} incomplete.`}
         aria-expanded={open}
         aria-haspopup="dialog"
       >
-        {restoreBusy ? (
+        {busy ? (
           <span className="w-3.5 h-3.5 rounded-full border border-white/30 border-t-sky-300 animate-spin flex-shrink-0" />
         ) : issueCount > 0 ? (
           <AlertCircle className="w-3.5 h-3.5 text-amber-300 flex-shrink-0" />
@@ -291,7 +353,7 @@ export default function SessionStatusBar({
           <Check className="w-3.5 h-3.5 text-emerald-300 flex-shrink-0" />
         )}
         <span className="hidden sm:inline">{chipLabel}</span>
-        <span className="sm:hidden">{inventory.total}</span>
+        <span className="sm:hidden">{busy ? "…" : chipCount}</span>
         {issueCount > 0 ? (
           <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400/20 text-amber-100 text-[10px] font-bold">
             {issueCount}
@@ -307,7 +369,7 @@ export default function SessionStatusBar({
                 ref={panelRef}
                 key="session-status-panel"
                 role="dialog"
-                aria-label="Loaded sessions"
+                aria-label={inventory.fromDrive ? "Sessions recalled from Drive" : "Loaded sessions"}
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
@@ -323,9 +385,13 @@ export default function SessionStatusBar({
               >
                 <div className="flex items-start justify-between gap-2 px-3 pt-3 pb-2">
                   <div>
-                    <div className="text-[13px] font-extrabold text-white/90">Loaded sessions</div>
+                    <div className="text-[13px] font-extrabold text-white/90">
+                      {inventory.fromDrive ? "From Drive" : "Loaded sessions"}
+                    </div>
                     <div className="text-[10px] text-white/45 mt-0.5">
-                      {inventory.ready} ready · {inventory.partial} incomplete · {inventory.empty} no analysis
+                      {inventory.fromDrive
+                        ? `${inventory.complete} fully recalled · ${inventory.incomplete} incomplete · ${inventory.empty} no analysis`
+                        : `${inventory.ready} ready · ${inventory.partial} incomplete · ${inventory.empty} no analysis`}
                     </div>
                   </div>
                   <button
@@ -341,7 +407,7 @@ export default function SessionStatusBar({
                 <div className="flex gap-1 px-3 pb-2">
                   {[
                     { id: "all", l: "All" },
-                    { id: "ready", l: "Ready" },
+                    { id: "ready", l: inventory.fromDrive ? "Recalled" : "Ready" },
                     { id: "partial", l: "Incomplete" },
                     { id: "empty", l: "Missing" },
                   ].map((f) => (

@@ -17,6 +17,7 @@ import {
 } from "./validationDriveSync";
 
 export const DRIVE_RECALL_EVENT = "neurolab-drive-recall";
+export const DRIVE_RECALL_START_EVENT = "neurolab-drive-recall-start";
 export const DRIVE_RECALL_LS = "nl_drive_recall_v1";
 export const PATIENTS_SYNC_EVENT = "neurolab-patients-synced";
 
@@ -317,15 +318,28 @@ function persistRecallSummary(summary) {
       complete: summary.complete,
       incomplete: summary.incomplete,
       attempted: summary.attempted,
+      empty: summary.empty,
       rows: (summary.rows || []).map((row) => ({
         key: row.patientKey || row.key,
         id: row.id,
         name: row.name,
         expected: row.expected,
         complete: row.complete,
-        missing: row.missing,
+        missing: row.missing || [],
+        pdfOk: !!row.pdfOk,
         expectedPhaseCount: row.expectedPhaseCount,
         completePhaseCount: row.completePhaseCount,
+        phases: (row.phases || []).map((ph) => ({
+          phase: ph.phase,
+          label: ph.label,
+          expected: !!ph.expected,
+          complete: !!ph.complete,
+          hasKin: !!ph.hasKin,
+          hasOriginal: !!ph.hasOriginal,
+          hasOverlay: !!ph.hasOverlay,
+          hasUnified: !!ph.hasUnified,
+          wantUnified: !!ph.wantUnified,
+        })),
       })),
     };
     localStorage.setItem(DRIVE_RECALL_LS, JSON.stringify(slim));
@@ -389,6 +403,9 @@ export async function recallAnalyzedSessionsFromDrive(patients, opts = {}) {
     (p) => p && typeof p === "object" && !p._archived,
   );
   recallPromise = (async () => {
+    try {
+      window.dispatchEvent(new Event(DRIVE_RECALL_START_EVENT));
+    } catch { /* ignore */ }
     const rows = await mapPool(list, 2, (patient) => recallOnePatient(patient));
     const summary = summarizeRecallRows(rows);
     lastRecallAt = Date.now();
@@ -404,6 +421,10 @@ export async function recallAnalyzedSessionsFromDrive(patients, opts = {}) {
     recallPromise = null;
   });
   return recallPromise;
+}
+
+export function isDriveRecallRunning() {
+  return Boolean(recallPromise);
 }
 
 export function readLastDriveRecall() {
