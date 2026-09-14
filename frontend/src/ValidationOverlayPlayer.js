@@ -550,9 +550,67 @@ function drawAmbientFromVideo() {
   return null;
 }
 
+function hideLetterboxGutters(gutters) {
+  placeGutterChrome(gutters.left, { left: 0, top: 0, width: 0, height: 0 });
+  placeGutterChrome(gutters.right, { left: 0, top: 0, width: 0, height: 0 });
+  placeGutterChrome(gutters.top, { left: 0, top: 0, width: 0, height: 0 });
+  placeGutterChrome(gutters.bottom, { left: 0, top: 0, width: 0, height: 0 });
+}
+
+/**
+ * Compact card: contain the full frame in (card width × 80vh).
+ * Do not letterbox a portrait clip into a collapsed landscape hole.
+ */
+function syncCompactVideoBox(video, stageEl, gutters, contentWrap) {
+  const stageW = stageEl.clientWidth;
+  const vw = video.videoWidth || 0;
+  const vh = video.videoHeight || 0;
+  if (stageW < 2 || !vw || !vh) {
+    hideLetterboxGutters(gutters);
+    return { externalPanel: false, rightGutter: 0 };
+  }
+  const viewH = window.visualViewport?.height || window.innerHeight || 0;
+  const maxH = Math.max(120, viewH * 0.8);
+  const scale = Math.min(stageW / vw, maxH / vh);
+  const displayW = vw * scale;
+  const displayH = vh * scale;
+  if (contentWrap) {
+    contentWrap.style.position = "relative";
+    contentWrap.style.left = "";
+    contentWrap.style.top = "";
+    contentWrap.style.width = `${displayW}px`;
+    contentWrap.style.height = `${displayH}px`;
+    contentWrap.style.maxWidth = "100%";
+    contentWrap.style.maxHeight = "80vh";
+    contentWrap.style.flexShrink = "0";
+    contentWrap.style.zIndex = "8";
+  }
+  video.style.width = "100%";
+  video.style.height = "100%";
+  video.style.objectFit = "contain";
+  hideLetterboxGutters(gutters);
+  return {
+    externalPanel: false,
+    rightGutter: 0,
+    panelW: 0,
+    panelH: displayH,
+    stageW,
+    stageH: displayH,
+    leftG: 0,
+    topG: 0,
+    rightG: 0,
+    bottomG: 0,
+  };
+}
+
 /** Position letterbox gutters (does not touch overlay mapping). */
 function syncLetterboxGutters(video, stageEl, gutters, contentWrap, absoluteVideoBox = false) {
   if (!video || !stageEl) return { externalPanel: false, rightGutter: 0 };
+
+  if (!absoluteVideoBox) {
+    return syncCompactVideoBox(video, stageEl, gutters, contentWrap);
+  }
+
   const stageW = stageEl.clientWidth;
   const stageH = stageEl.clientHeight;
   if (stageW < 2 || stageH < 2) return { externalPanel: false, rightGutter: 0 };
@@ -568,26 +626,17 @@ function syncLetterboxGutters(video, stageEl, gutters, contentWrap, absoluteVide
   const vidTop = (stageH - displayH) / 2;
 
   if (contentWrap) {
-    if (absoluteVideoBox) {
-      contentWrap.style.position = "absolute";
-      contentWrap.style.left = `${vidLeft}px`;
-      contentWrap.style.top = `${vidTop}px`;
-      contentWrap.style.width = `${displayW}px`;
-      contentWrap.style.height = `${displayH}px`;
-      contentWrap.style.flexShrink = "0";
-      contentWrap.style.zIndex = "8";
-    } else {
-      contentWrap.style.position = "";
-      contentWrap.style.left = "";
-      contentWrap.style.top = "";
-      contentWrap.style.width = `${displayW}px`;
-      contentWrap.style.height = `${displayH}px`;
-      contentWrap.style.flexShrink = "0";
-      contentWrap.style.zIndex = "";
-    }
+    contentWrap.style.position = "absolute";
+    contentWrap.style.left = `${vidLeft}px`;
+    contentWrap.style.top = `${vidTop}px`;
+    contentWrap.style.width = `${displayW}px`;
+    contentWrap.style.height = `${displayH}px`;
+    contentWrap.style.flexShrink = "0";
+    contentWrap.style.zIndex = "8";
   }
   video.style.width = "100%";
   video.style.height = "100%";
+  video.style.objectFit = "contain";
 
   const leftG = Math.max(0, vidLeft);
   const topG = Math.max(0, vidTop);
@@ -2611,8 +2660,8 @@ export function ValidationOverlayPlayer({
                 webkit-playsinline="true"
                 muted
                 preload="auto"
-                className={`block object-contain bg-transparent w-full h-full pointer-events-none ${
-                  isExpanded ? "" : "max-w-full max-h-[80vh]"
+                className={`block object-contain bg-transparent pointer-events-none ${
+                  isExpanded ? "w-full h-full" : "w-full h-full max-w-full max-h-[80vh]"
                 }`}
                 onError={(e) => onError?.(e?.target?.error || new Error("Video failed to load"))}
               />
