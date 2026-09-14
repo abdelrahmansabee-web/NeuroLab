@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Play, Pause, Maximize, Minimize2, ChevronLeft, ChevronRight, Circle, Square, X } from "lucide-react";
+import { Play, Pause, Maximize, Minimize2, ChevronLeft, ChevronRight, Download, X } from "lucide-react";
+import { downloadBlob } from "./downloadUtils";
 import {
   computeLiveTremorPower,
   formatTremorPower,
@@ -19,10 +20,12 @@ import {
   drawClinicalSkeleton,
   drawChalkJoint,
   drawChalkStick,
-  CHALK_PALETTE,
   HAND_FINGER_ORDER,
   SKELETON_PALETTE,
 } from "./clinicalSkeleton";
+
+/** Burned into the player UI so a cached PWA cannot hide a deploy. */
+export const OVERLAY_PLAYER_BUILD = "32.75";
 
 /** Same background treatment as App.js shell (bg.jpg + blur/dim). */
 const APP_BG_URL = "/bg.jpg";
@@ -81,7 +84,7 @@ export function computeOverlayMetrics(overlayData) {
   const tPeak = frames[peakElbowIdx]?.time != null ? frames[peakElbowIdx].time : peakElbowIdx / fps;
   const timeToPeak = Math.max(0, tPeak - t0);
 
-  // Pause/stop detection based on hand speed ? path pauses only.
+  // Pause/stop detection based on hand speed — path pauses only.
   // Terminal low-speed dwell (grasp fixation) is reported separately so a
   // successful grasp does not inflate pause vs an incomplete reach.
   const handSpeeds = frames.map((f) => f.speed || 0);
@@ -283,7 +286,7 @@ function getOverlayFrameState(frames, fps, playbackTime, videoDuration) {
 function overlayCanvasDpr() {
   const raw = window.devicePixelRatio || 1;
   const coarse = window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0;
-  // iPad/touch: cap at 1.0 ? large canvases block the main thread and lag video + overlay.
+  // iPad/touch: cap at 1.0 — large canvases block the main thread and lag video + overlay.
   return Math.min(raw, coarse ? 1 : 2);
 }
 
@@ -332,7 +335,7 @@ function syncOverlayCanvas(video, canvas, overlayData, layoutCache, contentWrap,
   canvas.style.height = `${displayH}px`;
 
   // Native buffer = full video pixels (Drive bake / no upscale blur).
-  // Display buffer = CSS size ? DPR (lighter while watching).
+  // Display buffer = CSS size × DPR (lighter while watching).
   const pw = Math.max(1, Math.round(nativeBuffer ? vw : displayW * dpr));
   const ph = Math.max(1, Math.round(nativeBuffer ? vh : displayH * dpr));
   if (canvas.width !== pw || canvas.height !== ph) {
@@ -529,125 +532,9 @@ function drawPanelChartLine(canvas, profile, endIdx, strokeColor, normalizeMinMa
   ctx.stroke();
 }
 
-/** @deprecated use drawPanelCardRect ? kept for inline fallback */
+/** @deprecated use drawPanelCardRect — kept for inline fallback */
 function drawLightGlassRect(ctx, x, y, w, h, radius, opts = {}) {
   drawPanelCardRect(ctx, x, y, w, h, radius, opts);
-}
-
-/** Sparkline for Drive/product bake (no DOM canvas). */
-function drawBakeSparkline(ctx, profile, endIdx, x, y, w, h, strokeColor, normalizeMinMax = false) {
-  if (!ctx || !profile?.v?.length || w < 8 || h < 8) return;
-  const vals = profile.v;
-  const endI = Math.min(Math.max(0, endIdx), vals.length - 1);
-  let minV = 0;
-  let maxV = 1;
-  if (normalizeMinMax) {
-    minV = Math.min(...vals);
-    maxV = Math.max(1, Math.max(...vals));
-  } else {
-    maxV = Math.max(1, ...vals);
-  }
-  const range = maxV - minV || 1;
-  const padX = 6;
-  const padTop = 14;
-  const padBottom = 4;
-  const plotW = w - padX * 2;
-  const plotH = h - padTop - padBottom;
-  ctx.beginPath();
-  for (let i = 0; i <= endI; i += 1) {
-    const px = x + padX + (i / Math.max(1, vals.length - 1)) * plotW;
-    const py = y + padTop + plotH - ((vals[i] - minV) / range) * plotH;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = 1.75;
-  ctx.lineJoin = "round";
-  ctx.stroke();
-}
-
-/**
- * Product metrics gutter burned into Drive bake frames ?
- * glass shell + metric cards + charts (matches ValidationOverlayPlayer UI).
- */
-function drawBakeProductPanel(ctx, x, y, w, h, hud) {
-  if (!ctx || !hud || w < 48 || h < 48) return;
-  const pad = Math.max(10, Math.round(w * 0.045));
-  const outerR = Math.max(16, Math.round(w * 0.045));
-  drawAppGlassRect(ctx, x, y, w, h, outerR, { shadow: false });
-
-  const formatValue = typeof hud.formatValue === "function"
-    ? hud.formatValue
-    : (v, digits = 2) => {
-      if (v == null || Number.isNaN(v)) return "";
-      if (digits === 0) return Math.round(v).toString();
-      return Number(v).toFixed(digits);
-    };
-  const color = hud.color || { text: "#7dd3fc", main: "#38bdf8" };
-  const rowDefs = hud.rowDefs || [];
-  const live = hud.live || {};
-  const overlayData = hud.overlayData;
-
-  const headerH = Math.max(22, Math.round(h * 0.045));
-  let cy = y + pad;
-  ctx.font = `bold ${Math.max(12, Math.round(w * 0.055))}px sans-serif`;
-  ctx.fillStyle = "#fff";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.fillText(String(hud.phaseLabel || "Trial"), x + pad, cy + headerH / 2);
-  ctx.fillStyle = color.text || "#7dd3fc";
-  ctx.textAlign = "right";
-  ctx.fillText(`NVP ${hud.nvp ?? 0}`, x + w - pad, cy + headerH / 2);
-  ctx.textAlign = "left";
-  cy += headerH + Math.round(pad * 0.55);
-
-  const showHand = hud.velocityProfile?.v?.length >= 2;
-  const showElbow = Boolean(hud.elbowProfile?.v?.length);
-  const showTrunk = Boolean(hud.trunkProfile?.v?.length);
-  const chartCount = (showHand ? 1 : 0) + (showElbow ? 1 : 0) + (showTrunk ? 1 : 0);
-  const chartH = chartCount > 0 ? Math.max(36, Math.min(52, Math.round(h * 0.07))) : 0;
-  const chartsBlock = chartCount > 0 ? chartCount * (chartH + 6) + pad : 0;
-  const rowsBottom = y + h - pad - chartsBlock;
-  const rowGap = 4;
-  const n = Math.max(1, rowDefs.length);
-  const avail = Math.max(40, rowsBottom - cy);
-  const rowH = Math.min(42, Math.max(22, (avail - rowGap * (n - 1)) / n));
-  const cardR = Math.max(8, Math.round(rowH * 0.35));
-  const fsLabel = Math.max(9, Math.round(w * 0.042));
-  const fsVal = Math.max(10, Math.round(w * 0.048));
-
-  rowDefs.forEach((row) => {
-    if (cy + rowH > rowsBottom + 1) return;
-    drawPanelCardRect(ctx, x + pad, cy, w - pad * 2, rowH, cardR);
-    const valueText = formatPanelRowValue(row, live, overlayData, formatValue);
-    ctx.font = `600 ${fsLabel}px sans-serif`;
-    ctx.fillStyle = "rgba(255,255,255,0.50)";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(row.label, x + pad + 10, cy + rowH / 2);
-    ctx.font = `bold ${fsVal}px sans-serif`;
-    ctx.fillStyle = row.accent ? (color.text || "#7dd3fc") : "rgba(255,255,255,0.94)";
-    ctx.textAlign = "right";
-    ctx.fillText(valueText, x + w - pad - 10, cy + rowH / 2);
-    ctx.textAlign = "left";
-    cy += rowH + rowGap;
-  });
-
-  cy = y + h - pad - chartsBlock + 2;
-  const chartW = w - pad * 2;
-  const paintChart = (label, profile, stroke, normalize) => {
-    drawPanelCardRect(ctx, x + pad, cy, chartW, chartH, cardR);
-    ctx.font = `600 ${Math.max(9, Math.round(fsLabel * 0.9))}px sans-serif`;
-    ctx.fillStyle = "rgba(255,255,255,0.50)";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    ctx.fillText(label, x + pad + 8, cy + 5);
-    drawBakeSparkline(ctx, profile, hud.idx ?? 0, x + pad, cy, chartW, chartH, stroke, normalize);
-    cy += chartH + 6;
-  };
-  if (showHand) paintChart("Hand speed", hud.velocityProfile, color.main || "#38bdf8", false);
-  if (showElbow) paintChart("Elbow angle", hud.elbowProfile, "#7dd3fc", true);
-  if (showTrunk) paintChart("Trunk", hud.trunkProfile, "#facc15", true);
 }
 
 function drawThinDivider(ctx, x0, x1, y, alpha = 0.16) {
@@ -661,7 +548,7 @@ function drawThinDivider(ctx, x0, x1, y, alpha = 0.16) {
   ctx.restore();
 }
 
-/** Letterbox gutters are transparent ? app bg.jpg shows through (see index.css). */
+/** Letterbox gutters are transparent — app bg.jpg shows through (see index.css). */
 function drawAmbientFromVideo() {
   return null;
 }
@@ -757,10 +644,7 @@ function isLeClinicalTask(clinicalTask, overlayData) {
   );
 }
 
-const DEG = "\u00B0";
-const PANEL_EMPTY = "\u2014";
-
-/** Full LE / gait / core validation panel ? all product variables. */
+/** Full LE / gait / core validation panel — all product variables. */
 const LE_VALIDATION_PANEL_ROWS = [
   { id: "mov_time", label: "Movement time", kind: "metric", metricKeys: ["movement_time_sec", "sts_time_sec"], suffix: " s", decimals: 2 },
   { id: "mov_quality", label: "Quality index", kind: "metric", metricKeys: ["movement_quality_index"] },
@@ -770,27 +654,27 @@ const LE_VALIDATION_PANEL_ROWS = [
   { id: "cadence", label: "Cadence", kind: "metric", metricKeys: ["cadence_spm"], suffix: " /min", decimals: 0 },
   { id: "speed_pct", label: "Speed % of norm", kind: "metric", metricKeys: ["pct_of_norm_gait_speed_m_s"], suffix: "%", decimals: 0 },
   { id: "cadence_pct", label: "Cadence % of norm", kind: "metric", metricKeys: ["pct_of_norm_cadence_spm"], suffix: "%", decimals: 0 },
-  { id: "df_l", label: "Ankle DF L", kind: "metric", metricKeys: ["ankle_df_peak_L_deg"], suffix: DEG, decimals: 1 },
-  { id: "df_r", label: "Ankle DF R", kind: "metric", metricKeys: ["ankle_df_peak_R_deg"], suffix: DEG, decimals: 1 },
-  { id: "pf_l", label: "Ankle PF L", kind: "metric", metricKeys: ["ankle_pf_peak_L_deg"], suffix: DEG, decimals: 1 },
-  { id: "pf_r", label: "Ankle PF R", kind: "metric", metricKeys: ["ankle_pf_peak_R_deg"], suffix: DEG, decimals: 1 },
+  { id: "df_l", label: "Ankle DF L", kind: "metric", metricKeys: ["ankle_df_peak_L_deg"], suffix: "°", decimals: 1 },
+  { id: "df_r", label: "Ankle DF R", kind: "metric", metricKeys: ["ankle_df_peak_R_deg"], suffix: "°", decimals: 1 },
+  { id: "pf_l", label: "Ankle PF L", kind: "metric", metricKeys: ["ankle_pf_peak_L_deg"], suffix: "°", decimals: 1 },
+  { id: "pf_r", label: "Ankle PF R", kind: "metric", metricKeys: ["ankle_pf_peak_R_deg"], suffix: "°", decimals: 1 },
   { id: "df_pct", label: "DF L % of norm", kind: "metric", metricKeys: ["pct_of_norm_ankle_df_peak_L_deg"], suffix: "%", decimals: 0 },
   { id: "pf_pct", label: "PF L % of norm", kind: "metric", metricKeys: ["pct_of_norm_ankle_pf_peak_L_deg"], suffix: "%", decimals: 0 },
-  { id: "ankle_rom_l", label: "Ankle ROM L", kind: "metric", metricKeys: ["ankle_sagittal_rom_L_deg"], suffix: DEG, decimals: 1 },
-  { id: "ankle_rom_r", label: "Ankle ROM R", kind: "metric", metricKeys: ["ankle_sagittal_rom_R_deg"], suffix: DEG, decimals: 1 },
-  { id: "fpa_l", label: "Foot progression L", kind: "metric", metricKeys: ["foot_progression_angle_L_deg"], suffix: DEG, decimals: 1 },
-  { id: "fpa_r", label: "Foot progression R", kind: "metric", metricKeys: ["foot_progression_angle_R_deg"], suffix: DEG, decimals: 1 },
-  { id: "hip_rot_l", label: "Hip rot ROM L", kind: "metric", metricKeys: ["hip_rotation_rom_L_deg"], suffix: DEG, decimals: 1 },
-  { id: "hip_rot_r", label: "Hip rot ROM R", kind: "metric", metricKeys: ["hip_rotation_rom_R_deg"], suffix: DEG, decimals: 1 },
-  { id: "knee_sw_l", label: "Swing knee flex L", kind: "metric", metricKeys: ["knee_flex_peak_swing_L_deg"], suffix: DEG, decimals: 1 },
-  { id: "knee_sw_r", label: "Swing knee flex R", kind: "metric", metricKeys: ["knee_flex_peak_swing_R_deg"], suffix: DEG, decimals: 1 },
-  { id: "hip_rom_l", label: "Hip ROM L", kind: "metric", metricKeys: ["hip_rom_L_deg"], suffix: DEG, decimals: 1 },
-  { id: "hip_rom_r", label: "Hip ROM R", kind: "metric", metricKeys: ["hip_rom_R_deg"], suffix: DEG, decimals: 1 },
-  { id: "knee_rom_l", label: "Knee ROM L", kind: "metric", metricKeys: ["knee_rom_L_deg"], suffix: DEG, decimals: 1 },
-  { id: "knee_rom_r", label: "Knee ROM R", kind: "metric", metricKeys: ["knee_rom_R_deg"], suffix: DEG, decimals: 1 },
-  { id: "pelvis_rot", label: "Pelvis rotation ROM", kind: "metric", metricKeys: ["pelvis_rotation_rom_deg"], suffix: DEG, decimals: 1 },
-  { id: "trunk_lean", label: "Trunk lean max", kind: "metric", metricKeys: ["trunk_lean_max_deg"], suffix: DEG, decimals: 1 },
-  { id: "trunk_flex", label: "Trunk flexion ROM", kind: "metric", metricKeys: ["trunk_flexion_rom_deg"], suffix: DEG, decimals: 1 },
+  { id: "ankle_rom_l", label: "Ankle ROM L", kind: "metric", metricKeys: ["ankle_sagittal_rom_L_deg"], suffix: "°", decimals: 1 },
+  { id: "ankle_rom_r", label: "Ankle ROM R", kind: "metric", metricKeys: ["ankle_sagittal_rom_R_deg"], suffix: "°", decimals: 1 },
+  { id: "fpa_l", label: "Foot progression L", kind: "metric", metricKeys: ["foot_progression_angle_L_deg"], suffix: "°", decimals: 1 },
+  { id: "fpa_r", label: "Foot progression R", kind: "metric", metricKeys: ["foot_progression_angle_R_deg"], suffix: "°", decimals: 1 },
+  { id: "hip_rot_l", label: "Hip rot ROM L", kind: "metric", metricKeys: ["hip_rotation_rom_L_deg"], suffix: "°", decimals: 1 },
+  { id: "hip_rot_r", label: "Hip rot ROM R", kind: "metric", metricKeys: ["hip_rotation_rom_R_deg"], suffix: "°", decimals: 1 },
+  { id: "knee_sw_l", label: "Swing knee flex L", kind: "metric", metricKeys: ["knee_flex_peak_swing_L_deg"], suffix: "°", decimals: 1 },
+  { id: "knee_sw_r", label: "Swing knee flex R", kind: "metric", metricKeys: ["knee_flex_peak_swing_R_deg"], suffix: "°", decimals: 1 },
+  { id: "hip_rom_l", label: "Hip ROM L", kind: "metric", metricKeys: ["hip_rom_L_deg"], suffix: "°", decimals: 1 },
+  { id: "hip_rom_r", label: "Hip ROM R", kind: "metric", metricKeys: ["hip_rom_R_deg"], suffix: "°", decimals: 1 },
+  { id: "knee_rom_l", label: "Knee ROM L", kind: "metric", metricKeys: ["knee_rom_L_deg"], suffix: "°", decimals: 1 },
+  { id: "knee_rom_r", label: "Knee ROM R", kind: "metric", metricKeys: ["knee_rom_R_deg"], suffix: "°", decimals: 1 },
+  { id: "pelvis_rot", label: "Pelvis rotation ROM", kind: "metric", metricKeys: ["pelvis_rotation_rom_deg"], suffix: "°", decimals: 1 },
+  { id: "trunk_lean", label: "Trunk lean max", kind: "metric", metricKeys: ["trunk_lean_max_deg"], suffix: "°", decimals: 1 },
+  { id: "trunk_flex", label: "Trunk flexion ROM", kind: "metric", metricKeys: ["trunk_flexion_rom_deg"], suffix: "°", decimals: 1 },
   { id: "trunk_comp", label: "Trunk compensation", kind: "metric", metricKeys: ["trunk_compensation_index"], decimals: 2 },
   { id: "step_l", label: "Step time L", kind: "metric", metricKeys: ["step_time_L_sec"], suffix: " s", decimals: 2 },
   { id: "step_r", label: "Step time R", kind: "metric", metricKeys: ["step_time_R_sec"], suffix: " s", decimals: 2 },
@@ -806,7 +690,7 @@ const LE_VALIDATION_PANEL_ROWS = [
   { id: "com_rise", label: "COM rise (HW)", kind: "metric", metricKeys: ["com_rise_norm"], decimals: 2 },
   { id: "wshift", label: "Weight-shift asym.", kind: "metric", metricKeys: ["weight_shift_asymmetry"], decimals: 2 },
   { id: "squat_depth", label: "Squat depth (HW)", kind: "metric", metricKeys: ["squat_depth_norm"], decimals: 2 },
-  { id: "min_knee", label: "Min knee (squat)", kind: "metric", metricKeys: ["min_knee_angle_deg"], suffix: DEG, decimals: 1 },
+  { id: "min_knee", label: "Min knee (squat)", kind: "metric", metricKeys: ["min_knee_angle_deg"], suffix: "°", decimals: 1 },
   { id: "sway_path", label: "COM sway path", kind: "metric", metricKeys: ["com_sway_path_norm"], decimals: 2 },
   { id: "sway_area", label: "COM sway area", kind: "metric", metricKeys: ["com_sway_area_norm"], decimals: 2 },
   { id: "sway_vel", label: "Sway velocity", kind: "metric", metricKeys: ["sway_velocity_mean"], decimals: 1 },
@@ -817,23 +701,23 @@ function getValidationPanelRowDefs(overlayData, clinicalTask) {
   if (isLeClinicalTask(clinicalTask, overlayData)) {
     return LE_VALIDATION_PANEL_ROWS;
   }
-  // UE study / kinematics table variables (live + metrics) ? full panel, not 2-row stub.
+  // UE study / kinematics table variables (live + metrics) — full panel, not 2-row stub.
   return UE_VALIDATION_PANEL_ROWS;
 }
 
-/** Upper-extremity validation panel ? matches kinematics table core + validation extras. */
+/** Upper-extremity validation panel — matches kinematics table core + validation extras. */
 const UE_VALIDATION_PANEL_ROWS = [
-  { id: "mov_time", label: "Movement time", kind: "metric", metricKeys: ["movement_time_sec"], suffix: " s", decimals: 2 },
+  { id: "mov_time", label: "Movement time", kind: "live", key: "movementTime", suffix: " s", decimals: 2 },
   { id: "mov_quality", label: "Movement quality", kind: "metric", metricKeys: ["movement_quality_index"], accent: true },
-  { id: "straightness", label: "Straightness", kind: "live", key: "straightness", decimals: 2, metricKeys: ["straightness"] },
+  { id: "straightness", label: "Straightness", kind: "live", key: "straightness", decimals: 2 },
   { id: "peak_vel", label: "Peak velocity", kind: "peakVelCm", accent: true },
   { id: "pause", label: "Pause / stops", kind: "pause" },
-  { id: "trunk", label: "Trunk ratio", kind: "live", key: "trunkRatio", decimals: 2, metricKeys: ["trunk_ratio"] },
+  { id: "trunk", label: "Trunk ratio", kind: "live", key: "trunkRatio", decimals: 2 },
   { id: "sh_elev", label: "Shoulder elevation", kind: "shoulderElev" },
-  { id: "elbow_mean", label: "Elbow angle mean", kind: "metric", metricKeys: ["elbow_angle_mean_deg", "elbow_angle_mean"], suffix: DEG, decimals: 1 },
-  { id: "tremor", label: "Tremor 8-12 Hz", kind: "tremor", tremorKey: "tremor_8_12hz_power" },
+  { id: "elbow_mean", label: "Elbow angle mean", kind: "metric", metricKeys: ["elbow_angle_mean_deg", "elbow_angle_mean"], suffix: "°", decimals: 1 },
+  { id: "tremor", label: "Tremor 8–12 Hz", kind: "tremor", tremorKey: "tremor_8_12hz_power" },
   { id: "tremor_hz", label: "Tremor peak freq", kind: "tremorFreq", tremorKey: "tremor_peak_freq_hz" },
-  { id: "kin_abd", label: "Shoulder abduction", kind: "live", key: "shoulderAbduction", suffix: DEG, decimals: 0 },
+  { id: "kin_abd", label: "Shoulder abduction", kind: "live", key: "shoulderAbduction", suffix: "°", decimals: 0 },
   { id: "kin_finger", label: "Finger quality", kind: "live", key: "fingerQuality", decimals: 0 },
 ];
 
@@ -857,74 +741,55 @@ function computeLiveFingerQuality(frames, startIdx, idx) {
   return Math.min(100, Math.round(q));
 }
 
-const LIVE_PANEL_FALLBACK_KEYS = {
-  straightness: ["straightness"],
-  trunkRatio: ["trunk_ratio"],
-  movementTime: ["movement_time_sec"],
-  shoulderAbduction: ["shoulder_abduction_deg"],
-  fingerQuality: ["finger_quality_index", "adl_finger_quality_index", "finger_quality"],
-};
-
 function formatPanelRowValue(row, live, overlayData, formatValue) {
   if (row.kind === "live") {
-    let v = live[row.key];
-    if (v == null || Number.isNaN(v) || (v <= 0 && row.id !== "kin_abd" && row.id !== "kin_finger")) {
-      const fb = row.metricKeys || LIVE_PANEL_FALLBACK_KEYS[row.key];
-      if (fb) {
-        const picked = pickOverlayMetric(overlayData, Array.isArray(fb) ? fb : [fb]);
-        if (picked != null) v = picked;
-      }
-    }
-    if (v == null || Number.isNaN(v)) return PANEL_EMPTY;
-    if ((row.id === "kin_abd" || row.id === "kin_finger") && v <= 0) return PANEL_EMPTY;
+    const v = live[row.key];
+    if (v == null || Number.isNaN(v)) return "—";
+    if (row.id !== "kin_abd" && row.id !== "kin_finger" && v <= 0) return "—";
+    if ((row.id === "kin_abd" || row.id === "kin_finger") && v <= 0) return "—";
     return `${formatValue(v, row.decimals ?? 2)}${row.suffix || ""}`;
   }
   if (row.kind === "peakVelCm") {
     const cm = pickOverlayMetric(overlayData, ["peak_velocity_cm_s"]);
     if (cm != null && Number(cm) > 0) return `${formatValue(Number(cm), 1)} cm/s`;
     const v = live.peakElbowAngVel;
-    if (v == null || Number.isNaN(v) || v <= 0) return PANEL_EMPTY;
-    return `${formatValue(v, 0)} ${DEG}/s`;
+    if (v == null || Number.isNaN(v) || v <= 0) return "—";
+    return `${formatValue(v, 0)} °/s`;
   }
   if (row.kind === "pause") {
-    const pauseTime = live.pauseTime ?? 0;
-    const stops = live.stops ?? 0;
-    const fbPause = pickOverlayMetric(overlayData, ["pause_time_sec"]);
-    const fbStops = pickOverlayMetric(overlayData, ["number_of_stops"]);
-    const p = pauseTime > 0 ? pauseTime : (fbPause ?? 0);
-    const s = stops > 0 ? stops : (fbStops ?? 0);
-    if (p <= 0 && s <= 0) return PANEL_EMPTY;
-    return `${formatValue(p, 2)} s / ${s}`;
+    const { pauseTime, stops } = live;
+    if (pauseTime > 0 || stops > 0) return `${formatValue(pauseTime, 2)} s / ${stops}`;
+    return "—";
   }
   if (row.kind === "shoulderElev") {
     const cm = pickOverlayMetric(overlayData, ["shoulder_elevation_cm"]);
     if (cm != null && Number(cm) > 0) return `${formatValue(Number(cm), 1)} cm`;
     const v = live.shoulderElevationPalm || live.shoulderElevationTable || live.shoulderElevation;
     if (v > 0) return formatValue(v, 3);
-    return PANEL_EMPTY;
+    return "—";
   }
   if (row.kind === "tremor") {
-    const v = live[row.tremorKey] ?? pickOverlayMetric(overlayData, [row.tremorKey]);
-    return formatTremorPower(v) || PANEL_EMPTY;
+    const v = live[row.tremorKey];
+    return formatTremorPower(v);
   }
   if (row.kind === "tremorIndex") {
     const v = live[row.tremorKey];
-    if (v == null || Number.isNaN(v)) return PANEL_EMPTY;
+    if (v == null || Number.isNaN(v)) return "—";
     return Math.round(Number(v)).toString();
   }
   if (row.kind === "tremorFreq") {
     const v = live[row.tremorKey] ?? pickOverlayMetric(overlayData, [row.tremorKey]);
-    if (v == null || Number.isNaN(Number(v))) return PANEL_EMPTY;
+    if (v == null || Number.isNaN(Number(v))) return "—";
     return `${Number(v).toFixed(1)} Hz`;
   }
   if (row.kind === "metric" && row.metricKeys) {
     const v = pickOverlayMetric(overlayData, row.metricKeys);
-    if (v == null) return PANEL_EMPTY;
+    if (v == null) return "—";
     const decimals = row.decimals != null ? row.decimals : 2;
     const formatted = formatValue(v, decimals);
     return row.suffix ? `${formatted}${row.suffix}` : formatted;
   }
-  return PANEL_EMPTY;
+  return "—";
 }
 
 export function ValidationOverlayPlayer({
@@ -939,7 +804,6 @@ export function ValidationOverlayPlayer({
   onEnded,
   onDownloadReady,
   onError,
-  onSourceMismatch,
 }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -962,10 +826,7 @@ export function ValidationOverlayPlayer({
   const gutterBottomRef = useRef(null);
   const containerRef = useRef(null);
   const recCanvasRef = useRef(null);
-  const bakeOverlayCanvasRef = useRef(null);
-  const bakeOverlayPassRef = useRef(false);
   const recordingRef = useRef(false);
-  const bakeHudRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [displayTime, setDisplayTime] = useState(0);
@@ -978,14 +839,6 @@ export function ValidationOverlayPlayer({
   const [renderProgress, setRenderProgress] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [videoAspect, setVideoAspect] = useState(null);
-  /** Loaded video is not the clip the overlay was computed from (e.g. a baked composite). */
-  const [sourceMismatch, setSourceMismatch] = useState(false);
-  const sourceMismatchRef = useRef(false);
-  const mismatchReportedRef = useRef(null);
-  useEffect(() => {
-    sourceMismatchRef.current = false;
-    setSourceMismatch(false);
-  }, [videoUrl]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isTouchUi, setIsTouchUi] = useState(false);
   const mediaRecorderRef = useRef(null);
@@ -1005,7 +858,7 @@ export function ValidationOverlayPlayer({
   const tremorLiveCacheRef = useRef({ idx: -1, data: null });
   const progressRafRef = useRef(0);
   const paintPendingRef = useRef(false);
-  /** Keep last good finger dots briefly so they don't vanish on 1?2 missing frames. */
+  /** Keep last good finger dots briefly so they don't vanish on 1–2 missing frames. */
   const fingerStickyRef = useRef({});
   /** EMA-smoothed finger canvas points for softer tracking. */
   const fingerSmoothRef = useRef({});
@@ -1066,69 +919,18 @@ export function ValidationOverlayPlayer({
   }, [frames, fps, overlayData?.duration_sec]);
 
   const formatValue = (v, digits = 2) => {
-    if (v == null || Number.isNaN(v)) return "";
+    if (v == null || Number.isNaN(v)) return "—";
     if (digits === 0) return Math.round(v).toString();
     return Number(v).toFixed(digits);
   };
 
-  /**
-   * Overlay coords are normalized to the analyzed clip. A baked composite (burned-in
-   * skeleton + side panel) has a different frame shape and length, so drawing on it puts
-   * chalk across the table. Detect that and stop drawing instead of showing wrong lines.
-   */
-  const checkOverlaySource = useCallback((vw, vh, vDuration) => {
-    const overlayW = Number(overlayData?.frame_width_px) || 0;
-    const overlayH = Number(overlayData?.frame_height_px) || 0;
-    const overlayDur = Number(overlayData?.duration_sec)
-      || (frames.length > 1 && fps > 0 ? frames.length / fps : 0);
-    const remapped = Boolean(overlayData?.coord_remap);
-
-    let shapeBad = false;
-    if (!remapped && vw > 0 && vh > 0 && overlayW > 0 && overlayH > 0) {
-      const videoAr = vw / vh;
-      const overlayAr = overlayW / overlayH;
-      const near = (a, b) => Math.abs(a / b - 1) <= 0.12;
-      // A rotated original reports swapped dimensions; that is still the same clip.
-      shapeBad = !near(videoAr, overlayAr) && !near(videoAr, 1 / overlayAr);
-    }
-    const durBad = overlayDur > 0.5
-      && Number.isFinite(vDuration)
-      && vDuration > 0.2
-      && overlayDur - vDuration > overlayDur * 0.3;
-
-    const bad = shapeBad || durBad;
-    sourceMismatchRef.current = bad;
-    setSourceMismatch(bad);
-    if (!bad) {
-      mismatchReportedRef.current = null;
-      return;
-    }
-    if (mismatchReportedRef.current === videoUrl) return;
-    mismatchReportedRef.current = videoUrl;
-    onSourceMismatch?.({
-      videoWidth: vw,
-      videoHeight: vh,
-      videoDuration: Number.isFinite(vDuration) ? vDuration : null,
-      overlayWidth: overlayW,
-      overlayHeight: overlayH,
-      overlayDuration: overlayDur,
-      reason: shapeBad ? "frame_shape" : "duration",
-    });
-  }, [overlayData, frames.length, fps, videoUrl, onSourceMismatch]);
-
   const drawOverlay = useCallback(() => {
-    const bakePass = bakeOverlayPassRef.current;
-    const canvas = bakePass ? bakeOverlayCanvasRef.current : canvasRef.current;
+    const canvas = canvasRef.current;
     const video = videoRef.current;
     if (!canvas || !video) return;
-    if (sourceMismatchRef.current) {
-      const ctx0 = canvas.getContext("2d");
-      ctx0?.clearRect(0, 0, canvas.width, canvas.height);
-      return;
-    }
 
-    const stageEl = bakePass ? null : stageRef.current;
-    const contentEl = bakePass ? null : contentWrapRef.current;
+    const stageEl = stageRef.current;
+    const contentEl = contentWrapRef.current;
     let gutterLayout = gutterLayoutCacheRef.current.result || { externalPanel: false };
     if (stageEl) {
       const sw = stageEl.clientWidth;
@@ -1148,32 +950,16 @@ export function ValidationOverlayPlayer({
       }
     }
 
-    if (!video.videoWidth || video.readyState < 1) return;
-    let cw;
-    let ch;
-    if (bakePass) {
-      const vw = video.videoWidth || 640;
-      const vh = video.videoHeight || 480;
-      if (canvas.width !== vw || canvas.height !== vh) {
-        canvas.width = vw;
-        canvas.height = vh;
-      }
-      cw = vw;
-      ch = vh;
-      gutterLayout = { externalPanel: false };
-    } else {
-      const synced = syncOverlayCanvas(
-        video,
-        canvas,
-        overlayData,
-        canvasLayoutCacheRef.current,
-        contentEl,
-        { nativeBuffer: false },
-      );
-      if (!synced) return;
-      cw = synced.cw;
-      ch = synced.ch;
-    }
+    const synced = syncOverlayCanvas(
+      video,
+      canvas,
+      overlayData,
+      canvasLayoutCacheRef.current,
+      contentEl,
+      { nativeBuffer: recordingRef.current },
+    );
+    if (!synced) return;
+    const { cw, ch } = synced;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, cw, ch);
 
@@ -1184,8 +970,7 @@ export function ValidationOverlayPlayer({
         bottom: gutterBottomRef.current,
       });
     }
-    // Never hide the live side panel during Drive bake ? panel is composited separately.
-    const useExternalPanel = !bakePass && Boolean(gutterLayout.externalPanel);
+    const useExternalPanel = Boolean(gutterLayout.externalPanel);
     const panelCtx = ctx;
     if (panelDomRef.current) {
       panelDomRef.current.classList.toggle("hidden", !useExternalPanel);
@@ -1194,15 +979,12 @@ export function ValidationOverlayPlayer({
     if (!frames.length) return;
 
     const touchPerf = isCoarsePointerDevice();
-    const shadowOff = touchPerf ? 4 : undefined;
-    // Live drawing must match pre-bake iPad behavior. Bake composites panel separately.
-    const baking = Boolean(recordingRef.current);
-    const drawRich = !touchPerf;
+    const shadowOff = touchPerf ? 0 : undefined;
+
     const playbackTime = video.currentTime ?? videoTimeRef.current ?? 0;
     const { idx, alpha } = getFrameState(playbackTime);
-    // Keep metrics panel fresh from the first frame (not only at movement end).
-    const updatePanelMetrics = baking || !touchPerf || video.paused || idx % 3 === 0;
-    const updatePanelCharts = baking || !touchPerf || video.paused;
+    const updatePanelMetrics = !touchPerf || video.paused || idx % 8 === 0 || idx >= win.end_idx;
+    const updatePanelCharts = !touchPerf || video.paused;
     const f = frames[idx];
     const fNext = frames[Math.min(idx + 1, frames.length - 1)];
     if (!f) return;
@@ -1614,7 +1396,7 @@ export function ValidationOverlayPlayer({
     }
 
     const cx = cw / 2;
-    if (drawRich) {
+    if (!touchPerf) {
       if (shoulder) {
         const shText =
           currentShoulderElevationTable > 0
@@ -1624,17 +1406,17 @@ export function ValidationOverlayPlayer({
             : "Sh";
         drawSimpleLabel(shText, shoulder, shoulder[0] > cx ? -110 : 14, -28, { color: color.text, border: color.glow });
         if (showExtendedKin && currentShoulderAbduction > 0) {
-          drawSimpleLabel(`Abd ${currentShoulderAbduction.toFixed(0)}${DEG}`, shoulder, shoulder[0] > cx ? -118 : 14, 6, {
+          drawSimpleLabel(`Abd ${currentShoulderAbduction.toFixed(0)}°`, shoulder, shoulder[0] > cx ? -118 : 14, 6, {
             color: "#93c5fd",
             border: "rgba(59,130,246,0.55)",
           });
         }
       }
       if (elbow) {
-        drawSimpleLabel(`El ${currentElbowAngle.toFixed(0)}${DEG}`, elbow, elbow[0] > cx ? -80 : 14, -22, { color: color.text, border: color.glow });
+        drawSimpleLabel(`El ${currentElbowAngle.toFixed(0)}°`, elbow, elbow[0] > cx ? -80 : 14, -22, { color: color.text, border: color.glow });
       }
       if (palm) {
-        drawSimpleLabel(`Ha ${Math.round(speed)} ${DEG}/s`, palm, palm[0] > cx ? -100 : 18, -24, { color: "#fde047", border: "rgba(250,204,21,0.6)" });
+        drawSimpleLabel(`Ha ${Math.round(speed)} °/s`, palm, palm[0] > cx ? -100 : 18, -24, { color: "#fde047", border: "rgba(250,204,21,0.6)" });
         drawSimpleLabel(`NVP ${currentNVP}`, palm, 0, 28, { color: color.text, border: color.glow, align: "center" });
       }
       if (trunk) {
@@ -1667,13 +1449,11 @@ export function ValidationOverlayPlayer({
     }
 
     // Pre-v37 overlays re-anchored HL tips onto pose wrist (floated off fingers).
-    // Undo: tip' = tip - poseWrist + hlWrist. v37+ / hl_absolute already stores absolute HL.
+    // Undo: tip' = tip - poseWrist + hlWrist. v37+ already stores absolute HL.
     const overlayVer = Number(overlayData?.overlay_version) || 0;
-    const absHl = overlayData?.finger_coords === "hl_absolute" || overlayVer >= 37;
-    const needUndoReanchor = overlayVer > 0 && overlayVer < 37 && !absHl;
+    const needUndoReanchor = overlayVer < 37;
     const poseWristPt = pt("wrist");
     const hlWristPt = pt("hl_wrist");
-    const elbowPt = pt("elbow");
     const undoReanchor = (cpt) => {
       if (!needUndoReanchor || !cpt || !poseWristPt || !hlWristPt) return cpt;
       return [
@@ -1681,162 +1461,20 @@ export function ValidationOverlayPlayer({
         cpt[1] - poseWristPt[1] + hlWristPt[1],
       ];
     };
-    // When Hand Landmarker latches the cup, wrist can stay near the pose wrist while
-    // tips stretch to the object — translate-only snap leaves sticks pointing at the cup.
-    // Lock those frames onto the real hand: rotate to the forearm axis and scale to hand length.
-    const handSpan = Math.max(1, Math.min(cw, ch));
-    const hypotPt = (a, b) => {
-      if (!a || !b) return null;
-      return Math.hypot(a[0] - b[0], a[1] - b[1]);
-    };
-    const distNorm = (a, b) => {
-      const d = hypotPt(a, b);
-      return d == null ? null : d / handSpan;
-    };
-    const hlTipsCanvas = [];
-    const hlMcpsCanvas = [];
-    if (fingerJoints) {
-      HAND_FINGER_ORDER.forEach((fid) => {
-        const fj = fingerJoints[fid];
-        if (!fj) return;
-        const tip = undoReanchor(jointToCanvas(fj.tip, fNext?.finger_joints?.[fid]?.tip));
-        const mcp = undoReanchor(jointToCanvas(fj.mcp, fNext?.finger_joints?.[fid]?.mcp));
-        if (tip) hlTipsCanvas.push(tip);
-        if (mcp) hlMcpsCanvas.push(mcp);
-      });
-    } else {
-      HAND_FINGER_ORDER.forEach((fid) => {
-        const tip = undoReanchor(pt(fid));
-        if (tip) hlTipsCanvas.push(tip);
-      });
-    }
-    const srcOrigin = hlWristPt || poseWristPt;
-    let maxTipFromOrigin = 0;
-    let maxTipFromPose = 0;
-    hlTipsCanvas.forEach((tip) => {
-      const d0 = hypotPt(tip, srcOrigin);
-      const d1 = hypotPt(tip, poseWristPt);
-      if (d0 != null) maxTipFromOrigin = Math.max(maxTipFromOrigin, d0);
-      if (d1 != null) maxTipFromPose = Math.max(maxTipFromPose, d1);
-    });
-    const forearmPx = hypotPt(elbowPt, poseWristPt) || 0;
-    const expectedHandPx = forearmPx > 8 ? forearmPx * 0.64 : handSpan * 0.10;
-    const wristDrift = (distNorm(poseWristPt, hlWristPt) || 0) > 0.12
-      || (forearmPx > 8 && (hypotPt(poseWristPt, hlWristPt) || 0) > forearmPx * 0.35);
-    const tipFarLimit = expectedHandPx > 0 ? expectedHandPx * 1.50 : handSpan * 0.12;
-    let tipN = 0;
-    let tipFar = 0;
-    hlTipsCanvas.forEach((tip) => {
-      tipN += 1;
-      if ((hypotPt(poseWristPt, tip) || 0) > tipFarLimit) tipFar += 1;
-    });
-    const tipsMajorityFar = tipN >= 3 && tipFar >= Math.ceil(tipN * 0.6);
-    const tipsStretched = expectedHandPx > 0 && maxTipFromPose > Math.max(expectedHandPx * 1.70, forearmPx * 0.85);
-    const hlOffHand = wristDrift || tipsMajorityFar || tipsStretched;
-    const mcpCenter = hlMcpsCanvas.length
-      ? [
-        hlMcpsCanvas.reduce((s, p) => s + p[0], 0) / hlMcpsCanvas.length,
-        hlMcpsCanvas.reduce((s, p) => s + p[1], 0) / hlMcpsCanvas.length,
-      ]
-      : (hlTipsCanvas.length
-        ? [
-          hlTipsCanvas.reduce((s, p) => s + p[0], 0) / hlTipsCanvas.length,
-          hlTipsCanvas.reduce((s, p) => s + p[1], 0) / hlTipsCanvas.length,
-        ]
-        : null);
-    let lockRot = 0;
-    if (hlOffHand && elbowPt && poseWristPt && srcOrigin && mcpCenter) {
-      const fromX = mcpCenter[0] - srcOrigin[0];
-      const fromY = mcpCenter[1] - srcOrigin[1];
-      const toX = poseWristPt[0] - elbowPt[0];
-      const toY = poseWristPt[1] - elbowPt[1];
-      if (Math.hypot(fromX, fromY) > 4 && Math.hypot(toX, toY) > 4) {
-        let ang = Math.atan2(toY, toX) - Math.atan2(fromY, fromX);
-        while (ang > Math.PI) ang -= Math.PI * 2;
-        while (ang < -Math.PI) ang += Math.PI * 2;
-        if (wristDrift || Math.abs(ang) > (32 * Math.PI) / 180) lockRot = ang;
-      }
-    }
-    let lockScale = 1;
-    if (hlOffHand && maxTipFromOrigin > 1e-3 && expectedHandPx > 0) {
-      lockScale = Math.min(2.1, Math.max(0.20, expectedHandPx / maxTipFromOrigin));
-    }
-    // Cup-stretch keeps a fan toward the object even after scale. Rebuild fingers on the
-    // pose wrist whenever HL has left the hand. Aim along on-hand MCPs when present.
-    const useAnatomyHand = Boolean(hlOffHand && poseWristPt && (forearmPx > 8 || hlMcpsCanvas.length >= 2));
-    const anatomyJoints = (() => {
-      if (!useAnatomyHand) return null;
-      let ux;
-      let uy;
-      const goodMcps = hlMcpsCanvas.filter((p) => {
-        const d = hypotPt(p, poseWristPt);
-        return d != null && d > expectedHandPx * 0.12 && d < expectedHandPx * 0.70;
-      });
-      if (goodMcps.length >= 1) {
-        const mx = goodMcps.reduce((s, p) => s + p[0], 0) / goodMcps.length;
-        const my = goodMcps.reduce((s, p) => s + p[1], 0) / goodMcps.length;
-        ux = mx - poseWristPt[0];
-        uy = my - poseWristPt[1];
-      } else if (elbowPt && forearmPx > 8) {
-        ux = poseWristPt[0] - elbowPt[0];
-        uy = poseWristPt[1] - elbowPt[1];
-      } else {
-        return null;
-      }
-      const ul = Math.hypot(ux, uy);
-      if (ul < 1e-3) return null;
-      ux /= ul;
-      uy /= ul;
-      const px = -uy;
-      const py = ux;
-      const specs = {
-        thumb: { ang: -0.48, mcp: 0.32, ip: 0.58, tip: 0.84 },
-        index: { ang: -0.20, mcp: 0.36, ip: 0.66, tip: 0.98 },
-        middle: { ang: 0.00, mcp: 0.38, ip: 0.68, tip: 1.02 },
-        ring: { ang: 0.18, mcp: 0.36, ip: 0.64, tip: 0.94 },
-        pinky: { ang: 0.36, mcp: 0.32, ip: 0.56, tip: 0.80 },
-      };
-      const out = {};
-      Object.keys(specs).forEach((fid) => {
-        const spec = specs[fid];
-        const c = Math.cos(spec.ang);
-        const s = Math.sin(spec.ang);
-        const dx = ux * c - uy * s;
-        const dy = ux * s + uy * c;
-        const along = (t) => [
-          poseWristPt[0] + dx * expectedHandPx * t + px * spec.ang * expectedHandPx * 0.08,
-          poseWristPt[1] + dy * expectedHandPx * t + py * spec.ang * expectedHandPx * 0.08,
-        ];
-        out[fid] = { mcp: along(spec.mcp), ip: along(spec.ip), tip: along(spec.tip) };
-      });
-      return out;
-    })();
-    const lockFingerToHand = (cpt) => {
-      if (!hlOffHand || !cpt || !poseWristPt) return cpt;
-      const origin = srcOrigin || poseWristPt;
-      let x = cpt[0] - origin[0];
-      let y = cpt[1] - origin[1];
-      if (lockRot !== 0) {
-        const c = Math.cos(lockRot);
-        const s = Math.sin(lockRot);
-        const rx = x * c - y * s;
-        const ry = x * s + y * c;
-        x = rx;
-        y = ry;
-      }
-      return [poseWristPt[0] + x * lockScale, poseWristPt[1] + y * lockScale];
-    };
 
     const smoothStore = fingerSmoothRef.current;
     const smoothAlpha = 0.42;
     const smoothFinger = (key, cpt, live) => {
       if (!cpt) return null;
       if (!live) return cpt;
+      const prev = smoothStore[key];
+      if (!prev || idx !== (smoothStore._idx ?? idx)) {
+        // reset blend when seeking far
+      }
       if (smoothStore._idx != null && Math.abs(idx - smoothStore._idx) > 8) {
         Object.keys(smoothStore).forEach((k) => { if (k !== "_idx") delete smoothStore[k]; });
       }
       smoothStore._idx = idx;
-      const prev = smoothStore[key];
       if (!prev) {
         smoothStore[key] = [...cpt];
         return cpt;
@@ -1850,6 +1488,7 @@ export function ValidationOverlayPlayer({
     };
 
     const jointDots = [];
+    // Hold last-good finger dots across ~0.4s of video frames (not paint FPS).
     const stickyHoldFrames = Math.max(10, Math.round(fps * 0.4));
     const stickyStore = fingerStickyRef.current;
     const pushFingerDot = (fid, jname, cpt, style, live) => {
@@ -1867,15 +1506,7 @@ export function ValidationOverlayPlayer({
       }
     };
 
-    if (anatomyJoints) {
-      HAND_FINGER_ORDER.forEach((fid) => {
-        const aj = anatomyJoints[fid];
-        if (!aj) return;
-        JOINT_ORDER.forEach((jname) => {
-          pushFingerDot(fid, jname, aj[jname], JOINT_DOT[jname], true);
-        });
-      });
-    } else if (fingerJoints) {
+    if (fingerJoints) {
       HAND_FINGER_ORDER.forEach((fid) => {
         const fj = fingerJoints[fid];
         if (!fj) return;
@@ -1883,7 +1514,7 @@ export function ValidationOverlayPlayer({
           const fjNext = fNext?.finger_joints?.[fid];
           let cpt = jointToCanvas(fj[jname], fjNext?.[jname]);
           if (!cpt && jname === "tip") cpt = pt(fid);
-          cpt = lockFingerToHand(undoReanchor(cpt));
+          cpt = undoReanchor(cpt);
           const coordsOk = Boolean(cpt)
             && cpt[0] > 2 && cpt[1] > 2
             && cpt[0] < cw - 2 && cpt[1] < ch - 2;
@@ -1897,7 +1528,7 @@ export function ValidationOverlayPlayer({
       });
     } else {
       HAND_FINGER_ORDER.forEach((id) => {
-        const tipPt = lockFingerToHand(undoReanchor(pt(id)));
+        let tipPt = undoReanchor(pt(id));
         const visOk = fingerVis ? fingerVis[id] !== false : true;
         if (tipPt) pushFingerDot(id, "tip", tipPt, JOINT_DOT.tip, visOk || true);
         else pushFingerDot(id, "tip", tipPt, JOINT_DOT.tip, false);
@@ -1918,7 +1549,7 @@ export function ValidationOverlayPlayer({
           for (let i = 0; i < chain.length - 1; i += 1) {
             drawChalkStick(ctx, chain[i], chain[i + 1], {
               width: 1.55,
-              blur: shadowOff != null ? 0 : 3,
+              blur: touchPerf ? 0 : 3,
               curve: 0.08,
             });
           }
@@ -1939,7 +1570,7 @@ export function ValidationOverlayPlayer({
       });
       ctx.restore();
 
-      if (drawRich && useHandHl) {
+      if (!touchPerf && useHandHl) {
         const hlCov = overlayData?.metrics?.hl_index_coverage_pct;
         const anchorPt = jointDots.find((d) => d.fid === "index" && d.jname === "tip")?.cpt
           || jointDots.find((d) => d.jname === "tip")?.cpt;
@@ -1958,7 +1589,7 @@ export function ValidationOverlayPlayer({
       }
 
       const indexTip = jointDots.find((d) => d.fid === "index" && d.jname === "tip")?.cpt;
-      if (drawRich && showExtendedKin && indexTip && currentFingerQuality > 0) {
+      if (!touchPerf && showExtendedKin && indexTip && currentFingerQuality > 0) {
         drawSimpleLabel(`Fi ${currentFingerQuality}`, indexTip, indexTip[0] > cx ? -68 : 14, 16, {
           color: "#ddd6fe",
           border: "rgba(167,139,250,0.6)",
@@ -1966,14 +1597,14 @@ export function ValidationOverlayPlayer({
       }
     }
 
-        // --- Metric evidence on skeleton: tremor halo + pinch aperture (explains the numbers) ---
-    if (drawRich) {
+    // --- Metric evidence on skeleton: tremor halo + pinch aperture (explains the numbers) ---
+    if (!touchPerf) {
       const fwPx = Number(overlayData?.frame_width_px) || cw;
       const fhPx = Number(overlayData?.frame_height_px) || ch;
       const swPx = Number(overlayData?.shoulder_width_px) || 0;
       const tremorAnchor = palm || pt("wrist") || pt("hl_wrist");
 
-      // Tremor: pulsing halo sized by local 8?12 Hz envelope / short-window activity
+      // Tremor: pulsing halo sized by local 8–12 Hz envelope / short-window activity
       if (tremorAnchor && idx >= win.start_idx && idx <= win.end_idx) {
         const env = localTremorEnvelopeAt(overlayData, idx);
         const act = localTremorActivity(frames, idx, fps, swPx);
@@ -2003,7 +1634,7 @@ export function ValidationOverlayPlayer({
           ctx.fill();
           ctx.restore();
           drawSimpleLabel(
-            `Tr ${formatTremorPower(livePow)}${peakHz != null ? ` \u00b7 ${Number(peakHz).toFixed(1)}Hz` : ""}`,
+            `Tr ${formatTremorPower(livePow)}${peakHz != null ? ` · ${Number(peakHz).toFixed(1)}Hz` : ""}`,
             tremorAnchor,
             tremorAnchor[0] > cx ? -150 : 20,
             -52,
@@ -2028,11 +1659,10 @@ export function ValidationOverlayPlayer({
         }
       }
 
-      // Pinch line: HL thumb/index tips only (never pose thumb/index ? those sit on the cup at t=0).
-      const thumbTip = jointDots.find((d) => d.fid === "thumb" && d.jname === "tip")?.cpt;
-      const indexTipEv = jointDots.find((d) => d.fid === "index" && d.jname === "tip")?.cpt;
-      const fingerActive = idx >= win.start_idx && idx <= win.end_idx && idx > win.start_idx;
-      if (fingerActive && thumbTip && indexTipEv) {
+      // Pinch/grasp: aperture line between thumb ↔ index (+ ROM ghost)
+      const thumbTip = jointDots.find((d) => d.fid === "thumb" && d.jname === "tip")?.cpt || pt("thumb");
+      const indexTipEv = jointDots.find((d) => d.fid === "index" && d.jname === "tip")?.cpt || pt("index");
+      if (thumbTip && indexTipEv) {
         const liveAp = pinchApertureFromFrame(f, fwPx, fhPx, swPx);
         const winStats = pinchApertureWindowStats(frames, win, fwPx, fhPx, swPx);
         const q = pickOverlayMetric(overlayData, ["pinch_grasp_quality_index", "adl_pinch_grasp_quality_index"]);
@@ -2045,6 +1675,28 @@ export function ValidationOverlayPlayer({
                 ? "rgba(251,191,36,0.95)"
                 : "rgba(251,113,133,0.95)"
             : "rgba(167,139,250,0.95)";
+
+        // Ghost max / min aperture from window extrema frames
+        if (winStats?.maxFrame != null && winStats?.minFrame != null) {
+          const drawGhost = (fi, stroke) => {
+            const gf = frames[fi];
+            if (!gf?.index || !gf?.thumb) return;
+            const a = toCanvas(gf.thumb);
+            const b = toCanvas(gf.index);
+            if (!a || !b) return;
+            ctx.save();
+            ctx.setLineDash([5, 5]);
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(a[0], a[1]);
+            ctx.lineTo(b[0], b[1]);
+            ctx.stroke();
+            ctx.restore();
+          };
+          drawGhost(winStats.maxFrame, "rgba(167,139,250,0.35)");
+          drawGhost(winStats.minFrame, "rgba(167,139,250,0.22)");
+        }
 
         ctx.save();
         ctx.strokeStyle = lineCol;
@@ -2090,7 +1742,7 @@ export function ValidationOverlayPlayer({
       }
     }
 
-    if (drawRich) {
+    if (!touchPerf) {
     const startPt = toCanvas(startPalm);
     const endPt = toCanvas(endPalm);
 
@@ -2163,7 +1815,7 @@ export function ValidationOverlayPlayer({
     ctx.restore();
     }
 
-    if (idx >= win.start_idx && idx <= win.end_idx && drawRich) {
+    if (idx >= win.start_idx && idx <= win.end_idx && !touchPerf) {
       ctx.save();
       ctx.strokeStyle = color.glow;
       ctx.lineWidth = 3;
@@ -2171,58 +1823,6 @@ export function ValidationOverlayPlayer({
       ctx.shadowBlur = 10;
       ctx.strokeRect(5, 5, cw - 10, ch - 10);
       ctx.restore();
-    }
-
-    // Always refresh bake HUD while recording so Drive video matches the product panel.
-    {
-      const liveBake = {
-        straightness: currentStraightness,
-        peakElbowAngVel: currentPeakElbowAngVel,
-        movementTime: currentMovementTime,
-        pauseTime: currentPauseTime,
-        stops: currentStops,
-        trunkRatio: currentTrunkRatio,
-        shoulderElevation: currentShoulderElevation,
-        shoulderElevationTable: currentShoulderElevationTable,
-        shoulderElevationPalm: currentShoulderElevationPalm,
-        shoulderAbduction: currentShoulderAbduction,
-        fingerQuality: currentFingerQuality,
-        tremor_8_12hz_power:
-          idx >= win.end_idx
-            ? resolvedTremor?.tremor_8_12hz_power
-            : tremorLive?.tremor_8_12hz_power ?? resolvedTremor?.tremor_8_12hz_power,
-        tremor_index:
-          idx >= win.end_idx
-            ? resolvedTremor?.tremor_index
-            : tremorLive?.tremor_index ?? resolvedTremor?.tremor_index,
-        index_tremor_8_12hz_power: resolvedTremor?.index_tremor_8_12hz_power,
-        tremor_peak_freq_hz:
-          idx >= win.end_idx
-            ? resolvedTremor?.tremor_peak_freq_hz
-            : tremorLive?.tremor_peak_freq_hz ?? resolvedTremor?.tremor_peak_freq_hz,
-        movement_quality_index: overlayData?.metrics?.movement_quality_index
-          ?? pickOverlayMetric(overlayData, ["movement_quality_index"]),
-        adl_tremor_8_12hz_power:
-          adlTremorLive?.tremor_8_12hz_power
-          ?? resolvedTremor?.adl_tremor_8_12hz_power
-          ?? tremorLive?.tremor_8_12hz_power
-          ?? resolvedTremor?.tremor_8_12hz_power,
-      };
-      if (baking) {
-        bakeHudRef.current = {
-          phaseLabel,
-          nvp: currentNVP,
-          color,
-          live: liveBake,
-          rowDefs: getValidationPanelRowDefs(overlayData, clinicalTask),
-          idx,
-          velocityProfile,
-          elbowProfile: overlayData?.elbow_angle_profile,
-          trunkProfile: overlayData?.trunk_x_profile,
-          overlayData,
-          formatValue,
-        };
-      }
     }
 
     if (useExternalPanel && (updatePanelMetrics || lastPanelUpdateIdxRef.current === idx)) {
@@ -2284,9 +1884,8 @@ export function ValidationOverlayPlayer({
       if (showHand && updatePanelCharts) drawPanelChartLine(chartHandRef.current, velocityProfile, idx, color.main, false);
       if (showElbow && updatePanelCharts) drawPanelChartLine(chartElbowRef.current, overlayData?.elbow_angle_profile, idx, "#7dd3fc", true);
       if (showTrunk && updatePanelCharts) drawPanelChartLine(chartTrunkRef.current, overlayData?.trunk_x_profile, idx, "#facc15", true);
-    } else if (!touchPerf && !baking) {
-    // Inline fallback panel (drawn on video canvas when gutter is narrow ? skipped on iPad for performance)
-    // Skipped during Drive bake: product side-panel is composited in drawRecordingFrame instead.
+    } else if (!touchPerf) {
+    // Inline fallback panel (drawn on video canvas when gutter is narrow — skipped on iPad for performance)
     const unscaledPad = 8 * dpr;
     let fsSmall = `${Math.round(8 * dpr)}px`;
     const unscaledPanelW = Math.max(52 * dpr, Math.min(200 * dpr, cw * 0.45));
@@ -2401,53 +2000,31 @@ export function ValidationOverlayPlayer({
     ctx.fillRect(gx, gy, gw * speedPct, gh);
     ctx.fillStyle = "#fff";
     ctx.font = `bold ${fsSmall} sans-serif`;
-    ctx.fillText(`Speed ${Math.round(speed)} ?/s`, gx, gy - 4);
+    ctx.fillText(`Speed ${Math.round(speed)} °/s`, gx, gy - 4);
     }
 
   }, [frames, fps, win, peakV, handPeakV, startPalm, endPalm, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, isExpanded, overlayStyle]);
 
-  const renderBakeOverlayNative = useCallback(() => {
-    if (!bakeOverlayCanvasRef.current) {
-      const el = document.createElement("canvas");
-      bakeOverlayCanvasRef.current = el;
-    }
-    bakeOverlayPassRef.current = true;
-    try {
-      drawOverlay();
-    } finally {
-      bakeOverlayPassRef.current = false;
-    }
-    return bakeOverlayCanvasRef.current;
-  }, [drawOverlay]);
-
   const drawRecordingFrame = useCallback(() => {
     const video = videoRef.current;
     const recCanvas = recCanvasRef.current;
-    if (!video || !recCanvas) return;
+    const visCanvas = canvasRef.current;
+    if (!video || !recCanvas || !visCanvas) return;
     const vw = video.videoWidth || 640;
     const vh = video.videoHeight || 480;
-    const gap = Math.max(10, Math.round(vw * 0.01));
-    const panelW = Math.round(Math.min(Math.max(vw * 0.36, 280), Math.max(360, vw * 0.42)));
-    const outW = vw + gap + panelW;
-    const outH = vh;
-    const scale = 2;
-    if (recCanvas.width !== outW * scale || recCanvas.height !== outH * scale) {
-      recCanvas.width = outW * scale;
-      recCanvas.height = outH * scale;
+    if (recCanvas.width !== vw || recCanvas.height !== vh) {
+      recCanvas.width = vw;
+      recCanvas.height = vh;
     }
     const ctx = recCanvas.getContext("2d", { alpha: false, desynchronized: true });
     if (!ctx) return;
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    ctx.fillStyle = "#121820";
-    ctx.fillRect(0, 0, outW, outH);
+    // Full-resolution source frame (not the CSS-scaled element bitmap).
     ctx.drawImage(video, 0, 0, vw, vh);
-    const bakeOv = renderBakeOverlayNative();
-    if (bakeOv) ctx.drawImage(bakeOv, 0, 0, vw, vh);
-    drawBakeProductPanel(ctx, vw + gap, 0, panelW, outH, bakeHudRef.current);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-  }, [renderBakeOverlayNative]);
+    // Overlay is already native-sized while recordingRef is true.
+    ctx.drawImage(visCanvas, 0, 0, vw, vh);
+  }, []);
 
   const getSupportedMimeType = () => {
     const types = [
@@ -2464,27 +2041,31 @@ export function ValidationOverlayPlayer({
   const estimateBakeBitrate = useCallback(async (video) => {
     const vw = video.videoWidth || 640;
     const vh = video.videoHeight || 480;
-    const panelW = Math.round(Math.min(Math.max(vw * 0.36, 280), Math.max(360, vw * 0.42)));
-    const gap = Math.max(10, Math.round(vw * 0.01));
-    const pixels = Math.max(1, (vw + gap + panelW) * vh * 4);
+    const pixels = Math.max(1, vw * vh);
     const captureFps = Math.min(60, Math.max(24, Math.round(Number(fps) || 30)));
-    let bps = Math.round(pixels * captureFps * 0.28);
+    let sourceBytes = 0;
     try {
       if (videoUrl) {
         const res = await fetch(videoUrl);
         if (res.ok) {
           const blob = await res.blob();
-          const dur = Math.max(0.5, Number(video.duration) || 1);
-          if (blob.size > 5000) {
-            bps = Math.max(bps, Math.round((blob.size * 8) / dur * 2.2));
-          }
+          sourceBytes = blob.size || 0;
         }
       }
     } catch {
-      /* use pixel estimate */
+      /* ignore — fall back to pixel estimate */
+    }
+    const duration = Math.max(0.5, Number(video.duration) || 1);
+    // Match or exceed source bitrate so re-encode does not visibly soften detail.
+    let bps;
+    if (sourceBytes > 1000) {
+      bps = Math.round((sourceBytes * 8) / duration * 1.5);
+    } else {
+      // ~0.2 bits/pixel/frame ≈ high clinical quality for H.264/VP9 family
+      bps = Math.round(pixels * captureFps * 0.2);
     }
     return {
-      videoBitsPerSecond: Math.min(160_000_000, Math.max(32_000_000, bps)),
+      videoBitsPerSecond: Math.min(120_000_000, Math.max(40_000_000, bps)),
       captureFps,
     };
   }, [fps, videoUrl]);
@@ -2495,10 +2076,8 @@ export function ValidationOverlayPlayer({
     if (!video || !recCanvas) return;
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") return;
     recordingRef.current = true;
-    fingerStickyRef.current = {};
-    fingerSmoothRef.current = {};
-    // Keep the live overlay in display space. Baking used to switch the visible
-    // canvas to native pixels, which threw chalk off the hand for the first plays.
+    canvasLayoutCacheRef.current = { key: "", result: null };
+    // Paint one native-res frame before capture so the first recorded frame is not blank.
     drawOverlay();
     drawRecordingFrame();
     const { videoBitsPerSecond, captureFps } = await estimateBakeBitrate(video);
@@ -2521,18 +2100,23 @@ export function ValidationOverlayPlayer({
     };
     recorder.onstop = () => {
       recordingRef.current = false;
-      fingerStickyRef.current = {};
-      fingerSmoothRef.current = {};
-      if (video) video.playbackRate = playbackRate || 1;
+      canvasLayoutCacheRef.current = { key: "", result: null };
       const blob = new Blob(recordedChunksRef.current, { type: mimeType.includes("mp4") ? "video/mp4" : "video/webm" });
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
       onDownloadReady?.(url, blob);
       setRecording(false);
-      setDownloadBusy(false);
+      // Restore display-sized overlay buffer after bake.
       requestAnimationFrame(() => {
         drawOverlay();
       });
+      if (pendingDownloadRef.current) {
+        pendingDownloadRef.current = false;
+        const ext = (blob.type || "").includes("mp4") ? "mp4" : "webm";
+        downloadBlob(blob, `${phaseLabel || "validation"}_overlay.${ext}`).catch((err) => {
+          onError?.(err?.message || "Download failed");
+        });
+      }
     };
     recorder.start(250);
     setRecording(true);
@@ -2549,33 +2133,50 @@ export function ValidationOverlayPlayer({
         /* ignore */
       }
       setRecording(false);
-      setDownloadBusy(false);
-      onError?.(err?.message || "Could not start screen record");
+      onError?.(err?.message || "Could not start high-quality bake");
     }
-  }, [drawOverlay, drawRecordingFrame, estimateBakeBitrate, onDownloadReady, onError, playbackRate]);
+  }, [drawOverlay, drawRecordingFrame, estimateBakeBitrate, onDownloadReady, onError, phaseLabel]);
 
-  const stopRecording = useCallback(() => {
-    const rec = mediaRecorderRef.current;
-    if (rec && rec.state === "recording") {
-      try { rec.stop(); } catch { /* ignore */ }
-    }
-  }, []);
-
-  const handleScreenRecord = useCallback(async () => {
-    if (recording || mediaRecorderRef.current?.state === "recording") {
-      stopRecording();
-      return;
-    }
-    if (downloadBusy) return;
+  const handleDownload = useCallback(async () => {
+    if (recording || downloadBusy) return;
     setDownloadBusy(true);
     try {
-      pendingDownloadRef.current = false;
+      if (onRequestServerExport) {
+        await onRequestServerExport();
+        return;
+      }
+      if (downloadUrl) {
+        const res = await fetch(downloadUrl);
+        if (!res.ok) throw new Error(`Download failed (${res.status})`);
+        const blob = await res.blob();
+        const ext = (blob.type || "").includes("mp4") ? "mp4" : "webm";
+        await downloadBlob(blob, `${phaseLabel || "validation"}_overlay.${ext}`);
+        onDownloadReady?.(downloadUrl, blob);
+        return;
+      }
+      if (serverExportFilename) {
+        onError?.("Validation video not cached — tap Download again after it loads");
+        return;
+      }
+      pendingDownloadRef.current = true;
       await startRecording();
     } catch (err) {
-      onError?.(err?.message || "Screen record failed");
+      pendingDownloadRef.current = false;
+      onError?.(err?.message || "Download failed");
+    } finally {
       setDownloadBusy(false);
     }
-  }, [recording, downloadBusy, startRecording, stopRecording, onError]);
+  }, [
+    recording,
+    downloadBusy,
+    onRequestServerExport,
+    downloadUrl,
+    serverExportFilename,
+    phaseLabel,
+    startRecording,
+    onDownloadReady,
+    onError,
+  ]);
 
   const tryAutoRender = useCallback(() => {
     const video = videoRef.current;
@@ -2670,7 +2271,6 @@ export function ValidationOverlayPlayer({
     const onVideoFrame = (_now, metadata) => {
       videoTimeRef.current = metadata?.mediaTime ?? video.currentTime ?? 0;
       schedulePaint();
-      scheduleProgress();
       if (!video.paused && useVfc) {
         vfcIdRef.current = video.requestVideoFrameCallback(onVideoFrame);
       }
@@ -2682,20 +2282,12 @@ export function ValidationOverlayPlayer({
       const vw = video.videoWidth || 1;
       const vh = video.videoHeight || 1;
       setVideoAspect(vw / vh);
-      checkOverlaySource(vw, vh, video.duration);
       videoTimeRef.current = video.currentTime ?? 0;
       lastPaintMediaTimeRef.current = -1;
       setDisplayDuration(video.duration || 0);
       setDisplayTime(video.currentTime || 0);
       schedulePaint();
       tryAutoRender();
-    };
-
-    const onLoadedData = () => {
-      canvasLayoutCacheRef.current = { key: "", result: null };
-      gutterLayoutCacheRef.current = { key: "", result: null };
-      lastPaintMediaTimeRef.current = -1;
-      schedulePaint();
     };
 
     const onTimeUpdate = () => {
@@ -2742,7 +2334,6 @@ export function ValidationOverlayPlayer({
     };
 
     video.addEventListener("loadedmetadata", onLoadedMetadata);
-    video.addEventListener("loadeddata", onLoadedData);
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
@@ -2754,7 +2345,6 @@ export function ValidationOverlayPlayer({
 
     return () => {
       video.removeEventListener("loadedmetadata", onLoadedMetadata);
-      video.removeEventListener("loadeddata", onLoadedData);
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
@@ -2764,7 +2354,7 @@ export function ValidationOverlayPlayer({
       stopRafLoop();
       if (progressRafRef.current) cancelAnimationFrame(progressRafRef.current);
     };
-  }, [videoUrl, drawOverlay, drawRecordingFrame, recording, onEnded, tryAutoRender, checkOverlaySource]);
+  }, [videoUrl, drawOverlay, drawRecordingFrame, recording, onEnded, tryAutoRender]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -2777,38 +2367,16 @@ export function ValidationOverlayPlayer({
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
-      setIsPlaying(true);
-      video.play().catch(() => setIsPlaying(false));
+      video.play().catch(() => {});
     } else {
-      setIsPlaying(false);
       video.pause();
     }
   };
 
   const controlTap = (handler) => (e) => {
+    e.preventDefault();
     e.stopPropagation();
-    if (typeof e.preventDefault === "function" && e.cancelable) {
-      try { e.preventDefault(); } catch (_) { /* iOS */ }
-    }
     handler(e);
-  };
-
-  const applySeekFromEvent = (e, el) => {
-    const video = videoRef.current;
-    if (!video || !video.duration) return;
-    const rect = el.getBoundingClientRect();
-    const clientX = e.clientX ?? e.nativeEvent?.changedTouches?.[0]?.clientX;
-    if (clientX == null) return;
-    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const nextTime = pct * video.duration;
-    video.currentTime = nextTime;
-    videoTimeRef.current = nextTime;
-    setDisplayTime(nextTime);
-    setProgress(pct * 100);
-    lastPaintMediaTimeRef.current = -1;
-    fingerStickyRef.current = {};
-    fingerSmoothRef.current = {};
-    drawOverlay();
   };
 
   /** Tap video stage to play/pause (ignore control chrome). */
@@ -2825,7 +2393,13 @@ export function ValidationOverlayPlayer({
   };
 
   const handleSeek = (e) => {
-    applySeekFromEvent(e, e.currentTarget);
+    const video = videoRef.current;
+    if (!video || !video.duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clientX = e.clientX ?? e.nativeEvent?.changedTouches?.[0]?.clientX;
+    if (clientX == null) return;
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    video.currentTime = pct * video.duration;
   };
 
   useEffect(() => {
@@ -2839,11 +2413,6 @@ export function ValidationOverlayPlayer({
   }, []);
 
   const exitExpanded = useCallback(() => {
-    const video = videoRef.current;
-    if (video) {
-      savedTimeRef.current = video.currentTime || 0;
-      wasPlayingRef.current = !video.paused;
-    }
     setIsExpanded(false);
   }, []);
 
@@ -2854,7 +2423,7 @@ export function ValidationOverlayPlayer({
     }
     const video = videoRef.current;
     if (video) {
-      savedTimeRef.current = video.currentTime || 0;
+      savedTimeRef.current = video.currentTime;
       wasPlayingRef.current = !video.paused;
     }
     setIsExpanded(true);
@@ -2886,16 +2455,7 @@ export function ValidationOverlayPlayer({
     if (!video || !video.duration) return;
     video.pause();
     const step = dir / fps;
-    const nextTime = Math.max(0, Math.min(video.duration, video.currentTime + step));
-    video.currentTime = nextTime;
-    videoTimeRef.current = nextTime;
-    setIsPlaying(false);
-    setDisplayTime(nextTime);
-    setProgress(video.duration ? (nextTime / video.duration) * 100 : 0);
-    lastPaintMediaTimeRef.current = -1;
-    fingerStickyRef.current = {};
-    fingerSmoothRef.current = {};
-    drawOverlay();
+    video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + step));
   };
 
   const formatTime = (s) => {
@@ -2921,35 +2481,25 @@ export function ValidationOverlayPlayer({
   }, [tryAutoRender]);
 
   useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      canvasLayoutCacheRef.current = { key: "", result: null };
-      gutterLayoutCacheRef.current = { key: "", result: null };
-      drawOverlay();
-      window.dispatchEvent(new Event("resize"));
-    });
-    return () => cancelAnimationFrame(id);
-  }, [isExpanded, drawOverlay]);
-
-  useEffect(() => {
     const video = videoRef.current;
     if (!video) return undefined;
-    const target = savedTimeRef.current;
-    const shouldPlay = wasPlayingRef.current;
     const apply = () => {
-      if (Number.isFinite(target) && target >= 0) {
-        const cur = video.currentTime || 0;
-        if (Math.abs(cur - target) > 0.08) video.currentTime = target;
-      }
-      setDisplayTime(video.currentTime || target || 0);
-      setDisplayDuration(video.duration || 0);
-      setProgress(video.duration ? ((video.currentTime || 0) / video.duration) * 100 : 0);
-      if (shouldPlay) video.play().catch(() => {});
-      else video.pause();
+      if (savedTimeRef.current > 0) video.currentTime = savedTimeRef.current;
+      if (wasPlayingRef.current) video.play().catch(() => {});
     };
     if (video.readyState >= 1) apply();
     else video.addEventListener("loadeddata", apply, { once: true });
     return undefined;
   }, [isExpanded, videoUrl]);
+
+  useEffect(() => {
+    if (!isExpanded) return undefined;
+    const id = requestAnimationFrame(() => {
+      drawOverlay();
+      window.dispatchEvent(new Event("resize"));
+    });
+    return () => cancelAnimationFrame(id);
+  }, [isExpanded, drawOverlay]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -2972,7 +2522,10 @@ export function ValidationOverlayPlayer({
       <div className="validation-player-chrome relative z-[1] flex flex-col flex-1 min-h-0 w-full">
       {isExpanded && (
         <div className="validation-player-topbar flex items-center justify-between px-4 pb-2.5 pt-[max(10px,env(safe-area-inset-top,0px))] flex-shrink-0 glass-float app-topbar-glass bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border-b border-white/[0.03]">
-          <p className="text-sm font-bold text-white/90 truncate pr-3">{`${phaseLabel || "Validation"} \u00b7 Validation`}</p>
+          <p className="text-sm font-bold text-white/90 truncate pr-3">
+            {phaseLabel || "Validation"} — Validation
+            <span style={{ marginLeft: 8, color: "#fde047", fontWeight: 800 }}>{OVERLAY_PLAYER_BUILD}</span>
+          </p>
           <button
             type="button"
             onPointerDown={controlTap(exitExpanded)}
@@ -2993,6 +2546,26 @@ export function ValidationOverlayPlayer({
           }`}
         >
           <AppShellBackground className="z-0 rounded-[inherit]" />
+          <div
+            data-overlay-player-build={OVERLAY_PLAYER_BUILD}
+            style={{
+              position: "absolute",
+              top: 8,
+              left: 8,
+              zIndex: 50,
+              pointerEvents: "none",
+              padding: "6px 10px",
+              borderRadius: 8,
+              fontSize: 15,
+              fontWeight: 900,
+              letterSpacing: 0.4,
+              color: "#111",
+              background: "#fde047",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.45)",
+            }}
+          >
+            {OVERLAY_PLAYER_BUILD} LIVE
+          </div>
           <canvas ref={ambientCanvasRef} className="validation-ambient-canvas" aria-hidden="true" />
           <div ref={gutterLeftRef} className="validation-gutter-pane validation-gutter-fill" aria-hidden="true" />
           <div ref={gutterRightRef} className="validation-gutter-pane validation-metrics-gutter glass-float content-panel-glass rounded-2xl overflow-hidden">
@@ -3017,7 +2590,9 @@ export function ValidationOverlayPlayer({
                         panelMetricValueRefs.current[i] = el;
                       }}
                       className="text-[12px] font-bold text-white/90 tabular-nums"
-                    />
+                    >
+                      —
+                    </span>
                   </div>
                 ))}
               </div>
@@ -3074,28 +2649,6 @@ export function ValidationOverlayPlayer({
                 className="absolute pointer-events-none"
                 style={{ transform: "translateZ(0)", WebkitTransform: "translateZ(0)" }}
               />
-              {sourceMismatch ? (
-                <div
-                  className="absolute pointer-events-none"
-                  style={{ left: 0, right: 0, top: 0, padding: "8px" }}
-                >
-                  <p
-                    style={{
-                      margin: "0 auto",
-                      maxWidth: "22rem",
-                      borderRadius: "6px",
-                      background: "rgba(0,0,0,0.7)",
-                      padding: "4px 8px",
-                      textAlign: "center",
-                      fontSize: "11px",
-                      lineHeight: 1.4,
-                      color: "rgba(253,230,138,0.92)",
-                    }}
-                  >
-                    {"Drawing paused \u2014 this clip is not the analyzed original. Reloading it\u2026"}
-                  </p>
-                </div>
-              ) : null}
           </div>
         </div>
       </div>
@@ -3168,25 +2721,20 @@ export function ValidationOverlayPlayer({
               {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
             </button>
             {recording ? (
-              <button
-                type="button"
-                onPointerDown={controlTap(() => { stopRecording(); })}
-                className="validation-control-btn validation-control-chip validation-control-record is-recording"
-                title="Stop recording and save to patient Drive"
-              >
-                <Square className="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
-                <span>Stop {Math.round(renderProgress)}%</span>
-              </button>
+              <div className="validation-control-chip validation-control-busy">
+                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
+                <span>{Math.round(renderProgress)}%</span>
+              </div>
             ) : (
               <button
                 type="button"
-                onPointerDown={controlTap(() => { void handleScreenRecord(); })}
+                onPointerDown={controlTap(() => { void handleDownload(); })}
                 disabled={downloadBusy}
-                className="validation-control-btn validation-control-chip validation-control-record"
-                title="Screen-record this view and save to patient Drive"
+                className="validation-control-btn validation-control-chip validation-control-download"
+                title={serverExportFilename || onRequestServerExport ? "Download validation video" : "Download overlay video"}
               >
-                <Circle className="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
-                <span>{downloadBusy ? "..." : "Record"}</span>
+                <Download className="w-4 h-4" />
+                <span>{downloadBusy ? "…" : "Download"}</span>
               </button>
             )}
           </div>
@@ -3196,12 +2744,6 @@ export function ValidationOverlayPlayer({
             onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-              handleSeek(e);
-            }}
-            onPointerMove={(e) => {
-              if (!e.currentTarget.hasPointerCapture?.(e.pointerId)) return;
-              e.preventDefault();
               handleSeek(e);
             }}
             title="Seek"
@@ -3221,7 +2763,7 @@ export function ValidationOverlayPlayer({
     return (
       <>
         <div className="w-full min-h-[120px] rounded-lg bg-black/30 border border-white/10 flex items-center justify-center text-[11px] text-white/45">
-          Fullscreen ? tap Close to return
+          Fullscreen — tap Close to return
         </div>
         {createPortal(playerNode, document.body)}
       </>
