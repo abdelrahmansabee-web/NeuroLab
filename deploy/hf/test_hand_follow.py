@@ -138,6 +138,15 @@ class ResampleGapTests(unittest.TestCase):
         self.assertAlmostEqual(float(out[1]), 0.3, places=5)
 
 
+class OverlayZeroLagPatchTests(unittest.TestCase):
+    def test_overlay_diff_drops_one_euro_and_bumps_version(self):
+        p = Path(__file__).resolve().parent / "overlay_zero_lag.diff"
+        text = p.read_text(encoding="utf-8")
+        self.assertIn("+OVERLAY_VERSION = 43", text)
+        self.assertIn("-    out_x, out_y = one_euro_xy(out_x, out_y)", text)
+        self.assertNotIn("+    out_x, out_y = one_euro_xy", text)
+
+
 class PoseWristLockTests(unittest.TestCase):
     def test_table_hl_is_not_on_the_lifted_pose_wrist(self):
         self.assertFalse(

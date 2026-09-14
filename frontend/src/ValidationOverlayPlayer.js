@@ -850,6 +850,7 @@ export function ValidationOverlayPlayer({
   const canvasLayoutCacheRef = useRef({ key: "", result: null });
   const gutterLayoutCacheRef = useRef({ key: "", result: null });
   const lastPaintMediaTimeRef = useRef(-1);
+  const usePresentedTimeRef = useRef(false);
   const lastPanelUpdateIdxRef = useRef(-1);
   const liveMetricsCacheRef = useRef(null);
   const tremorLiveCacheRef = useRef({ idx: -1, data: null });
@@ -857,7 +858,7 @@ export function ValidationOverlayPlayer({
   const paintPendingRef = useRef(false);
   /** Keep last good finger dots briefly so they don't vanish on 1–2 missing frames. */
   const fingerStickyRef = useRef({});
-  /** EMA-smoothed finger canvas points for softer tracking. */
+  /** Last live finger canvas points (no EMA). Used only to reset on seeks. */
   const fingerSmoothRef = useRef({});
 
   const phaseColor = useMemo(() => {
@@ -978,7 +979,10 @@ export function ValidationOverlayPlayer({
     const touchPerf = isCoarsePointerDevice();
     const shadowOff = touchPerf ? 0 : undefined;
 
-    const playbackTime = video.currentTime ?? videoTimeRef.current ?? 0;
+    // RVFC paints pass the presented-frame mediaTime; other paints use currentTime.
+    const playbackTime = usePresentedTimeRef.current
+      ? videoTimeRef.current
+      : (video.currentTime ?? 0);
     const { idx, alpha } = getFrameState(playbackTime);
     const updatePanelMetrics = !touchPerf || video.paused || idx % 8 === 0 || idx >= win.end_idx;
     const updatePanelCharts = !touchPerf || video.paused;
@@ -1460,28 +1464,15 @@ export function ValidationOverlayPlayer({
     };
 
     const smoothStore = fingerSmoothRef.current;
-    const smoothAlpha = 0.42;
     const smoothFinger = (key, cpt, live) => {
       if (!cpt) return null;
       if (!live) return cpt;
-      const prev = smoothStore[key];
-      if (!prev || idx !== (smoothStore._idx ?? idx)) {
-        // reset blend when seeking far
-      }
       if (smoothStore._idx != null && Math.abs(idx - smoothStore._idx) > 8) {
         Object.keys(smoothStore).forEach((k) => { if (k !== "_idx") delete smoothStore[k]; });
       }
       smoothStore._idx = idx;
-      if (!prev) {
-        smoothStore[key] = [...cpt];
-        return cpt;
-      }
-      const out = [
-        prev[0] + (cpt[0] - prev[0]) * smoothAlpha,
-        prev[1] + (cpt[1] - prev[1]) * smoothAlpha,
-      ];
-      smoothStore[key] = out;
-      return out;
+      smoothStore[key] = [...cpt];
+      return cpt;
     };
 
     const jointDots = [];
@@ -2200,10 +2191,17 @@ export function ValidationOverlayPlayer({
     const useVfc = typeof video.requestVideoFrameCallback === "function";
     let rafActive = false;
 
-    const runPaint = () => {
-      videoTimeRef.current = video.currentTime ?? 0;
+    const runPaint = (explicitTime) => {
+      if (Number.isFinite(explicitTime)) {
+        videoTimeRef.current = explicitTime;
+        usePresentedTimeRef.current = true;
+      } else {
+        videoTimeRef.current = video.currentTime ?? 0;
+        usePresentedTimeRef.current = false;
+      }
       lastPaintMediaTimeRef.current = videoTimeRef.current;
       drawOverlay();
+      usePresentedTimeRef.current = false;
       if (recording) drawRecordingFrame();
     };
 
@@ -2266,8 +2264,8 @@ export function ValidationOverlayPlayer({
     };
 
     const onVideoFrame = (_now, metadata) => {
-      videoTimeRef.current = metadata?.mediaTime ?? video.currentTime ?? 0;
-      schedulePaint();
+      const t = metadata?.mediaTime ?? video.currentTime ?? 0;
+      runPaint(t);
       if (!video.paused && useVfc) {
         vfcIdRef.current = video.requestVideoFrameCallback(onVideoFrame);
       }
