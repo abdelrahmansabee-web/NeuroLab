@@ -1,0 +1,32 @@
+{
+  "name": "REFERENCE_SNAPSHOT_2026-09-14_validation_overlay",
+  "revision": 3,
+  "updated_at_utc": "2026-09-14T09:15:37Z",
+  "quality_note": "Refreshed after 1\u20ac finger stick/smooth (overlay v42). Freeze before zero-lag player/overlay change.",
+  "supersedes": "backup/2026-09-14-validation-overlay-v2",
+  "do_not_edit": true,
+  "github": {
+    "repo": "abdelrahmansabee-web/NeuroLab",
+    "branch_at_copy": "cursor/backup-validation-v3-f95a",
+    "commit_at_copy": "de3844ade66e38fa1c2be6114e8fc609ab8f8d8c",
+    "tag": "backup/2026-09-14-validation-overlay-v3",
+    "previous_tag": "backup/2026-09-14-validation-overlay-v2"
+  },
+  "huggingface": {
+    "space": "AbdelrahmanSabee/raedai",
+    "commit": "7661a276641113c8725fb4d2a40dff4451216533",
+    "frontend_bundle_commit": "0a35f61",
+    "tag": "backup-2026-09-14-validation-overlay-v3",
+    "previous_tag": "backup-2026-09-14-validation-overlay-v2"
+  },
+  "live_validation_player": {
+    "nl_version": "32.43",
+    "js": "main.a0625928.js",
+    "css": "main.23ef7b0e.css",
+    "overlay_version": 42,
+    "note": "32.43 player + VIDEO distal HL + overlay v42 1\u20ac joints."
+  },
+  "missing_hf_files": [],
+  "file_count": 51,
+  "total_bytes": 11512392
+}
