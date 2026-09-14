@@ -16,7 +16,7 @@ import mediapipe as mp
 import numpy as np
 import pandas as pd
 
-from hl_overlay_resample import MAX_HL_POSE_WRIST, smooth_xy_series, wrist_roi_box
+from hl_overlay_resample import MAX_HL_POSE_WRIST, wrist_roi_box
 
 if sys.platform == "win32":
     try:
@@ -197,18 +197,6 @@ def _write_hand_landmarks(
         raw.at[frame_i, f"{store_side}_HL_{name}_X"] = float((x0 + lm.x * cw) / fw)
         raw.at[frame_i, f"{store_side}_HL_{name}_Y"] = float((y0 + lm.y * ch) / fh)
         raw.at[frame_i, f"{store_side}_HL_{name}_Z"] = float(lm.z)
-
-
-def _smooth_written_hl(raw: pd.DataFrame, sides: Tuple[str, str]) -> None:
-    for side in sides:
-        for name in _HAND_LM:
-            xcol = f"{side}_HL_{name}_X"
-            ycol = f"{side}_HL_{name}_Y"
-            if xcol not in raw.columns or ycol not in raw.columns:
-                continue
-            sx, sy = smooth_xy_series(raw[xcol].to_numpy(dtype=float), raw[ycol].to_numpy(dtype=float))
-            raw[xcol] = sx
-            raw[ycol] = sy
 
 
 def _run_landmarker(landmarker, bgr: np.ndarray, ts_ms: int):
@@ -416,7 +404,6 @@ def merge_hand_landmarks_into_raw_csv(
 
     cap.release()
     landmarker.close()
-    _smooth_written_hl(raw, sides)
     raw.to_csv(raw_csv_path, index=False)
 
     return {
