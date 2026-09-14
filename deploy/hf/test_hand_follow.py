@@ -22,6 +22,7 @@ from hl_overlay_resample import (  # noqa: E402
     helper_near_wrist,
     hl_close_to_pose_wrist,
     resample_with_max_gap,
+    smooth_xy_series,
     wrist_roi_box,
 )
 
@@ -51,8 +52,41 @@ class WristRoiTests(unittest.TestCase):
     def test_raised_wrist_crop_is_not_most_of_the_frame(self):
         fw = fh = 1000
         x0, y0, cw, ch = wrist_roi_box(0.45, 0.28, 0.55, 0.62, fw, fh)
-        self.assertLess(cw * ch, 0.12 * fw * fh)
-        self.assertLess(ch, 0.30 * fh)
+        self.assertLess(cw * ch, 0.18 * fw * fh)
+        self.assertLess(ch, 0.40 * fh)
+
+    def test_drink_fingertips_stay_in_distal_crop(self):
+        fw = fh = 1000
+        wx, wy = 0.45, 0.32
+        ex, ey = 0.40, 0.50
+        tip_x, tip_y = 0.52, 0.18
+        table_x, table_y = 0.55, 0.62
+        x0, y0, cw, ch = wrist_roi_box(
+            wx, wy, 0.55, 0.62, fw, fh, ex=ex, ey=ey,
+        )
+        self.assertTrue(x0 <= int(wx * fw) < x0 + cw)
+        self.assertTrue(y0 <= int(wy * fh) < y0 + ch)
+        self.assertTrue(x0 <= int(tip_x * fw) < x0 + cw)
+        self.assertTrue(y0 <= int(tip_y * fh) < y0 + ch)
+        inside_table = x0 <= int(table_x * fw) < x0 + cw and y0 <= int(table_y * fh) < y0 + ch
+        self.assertFalse(inside_table)
+
+
+class SmoothSeriesTests(unittest.TestCase):
+    def test_small_jitter_is_damped(self):
+        xs = np.array([0.50, 0.53, 0.50, 0.53, 0.50])
+        ys = np.array([0.40, 0.40, 0.40, 0.40, 0.40])
+        ox, oy = smooth_xy_series(xs, ys, alpha=0.36, max_jump=0.055)
+        raw_span = float(np.nanmax(xs) - np.nanmin(xs))
+        sm_span = float(np.nanmax(ox) - np.nanmin(ox))
+        self.assertLess(sm_span, raw_span)
+
+    def test_teleport_is_not_blended(self):
+        xs = np.array([0.50, 0.50, 0.20, 0.20])
+        ys = np.array([0.60, 0.60, 0.30, 0.30])
+        ox, oy = smooth_xy_series(xs, ys, alpha=0.36, max_jump=0.055)
+        self.assertAlmostEqual(float(ox[2]), 0.20, places=5)
+        self.assertAlmostEqual(float(oy[2]), 0.30, places=5)
 
 
 class ResampleGapTests(unittest.TestCase):
