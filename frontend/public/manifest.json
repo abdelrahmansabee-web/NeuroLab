@@ -3,30 +3,30 @@
   "name": "RA.ED AI - Stroke Rehab Platform",
   "icons": [
     {
-      "src": "favicon.ico?v=32.56",
+      "src": "favicon.ico?v=32.57",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
     },
     {
-      "src": "apple-touch-icon.png?v=32.56",
+      "src": "apple-touch-icon.png?v=32.57",
       "type": "image/png",
       "sizes": "180x180",
       "purpose": "any"
     },
     {
-      "src": "logo192.png?v=32.56",
+      "src": "logo192.png?v=32.57",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "logo512.png?v=32.56",
+      "src": "logo512.png?v=32.57",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any maskable"
     }
   ],
-  "start_url": "./?_v=32.56",
+  "start_url": "./?_v=32.57",
   "scope": ".",
   "display": "standalone",
   "theme_color": "#121820",
