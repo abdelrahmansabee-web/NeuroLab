@@ -23,7 +23,7 @@ const overlayData = {
   frame_height_px: 720,
 };
 
-test("expand keeps the same in-card video node", () => {
+test("expand keeps the same portaled video node", () => {
   window.matchMedia = (query) => ({
     matches: false,
     media: query,
@@ -66,22 +66,21 @@ test("expand keeps the same in-card video node", () => {
     <ValidationOverlayPlayer videoUrl="blob:test-overlay" overlayData={overlayData} phaseLabel="Post" />,
   );
 
-  const home = container.querySelector(".validation-player-home");
-  expect(home).toBeTruthy();
-  const video = home.querySelector("video");
+  const slot = container.querySelector(".validation-player-slot");
+  expect(slot).toBeTruthy();
+  expect(container.querySelector("video")).toBeNull();
+
+  const video = document.body.querySelector("video");
   expect(video).toBeTruthy();
   expect(video.getAttribute("src")).toBe("blob:test-overlay");
-  expect(document.body.querySelector("video")).toBe(video);
 
   fireEvent.pointerDown(getByTitle("Fullscreen"));
 
-  expect(home.querySelector(".validation-player-fullscreen")).toBeTruthy();
+  expect(document.body.querySelector(".validation-player-fullscreen")).toBeTruthy();
   expect(getByTitle("Exit fullscreen")).toBeTruthy();
-  expect(home.querySelector("video")).toBe(video);
-  expect(document.documentElement.classList.contains("nl-overlay-expanded")).toBe(true);
+  expect(document.body.querySelector("video")).toBe(video);
 
   fireEvent.pointerDown(getByTitle("Exit fullscreen"));
-  expect(home.querySelector(".validation-player-fullscreen")).toBeNull();
-  expect(home.querySelector("video")).toBe(video);
-  expect(document.documentElement.classList.contains("nl-overlay-expanded")).toBe(false);
+  expect(document.body.querySelector(".validation-player-fullscreen")).toBeNull();
+  expect(document.body.querySelector("video")).toBe(video);
 });

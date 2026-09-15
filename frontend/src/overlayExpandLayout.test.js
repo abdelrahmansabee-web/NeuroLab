@@ -1,17 +1,17 @@
 import {
   overlayPortalStyle,
-  overlayPlayerChromeStyle,
   overlaySlotAspect,
   overlaySlotReserveStyle,
   readSlotBox,
-  captureContainingBlockStyles,
-  restoreContainingBlockStyles,
   OVERLAY_PORTAL_Z_COMPACT,
   OVERLAY_PORTAL_Z_EXPANDED,
 } from "./overlayExpandLayout";
 
-test("expanded chrome covers the viewport without using the card slot", () => {
-  const style = overlayPlayerChromeStyle({ isExpanded: true });
+test("expanded portal covers the viewport without using the card slot", () => {
+  const style = overlayPortalStyle({
+    isExpanded: true,
+    slot: { left: 40, top: 80, width: 320, height: 180 },
+  });
   expect(style.position).toBe("fixed");
   expect(style.top).toBe(0);
   expect(style.left).toBe(0);
@@ -20,24 +20,26 @@ test("expanded chrome covers the viewport without using the card slot", () => {
   expect(style.zIndex).toBe(OVERLAY_PORTAL_Z_EXPANDED);
 });
 
-test("compact chrome stays in-flow so iPad scroll keeps the video in its card", () => {
-  const style = overlayPlayerChromeStyle({ isExpanded: false });
-  expect(style.position).toBe("absolute");
-  expect(style.inset).toBe(0);
-  expect(style.width).toBe("100%");
-  expect(style.height).toBe("100%");
-  expect(style.zIndex).toBe(OVERLAY_PORTAL_Z_COMPACT);
-  expect(style.left).toBeUndefined();
-  expect(style.top).toBeUndefined();
+test("compact portal pins to the measured slot so the video node never moves", () => {
+  const slot = { left: 24, top: 120, width: 400, height: 225 };
+  const style = overlayPortalStyle({ isExpanded: false, slot });
+  expect(style).toMatchObject({
+    position: "fixed",
+    left: 24,
+    top: 120,
+    width: 400,
+    height: 225,
+    zIndex: OVERLAY_PORTAL_Z_COMPACT,
+  });
+  expect(style.opacity).toBeUndefined();
+  expect(style.pointerEvents).toBeUndefined();
 });
 
-test("legacy overlayPortalStyle compact no longer pins a fixed slot", () => {
-  const style = overlayPortalStyle({
-    isExpanded: false,
-    slot: { left: 24, top: 120, width: 400, height: 225 },
-  });
-  expect(style.position).toBe("absolute");
-  expect(style.width).toBe("100%");
+test("unmeasured or tiny slots stay inert until layout exists", () => {
+  expect(overlayPortalStyle({ isExpanded: false, slot: null }).opacity).toBe(0);
+  expect(overlayPortalStyle({ isExpanded: false, slot: { left: 0, top: 0, width: 1, height: 40 } }).pointerEvents).toBe(
+    "none",
+  );
 });
 
 test("readSlotBox rounds the card placeholder rect", () => {
@@ -60,36 +62,4 @@ test("slot reserve uses live video aspect then overlay frame size", () => {
   expect(overlaySlotAspect(null, null)).toBeCloseTo(16 / 9);
   expect(overlaySlotReserveStyle(16 / 9).aspectRatio).toBe(String(16 / 9));
   expect(overlaySlotReserveStyle(16 / 9).maxHeight).toBe("80vh");
-});
-
-test("containing-block unlock beats stylesheet !important without touching overflow", () => {
-  const styleEl = document.createElement("style");
-  styleEl.textContent = ".glass-float { backdrop-filter: blur(12px) saturate(2.25) !important; overflow: auto; }";
-  document.head.appendChild(styleEl);
-  const scroller = document.createElement("div");
-  scroller.style.overflow = "auto";
-  scroller.style.overflowY = "auto";
-  const parent = document.createElement("div");
-  parent.className = "glass-float";
-  parent.style.overflow = "hidden";
-  const child = document.createElement("div");
-  parent.appendChild(child);
-  scroller.appendChild(parent);
-  document.body.appendChild(scroller);
-
-  const saved = captureContainingBlockStyles(child);
-  expect(parent.style.overflow).toBe("hidden");
-  expect(scroller.style.overflow).toBe("auto");
-  expect(scroller.style.overflowY).toBe("auto");
-  expect(parent.style.getPropertyPriority("transform")).toBe("important");
-  expect(parent.style.getPropertyValue("transform")).toBe("none");
-  expect(parent.style.getPropertyValue("filter")).toBe("none");
-  expect(parent.classList.contains("nl-overlay-escape")).toBe(true);
-
-  restoreContainingBlockStyles(saved);
-  expect(parent.style.overflow).toBe("hidden");
-  expect(parent.classList.contains("nl-overlay-escape")).toBe(false);
-  expect(parent.style.getPropertyValue("backdrop-filter")).toBe("");
-  document.body.removeChild(scroller);
-  document.head.removeChild(styleEl);
 });

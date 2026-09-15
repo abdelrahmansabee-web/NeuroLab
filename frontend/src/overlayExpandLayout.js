@@ -1,22 +1,7 @@
-/** Compact overlay player stays in the card. Expand uses CSS fixed on the same node. */
+/** Compact overlay player is portaled to document.body so expand never relocates <video>. */
 
-export const OVERLAY_PORTAL_Z_COMPACT = "auto";
+export const OVERLAY_PORTAL_Z_COMPACT = 35;
 export const OVERLAY_PORTAL_Z_EXPANDED = 99999;
-export const OVERLAY_ESCAPE_CLASS = "nl-overlay-escape";
-
-/** CSS names. Inline !important is required to beat App.js glass `backdrop-filter: … !important`. */
-const CONTAINING_BLOCK_PROPS = [
-  "filter",
-  "-webkit-filter",
-  "backdrop-filter",
-  "-webkit-backdrop-filter",
-  "transform",
-  "will-change",
-  "contain",
-  "perspective",
-  "clip-path",
-  "-webkit-clip-path",
-];
 
 export function overlaySlotAspect(overlayData, videoAspect) {
   const live = Number(videoAspect);
@@ -49,8 +34,7 @@ export function readSlotBox(el) {
   };
 }
 
-/** Same node for compact and expand so iPad never relocates <video>. */
-export function overlayPlayerChromeStyle({ isExpanded } = {}) {
+export function overlayPortalStyle({ isExpanded, slot } = {}) {
   if (isExpanded) {
     return {
       position: "fixed",
@@ -65,64 +49,25 @@ export function overlayPlayerChromeStyle({ isExpanded } = {}) {
       maxHeight: "100dvh",
     };
   }
+  if (!slot || !(slot.width >= 2) || !(slot.height >= 2)) {
+    return {
+      position: "fixed",
+      left: 0,
+      top: 0,
+      width: 8,
+      height: 8,
+      opacity: 0,
+      pointerEvents: "none",
+      zIndex: 0,
+    };
+  }
   return {
-    position: "absolute",
-    inset: 0,
-    width: "100%",
-    height: "100%",
+    position: "fixed",
+    left: slot.left,
+    top: slot.top,
+    width: slot.width,
+    height: slot.height,
     zIndex: OVERLAY_PORTAL_Z_COMPACT,
     maxHeight: "none",
   };
-}
-
-/** @deprecated Use overlayPlayerChromeStyle. Compact is in-flow, not a body portal. */
-export function overlayPortalStyle({ isExpanded, slot } = {}) {
-  if (isExpanded) return overlayPlayerChromeStyle({ isExpanded: true });
-  void slot;
-  return overlayPlayerChromeStyle({ isExpanded: false });
-}
-
-function propValue(prop) {
-  return prop === "will-change" ? "auto" : "none";
-}
-
-/**
- * Clear filter/transform containing blocks on the ancestor path.
- * Uses inline !important so clinic glass `backdrop-filter: … !important` cannot keep
- * position:fixed trapped (video on the right, results table painted on top).
- * Never changes overflow — that froze the iPad scroller.
- */
-export function captureContainingBlockStyles(fromEl) {
-  const saved = [];
-  if (typeof window === "undefined" || !fromEl || !fromEl.parentElement) return saved;
-  let node = fromEl.parentElement;
-  while (node && node !== document.documentElement) {
-    const target = node;
-    const inline = {};
-    const priority = {};
-    for (let i = 0; i < CONTAINING_BLOCK_PROPS.length; i += 1) {
-      const prop = CONTAINING_BLOCK_PROPS[i];
-      inline[prop] = target.style.getPropertyValue(prop);
-      priority[prop] = target.style.getPropertyPriority(prop);
-      target.style.setProperty(prop, propValue(prop), "important");
-    }
-    const addedClass = !target.classList.contains(OVERLAY_ESCAPE_CLASS);
-    if (addedClass) target.classList.add(OVERLAY_ESCAPE_CLASS);
-    saved.push({ node: target, inline, priority, addedClass });
-    node = node.parentElement;
-  }
-  return saved;
-}
-
-export function restoreContainingBlockStyles(saved) {
-  (saved || []).forEach(({ node, inline, priority, addedClass }) => {
-    if (!node || !node.style) return;
-    if (addedClass) node.classList.remove(OVERLAY_ESCAPE_CLASS);
-    CONTAINING_BLOCK_PROPS.forEach((prop) => {
-      const prev = inline ? inline[prop] : "";
-      const pri = priority ? priority[prop] : "";
-      if (prev) node.style.setProperty(prop, prev, pri || "");
-      else node.style.removeProperty(prop);
-    });
-  });
 }
