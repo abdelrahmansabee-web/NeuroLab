@@ -22,7 +22,7 @@ import {
   pinchApertureFromFrame,
   pinchApertureWindowStats,
 } from "./overlayMetricEvidence";
-import { drawPanelKinematicMarks } from "./overlayPanelMarks";
+import { drawPanelKinematicMarks, drawTableSurfaceLine } from "./overlayPanelMarks";
 import {
   drawClinicalSkeleton,
   drawChalkJoint,
@@ -971,6 +971,14 @@ export function ValidationOverlayPlayer({
     const elbow = pt("elbow");
     const shoulder = pt("shoulder");
 
+    drawTableSurfaceLine(ctx, overlayData, {
+      shoulder,
+      cw,
+      ch,
+      shoulderWidthPx: Number(overlayData?.shoulder_width_px) || 0,
+      noShadow: Boolean(touchPerf),
+    });
+
     const boneColor = SKELETON_PALETTE.bone;
     const boneOutline = SKELETON_PALETTE.boneOutline;
     const boneShadow = SKELETON_PALETTE.shadow;
@@ -1075,24 +1083,6 @@ export function ValidationOverlayPlayer({
     const labelPad = 5 * dpr;
     const labelH = Math.round(12 * dpr);
 
-    // Table surface (palm rest). Subtle — the shoulder column uses this same y.
-    if (overlayData?.table_surface_y != null && overlayData.table_surface_y >= 0 && overlayData.table_surface_y <= 1) {
-      const ty = overlayData.table_surface_y * ch;
-      ctx.save();
-      ctx.strokeStyle = "rgba(245,158,11,0.55)";
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([7, 6]);
-      if (!touchPerf) {
-        ctx.shadowColor = "rgba(245,158,11,0.3)";
-        ctx.shadowBlur = 6;
-      }
-      ctx.beginPath();
-      ctx.moveTo(0, ty);
-      ctx.lineTo(cw, ty);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-    }
     function drawSimpleLabel(text, anchor, offsetX, offsetY, opts = {}) {
       if (!anchor) return;
       const align = opts.align || "left";

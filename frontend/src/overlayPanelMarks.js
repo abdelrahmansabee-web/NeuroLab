@@ -54,16 +54,87 @@ export function trunkHorizontalDispNorm(frames, startIdx, untilIdx) {
   };
 }
 
-/** Table line, else palm-rest / start-palm y (normalized). */
-export function resolveShoulderRestY(overlayData, frames, startIdx) {
+/** Sample table-surface y (0–1) at a normalized x, using the per-column edge when present. */
+export function tableSurfaceYAtX(overlayData, xNorm) {
+  const prof = overlayData?.table_edge_y;
+  if (Array.isArray(prof) && prof.length >= 2 && xNorm != null && Number.isFinite(Number(xNorm))) {
+    const n = prof.length;
+    const t = Math.max(0, Math.min(1, Number(xNorm))) * (n - 1);
+    const i0 = Math.max(0, Math.min(n - 1, Math.floor(t)));
+    const i1 = Math.min(n - 1, i0 + 1);
+    const a = Number(prof[i0]);
+    const b = Number(prof[i1]);
+    const f = t - i0;
+    if (Number.isFinite(a) && Number.isFinite(b)) return a + (b - a) * f;
+    if (Number.isFinite(a)) return a;
+    if (Number.isFinite(b)) return b;
+  }
   const ty = overlayData?.table_surface_y;
   if (ty != null && Number(ty) >= 0 && Number(ty) <= 1) return Number(ty);
   const anc = overlayData?.shoulder_palm_anchor;
-  if (typeof anc === "number" && anc >= 0 && anc <= 1) return anc;
   if (Array.isArray(anc) && anc[1] != null && Number.isFinite(Number(anc[1]))) return Number(anc[1]);
   if (anc && typeof anc === "object" && anc.y != null && Number.isFinite(Number(anc.y))) {
     return Number(anc.y);
   }
+  return null;
+}
+
+export function tableRestXNorm(overlayData, shoulderCanvas, cw) {
+  if (shoulderCanvas && cw > 0 && Number.isFinite(shoulderCanvas[0])) return shoulderCanvas[0] / cw;
+  const anc = overlayData?.shoulder_palm_anchor;
+  if (Array.isArray(anc) && anc[0] != null && Number.isFinite(Number(anc[0]))) return Number(anc[0]);
+  if (anc && typeof anc === "object" && anc.x != null && Number.isFinite(Number(anc.x))) return Number(anc.x);
+  return null;
+}
+
+/** Short table segment in overlay pixels, centered on the shoulder x. */
+export function tableLineUnderShoulder(overlayData, { shoulder, cw, ch, shoulderWidthPx = 0 } = {}) {
+  if (!cw || !ch) return null;
+  const xNorm = tableRestXNorm(overlayData, shoulder, cw);
+  const yNorm = tableSurfaceYAtX(overlayData, xNorm);
+  if (yNorm == null || !Number.isFinite(yNorm)) return null;
+  const x = shoulder && Number.isFinite(shoulder[0])
+    ? shoulder[0]
+    : (xNorm != null ? xNorm * cw : null);
+  if (x == null || !Number.isFinite(x)) return null;
+  const half = Math.max(
+    26,
+    Math.min(cw * 0.08, shoulderWidthPx > 8 ? shoulderWidthPx * 0.38 : cw * 0.055),
+  );
+  return {
+    x0: Math.max(2, x - half),
+    x1: Math.min(cw - 2, x + half),
+    x,
+    y: yNorm * ch,
+    yNorm,
+  };
+}
+
+export function drawTableSurfaceLine(ctx, overlayData, opts = {}) {
+  const g = tableLineUnderShoulder(overlayData, opts);
+  if (!ctx || !g) return null;
+  const { noShadow = false } = opts;
+  ctx.save();
+  ctx.strokeStyle = "rgba(245,158,11,0.9)";
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = "round";
+  ctx.setLineDash([]);
+  if (!noShadow) {
+    ctx.shadowColor = "rgba(245,158,11,0.35)";
+    ctx.shadowBlur = 6;
+  }
+  ctx.beginPath();
+  ctx.moveTo(g.x0, g.y);
+  ctx.lineTo(g.x1, g.y);
+  ctx.stroke();
+  ctx.restore();
+  return g;
+}
+
+/** Table line under the shoulder, else palm-rest / start-palm y (normalized). */
+export function resolveShoulderRestY(overlayData, frames, startIdx, xNorm = null) {
+  const fromTable = tableSurfaceYAtX(overlayData, xNorm);
+  if (fromTable != null) return fromTable;
   const rest = overlayData?.start_palm || frames?.[startIdx]?.palm;
   if (rest && rest[1] != null && Number.isFinite(Number(rest[1]))) return Number(rest[1]);
   return null;
@@ -216,10 +287,21 @@ export function drawPanelKinematicMarks(ctx, {
     drawHArrow(ctx, x0, x1, y, TRUNK);
   }
 
-  // 5. Shoulder: column from shoulder down/up to the table / palm rest.
-  const restY = resolveShoulderRestY(overlayData, frames, startIdx);
+  // 5. Shoulder: column from shoulder down to the table line under that x.
+  const tableLine = tableLineUnderShoulder(overlayData, {
+    shoulder,
+    cw,
+    ch,
+    shoulderWidthPx: Number(overlayData?.shoulder_width_px) || 0,
+  });
+  const restY = tableLine?.yNorm ?? resolveShoulderRestY(
+    overlayData,
+    frames,
+    startIdx,
+    tableRestXNorm(overlayData, shoulder, cw),
+  );
   if (shoulder && restY != null) {
-    const x = shoulder[0];
+    const x = tableLine?.x ?? shoulder[0];
     const y0 = shoulder[1];
     const y1 = restY * ch;
     if (Math.abs(y1 - y0) >= 4) {
@@ -230,10 +312,6 @@ export function drawPanelKinematicMarks(ctx, {
       ctx.beginPath();
       ctx.moveTo(x, y0);
       ctx.lineTo(x, y1);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(x - 5, y1);
-      ctx.lineTo(x + 5, y1);
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
