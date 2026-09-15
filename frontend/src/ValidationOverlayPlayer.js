@@ -14,6 +14,7 @@ import {
 } from "./validationPanelMetrics";
 import {
   buildPinchEvidenceLines,
+  buildTremorEvidenceLines,
   drawEvidenceCard,
   drawTremorCameraEvidence,
   localTremorActivity,
@@ -1323,20 +1324,22 @@ export function ValidationOverlayPlayer({
       }
     }
 
-    // --- Tremor on the hand: 8–12 Hz camera residual (same signal as the panel number) ---
+    // --- Tremor: backup pulsing halo on the hand + 8–12 Hz camera sparkline ---
     const tremorAnchor = palm || pt("wrist") || pt("hl_wrist");
+    const swPxTremor = Number(overlayData?.shoulder_width_px) || 0;
+    const tremorEnv = tremorAnchor ? localTremorEnvelopeAt(overlayData, idx) : null;
+    const tremorAct = tremorAnchor ? localTremorActivity(frames, idx, fps, swPxTremor) : null;
+    const tremorIntensity = tremorEnv != null ? Math.min(1, tremorEnv * 4) : tremorAct != null ? Math.min(1, tremorAct * 12) : 0;
+    const tremorLivePow =
+      idx >= win.end_idx
+        ? resolvedTremor?.tremor_8_12hz_power
+        : tremorLive?.tremor_8_12hz_power ?? resolvedTremor?.tremor_8_12hz_power;
+    const tremorPeakHz =
+      idx >= win.end_idx
+        ? resolvedTremor?.tremor_peak_freq_hz
+        : tremorLive?.tremor_peak_freq_hz ?? resolvedTremor?.tremor_peak_freq_hz;
+
     if (tremorAnchor && idx >= win.start_idx && idx <= win.end_idx && tremorCameraTrack) {
-      const env = localTremorEnvelopeAt(overlayData, idx);
-      const act = localTremorActivity(frames, idx, fps, Number(overlayData?.shoulder_width_px) || 0);
-      const intensity = env != null ? Math.min(1, env * 4) : act != null ? Math.min(1, act * 12) : 0;
-      const livePow =
-        idx >= win.end_idx
-          ? resolvedTremor?.tremor_8_12hz_power
-          : tremorLive?.tremor_8_12hz_power ?? resolvedTremor?.tremor_8_12hz_power;
-      const peakHz =
-        idx >= win.end_idx
-          ? resolvedTremor?.tremor_peak_freq_hz
-          : tremorLive?.tremor_peak_freq_hz ?? resolvedTremor?.tremor_peak_freq_hz;
       drawTremorCameraEvidence(ctx, {
         anchor: tremorAnchor,
         idx,
@@ -1344,9 +1347,9 @@ export function ValidationOverlayPlayer({
         cw,
         ch,
         dpr,
-        livePow,
-        peakHz,
-        intensity,
+        livePow: tremorLivePow,
+        peakHz: tremorPeakHz,
+        intensity: tremorIntensity,
       });
     }
 
@@ -1354,7 +1357,52 @@ export function ValidationOverlayPlayer({
     if (!touchPerf) {
       const fwPx = Number(overlayData?.frame_width_px) || cw;
       const fhPx = Number(overlayData?.frame_height_px) || ch;
-      const swPx = Number(overlayData?.shoulder_width_px) || 0;
+      const swPx = swPxTremor;
+
+      // Tremor halo from backup (REFERENCE_SNAPSHOT / v32.52): pulsing ring on the palm.
+      if (tremorAnchor && idx >= win.start_idx && idx <= win.end_idx) {
+        if (tremorIntensity > 0.02 || tremorLivePow != null) {
+          const r = 14 + tremorIntensity * 42;
+          const alphaHalo = 0.12 + tremorIntensity * 0.55;
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(tremorAnchor[0], tremorAnchor[1], r, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(251,113,133,${Math.min(0.95, alphaHalo).toFixed(2)})`;
+          ctx.lineWidth = 2.5 + tremorIntensity * 3;
+          ctx.shadowColor = "rgba(251,113,133,0.65)";
+          ctx.shadowBlur = 12 + tremorIntensity * 18;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(tremorAnchor[0], tremorAnchor[1], Math.max(6, r * 0.45), 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(251,113,133,${(0.08 + tremorIntensity * 0.28).toFixed(2)})`;
+          ctx.fill();
+          ctx.restore();
+          drawSimpleLabel(
+            `Tr ${formatTremorPower(tremorLivePow)}${tremorPeakHz != null ? ` · ${Number(tremorPeakHz).toFixed(1)}Hz` : ""}`,
+            tremorAnchor,
+            tremorAnchor[0] > cx ? -150 : 20,
+            -52,
+            { color: "#fda4af", border: "rgba(251,113,133,0.55)", bg: "rgba(40,10,18,0.85)" },
+          );
+          if (showExtendedKin || tremorLivePow != null) {
+            drawEvidenceCard(
+              ctx,
+              buildTremorEvidenceLines(overlayData, tremorLivePow, tremorPeakHz),
+              tremorAnchor,
+              {
+                cw,
+                ch,
+                dpr,
+                offsetX: tremorAnchor[0] > cx ? -210 : 18,
+                offsetY: -118,
+                border: "rgba(251,113,133,0.4)",
+                titleColor: "#fecdd3",
+              },
+            );
+          }
+        }
+      }
+
       const thumbTip = jointDots.find((d) => d.fid === "thumb" && d.jname === "tip")?.cpt || pt("thumb");
       const indexTipEv = jointDots.find((d) => d.fid === "index" && d.jname === "tip")?.cpt || pt("index");
       if (thumbTip && indexTipEv) {
