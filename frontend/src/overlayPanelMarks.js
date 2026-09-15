@@ -313,10 +313,12 @@ export function tableLineUnderShoulder(overlayData, {
     : null;
   const tableX = pt.x * cw;
   const tableY = pt.y * ch;
-  const colX = tableX;
-  const yTop = robust && Number.isFinite(robust[1])
-    ? robust[1] * ch
-    : (shoulder && Number.isFinite(shoulder[1]) ? shoulder[1] : null);
+  const liveX = shoulder && Number.isFinite(Number(shoulder[0])) ? Number(shoulder[0]) : null;
+  const liveY = shoulder && Number.isFinite(Number(shoulder[1])) ? Number(shoulder[1]) : null;
+  const colX = liveX != null ? liveX : tableX;
+  const yTop = liveY != null
+    ? liveY
+    : (robust && Number.isFinite(robust[1]) ? robust[1] * ch : null);
   const half = Math.max(
     22,
     Math.min(cw * 0.07, shoulderWidthPx > 8 ? shoulderWidthPx * 0.32 : cw * 0.05),
@@ -555,7 +557,8 @@ export function drawPanelKinematicMarks(ctx, {
     drawHArrow(ctx, x0, x1, y, TRUNK);
   }
 
-  // 5. Shoulder: column from a stable shoulder down to the frozen table point.
+  // 5. Shoulder: column glued to the live skeleton shoulder landmark,
+  // down to the frozen table plane (gold mark Y).
   const tableLine = tableLineUnderShoulder(overlayData, {
     shoulder,
     cw,
@@ -572,9 +575,8 @@ export function drawPanelKinematicMarks(ctx, {
     startIdx,
     tableRestXNorm(overlayData, shoulder, cw, frames, startIdx),
   );
-  const robust = robustShoulderNorm(overlayData, frames, idx, startIdx);
-  const colX = tableLine?.colX ?? (robust ? robust[0] * cw : shoulder?.[0]);
-  const y0 = tableLine?.yTop ?? (robust ? robust[1] * ch : shoulder?.[1]);
+  const colX = (shoulder && Number.isFinite(shoulder[0])) ? shoulder[0] : tableLine?.colX;
+  const y0 = (shoulder && Number.isFinite(shoulder[1])) ? shoulder[1] : tableLine?.yTop;
   if (colX != null && y0 != null && restY != null) {
     const y1 = restY * ch;
     if (Math.abs(y1 - y0) >= 4) {

@@ -161,6 +161,33 @@ test("drink occlusion does not drop the shoulder height mark", () => {
   expect(y).toBeLessThanOrEqual(0.32 + 0.015);
 });
 
+test("shoulder column sticks to the live skeleton landmark, table Y stays put", () => {
+  const overlay = makeOverlay();
+  overlay.table_user = { x: 0.24, y: 0.86, source: "user" };
+  const up = tableLineUnderShoulder(overlay, {
+    shoulder: [0.41 * 200, 0.18 * 100],
+    frames: overlay.frames,
+    startIdx: 4,
+    idx: 10,
+    cw: 200,
+    ch: 100,
+  });
+  expect(up.colX).toBeCloseTo(0.41 * 200, 8);
+  expect(up.yTop).toBeCloseTo(0.18 * 100, 8);
+  expect(up.y).toBeCloseTo(0.86 * 100, 8);
+  const down = tableLineUnderShoulder(overlay, {
+    shoulder: [0.44 * 200, 0.29 * 100],
+    frames: overlay.frames,
+    startIdx: 4,
+    idx: 12,
+    cw: 200,
+    ch: 100,
+  });
+  expect(down.colX).toBeCloseTo(0.44 * 200, 8);
+  expect(down.yTop).toBeCloseTo(0.29 * 100, 8);
+  expect(down.y).toBeCloseTo(0.86 * 100, 8);
+});
+
 test("a clinician table mark sits where it was placed, not on the chair", () => {
   const overlay = makeOverlay();
   overlay.table_surface_y = 0.55;
