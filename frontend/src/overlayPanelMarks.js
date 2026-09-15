@@ -76,12 +76,83 @@ export function restShoulderNorm(overlayData, frames, startIdx = null) {
 }
 
 export function restPalmNorm(overlayData, frames, startIdx = null) {
-  const p = overlayData?.start_palm;
-  if (p && p[1] != null && Number.isFinite(Number(p[1]))) return [Number(p[0]), Number(p[1])];
   const i = restFrameIndex(overlayData, startIdx);
   const fp = frames?.[i]?.palm;
   if (fp && fp[1] != null && Number.isFinite(Number(fp[1]))) return [Number(fp[0]), Number(fp[1])];
+  const p = overlayData?.start_palm;
+  if (p && p[1] != null && Number.isFinite(Number(p[1]))) return [Number(p[0]), Number(p[1])];
   return null;
+}
+
+function finiteXY(p) {
+  if (!p || p[0] == null || p[1] == null) return null;
+  if (!Number.isFinite(Number(p[0])) || !Number.isFinite(Number(p[1]))) return null;
+  return [Number(p[0]), Number(p[1])];
+}
+
+/** Shoulder of the arm that is on the table (closer to the rest palm). */
+export function tableArmShoulderNorm(overlayData, frames, startIdx = null) {
+  const i0 = restFrameIndex(overlayData, startIdx);
+  const f = frames?.[i0];
+  const palm = finiteXY(f?.palm) || finiteXY(overlayData?.start_palm);
+  const l = finiteXY(f?.lshoulder);
+  const r = finiteXY(f?.rshoulder);
+  if (palm && l && r) {
+    return Math.abs(l[0] - palm[0]) <= Math.abs(r[0] - palm[0]) ? l : r;
+  }
+  return restShoulderNorm(overlayData, frames, i0);
+}
+
+/**
+ * Table surface Y: the supporting plane under the resting arm.
+ * A person sees the table where the hand/wrist lie, not a chest-high edge.
+ */
+export function armOnTableY(overlayData, frames, startIdx = null, idx = null) {
+  const i0 = restFrameIndex(overlayData, startIdx);
+  const ys = [];
+  const take = (p) => {
+    if (!p || p[1] == null || !Number.isFinite(Number(p[1]))) return;
+    const y = Number(p[1]);
+    if (y >= 0.45) ys.push(y);
+  };
+  const fromFrame = (f) => {
+    if (!f) return;
+    take(f.palm);
+    take(f.wrist);
+    take(f.hl_wrist);
+  };
+  if (frames?.length) {
+    const a = Math.max(0, i0 - 1);
+    const b = Math.min(frames.length - 1, i0 + 8);
+    for (let i = a; i <= b; i += 1) fromFrame(frames[i]);
+    if (idx != null && Number.isFinite(Number(idx))) {
+      const i = Math.max(0, Math.min(frames.length - 1, Number(idx)));
+      fromFrame(frames[i]);
+    }
+  }
+  take(overlayData?.start_palm);
+  if (!ys.length) return null;
+  return Math.max(...ys);
+}
+
+/** Horizontal span of the table under the arm (palm…elbow…trunk), not the chair. */
+export function tableSpanX(overlayData, frames, startIdx = null) {
+  const i0 = restFrameIndex(overlayData, startIdx);
+  const f = frames?.[i0] || {};
+  const xs = [];
+  const add = (p) => {
+    if (p && p[0] != null && Number.isFinite(Number(p[0]))) xs.push(Number(p[0]));
+  };
+  add(f.palm);
+  add(overlayData?.start_palm);
+  add(f.wrist);
+  add(f.hl_wrist);
+  add(f.elbow);
+  add(f.trunk);
+  const armSh = tableArmShoulderNorm(overlayData, frames, i0);
+  add(armSh);
+  if (!xs.length) return null;
+  return { lo: Math.min(...xs) - 0.04, hi: Math.max(...xs) + 0.04 };
 }
 
 /**
@@ -177,20 +248,38 @@ export function robustShoulderNorm(overlayData, frames, idx, startIdx = null) {
   return [Number(cur[0]), y];
 }
 
-/** Frozen table point nearest the rest shoulder, in 0–1 overlay coordinates. */
-export function tablePointUnderShoulder(overlayData, frames, startIdx = null) {
+/** Table point on the supporting surface, nearest the arm-on-table shoulder. */
+export function tablePointUnderShoulder(overlayData, frames, startIdx = null, idx = null) {
   const i0 = restFrameIndex(overlayData, startIdx);
   const restSh = restShoulderNorm(overlayData, frames, i0);
+  const armSh = tableArmShoulderNorm(overlayData, frames, i0);
   const restPalm = restPalmNorm(overlayData, frames, i0);
+  const armY = armOnTableY(overlayData, frames, i0, idx);
+  const span = tableSpanX(overlayData, frames, i0);
   const frozen = overlayData?.table_under_shoulder;
-  let x = frozen && frozen.x != null && Number.isFinite(Number(frozen.x))
-    ? Number(frozen.x)
-    : (restSh ? restSh[0] : null);
-  if (x == null && restPalm) x = restPalm[0];
-  let y = frozen && frozen.y != null && Number.isFinite(Number(frozen.y))
+
+  let x = armSh?.[0] ?? restSh?.[0] ?? restPalm?.[0] ?? null;
+  if (
+    frozen && frozen.x != null && Number.isFinite(Number(frozen.x))
+    && span && Number(frozen.x) >= span.lo && Number(frozen.x) <= span.hi
+  ) {
+    x = Number(frozen.x);
+  }
+  if (x != null && span) {
+    x = Math.min(span.hi, Math.max(span.lo, x));
+  }
+
+  let y = armY;
+  const detected = (frozen && frozen.y != null && Number.isFinite(Number(frozen.y)))
     ? Number(frozen.y)
     : tableSurfaceYAtX(overlayData, x);
-  y = snapTableYToRestArm(y, restPalm?.[1], restSh?.[1]);
+  if (y != null && Number.isFinite(y)) {
+    if (detected != null && Number.isFinite(detected) && Math.abs(detected - y) <= 0.05) {
+      y = detected;
+    }
+  } else {
+    y = snapTableYToRestArm(detected, restPalm?.[1], restSh?.[1]);
+  }
   if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) return null;
   return { x, y };
 }
@@ -206,7 +295,7 @@ export function tableLineUnderShoulder(overlayData, {
   idx = null,
 } = {}) {
   if (!cw || !ch) return null;
-  const pt = tablePointUnderShoulder(overlayData, frames, startIdx);
+  const pt = tablePointUnderShoulder(overlayData, frames, startIdx, idx);
   if (!pt) return null;
   const robust = frames && idx != null
     ? robustShoulderNorm(overlayData, frames, idx, startIdx)
@@ -262,6 +351,8 @@ export function drawTableSurfaceLine(ctx, overlayData, opts = {}) {
 export function resolveShoulderRestY(overlayData, frames, startIdx, xNorm = null) {
   const pt = tablePointUnderShoulder(overlayData, frames, startIdx);
   if (pt) return pt.y;
+  const armY = armOnTableY(overlayData, frames, startIdx);
+  if (armY != null) return armY;
   const fromTable = snapTableYToRestArm(
     tableSurfaceYAtX(overlayData, xNorm),
     restPalmNorm(overlayData, frames, startIdx)?.[1],
