@@ -26,6 +26,16 @@ function num(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+function isDrinkOrBrushTask(result) {
+  const task = String(result?.clinical_task || result?.clinicalTask || "").trim().toLowerCase();
+  if (task.includes("drink") || task.includes("brush")) return true;
+  const ids = listTaskPhases(result).map((p) => String(p.id || ""));
+  if (ids.some((id) => id.startsWith("transport_") || id === "return")) return true;
+  if (num(result?.drink_lift_height_cm) != null || num(result?.drink_lift_height_sw) != null) return true;
+  if (num(result?.nvp_drink) != null || num(result?.sip_bout_count) != null) return true;
+  return false;
+}
+
 function expectedPhaseIds(result) {
   const fromResult = result?.expected_phase_ids;
   if (Array.isArray(fromResult) && fromResult.length) return fromResult;
@@ -37,7 +47,118 @@ function expectedPhaseIds(result) {
   const ids = listTaskPhases(result).map((p) => p.id).filter(Boolean);
   if (ids.includes("transport_drink")) return ["reach_grasp", "transport_drink", "return"];
   if (ids.includes("transport_brush")) return ["reach_grasp", "transport_brush", "return"];
+  if (isDrinkOrBrushTask(result)) return ["reach_grasp", "transport_drink", "return"];
   return ["reach_grasp"];
+}
+
+function overlaySource(result, overlayData) {
+  if (overlayData?.frames?.length) return overlayData;
+  if (result?.frames?.length) return result;
+  if (result?.overlay?.frames?.length) return result.overlay;
+  return null;
+}
+
+function finiteMedian(values) {
+  const v = values.filter((n) => Number.isFinite(n)).slice().sort((a, b) => a - b);
+  if (!v.length) return null;
+  return v[Math.floor(v.length / 2)];
+}
+
+/** Reach → lift (cup to mouth) → return from overlay palm path. Image y grows downward. */
+export function inferPalmTaskShape(overlayData) {
+  const frames = overlayData?.frames;
+  if (!Array.isArray(frames) || frames.length < 8) return null;
+  const xs = [];
+  const ys = [];
+  frames.forEach((f) => {
+    const p = f?.palm || f?.wrist;
+    xs.push(Array.isArray(p) && Number.isFinite(Number(p[0])) ? Number(p[0]) : null);
+    ys.push(Array.isArray(p) && Number.isFinite(Number(p[1])) ? Number(p[1]) : null);
+  });
+  const valid = ys.filter((v) => v != null).length;
+  if (valid < 8) return null;
+
+  let lastY = finiteMedian(ys) ?? 0.7;
+  let lastX = finiteMedian(xs) ?? 0.5;
+  const filledY = ys.map((v) => {
+    if (v != null) lastY = v;
+    return lastY;
+  });
+  const filledX = xs.map((v) => {
+    if (v != null) lastX = v;
+    return lastX;
+  });
+
+  const n = filledY.length;
+  const head = filledY.slice(0, Math.max(3, Math.floor(n / 8)));
+  const base = finiteMedian(head);
+  if (base == null) return null;
+  let minY = base;
+  let minI = 0;
+  for (let i = 0; i < n; i += 1) {
+    if (filledY[i] < minY) {
+      minY = filledY[i];
+      minI = i;
+    }
+  }
+  const lift = base - minY;
+  const tail = filledY.slice(minI);
+  const tailRest = finiteMedian(tail.slice(-Math.max(3, Math.floor(tail.length / 5)))) ?? minY;
+  const recovery = tailRest - minY;
+  let path = 0;
+  for (let i = 1; i < n; i += 1) {
+    path += Math.hypot(filledX[i] - filledX[i - 1], filledY[i] - filledY[i - 1]);
+  }
+  const reachPath = (() => {
+    let p = 0;
+    const end = Math.max(2, minI);
+    for (let i = 1; i < end; i += 1) {
+      p += Math.hypot(filledX[i] - filledX[i - 1], filledY[i] - filledY[i - 1]);
+    }
+    return p;
+  })();
+
+  return {
+    lift,
+    recovery,
+    path,
+    reachPath,
+    peakIndex: minI,
+    reach: reachPath >= 0.035 || minI >= 4,
+    liftOk: lift >= 0.045,
+    returnOk: lift >= 0.045 && recovery >= 0.32 * lift,
+  };
+}
+
+function adlMetricEvidence(result) {
+  const liftCm = num(result?.drink_lift_height_cm) ?? num(result?.lift_height_cm);
+  const liftSw = num(result?.drink_lift_height_sw) ?? num(result?.lift_height_sw);
+  const sip = num(result?.sip_bout_count);
+  const nvpDrink = num(result?.nvp_drink) ?? num(result?.nvp_transport);
+  const nvpReturn = num(result?.nvp_return);
+  const phases = listTaskPhases(result).map((p) => String(p?.id || ""));
+  const hasReturn = phases.includes("return") || nvpReturn != null;
+  const hasTransport = phases.some((id) => id.startsWith("transport_")) || nvpDrink != null || (sip != null && sip >= 1);
+  const hasLift = (liftCm != null && liftCm >= 1.5) || (liftSw != null && liftSw >= 0.05);
+  const hasReach = phases.includes("reach_grasp") || num(result?.nvp_reach) != null || num(result?.nvp) != null;
+  return {
+    hasReach,
+    hasTransport: hasTransport || hasLift,
+    hasReturn,
+    full: Boolean((hasReach || hasLift) && (hasTransport || hasLift) && hasReturn),
+  };
+}
+
+/** Upgrade Incomplete → Complete when the clip clearly has reach, lift, and return. Never downgrade Complete. */
+export function motionConfirmsAdlComplete(result, overlayData) {
+  if (!isDrinkOrBrushTask(result) && expectedPhaseIds(result).length < 3) return false;
+  const metrics = adlMetricEvidence(result);
+  if (metrics.full) return true;
+  const shape = inferPalmTaskShape(overlaySource(result, overlayData));
+  if (shape?.reach && shape?.liftOk && shape?.returnOk) return true;
+  if (metrics.hasLift && metrics.hasReturn) return true;
+  if (shape?.liftOk && shape?.returnOk && (metrics.hasReach || shape.reach)) return true;
+  return false;
 }
 
 export function listTaskPhases(result) {
@@ -75,7 +196,7 @@ export function pickTransportPhase(result) {
   );
 }
 
-export function deriveTaskCompletion(result) {
+export function deriveTaskCompletion(result, overlayData = null) {
   if (!result || typeof result !== "object") {
     return {
       taskComplete: null,
@@ -84,57 +205,68 @@ export function deriveTaskCompletion(result) {
       completedPhaseIds: [],
     };
   }
-  if (result.task_complete === true || result.task_complete === false) {
-    const expected = expectedPhaseIds(result);
-    const completed = Array.isArray(result.completed_phase_ids)
-      ? result.completed_phase_ids
-      : listTaskPhases(result).map((p) => p.id).filter(Boolean);
-    const ratio = num(result.task_completion_ratio);
-    return {
-      taskComplete: Boolean(result.task_complete),
-      taskCompletionRatio: ratio != null ? ratio : (expected.length ? completed.length / expected.length : null),
-      expectedPhaseIds: expected,
-      completedPhaseIds: completed,
-    };
-  }
-  if (result.task_complete === 1 || result.task_complete === 0 || result.task_complete === "1" || result.task_complete === "0") {
-    const expected = expectedPhaseIds(result);
-    const completed = Array.isArray(result.completed_phase_ids)
-      ? result.completed_phase_ids
-      : listTaskPhases(result).map((p) => p.id).filter(Boolean);
-    return {
-      taskComplete: Number(result.task_complete) === 1,
-      taskCompletionRatio: num(result.task_completion_ratio),
-      expectedPhaseIds: expected,
-      completedPhaseIds: completed,
-    };
-  }
-
   const expected = expectedPhaseIds(result);
-  const phases = listTaskPhases(result);
-  const completed = phases.map((p) => p.id).filter(Boolean);
-  if (!phases.length && result.nvp == null && result.movement_time_sec == null) {
-    return { taskComplete: null, taskCompletionRatio: null, expectedPhaseIds: expected, completedPhaseIds: [] };
+  const flagged = (() => {
+    if (result.task_complete === true || result.task_complete === false) {
+      const completed = Array.isArray(result.completed_phase_ids)
+        ? result.completed_phase_ids
+        : listTaskPhases(result).map((p) => p.id).filter(Boolean);
+      const ratio = num(result.task_completion_ratio);
+      return {
+        taskComplete: Boolean(result.task_complete),
+        taskCompletionRatio: ratio != null ? ratio : (expected.length ? completed.length / expected.length : null),
+        expectedPhaseIds: expected,
+        completedPhaseIds: completed,
+      };
+    }
+    if (result.task_complete === 1 || result.task_complete === 0 || result.task_complete === "1" || result.task_complete === "0") {
+      const completed = Array.isArray(result.completed_phase_ids)
+        ? result.completed_phase_ids
+        : listTaskPhases(result).map((p) => p.id).filter(Boolean);
+      return {
+        taskComplete: Number(result.task_complete) === 1,
+        taskCompletionRatio: num(result.task_completion_ratio),
+        expectedPhaseIds: expected,
+        completedPhaseIds: completed,
+      };
+    }
+
+    const phases = listTaskPhases(result);
+    const completed = phases.map((p) => p.id).filter(Boolean);
+    if (!phases.length && result.nvp == null && result.movement_time_sec == null) {
+      return { taskComplete: null, taskCompletionRatio: null, expectedPhaseIds: expected, completedPhaseIds: [] };
+    }
+    const complete = expected.every((id) => completed.includes(id));
+    const ratio = expected.length ? Math.min(1, completed.length / expected.length) : null;
+    return {
+      taskComplete: phases.length ? complete : (expected.length <= 1 ? true : false),
+      taskCompletionRatio: ratio,
+      expectedPhaseIds: expected,
+      completedPhaseIds: completed,
+    };
+  })();
+
+  if (flagged.taskComplete === true) return flagged;
+  if (motionConfirmsAdlComplete(result, overlayData)) {
+    return {
+      taskComplete: true,
+      taskCompletionRatio: 1,
+      expectedPhaseIds: expected,
+      completedPhaseIds: expected,
+    };
   }
-  const complete = expected.every((id) => completed.includes(id));
-  const ratio = expected.length ? Math.min(1, completed.length / expected.length) : null;
-  return {
-    taskComplete: phases.length ? complete : (expected.length <= 1 ? true : false),
-    taskCompletionRatio: ratio,
-    expectedPhaseIds: expected,
-    completedPhaseIds: completed,
-  };
+  return flagged;
 }
 
 /** 1 = complete, 0 = incomplete (SPSS-friendly). */
-export function taskCompleteCode(result) {
-  const { taskComplete } = deriveTaskCompletion(result);
+export function taskCompleteCode(result, overlayData = null) {
+  const { taskComplete } = deriveTaskCompletion(result, overlayData);
   if (taskComplete == null) return null;
   return taskComplete ? 1 : 0;
 }
 
-export function enrichKinematicCompletion(result) {
-  const c = deriveTaskCompletion(result);
+export function enrichKinematicCompletion(result, overlayData = null) {
+  const c = deriveTaskCompletion(result, overlayData);
   const graspDwell = num(result?.grasp_dwell_sec) ?? pickReachPhaseMetric(result, "grasp_dwell_sec");
   const functionalHold = num(result?.functional_hold_sec);
   const pauseTotal = num(result?.pause_time_sec_total);

@@ -1,7 +1,24 @@
-/** Compact overlay player is portaled to document.body so expand never relocates <video>. */
+/** Compact overlay player stays in the card. Expand uses CSS fixed on the same node. */
 
-export const OVERLAY_PORTAL_Z_COMPACT = 35;
+export const OVERLAY_PORTAL_Z_COMPACT = "auto";
 export const OVERLAY_PORTAL_Z_EXPANDED = 99999;
+
+const CONTAINING_BLOCK_STYLE_KEYS = [
+  "overflow",
+  "overflowX",
+  "overflowY",
+  "filter",
+  "webkitFilter",
+  "backdropFilter",
+  "webkitBackdropFilter",
+  "transform",
+  "willChange",
+  "contain",
+  "perspective",
+  "clipPath",
+  "webkitClipPath",
+  "isolation",
+];
 
 export function overlaySlotAspect(overlayData, videoAspect) {
   const live = Number(videoAspect);
@@ -34,7 +51,8 @@ export function readSlotBox(el) {
   };
 }
 
-export function overlayPortalStyle({ isExpanded, slot } = {}) {
+/** Same node for compact and expand so iPad never relocates <video>. */
+export function overlayPlayerChromeStyle({ isExpanded } = {}) {
   if (isExpanded) {
     return {
       position: "fixed",
@@ -49,25 +67,89 @@ export function overlayPortalStyle({ isExpanded, slot } = {}) {
       maxHeight: "100dvh",
     };
   }
-  if (!slot || !(slot.width >= 2) || !(slot.height >= 2)) {
-    return {
-      position: "fixed",
-      left: 0,
-      top: 0,
-      width: 8,
-      height: 8,
-      opacity: 0,
-      pointerEvents: "none",
-      zIndex: 0,
-    };
-  }
   return {
-    position: "fixed",
-    left: slot.left,
-    top: slot.top,
-    width: slot.width,
-    height: slot.height,
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
     zIndex: OVERLAY_PORTAL_Z_COMPACT,
     maxHeight: "none",
   };
+}
+
+/** @deprecated Use overlayPlayerChromeStyle. Compact is in-flow, not a body portal. */
+export function overlayPortalStyle({ isExpanded, slot } = {}) {
+  if (isExpanded) return overlayPlayerChromeStyle({ isExpanded: true });
+  void slot;
+  return overlayPlayerChromeStyle({ isExpanded: false });
+}
+
+function computedNeedsUnlock(cs) {
+  if (!cs) return false;
+  const transform = cs.transform;
+  const filter = cs.filter;
+  const backdrop = cs.backdropFilter || cs.webkitBackdropFilter;
+  const contain = cs.contain;
+  const willChange = cs.willChange || "";
+  const perspective = cs.perspective;
+  const clipPath = cs.clipPath || cs.webkitClipPath;
+  const overflowLocks = [cs.overflow, cs.overflowX, cs.overflowY].some(
+    (v) => v && v !== "visible" && v !== "unset" && v !== "auto" && v !== "clip",
+  );
+  // overflow:auto on the iPad inner scroller also clips position:fixed descendants
+  // once a filter/transform containing block exists on a parent.
+  const overflowScroll = [cs.overflow, cs.overflowX, cs.overflowY].some(
+    (v) => v === "auto" || v === "scroll" || v === "overlay" || v === "hidden",
+  );
+  if (transform && transform !== "none") return true;
+  if (filter && filter !== "none") return true;
+  if (backdrop && backdrop !== "none") return true;
+  if (contain && contain !== "none") return true;
+  if (perspective && perspective !== "none") return true;
+  if (clipPath && clipPath !== "none") return true;
+  if (/transform|filter|backdrop|perspective|contain/i.test(willChange)) return true;
+  if (cs.isolation === "isolate") return true;
+  if (overflowLocks || overflowScroll) return true;
+  return false;
+}
+
+export function captureContainingBlockStyles(fromEl) {
+  const saved = [];
+  if (typeof window === "undefined" || !fromEl || !fromEl.parentElement) return saved;
+  let node = fromEl.parentElement;
+  while (node && node !== document.documentElement) {
+    const cs = window.getComputedStyle(node);
+    if (computedNeedsUnlock(cs)) {
+      const inline = {};
+      CONTAINING_BLOCK_STYLE_KEYS.forEach((key) => {
+        inline[key] = node.style[key];
+      });
+      saved.push({ node, inline });
+      node.style.overflow = "visible";
+      node.style.overflowX = "visible";
+      node.style.overflowY = "visible";
+      node.style.filter = "none";
+      node.style.webkitFilter = "none";
+      node.style.backdropFilter = "none";
+      node.style.webkitBackdropFilter = "none";
+      node.style.transform = "none";
+      node.style.willChange = "auto";
+      node.style.contain = "none";
+      node.style.perspective = "none";
+      node.style.clipPath = "none";
+      node.style.webkitClipPath = "none";
+      node.style.isolation = "auto";
+    }
+    node = node.parentElement;
+  }
+  return saved;
+}
+
+export function restoreContainingBlockStyles(saved) {
+  (saved || []).forEach(({ node, inline }) => {
+    if (!node || !node.style || !inline) return;
+    CONTAINING_BLOCK_STYLE_KEYS.forEach((key) => {
+      node.style[key] = inline[key] || "";
+    });
+  });
 }

@@ -71,7 +71,21 @@ input[type="range"]::-webkit-slider-runnable-track {
   box-shadow: none !important;
 }
 
-/* Card placeholder: the real player is portaled to body so expand never moves <video>. */
+/* In-card player home: compact video stays in the group while the page scrolls. */
+.validation-player-home {
+  position: relative;
+  width: 100%;
+  min-height: 200px;
+  max-height: 80vh;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.validation-player-home[data-expanded="1"] {
+  overflow: visible;
+}
+
 .validation-player-slot {
   width: 100%;
   min-height: 200px;
@@ -79,6 +93,34 @@ input[type="range"]::-webkit-slider-runnable-track {
   pointer-events: none;
   border-radius: 0.5rem;
   background: rgba(0, 0, 0, 0.28);
+}
+
+/* Expand is CSS-fixed on the same node; strip ancestor containing blocks. */
+html.nl-overlay-expanded,
+html.nl-overlay-expanded body {
+  overflow: hidden !important;
+}
+
+html.nl-overlay-expanded .content-shell,
+html.nl-overlay-expanded .sidebar-shell,
+html.nl-overlay-expanded .glass-float,
+html.nl-overlay-expanded .content-panel-glass,
+html.nl-overlay-expanded .content-shell .glass-float,
+html.nl-overlay-expanded .content-shell .content-panel-glass,
+html.nl-overlay-expanded .content-shell .glass-float:not(.section-header):not(.app-topbar-glass) {
+  transform: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  contain: none !important;
+}
+
+html.nl-overlay-expanded .content-shell,
+html.nl-overlay-expanded .overflow-hidden,
+html.nl-overlay-expanded [class*="overflow-hidden"],
+html.nl-overlay-expanded .overflow-y-auto,
+html.nl-overlay-expanded .validation-player-home {
+  overflow: visible !important;
 }
 
 .validation-player-shell-bg {

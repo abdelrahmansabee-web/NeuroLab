@@ -61,7 +61,7 @@ export function resolveKinMetricValue(phaseResult, metricKey, overlayData = null
     "nvp",
   ];
   if (completionKeys.includes(metricKey)) {
-    const enriched = enrichKinematicCompletion(phaseResult || {});
+    const enriched = enrichKinematicCompletion(phaseResult || {}, overlayData);
     const fromEnriched = enriched[metricKey];
     if (fromEnriched != null && fromEnriched !== "" && !Number.isNaN(Number(fromEnriched))) {
       return Number(fromEnriched);
