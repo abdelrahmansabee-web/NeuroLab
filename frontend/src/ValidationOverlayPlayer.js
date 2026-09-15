@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import React, { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Play, Pause, Maximize, Minimize2, ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import { downloadBlob } from "./downloadUtils";
@@ -32,6 +32,12 @@ import {
   tableMarkHitGeom,
 } from "./overlayTableUserMark";
 import { isAppleTouchVideo, shouldRestartPlayback } from "./overlayVideoPlayback";
+import {
+  overlayPortalStyle,
+  overlaySlotAspect,
+  overlaySlotReserveStyle,
+  readSlotBox,
+} from "./overlayExpandLayout";
 import {
   drawClinicalSkeleton,
   drawChalkJoint,
@@ -705,6 +711,8 @@ export function ValidationOverlayPlayer({
   const [videoAspect, setVideoAspect] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isTouchUi, setIsTouchUi] = useState(false);
+  const slotRef = useRef(null);
+  const [slotBox, setSlotBox] = useState(null);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const rafRef = useRef(null);
@@ -2351,17 +2359,52 @@ export function ValidationOverlayPlayer({
     tryAutoRender();
   }, [tryAutoRender]);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return undefined;
-    const apply = () => {
-      if (savedTimeRef.current > 0) video.currentTime = savedTimeRef.current;
-      if (wasPlayingRef.current) video.play().catch(() => {});
+  useLayoutEffect(() => {
+    const slot = slotRef.current;
+    if (!slot) return undefined;
+    let raf = 0;
+    const update = () => {
+      const next = readSlotBox(slot);
+      setSlotBox((prev) => {
+        if (
+          prev &&
+          next &&
+          prev.left === next.left &&
+          prev.top === next.top &&
+          prev.width === next.width &&
+          prev.height === next.height
+        ) {
+          return prev;
+        }
+        if (!prev && !next) return prev;
+        return next;
+      });
     };
-    if (video.readyState >= 1) apply();
-    else video.addEventListener("loadeddata", apply, { once: true });
-    return undefined;
-  }, [isExpanded, videoUrl]);
+    const updateRaf = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(update);
+    };
+    update();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateRaf) : null;
+    if (ro) ro.observe(slot);
+    window.addEventListener("scroll", updateRaf, true);
+    window.addEventListener("resize", updateRaf);
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener("resize", updateRaf);
+      vv.addEventListener("scroll", updateRaf);
+    }
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      if (ro) ro.disconnect();
+      window.removeEventListener("scroll", updateRaf, true);
+      window.removeEventListener("resize", updateRaf);
+      if (vv) {
+        vv.removeEventListener("resize", updateRaf);
+        vv.removeEventListener("scroll", updateRaf);
+      }
+    };
+  }, [videoUrl, isExpanded, videoAspect]);
 
   useEffect(() => {
     if (!isExpanded) return undefined;
@@ -2378,6 +2421,7 @@ export function ValidationOverlayPlayer({
   }, [playbackRate]);
 
   const controlsVisible = isExpanded || isTouchUi;
+  const portalStyle = overlayPortalStyle({ isExpanded, slot: slotBox });
 
   const playerNode = (
     <div
@@ -2385,9 +2429,13 @@ export function ValidationOverlayPlayer({
       className={
         isExpanded
           ? "validation-player-fullscreen fixed inset-0 z-[99999] flex flex-col"
-          : "relative w-full rounded-lg overflow-hidden group flex justify-center items-center"
+          : "relative w-full h-full rounded-lg overflow-hidden group flex flex-col justify-center items-center"
       }
-      style={isExpanded ? { width: "100vw", height: "100dvh", maxWidth: "100vw", maxHeight: "100dvh" } : undefined}
+      style={
+        isExpanded
+          ? { ...portalStyle, width: "100vw", height: "100dvh", maxWidth: "100vw", maxHeight: "100dvh" }
+          : portalStyle
+      }
     >
       {isExpanded && <AppShellBackground className="z-0" />}
       <div className="validation-player-chrome relative z-[1] flex flex-col flex-1 min-h-0 w-full">
@@ -2406,7 +2454,7 @@ export function ValidationOverlayPlayer({
         </div>
       )}
 
-      <div className={`${isExpanded ? "validation-player-stage-area flex-1 flex min-h-0 w-full p-2 pb-0" : "relative w-full"}`}>
+      <div className={`${isExpanded ? "validation-player-stage-area flex-1 flex min-h-0 w-full p-2 pb-0" : "relative w-full flex-1 min-h-0"}`}>
         <div
           ref={stageRef}
           className={`validation-stage-frame relative overflow-hidden ${
@@ -2638,18 +2686,33 @@ export function ValidationOverlayPlayer({
     </div>
   );
 
-  if (isExpanded && typeof document !== "undefined") {
+  const slotEl = (
+    <div
+      ref={slotRef}
+      className="validation-player-slot"
+      data-expanded={isExpanded ? "1" : "0"}
+      style={overlaySlotReserveStyle(overlaySlotAspect(overlayData, videoAspect))}
+      aria-hidden="true"
+    />
+  );
+
+  // Always portal from first paint. Toggling expand used to move <video> onto
+  // document.body; iPad then kept the overlay but lost the picture and controls.
+  if (typeof document === "undefined" || !document.body) {
     return (
-      <>
-        <div className="w-full min-h-[120px] rounded-lg bg-black/30 border border-white/10 flex items-center justify-center text-[11px] text-white/45">
-          Fullscreen — tap Close to return
-        </div>
-        {createPortal(playerNode, document.body)}
-      </>
+      <div className="relative w-full">
+        {slotEl}
+        {playerNode}
+      </div>
     );
   }
 
-  return playerNode;
+  return (
+    <>
+      {slotEl}
+      {createPortal(playerNode, document.body)}
+    </>
+  );
 }
 
 export default ValidationOverlayPlayer;
