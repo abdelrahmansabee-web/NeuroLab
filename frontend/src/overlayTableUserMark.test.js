@@ -3,7 +3,9 @@ import {
   clearTableUserMark,
   clientPointToOverlayNorm,
   hitTableMark,
+  loadSharedTableSurfaceY,
   loadTableUserMark,
+  saveSharedTableSurfaceY,
   saveTableUserMark,
   tableMarkHitGeom,
   tableUserMarkStorageKey,
@@ -35,6 +37,15 @@ test("load / save round-trips through localStorage", () => {
   expect(got.y).toBeCloseTo(0.84, 8);
   expect(got.source).toBe("user");
   clearTableUserMark(overlay, "");
+});
+
+test("a clinician table Y is reused as the shared surface hint", () => {
+  localStorage.removeItem("nl-table-surface-y-hint");
+  saveTableUserMark({ overlay_video_filename: "hint-a.mp4" }, "", { x: 0.22, y: 0.67 });
+  expect(loadSharedTableSurfaceY()).toBeCloseTo(0.67, 8);
+  expect(saveSharedTableSurfaceY(0.48)).toBeNull();
+  expect(loadSharedTableSurfaceY()).toBeCloseTo(0.67, 8);
+  localStorage.removeItem("nl-table-surface-y-hint");
 });
 
 test("pointer on the canvas box maps to overlay 0–1", () => {

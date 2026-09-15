@@ -24,11 +24,14 @@ import {
 } from "./overlayMetricEvidence";
 import { drawPanelKinematicMarks, drawTableSurfaceLine } from "./overlayPanelMarks";
 import { detectCupFromRgba } from "./overlayCupTable";
+import { detectTableSurfaceYFromRgba } from "./overlayCreamTable";
 import {
   clientPointToOverlayNorm,
   hitTableMark,
   loadTableUserMark,
   saveTableUserMark,
+  loadSharedTableSurfaceY,
+  saveSharedTableSurfaceY,
   tableMarkHitGeom,
 } from "./overlayTableUserMark";
 import { isAppleTouchVideo, shouldRestartPlayback } from "./overlayVideoPlayback";
@@ -54,7 +57,7 @@ const APP_BG_FILTER = "blur(24px) brightness(0.55) saturate(0.80)";
 const APP_BG_SCALE = "scale(1.08)";
 const APP_BG_OVERLAY = "rgba(8, 8, 8, 0.18)";
 
-function sampleCupFromVideo(video, palm) {
+function sampleVideoRgba(video) {
   if (!video || video.readyState < 2) return null;
   if (isAppleTouchVideo()) return null;
   const w = video.videoWidth;
@@ -63,15 +66,15 @@ function sampleCupFromVideo(video, palm) {
   try {
     const cw = Math.min(w, 360);
     const ch = Math.max(1, Math.round(h * (cw / w)));
-    if (!sampleCupFromVideo._c) sampleCupFromVideo._c = document.createElement("canvas");
-    const canvas = sampleCupFromVideo._c;
+    if (!sampleVideoRgba._c) sampleVideoRgba._c = document.createElement("canvas");
+    const canvas = sampleVideoRgba._c;
     canvas.width = cw;
     canvas.height = ch;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return null;
     ctx.drawImage(video, 0, 0, cw, ch);
     const img = ctx.getImageData(0, 0, cw, ch);
-    return detectCupFromRgba(img.data, cw, ch, { palm });
+    return { data: img.data, width: cw, height: ch };
   } catch (_err) {
     return null;
   }
@@ -736,7 +739,9 @@ export function ValidationOverlayPlayer({
   /** Last live finger canvas points (no EMA). Used only to reset on seeks. */
   const fingerSmoothRef = useRef({});
   const cupLiveRef = useRef(null);
-  const cupTriesRef = useRef(0);
+  const tableCreamRef = useRef(null);
+  const tableHintYRef = useRef(null);
+  const tableCreamTriesRef = useRef(0);
   const tableUserRef = useRef(null);
   const tableGeomRef = useRef(null);
   const tableDragRef = useRef({ active: false, moved: false, pointerId: null, start: null });
@@ -1027,22 +1032,38 @@ export function ValidationOverlayPlayer({
 
     if (
       !isAppleTouchVideo()
-      && !overlayData?.cup
       && !tableUserRef.current
-      && !cupLiveRef.current
-      && cupTriesRef.current < 8
+      && tableCreamTriesRef.current < 8
       && video.readyState >= 2
     ) {
       const restI = Number.isFinite(Number(win?.start_idx)) ? Number(win.start_idx) : 0;
       const restPalm = frames[restI]?.palm || overlayData?.start_palm;
-      cupTriesRef.current += 1;
-      const found = sampleCupFromVideo(video, restPalm);
-      if (found) cupLiveRef.current = found;
+      const restShY = frames[restI]?.shoulder?.[1];
+      tableCreamTriesRef.current += 1;
+      const scene = sampleVideoRgba(video);
+      if (scene) {
+        if (!overlayData?.cup && !cupLiveRef.current) {
+          const found = detectCupFromRgba(scene.data, scene.width, scene.height, { palm: restPalm });
+          if (found) cupLiveRef.current = found;
+        }
+        if (tableCreamRef.current == null) {
+          const creamY = detectTableSurfaceYFromRgba(scene.data, scene.width, scene.height, {
+            shoulderY: restShY,
+          });
+          if (creamY != null) {
+            tableCreamRef.current = creamY;
+            saveSharedTableSurfaceY(creamY);
+          }
+        }
+      }
     }
 
-    const overlayForTable = tableUserRef.current
-      ? { ...overlayData, table_user: tableUserRef.current }
-      : overlayData;
+    const overlayForTable = {
+      ...overlayData,
+      ...(tableUserRef.current ? { table_user: tableUserRef.current } : {}),
+      ...(tableCreamRef.current != null ? { cream_table_y: tableCreamRef.current } : {}),
+      ...(tableHintYRef.current != null ? { table_y_hint: tableHintYRef.current } : {}),
+    };
     const tableGeom = drawTableSurfaceLine(ctx, overlayForTable, {
       shoulder,
       frames,
@@ -1054,6 +1075,8 @@ export function ValidationOverlayPlayer({
       noShadow: Boolean(touchPerf),
       cup: overlayData?.cup || cupLiveRef.current,
       userMark: tableUserRef.current,
+      creamY: tableCreamRef.current,
+      hintY: tableHintYRef.current,
       placing: tablePlaceModeRef.current,
     });
     tableGeomRef.current = tableMarkHitGeom(tableGeom, cw);
@@ -2342,12 +2365,14 @@ export function ValidationOverlayPlayer({
     setDownloadUrl(null);
     setRenderProgress(0);
     cupLiveRef.current = null;
-    cupTriesRef.current = 0;
+    tableCreamRef.current = null;
+    tableCreamTriesRef.current = 0;
   }, [videoUrl]);
 
   useEffect(() => {
     const m = loadTableUserMark(overlayData, videoUrl);
     tableUserRef.current = m;
+    tableHintYRef.current = m?.y ?? loadSharedTableSurfaceY();
     setTableUserMark(m);
     setTablePlaceMode(false);
     tablePlaceModeRef.current = false;
