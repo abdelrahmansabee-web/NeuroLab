@@ -161,6 +161,17 @@ test("drink occlusion does not drop the shoulder height mark", () => {
   expect(y).toBeLessThanOrEqual(0.32 + 0.015);
 });
 
+test("a clinician table mark sits where it was placed, not on the chair", () => {
+  const overlay = makeOverlay();
+  overlay.table_surface_y = 0.55;
+  overlay.table_under_shoulder = { x: 0.72, y: 0.55 };
+  overlay.table_user = { x: 0.24, y: 0.86, source: "user" };
+  overlay.cup = { x: 0.14, x0: 0.10, x1: 0.18, y_top: 0.62, y_base: 0.70 };
+  const pt = tablePointUnderShoulder(overlay, overlay.frames, 4, 10);
+  expect(pt.x).toBeCloseTo(0.24, 8);
+  expect(pt.y).toBeCloseTo(0.86, 8);
+});
+
 test("cup base is the table surface even when the frozen detector sits on the chair", () => {
   const overlay = makeOverlay();
   overlay.table_surface_y = 0.55;

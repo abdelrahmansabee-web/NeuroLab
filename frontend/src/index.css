@@ -351,6 +351,21 @@ input[type="range"]::-webkit-slider-runnable-track {
   color: #fff;
 }
 
+.validation-control-chip.is-table-place {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fde68a;
+}
+
+.validation-content-box.is-placing-table {
+  cursor: crosshair;
+}
+
+.validation-content-box.is-dragging-table {
+  cursor: grabbing;
+  touch-action: none;
+}
+
 .validation-control-chip:hover,
 .validation-control-chip:active {
   background: rgba(255, 255, 255, 0.14);
