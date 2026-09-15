@@ -973,6 +973,8 @@ export function ValidationOverlayPlayer({
 
     drawTableSurfaceLine(ctx, overlayData, {
       shoulder,
+      frames,
+      idx,
       cw,
       ch,
       shoulderWidthPx: Number(overlayData?.shoulder_width_px) || 0,
