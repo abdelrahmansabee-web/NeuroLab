@@ -268,3 +268,98 @@ export function formatTremorIndex(val) {
   if (val == null || Number.isNaN(val)) return "—";
   return Math.round(Number(val)).toString();
 }
+
+function rbjBandpass(fs, f0, Q) {
+  const w0 = (2 * Math.PI * f0) / fs;
+  const cos = Math.cos(w0);
+  const sin = Math.sin(w0);
+  const alpha = sin / (2 * Math.max(0.3, Q));
+  const b0 = alpha;
+  const b1 = 0;
+  const b2 = -alpha;
+  const a0 = 1 + alpha;
+  const a1 = -2 * cos;
+  const a2 = 1 - alpha;
+  return {
+    b0: b0 / a0,
+    b1: b1 / a0,
+    b2: b2 / a0,
+    a1: a1 / a0,
+    a2: a2 / a0,
+  };
+}
+
+function biquadFilter(x, c) {
+  const y = new Array(x.length);
+  let z1 = 0;
+  let z2 = 0;
+  for (let i = 0; i < x.length; i += 1) {
+    const v = x[i] - c.a1 * z1 - c.a2 * z2;
+    y[i] = c.b0 * v + c.b1 * z1 + c.b2 * z2;
+    z2 = z1;
+    z1 = v;
+  }
+  return y;
+}
+
+/** Zero-phase 8–12 Hz bandpass for camera tremor visuals (same band as the FFT number). */
+export function bandpassZeroPhase(y, fs, fLo = TREMOR_BAND_HZ[0], fHi = TREMOR_BAND_HZ[1]) {
+  if (!y?.length || !(fs > 0)) return [];
+  const nyq = fs * 0.5;
+  const hi = Math.min(Number(fHi), nyq * 0.45);
+  const lo = Math.max(Number(fLo), 1);
+  if (!(hi > lo)) return y.map(() => 0);
+  const f0 = 0.5 * (lo + hi);
+  const Q = Math.max(0.6, f0 / Math.max(1, hi - lo));
+  const c = rbjBandpass(fs, f0, Q);
+  const x = y.map((v) => (Number.isFinite(v) ? Number(v) : 0));
+  const fwd = biquadFilter(x, c);
+  fwd.reverse();
+  const back = biquadFilter(fwd, c);
+  back.reverse();
+  return back;
+}
+
+export function zeroCrossingHz(y, fs) {
+  if (!y?.length || y.length < 6 || !(fs > 0)) return null;
+  let xc = 0;
+  for (let i = 1; i < y.length; i += 1) {
+    const a = y[i - 1];
+    const b = y[i];
+    if (!Number.isFinite(a) || !Number.isFinite(b) || a === 0 || b === 0) continue;
+    if ((a < 0 && b > 0) || (a > 0 && b < 0)) xc += 1;
+  }
+  const dur = (y.length - 1) / fs;
+  if (dur < 0.15) return null;
+  return xc / 2 / dur;
+}
+
+/**
+ * Precompute camera 8–12 Hz residuals from overlay frames (no IMU).
+ * `bandSpeed` is the same channel the panel FFT uses (`speed_tremor` / speed).
+ */
+export function buildTremorCameraTrack(overlayData) {
+  const frames = overlayData?.frames;
+  if (!frames?.length || frames.length < 16) return null;
+  const fps = overlayData.fps || 60;
+  const n = frames.length;
+  const px = new Array(n);
+  const py = new Array(n);
+  const spd = new Array(n);
+  for (let i = 0; i < n; i += 1) {
+    const p = frames[i]?.palm;
+    px[i] = p && Number.isFinite(Number(p[0])) ? Number(p[0]) : 0;
+    py[i] = p && Number.isFinite(Number(p[1])) ? Number(p[1]) : 0;
+    let s = frames[i]?.speed_tremor;
+    if (s == null || Number.isNaN(Number(s))) s = frames[i]?.speed ?? 0;
+    spd[i] = Number(s) || 0;
+  }
+  return {
+    fps,
+    n,
+    dx: bandpassZeroPhase(px, fps),
+    dy: bandpassZeroPhase(py, fps),
+    speed: spd,
+    bandSpeed: bandpassZeroPhase(spd, fps),
+  };
+}
