@@ -31,6 +31,7 @@ import {
   saveTableUserMark,
   tableMarkHitGeom,
 } from "./overlayTableUserMark";
+import { isAppleTouchVideo, shouldRestartPlayback } from "./overlayVideoPlayback";
 import {
   drawClinicalSkeleton,
   drawChalkJoint,
@@ -49,6 +50,7 @@ const APP_BG_OVERLAY = "rgba(8, 8, 8, 0.18)";
 
 function sampleCupFromVideo(video, palm) {
   if (!video || video.readyState < 2) return null;
+  if (isAppleTouchVideo()) return null;
   const w = video.videoWidth;
   const h = video.videoHeight;
   if (!w || !h) return null;
@@ -1015,7 +1017,14 @@ export function ValidationOverlayPlayer({
     const elbow = pt("elbow");
     const shoulder = pt("shoulder");
 
-    if (!overlayData?.cup && !cupLiveRef.current && cupTriesRef.current < 8 && video.readyState >= 2) {
+    if (
+      !isAppleTouchVideo()
+      && !overlayData?.cup
+      && !tableUserRef.current
+      && !cupLiveRef.current
+      && cupTriesRef.current < 8
+      && video.readyState >= 2
+    ) {
       const restI = Number.isFinite(Number(win?.start_idx)) ? Number(win.start_idx) : 0;
       const restPalm = frames[restI]?.palm || overlayData?.start_palm;
       cupTriesRef.current += 1;
@@ -2050,6 +2059,14 @@ export function ValidationOverlayPlayer({
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
         mediaRecorderRef.current.stop();
       }
+      const dur = Number(video.duration);
+      if (Number.isFinite(dur) && dur > 0.08) {
+        try {
+          video.currentTime = Math.max(0, dur - 0.05);
+        } catch (_err) {
+          /* ignore */
+        }
+      }
       onEnded?.();
     };
 
@@ -2093,7 +2110,14 @@ export function ValidationOverlayPlayer({
   const togglePlay = () => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.paused) {
+    if (video.paused || video.ended) {
+      if (shouldRestartPlayback({
+        ended: video.ended,
+        currentTime: video.currentTime,
+        duration: video.duration,
+      })) {
+        video.currentTime = 0;
+      }
       video.play().catch(() => {});
     } else {
       video.pause();
