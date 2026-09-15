@@ -62,18 +62,24 @@ test("slot reserve uses live video aspect then overlay frame size", () => {
   expect(overlaySlotReserveStyle(16 / 9).maxHeight).toBe("80vh");
 });
 
-test("containing-block unlock restores inline overflow and filter", () => {
+test("containing-block unlock strips backdrop-filter but never overflow", () => {
+  const scroller = document.createElement("div");
+  scroller.style.overflow = "auto";
+  scroller.style.overflowY = "auto";
   const parent = document.createElement("div");
   parent.style.overflow = "hidden";
   parent.style.backdropFilter = "blur(12px)";
   const child = document.createElement("div");
   parent.appendChild(child);
-  document.body.appendChild(parent);
+  scroller.appendChild(parent);
+  document.body.appendChild(scroller);
   const saved = captureContainingBlockStyles(child);
-  expect(parent.style.overflow).toBe("visible");
+  expect(parent.style.overflow).toBe("hidden");
+  expect(scroller.style.overflow).toBe("auto");
+  expect(scroller.style.overflowY).toBe("auto");
   expect(parent.style.backdropFilter).toBe("none");
   restoreContainingBlockStyles(saved);
   expect(parent.style.overflow).toBe("hidden");
   expect(parent.style.backdropFilter).toBe("blur(12px)");
-  document.body.removeChild(parent);
+  document.body.removeChild(scroller);
 });
