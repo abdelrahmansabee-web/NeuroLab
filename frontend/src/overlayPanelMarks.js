@@ -3,6 +3,7 @@
  * Paint only — uses the same palm / peak_frames / pause threshold as the panel.
  */
 import { overlayMovementWindow, overlayPauseSpeedThreshold } from "./validationPanelMetrics";
+import { addCupToSpan, tableYFromCup } from "./overlayCupTable";
 
 const PATH_MOVE = "rgba(248,250,252,0.78)";
 const PATH_PAUSE = "rgba(248,250,252,0.28)";
@@ -136,7 +137,7 @@ export function armOnTableY(overlayData, frames, startIdx = null, idx = null) {
 }
 
 /** Horizontal span of the table under the arm (palm…elbow…trunk), not the chair. */
-export function tableSpanX(overlayData, frames, startIdx = null) {
+export function tableSpanX(overlayData, frames, startIdx = null, cup = null) {
   const i0 = restFrameIndex(overlayData, startIdx);
   const f = frames?.[i0] || {};
   const xs = [];
@@ -151,8 +152,8 @@ export function tableSpanX(overlayData, frames, startIdx = null) {
   add(f.trunk);
   const armSh = tableArmShoulderNorm(overlayData, frames, i0);
   add(armSh);
-  if (!xs.length) return null;
-  return { lo: Math.min(...xs) - 0.04, hi: Math.max(...xs) + 0.04 };
+  const span = xs.length ? { lo: Math.min(...xs) - 0.04, hi: Math.max(...xs) + 0.04 } : null;
+  return addCupToSpan(span, cup || overlayData?.cup);
 }
 
 /**
@@ -249,13 +250,14 @@ export function robustShoulderNorm(overlayData, frames, idx, startIdx = null) {
 }
 
 /** Table point on the supporting surface, nearest the arm-on-table shoulder. */
-export function tablePointUnderShoulder(overlayData, frames, startIdx = null, idx = null) {
+export function tablePointUnderShoulder(overlayData, frames, startIdx = null, idx = null, cup = null) {
   const i0 = restFrameIndex(overlayData, startIdx);
   const restSh = restShoulderNorm(overlayData, frames, i0);
   const armSh = tableArmShoulderNorm(overlayData, frames, i0);
   const restPalm = restPalmNorm(overlayData, frames, i0);
   const armY = armOnTableY(overlayData, frames, i0, idx);
-  const span = tableSpanX(overlayData, frames, i0);
+  const c = cup || overlayData?.cup || null;
+  const span = tableSpanX(overlayData, frames, i0, c);
   const frozen = overlayData?.table_under_shoulder;
 
   let x = armSh?.[0] ?? restSh?.[0] ?? restPalm?.[0] ?? null;
@@ -269,16 +271,19 @@ export function tablePointUnderShoulder(overlayData, frames, startIdx = null, id
     x = Math.min(span.hi, Math.max(span.lo, x));
   }
 
-  let y = armY;
-  const detected = (frozen && frozen.y != null && Number.isFinite(Number(frozen.y)))
-    ? Number(frozen.y)
-    : tableSurfaceYAtX(overlayData, x);
-  if (y != null && Number.isFinite(y)) {
-    if (detected != null && Number.isFinite(detected) && Math.abs(detected - y) <= 0.05) {
-      y = detected;
+  const cupY = tableYFromCup(c, armY);
+  let y = cupY != null ? cupY : armY;
+  if (cupY == null) {
+    const detected = (frozen && frozen.y != null && Number.isFinite(Number(frozen.y)))
+      ? Number(frozen.y)
+      : tableSurfaceYAtX(overlayData, x);
+    if (y != null && Number.isFinite(y)) {
+      if (detected != null && Number.isFinite(detected) && Math.abs(detected - y) <= 0.05) {
+        y = detected;
+      }
+    } else {
+      y = snapTableYToRestArm(detected, restPalm?.[1], restSh?.[1]);
     }
-  } else {
-    y = snapTableYToRestArm(detected, restPalm?.[1], restSh?.[1]);
   }
   if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) return null;
   return { x, y };
@@ -293,9 +298,10 @@ export function tableLineUnderShoulder(overlayData, {
   frames = null,
   startIdx = null,
   idx = null,
+  cup = null,
 } = {}) {
   if (!cw || !ch) return null;
-  const pt = tablePointUnderShoulder(overlayData, frames, startIdx, idx);
+  const pt = tablePointUnderShoulder(overlayData, frames, startIdx, idx, cup);
   if (!pt) return null;
   const robust = frames && idx != null
     ? robustShoulderNorm(overlayData, frames, idx, startIdx)
@@ -323,9 +329,10 @@ export function tableLineUnderShoulder(overlayData, {
 }
 
 export function drawTableSurfaceLine(ctx, overlayData, opts = {}) {
-  const g = tableLineUnderShoulder(overlayData, opts);
+  const cup = opts.cup || overlayData?.cup || null;
+  const g = tableLineUnderShoulder(overlayData, { ...opts, cup });
   if (!ctx || !g) return null;
-  const { noShadow = false } = opts;
+  const { noShadow = false, cw, ch } = opts;
   ctx.save();
   ctx.strokeStyle = "rgba(245,158,11,0.92)";
   ctx.fillStyle = "rgba(245,158,11,0.95)";
@@ -343,13 +350,26 @@ export function drawTableSurfaceLine(ctx, overlayData, opts = {}) {
   ctx.beginPath();
   ctx.arc(g.x, g.y, 4.4, 0, Math.PI * 2);
   ctx.fill();
+  if (
+    cup
+    && cup.x != null && cup.y_base != null
+    && Number.isFinite(Number(cup.x)) && Number.isFinite(Number(cup.y_base))
+    && cw > 0 && ch > 0
+  ) {
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(186,230,253,0.92)";
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(Number(cup.x) * cw, Number(cup.y_base) * ch, 5.2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
   return g;
 }
 
 /** Table line under the shoulder, else palm-rest / start-palm y (normalized). */
 export function resolveShoulderRestY(overlayData, frames, startIdx, xNorm = null) {
-  const pt = tablePointUnderShoulder(overlayData, frames, startIdx);
+  const pt = tablePointUnderShoulder(overlayData, frames, startIdx, null, overlayData?.cup);
   if (pt) return pt.y;
   const armY = armOnTableY(overlayData, frames, startIdx);
   if (armY != null) return armY;

@@ -23,6 +23,7 @@ import {
   pinchApertureWindowStats,
 } from "./overlayMetricEvidence";
 import { drawPanelKinematicMarks, drawTableSurfaceLine } from "./overlayPanelMarks";
+import { detectCupFromRgba } from "./overlayCupTable";
 import {
   drawClinicalSkeleton,
   drawChalkJoint,
@@ -38,6 +39,28 @@ const APP_BG_URL = "/bg.jpg";
 const APP_BG_FILTER = "blur(24px) brightness(0.55) saturate(0.80)";
 const APP_BG_SCALE = "scale(1.08)";
 const APP_BG_OVERLAY = "rgba(8, 8, 8, 0.18)";
+
+function sampleCupFromVideo(video, palm) {
+  if (!video || video.readyState < 2) return null;
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (!w || !h) return null;
+  try {
+    const cw = Math.min(w, 360);
+    const ch = Math.max(1, Math.round(h * (cw / w)));
+    if (!sampleCupFromVideo._c) sampleCupFromVideo._c = document.createElement("canvas");
+    const canvas = sampleCupFromVideo._c;
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(video, 0, 0, cw, ch);
+    const img = ctx.getImageData(0, 0, cw, ch);
+    return detectCupFromRgba(img.data, cw, ch, { palm });
+  } catch (_err) {
+    return null;
+  }
+}
 
 function AppShellBackground({ className = "" }) {
   return (
@@ -695,6 +718,8 @@ export function ValidationOverlayPlayer({
   const fingerStickyRef = useRef({});
   /** Last live finger canvas points (no EMA). Used only to reset on seeks. */
   const fingerSmoothRef = useRef({});
+  const cupLiveRef = useRef(null);
+  const cupTriesRef = useRef(0);
 
   const phaseColor = useMemo(() => {
     const p = (phaseLabel || "").toLowerCase();
@@ -971,14 +996,24 @@ export function ValidationOverlayPlayer({
     const elbow = pt("elbow");
     const shoulder = pt("shoulder");
 
+    if (!overlayData?.cup && !cupLiveRef.current && cupTriesRef.current < 8 && video.readyState >= 2) {
+      const restI = Number.isFinite(Number(win?.start_idx)) ? Number(win.start_idx) : 0;
+      const restPalm = frames[restI]?.palm || overlayData?.start_palm;
+      cupTriesRef.current += 1;
+      const found = sampleCupFromVideo(video, restPalm);
+      if (found) cupLiveRef.current = found;
+    }
+
     drawTableSurfaceLine(ctx, overlayData, {
       shoulder,
       frames,
       idx,
+      startIdx: win.start_idx,
       cw,
       ch,
       shoulderWidthPx: Number(overlayData?.shoulder_width_px) || 0,
       noShadow: Boolean(touchPerf),
+      cup: overlayData?.cup || cupLiveRef.current,
     });
 
     const boneColor = SKELETON_PALETTE.bone;
@@ -2141,6 +2176,8 @@ export function ValidationOverlayPlayer({
     autoRenderStartedRef.current = false;
     setDownloadUrl(null);
     setRenderProgress(0);
+    cupLiveRef.current = null;
+    cupTriesRef.current = 0;
   }, [videoUrl]);
 
   useEffect(() => {

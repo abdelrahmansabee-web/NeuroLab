@@ -161,6 +161,22 @@ test("drink occlusion does not drop the shoulder height mark", () => {
   expect(y).toBeLessThanOrEqual(0.32 + 0.015);
 });
 
+test("cup base is the table surface even when the frozen detector sits on the chair", () => {
+  const overlay = makeOverlay();
+  overlay.table_surface_y = 0.55;
+  overlay.table_under_shoulder = { x: 0.72, y: 0.55 };
+  overlay.start_palm = [0.20, 0.80];
+  overlay.frames[4].palm = [0.20, 0.80];
+  overlay.frames[4].wrist = [0.28, 0.78];
+  overlay.frames[4].elbow = [0.42, 0.62];
+  overlay.frames[4].rshoulder = [0.48, 0.38];
+  overlay.frames[4].lshoulder = [0.72, 0.40];
+  overlay.cup = { x: 0.14, x0: 0.10, x1: 0.18, y_top: 0.62, y_base: 0.88 };
+  const pt = tablePointUnderShoulder(overlay, overlay.frames, 4, 10);
+  expect(pt.y).toBeCloseTo(0.88, 8);
+  expect(pt.x).toBeLessThan(0.58);
+});
+
 test("table mark sits on the beige surface, not a chest-high line over the chair", () => {
   const overlay = makeOverlay();
   overlay.table_surface_y = 0.55;
