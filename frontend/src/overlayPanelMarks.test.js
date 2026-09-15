@@ -6,6 +6,8 @@ import {
   nvpPeakIndicesOnPath,
   resolveShoulderRestY,
   straightnessEndpoints,
+  tableLineUnderShoulder,
+  tableSurfaceYAtX,
   trunkHorizontalDispNorm,
 } from "./overlayPanelMarks";
 
@@ -72,7 +74,31 @@ test("trunk arrow length is horizontal Δx only (same as panel trunkDisp)", () =
   expect(t.dx).toBeCloseTo(overlay.frames[14].trunk[0] - overlay.frames[4].trunk[0], 8);
 });
 
-test("shoulder column rest prefers table_surface_y, then palm rest", () => {
+test("table line sits under the shoulder x in overlay coordinates", () => {
+  const overlay = makeOverlay();
+  const line = tableLineUnderShoulder(overlay, {
+    shoulder: [0.3 * 200, 0.25 * 100],
+    cw: 200,
+    ch: 100,
+    shoulderWidthPx: 40,
+  });
+  expect(line.y).toBeCloseTo(0.72 * 100, 8);
+  expect(line.x).toBeCloseTo(60, 8);
+  expect(line.x0).toBeLessThan(line.x);
+  expect(line.x1).toBeGreaterThan(line.x);
+});
+
+test("table_edge_y is sampled at the shoulder x, not a full-frame median", () => {
+  const overlay = {
+    table_edge_y: [0.50, 0.55, 0.60, 0.70, 0.80],
+    table_surface_y: 0.99,
+  };
+  expect(tableSurfaceYAtX(overlay, 0)).toBeCloseTo(0.50, 8);
+  expect(tableSurfaceYAtX(overlay, 1)).toBeCloseTo(0.80, 8);
+  expect(tableSurfaceYAtX(overlay, 0.5)).toBeCloseTo(0.60, 8);
+});
+
+test("without a table edge, rest y falls back to start palm", () => {
   const overlay = makeOverlay();
   expect(resolveShoulderRestY(overlay, overlay.frames, 4)).toBe(0.72);
   const noTable = { ...overlay, table_surface_y: null };
