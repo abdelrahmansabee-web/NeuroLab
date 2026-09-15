@@ -1,7 +1,9 @@
 import { pickKinField } from "./analysisPlan";
-import { computeOverlayMetrics } from "./ValidationOverlayPlayer";
+import { computeOverlayMetrics, isPanelTableKey } from "./validationPanelMetrics";
 import { getMovementProfile } from "./movementProfile";
 import { enrichKinematicCompletion } from "./taskCompletion";
+
+export { formatPanelAlignedKinValue, isPanelTableKey } from "./validationPanelMetrics";
 
 export const KIN_RESULTS_LS_KEY = "neuro_kin_results";
 
@@ -13,9 +15,28 @@ function pickFromMovementProfile(phaseResult, metricKey) {
   return v;
 }
 
-/** Same metric resolution as Kinematic Lab table — overlay frames first, then stored overlay metrics, then backend fields. */
+/** Same metric resolution as Kinematic Lab table — validation-video panel first. */
 export function resolveKinMetricValue(phaseResult, metricKey, overlayData = null) {
   if (!phaseResult && !overlayData) return null;
+
+  if (isPanelTableKey(metricKey)) {
+    if (overlayData?.frames?.length) {
+      try {
+        const computed = computeOverlayMetrics(overlayData);
+        if (computed) {
+          const fromOverlay = pickKinField(computed, metricKey);
+          if (fromOverlay !== null) return fromOverlay;
+          return null;
+        }
+      } catch (e) {
+        console.warn("computeOverlayMetrics failed:", e);
+      }
+    }
+    for (const src of [phaseResult?.overlay_metrics, phaseResult?.validation_summary]) {
+      const v = pickKinField(src, metricKey);
+      if (v !== null) return v;
+    }
+  }
 
   const completionKeys = [
     "task_complete",

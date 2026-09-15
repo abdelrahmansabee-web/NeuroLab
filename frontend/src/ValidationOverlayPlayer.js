@@ -3,10 +3,14 @@ import { createPortal } from "react-dom";
 import { Play, Pause, Maximize, Minimize2, ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import { downloadBlob } from "./downloadUtils";
 import {
-  computeLiveTremorPower,
   formatTremorPower,
   resolveTremorMetrics,
 } from "./tremorMetrics";
+import {
+  computeValidationPanelLive,
+  elbowAngVelAt,
+  pickOverlayMetric,
+} from "./validationPanelMetrics";
 import {
   buildPinchEvidenceLines,
   buildTremorEvidenceLines,
@@ -23,6 +27,8 @@ import {
   HAND_FINGER_ORDER,
   SKELETON_PALETTE,
 } from "./clinicalSkeleton";
+
+export { computeOverlayMetrics, computeValidationPanelLive } from "./validationPanelMetrics";
 
 /** Same background treatment as App.js shell (bg.jpg + blur/dim). */
 const APP_BG_URL = "/bg.jpg";
@@ -47,202 +53,6 @@ function AppShellBackground({ className = "" }) {
       <div className="absolute inset-0" style={{ background: APP_BG_OVERLAY }} />
     </div>
   );
-}
-
-export function computeOverlayMetrics(overlayData) {
-  if (!overlayData?.frames?.length) return null;
-  const frames = overlayData.frames;
-  const fps = overlayData.fps || 60;
-  const win = overlayData.movement_window || { start_idx: 0, end_idx: frames.length - 1 };
-  const startIdx = Math.max(0, Math.min(frames.length - 1, win.start_idx || 0));
-  const endIdx = Math.max(startIdx, Math.min(frames.length - 1, win.end_idx || frames.length - 1));
-  const peakFrames = overlayData.peak_frames || [];
-
-  const t0 = frames[startIdx]?.time != null ? frames[startIdx].time : startIdx / fps;
-  const t1 = frames[endIdx]?.time != null ? frames[endIdx].time : endIdx / fps;
-  const movementTime = Math.max(0, t1 - t0);
-
-  // Peak elbow angular velocity (deg/sec) within the movement window.
-  let peakElbowAngVel = 0;
-  let peakElbowIdx = startIdx;
-  for (let i = startIdx + 1; i <= endIdx; i++) {
-    const a1 = frames[i - 1]?.elbow_angle;
-    const a2 = frames[i]?.elbow_angle;
-    if (a1 == null || a2 == null) continue;
-    const dt = (frames[i]?.time != null && frames[i - 1]?.time != null)
-      ? Math.max(1e-6, frames[i].time - frames[i - 1].time)
-      : 1 / fps;
-    const angVel = Math.abs((a2 - a1) / dt);
-    if (angVel > peakElbowAngVel) {
-      peakElbowAngVel = angVel;
-      peakElbowIdx = i;
-    }
-  }
-  const tPeak = frames[peakElbowIdx]?.time != null ? frames[peakElbowIdx].time : peakElbowIdx / fps;
-  const timeToPeak = Math.max(0, tPeak - t0);
-
-  // Pause/stop detection based on hand speed — path pauses only.
-  // Terminal low-speed dwell (grasp fixation) is reported separately so a
-  // successful grasp does not inflate pause vs an incomplete reach.
-  const handSpeeds = frames.map((f) => f.speed || 0);
-  const winSpeeds = handSpeeds.slice(startIdx, endIdx + 1);
-  const handPeakV = winSpeeds.length ? Math.max(...winSpeeds) : 0;
-  const speedThreshold = handPeakV > 0 ? 0.05 * handPeakV : 1.0;
-  const minPauseFrames = Math.max(3, Math.round(0.08 * fps));
-  const below = winSpeeds.map((s) => (s || 0) < speedThreshold);
-  const runs = [];
-  for (let i = 0; i < below.length; ) {
-    if (!below[i]) { i += 1; continue; }
-    let j = i;
-    while (j + 1 < below.length && below[j + 1]) j += 1;
-    if (j - i + 1 >= minPauseFrames) runs.push([i, j]);
-    i = j + 1;
-  }
-  const terminalCut = Math.floor(below.length * 0.82);
-  const isTerminal = ([r0, r1]) => r1 >= below.length - 1 || r0 >= terminalCut;
-  let pathRuns = [];
-  let dwellRuns = [];
-  runs.forEach((run) => {
-    if (isTerminal(run)) dwellRuns.push(run);
-    else pathRuns.push(run);
-  });
-  if (runs.length && !pathRuns.length && dwellRuns.length) {
-    pathRuns = dwellRuns;
-    dwellRuns = [];
-  }
-  const sumFrames = (rs) => rs.reduce((a, [a0, a1]) => a + (a1 - a0 + 1), 0);
-  const pauseTime = sumFrames(pathRuns) / fps;
-  const stops = pathRuns.length;
-  const graspDwellSec = sumFrames(dwellRuns) / fps;
-  const pauseTimeTotal = pauseTime + graspDwellSec;
-
-  let pathLength = 0;
-  const startPalm = frames[startIdx]?.palm;
-  for (let i = startIdx + 1; i <= endIdx; i++) {
-    const prev = frames[i - 1]?.palm;
-    const curr = frames[i]?.palm;
-    if (prev && curr) pathLength += Math.hypot(curr[0] - prev[0], curr[1] - prev[1]);
-  }
-  const endPalm = frames[endIdx]?.palm;
-  let straightness = 0;
-  if (startPalm && endPalm && pathLength > 0) {
-    const displacement = Math.hypot(endPalm[0] - startPalm[0], endPalm[1] - startPalm[1]);
-    straightness = Math.min(1, displacement / pathLength);
-  }
-
-  let trunkRatio = 0;
-  const trunkStart = frames[startIdx]?.trunk;
-  const trunkEnd = frames[endIdx]?.trunk;
-  if (trunkStart && trunkEnd && startPalm && endPalm) {
-    const trunkDisp = Math.abs(trunkEnd[0] - trunkStart[0]);
-    const palmDisp = Math.hypot(endPalm[0] - startPalm[0], endPalm[1] - startPalm[1]);
-    if (palmDisp > 0) trunkRatio = Math.min(1, trunkDisp / palmDisp);
-  }
-
-  // Shoulder elevation = ratio of affected shoulder height above shoulder midpoint.
-  let shoulderElevation = 0;
-  for (let i = startIdx; i <= endIdx; i++) {
-    const v = frames[i]?.shoulder_elevation_norm;
-    if (v != null && !Number.isNaN(v)) {
-      shoulderElevation = Math.max(shoulderElevation, v);
-    }
-  }
-
-  // Shoulder elevation relative to detected table surface line.
-  let shoulderElevationTable = 0;
-  for (let i = startIdx; i <= endIdx; i++) {
-    const v = frames[i]?.shoulder_elevation_table_ratio;
-    if (v != null && !Number.isNaN(v)) {
-      shoulderElevationTable = Math.max(shoulderElevationTable, v);
-    }
-  }
-  if (!shoulderElevationTable && overlayData?.metrics?.shoulder_elevation_table_ratio != null) {
-    shoulderElevationTable = Number(overlayData.metrics.shoulder_elevation_table_ratio);
-  }
-
-  // Shoulder elevation relative to vertical projection on the palm/table level (fixed at rest).
-  let shoulderElevationPalm = 0;
-  for (let i = startIdx; i <= endIdx; i++) {
-    const v = frames[i]?.shoulder_elevation_palm_ratio;
-    if (v != null && !Number.isNaN(v)) {
-      shoulderElevationPalm = Math.max(shoulderElevationPalm, v);
-    }
-  }
-  if (!shoulderElevationPalm && overlayData?.metrics?.shoulder_elevation_palm_ratio != null) {
-    shoulderElevationPalm = Number(overlayData.metrics.shoulder_elevation_palm_ratio);
-  }
-
-  let elbowAngleMean = 0;
-  let elbowAngleCount = 0;
-  for (let i = startIdx; i <= endIdx; i++) {
-    const a = frames[i]?.elbow_angle;
-    if (a != null && !Number.isNaN(a)) {
-      elbowAngleMean += a;
-      elbowAngleCount++;
-    }
-  }
-  if (elbowAngleCount > 0) elbowAngleMean /= elbowAngleCount;
-
-  const out = {
-    nvp: peakFrames.length,
-    straightness,
-    pause_time_sec: pauseTime,
-    number_of_stops: stops,
-    pause_time_sec_total: pauseTimeTotal,
-    grasp_dwell_sec: graspDwellSec,
-    trunk_ratio: trunkRatio,
-    shoulder_elevation_norm: shoulderElevation,
-    shoulder_vert_norm: shoulderElevation,
-    shoulder_elevation_table_ratio: shoulderElevationTable,
-    shoulder_elevation_palm_ratio: shoulderElevationPalm,
-    shoulder_elevation_cm:
-      overlayData?.metrics?.shoulder_elevation_cm != null
-        ? Number(overlayData.metrics.shoulder_elevation_cm)
-        : null,
-    peak_velocity_cm_s:
-      overlayData?.metrics?.peak_velocity_cm_s != null
-        ? Number(overlayData.metrics.peak_velocity_cm_s)
-        : (overlayData?.peak_velocity_cm_s != null ? Number(overlayData.peak_velocity_cm_s) : null),
-    elbow_angle_mean_deg: elbowAngleMean,
-    movement_time_sec: movementTime,
-    peak_elbow_ang_vel_deg_s: peakElbowAngVel,
-    time_to_peak_velocity_sec: timeToPeak,
-  };
-
-  if (movementTime > 0) {
-    out.relative_time_to_peak_pct = (timeToPeak / movementTime) * 100;
-  }
-
-  const backend = overlayData?.metrics;
-  if (backend && typeof backend === "object") {
-    const passthrough = [
-      "validation_adl_phase_id",
-      "clinical_task",
-      "adl_shoulder_abduction_mean_deg",
-      "adl_shoulder_abduction_rom_deg",
-      "adl_finger_flex_ext_rom_sw",
-      "adl_finger_flex_ext_quality_index",
-      "adl_head_forward_flexion_compensation_index",
-      "adl_head_flexion_increase_deg",
-      "finger_flex_ext_rom_sw",
-      "finger_flex_ext_quality_index",
-      "head_forward_flexion_compensation_index",
-      "head_flexion_increase_deg",
-      "shoulder_abduction_mean_deg",
-      "shoulder_abduction_rom_deg",
-      "movement_quality_index",
-    ];
-    for (const k of passthrough) {
-      if (backend[k] != null && backend[k] !== "") out[k] = backend[k];
-    }
-  }
-
-  const tremor = resolveTremorMetrics(overlayData);
-  if (tremor) {
-    Object.assign(out, tremor);
-  }
-
-  return out;
 }
 
 /** Map video.currentTime to overlay frame index (handles duration drift vs served MP4). */
@@ -665,15 +475,6 @@ function syncLetterboxGutters(video, stageEl, gutters, contentWrap, absoluteVide
   };
 }
 
-function pickOverlayMetric(overlayData, keys) {
-  const m = overlayData?.metrics || {};
-  for (const k of keys) {
-    const v = m[k];
-    if (v != null && v !== "" && !Number.isNaN(Number(v))) return Number(v);
-  }
-  return null;
-}
-
 function isLeClinicalTask(clinicalTask, overlayData) {
   const m = overlayData?.metrics || {};
   const task = String(clinicalTask || m.clinical_task || overlayData?.clinical_task || "").toLowerCase();
@@ -766,26 +567,6 @@ const UE_VALIDATION_PANEL_ROWS = [
   { id: "kin_abd", label: "Shoulder abduction", kind: "live", key: "shoulderAbduction", suffix: "°", decimals: 0 },
   { id: "kin_finger", label: "Finger quality", kind: "live", key: "fingerQuality", decimals: 0 },
 ];
-
-function computeLiveFingerQuality(frames, startIdx, idx) {
-  if (!frames?.length || idx < startIdx) return null;
-  const vals = [];
-  for (let i = startIdx; i <= idx; i += 1) {
-    const v = frames[i]?.finger_open_sw;
-    if (typeof v === "number" && v > 0 && !Number.isNaN(v)) vals.push(v);
-  }
-  if (!vals.length) return null;
-  const peak = Math.max(...vals);
-  const rom = vals.length >= 2 ? Math.max(...vals) - Math.min(...vals) : 0;
-  let q = 25 * Math.min(1, peak * 4);
-  if (rom > 0) q += 45 * Math.min(1, rom * 6);
-  if (vals.length >= 3) {
-    const mu = vals.reduce((a, b) => a + b, 0) / vals.length;
-    const sd = Math.sqrt(vals.reduce((a, b) => a + (b - mu) ** 2, 0) / vals.length);
-    if (mu > 1e-6) q += 30 * (1 - Math.min(1, sd / mu));
-  }
-  return Math.min(100, Math.round(q));
-}
 
 function formatPanelRowValue(row, live, overlayData, formatValue) {
   if (row.kind === "live") {
@@ -928,16 +709,7 @@ export function ValidationOverlayPlayer({
   const velocityProfile = overlayData?.velocity_profile;
   const peakFrames = overlayData?.peak_frames || [];
 
-  const getElbowAngVel = useCallback((idx) => {
-    if (idx <= 0 || idx >= frames.length) return 0;
-    const a1 = frames[idx - 1]?.elbow_angle;
-    const a2 = frames[idx]?.elbow_angle;
-    if (a1 == null || a2 == null) return 0;
-    const dt = (frames[idx]?.time != null && frames[idx - 1]?.time != null)
-      ? Math.max(1e-6, frames[idx].time - frames[idx - 1].time)
-      : 1 / fps;
-    return Math.abs((a2 - a1) / dt);
-  }, [frames, fps]);
+  const getElbowAngVel = useCallback((idx) => elbowAngVelAt(frames, fps, idx), [frames, fps]);
 
   const peakElbowAngVel = useMemo(() => {
     let maxV = 0;
@@ -948,10 +720,6 @@ export function ValidationOverlayPlayer({
     return maxV;
   }, [frames, getElbowAngVel]);
   const peakV = peakElbowAngVel || 1;
-  const handPeakV = useMemo(() => {
-    const speeds = frames.map((f) => f.speed || 0);
-    return speeds.length ? Math.max(...speeds) : 1;
-  }, [frames]);
 
   const getFrameIndex = useCallback((time) => {
     const video = videoRef.current;
@@ -1234,93 +1002,43 @@ export function ValidationOverlayPlayer({
     });
     const handRoot = skel.palmPt || skel.forearmEnd || pt("wrist");
 
-    const speedThreshold = handPeakV > 0 ? 0.05 * handPeakV : 1.0;
-    const inMovement = idx >= win.start_idx && idx <= win.end_idx;
-    const t0 = win.start_idx < frames.length ? (frames[win.start_idx].time || win.start_idx / fps) : 0;
-
     const currentNVP = peakFrames.filter((pi) => pi <= idx).length;
 
-    let currentPeakElbowAngVel = 0;
-    let currentMovementTime = 0;
-    let currentPauseTime = 0;
-    let currentStops = 0;
-    let currentStraightness = 0;
-    let currentTrunkRatio = 0;
-
+    let panelLive = liveMetricsCacheRef.current?.panelLive;
     if (updatePanelMetrics) {
-      for (let i = 1; i <= idx && i < frames.length; i++) {
-        currentPeakElbowAngVel = Math.max(currentPeakElbowAngVel, getElbowAngVel(i));
-      }
-
-      if (inMovement && idx < frames.length) {
-        const t = frames[idx].time || idx / fps;
-        currentMovementTime = Math.max(0, t - t0);
-      }
-
-      for (let i = win.start_idx; i <= idx && i < frames.length; i++) {
-        const s = frames[i].speed || 0;
-        if (s < speedThreshold) {
-          currentPauseTime += 1 / fps;
-        }
-        if (i > win.start_idx) {
-          const prevS = frames[i - 1].speed || 0;
-          if (prevS >= speedThreshold && s < speedThreshold) {
-            currentStops++;
-          }
-        }
-      }
-
-      if (inMovement) {
-        let pathLength = 0;
-        const startP = frames[win.start_idx]?.palm;
-        for (let i = win.start_idx + 1; i <= idx && i < frames.length; i++) {
-          const prev = frames[i - 1]?.palm;
-          const curr = frames[i]?.palm;
-          if (prev && curr) {
-            pathLength += Math.hypot(curr[0] - prev[0], curr[1] - prev[1]);
-          }
-        }
-        const endP = frames[idx]?.palm;
-        if (startP && endP && pathLength > 0) {
-          const displacement = Math.hypot(endP[0] - startP[0], endP[1] - startP[1]);
-          currentStraightness = Math.min(1, displacement / pathLength);
-        }
-      }
-
-      if (inMovement) {
-        const trunkStart = frames[win.start_idx]?.trunk;
-        const trunkEnd = frames[idx]?.trunk;
-        const palmStart = frames[win.start_idx]?.palm;
-        const palmEnd = frames[idx]?.palm;
-        if (trunkStart && trunkEnd && palmStart && palmEnd) {
-          const trunkDisp = Math.abs(trunkEnd[0] - trunkStart[0]);
-          const palmDisp = Math.hypot(palmEnd[0] - palmStart[0], palmEnd[1] - palmStart[1]);
-          if (palmDisp > 0) {
-            currentTrunkRatio = Math.min(1, trunkDisp / palmDisp);
-          }
-        }
-      }
-
+      panelLive = computeValidationPanelLive(overlayData, idx);
       liveMetricsCacheRef.current = {
+        ...(liveMetricsCacheRef.current || {}),
         idx,
-        currentPeakElbowAngVel,
-        currentMovementTime,
-        currentPauseTime,
-        currentStops,
-        currentStraightness,
-        currentTrunkRatio,
+        panelLive,
+        currentPeakElbowAngVel: panelLive?.peakElbowAngVel ?? 0,
+        currentMovementTime: panelLive?.movementTime ?? 0,
+        currentPauseTime: panelLive?.pauseTime ?? 0,
+        currentStops: panelLive?.stops ?? 0,
+        currentStraightness: panelLive?.straightness ?? 0,
+        currentTrunkRatio: panelLive?.trunkRatio ?? 0,
+        fingerQuality: panelLive?.fingerQuality ?? 0,
       };
-    } else {
-      const cached = liveMetricsCacheRef.current;
-      if (cached) {
-        currentPeakElbowAngVel = cached.currentPeakElbowAngVel ?? 0;
-        currentMovementTime = cached.currentMovementTime ?? 0;
-        currentPauseTime = cached.currentPauseTime ?? 0;
-        currentStops = cached.currentStops ?? 0;
-        currentStraightness = cached.currentStraightness ?? 0;
-        currentTrunkRatio = cached.currentTrunkRatio ?? 0;
-      }
+      tremorLiveCacheRef.current = {
+        idx,
+        data: {
+          tremor_8_12hz_power: panelLive?.tremor_8_12hz_power,
+          tremor_index: panelLive?.tremor_index,
+          tremor_peak_freq_hz: panelLive?.tremor_peak_freq_hz,
+        },
+        adlData: {
+          tremor_8_12hz_power: panelLive?.adl_tremor_8_12hz_power,
+        },
+      };
+      lastPanelUpdateIdxRef.current = idx;
     }
+    const cachedLive = liveMetricsCacheRef.current || {};
+    const currentPeakElbowAngVel = panelLive?.peakElbowAngVel ?? cachedLive.currentPeakElbowAngVel ?? 0;
+    const currentMovementTime = panelLive?.movementTime ?? cachedLive.currentMovementTime ?? 0;
+    const currentPauseTime = panelLive?.pauseTime ?? cachedLive.currentPauseTime ?? 0;
+    const currentStops = panelLive?.stops ?? cachedLive.currentStops ?? 0;
+    const currentStraightness = panelLive?.straightness ?? cachedLive.currentStraightness ?? 0;
+    const currentTrunkRatio = panelLive?.trunkRatio ?? cachedLive.currentTrunkRatio ?? 0;
 
     let currentShoulderElevation = 0;
     if (f && typeof f.shoulder_elevation_norm === "number" && !Number.isNaN(f.shoulder_elevation_norm)) {
@@ -1341,41 +1059,10 @@ export function ValidationOverlayPlayer({
     if (f && typeof f.shoulder_abduction_deg === "number" && f.shoulder_abduction_deg > 0) {
       currentShoulderAbduction = f.shoulder_abduction_deg;
     }
-    const adlStart = overlayData?.adl_window?.start_idx ?? win.start_idx;
-    let currentFingerQuality = liveMetricsCacheRef.current?.fingerQuality ?? 0;
+    let currentFingerQuality = panelLive?.fingerQuality ?? cachedLive.fingerQuality ?? 0;
     let tremorLive = tremorLiveCacheRef.current?.data;
     let adlTremorLive = tremorLiveCacheRef.current?.adlData;
     const resolvedTremor = resolveTremorMetrics(overlayData);
-
-    if (updatePanelMetrics) {
-      const fingerQ = computeLiveFingerQuality(frames, adlStart, idx);
-      currentFingerQuality = fingerQ ?? 0;
-      tremorLive = computeLiveTremorPower(
-        frames,
-        fps,
-        win.start_idx,
-        Math.max(win.start_idx, idx),
-        overlayData?.shoulder_width_px || 0,
-      );
-      tremorLiveCacheRef.current = { idx, data: tremorLive };
-      if (overlayData?.adl_window) {
-        adlTremorLive = computeLiveTremorPower(
-          frames,
-          fps,
-          overlayData.adl_window.start_idx ?? win.start_idx,
-          Math.max(overlayData.adl_window.start_idx ?? win.start_idx, idx),
-          overlayData?.shoulder_width_px || 0,
-        );
-        tremorLiveCacheRef.current.adlIdx = idx;
-        tremorLiveCacheRef.current.adlData = adlTremorLive;
-      }
-      liveMetricsCacheRef.current = {
-        ...(liveMetricsCacheRef.current || {}),
-        fingerQuality: currentFingerQuality,
-        idx,
-      };
-      lastPanelUpdateIdxRef.current = idx;
-    }
 
     const showExtendedKin = false; // UE abduction/finger overlays disabled
 
@@ -1875,23 +1562,22 @@ export function ValidationOverlayPlayer({
         shoulderElevationPalm: currentShoulderElevationPalm,
         shoulderAbduction: currentShoulderAbduction,
         fingerQuality: currentFingerQuality,
-        tremor_8_12hz_power:
-          idx >= win.end_idx
-            ? resolvedTremor?.tremor_8_12hz_power
-            : tremorLive?.tremor_8_12hz_power ?? resolvedTremor?.tremor_8_12hz_power,
-        tremor_index:
-          idx >= win.end_idx
-            ? resolvedTremor?.tremor_index
-            : tremorLive?.tremor_index ?? resolvedTremor?.tremor_index,
-        index_tremor_8_12hz_power: resolvedTremor?.index_tremor_8_12hz_power,
-        tremor_peak_freq_hz:
-          idx >= win.end_idx
-            ? resolvedTremor?.tremor_peak_freq_hz
-            : tremorLive?.tremor_peak_freq_hz ?? resolvedTremor?.tremor_peak_freq_hz,
-        movement_quality_index: overlayData?.metrics?.movement_quality_index
+        tremor_8_12hz_power: panelLive?.tremor_8_12hz_power
+          ?? tremorLive?.tremor_8_12hz_power
+          ?? resolvedTremor?.tremor_8_12hz_power,
+        tremor_index: panelLive?.tremor_index
+          ?? tremorLive?.tremor_index
+          ?? resolvedTremor?.tremor_index,
+        index_tremor_8_12hz_power: panelLive?.index_tremor_8_12hz_power
+          ?? resolvedTremor?.index_tremor_8_12hz_power,
+        tremor_peak_freq_hz: panelLive?.tremor_peak_freq_hz
+          ?? tremorLive?.tremor_peak_freq_hz
+          ?? resolvedTremor?.tremor_peak_freq_hz,
+        movement_quality_index: panelLive?.movement_quality_index
+          ?? overlayData?.metrics?.movement_quality_index
           ?? pickOverlayMetric(overlayData, ["movement_quality_index"]),
-        adl_tremor_8_12hz_power:
-          adlTremorLive?.tremor_8_12hz_power
+        adl_tremor_8_12hz_power: panelLive?.adl_tremor_8_12hz_power
+          ?? adlTremorLive?.tremor_8_12hz_power
           ?? resolvedTremor?.adl_tremor_8_12hz_power
           ?? tremorLive?.tremor_8_12hz_power
           ?? resolvedTremor?.tremor_8_12hz_power,
@@ -2040,7 +1726,7 @@ export function ValidationOverlayPlayer({
     ctx.fillText(`Speed ${Math.round(speed)} °/s`, gx, gy - 4);
     }
 
-  }, [frames, fps, win, peakV, handPeakV, startPalm, endPalm, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, isExpanded, overlayStyle]);
+  }, [frames, fps, win, peakV, startPalm, endPalm, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, isExpanded, overlayStyle]);
 
   const drawRecordingFrame = useCallback(() => {
     const video = videoRef.current;
