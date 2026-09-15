@@ -22,6 +22,7 @@ import {
   pinchApertureFromFrame,
   pinchApertureWindowStats,
 } from "./overlayMetricEvidence";
+import { drawPanelKinematicMarks } from "./overlayPanelMarks";
 import {
   drawClinicalSkeleton,
   drawChalkJoint,
@@ -706,8 +707,6 @@ export function ValidationOverlayPlayer({
   const fps = overlayData?.fps || 60;
   const metrics = overlayData?.metrics || {};
   const win = overlayData?.movement_window || { start_idx: 0, end_idx: frames.length - 1 };
-  const startPalm = overlayData?.start_palm;
-  const endPalm = overlayData?.end_palm;
   const velocityProfile = overlayData?.velocity_profile;
   const peakFrames = overlayData?.peak_frames || [];
   const tremorCameraTrack = useMemo(() => buildTremorCameraTrack(overlayData), [overlayData]);
@@ -1074,28 +1073,24 @@ export function ValidationOverlayPlayer({
     const labelPad = 5 * dpr;
     const labelH = Math.round(12 * dpr);
 
-    // Table surface reference line (detected from video frames, independent of color).
-    if (overlayData?.table_surface_y != null && overlayData.table_surface_y >= 0 && overlayData.table_surface_y <= 1 && !touchPerf) {
+    // Table surface (palm rest). Subtle — the shoulder column uses this same y.
+    if (overlayData?.table_surface_y != null && overlayData.table_surface_y >= 0 && overlayData.table_surface_y <= 1) {
       const ty = overlayData.table_surface_y * ch;
       ctx.save();
-      ctx.strokeStyle = "rgba(245,158,11,0.75)";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([8, 6]);
-      ctx.shadowColor = "rgba(245,158,11,0.45)";
-      ctx.shadowBlur = 8;
+      ctx.strokeStyle = "rgba(245,158,11,0.55)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([7, 6]);
+      if (!touchPerf) {
+        ctx.shadowColor = "rgba(245,158,11,0.3)";
+        ctx.shadowBlur = 6;
+      }
       ctx.beginPath();
       ctx.moveTo(0, ty);
       ctx.lineTo(cw, ty);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
-      ctx.fillStyle = "rgba(245,158,11,0.95)";
-      ctx.font = `600 ${labelSize} sans-serif`;
-      const debugText = `Table surface ${overlayData.table_surface_y.toFixed(4)}`;
-      ctx.fillText(debugText, 8, Math.max(ty - 6, 14));
     }
-
-    // Shoulder elevation reference is computed server-side; omit vertical guide in player.
     function drawSimpleLabel(text, anchor, offsetX, offsetY, opts = {}) {
       if (!anchor) return;
       const align = opts.align || "left";
@@ -1137,30 +1132,17 @@ export function ValidationOverlayPlayer({
 
     const cx = cw / 2;
     if (!touchPerf) {
-      if (shoulder) {
-        const shText =
-          currentShoulderElevationTable > 0
-            ? `Sh ${currentShoulderElevationTable.toFixed(2)}`
-            : currentShoulderElevation > 0
-            ? `Sh ${currentShoulderElevation.toFixed(2)}`
-            : "Sh";
-        drawSimpleLabel(shText, shoulder, shoulder[0] > cx ? -110 : 14, -28, { color: color.text, border: color.glow });
-        if (showExtendedKin && currentShoulderAbduction > 0) {
-          drawSimpleLabel(`Abd ${currentShoulderAbduction.toFixed(0)}°`, shoulder, shoulder[0] > cx ? -118 : 14, 6, {
-            color: "#93c5fd",
-            border: "rgba(59,130,246,0.55)",
-          });
-        }
+      if (shoulder && showExtendedKin && currentShoulderAbduction > 0) {
+        drawSimpleLabel(`Abd ${currentShoulderAbduction.toFixed(0)}°`, shoulder, shoulder[0] > cx ? -118 : 14, 6, {
+          color: "#93c5fd",
+          border: "rgba(59,130,246,0.55)",
+        });
       }
       if (elbow) {
         drawSimpleLabel(`El ${currentElbowAngle.toFixed(0)}°`, elbow, elbow[0] > cx ? -80 : 14, -22, { color: color.text, border: color.glow });
       }
       if (palm) {
         drawSimpleLabel(`Ha ${Math.round(speed)} °/s`, palm, palm[0] > cx ? -100 : 18, -24, { color: "#fde047", border: "rgba(250,204,21,0.6)" });
-        drawSimpleLabel(`NVP ${currentNVP}`, palm, 0, 28, { color: color.text, border: color.glow, align: "center" });
-      }
-      if (trunk) {
-        drawSimpleLabel(`Tr ${(currentTrunkRatio * 100).toFixed(0)}%`, trunk, trunk[0] > cx ? -80 : -80, -52, { color: "#fde047", border: "rgba(250,204,21,0.6)" });
       }
     }
 
@@ -1324,6 +1306,21 @@ export function ValidationOverlayPlayer({
       }
     }
 
+    if (!isLeClinicalTask(clinicalTask, overlayData)) {
+      drawPanelKinematicMarks(ctx, {
+        overlayData,
+        frames,
+        idx,
+        cw,
+        ch,
+        palm,
+        trunk,
+        shoulder,
+        peakFrames,
+        noShadow: Boolean(touchPerf),
+      });
+    }
+
     // --- Tremor: backup pulsing halo on the hand + 8–12 Hz camera sparkline ---
     const tremorAnchor = palm || pt("wrist") || pt("hl_wrist");
     const swPxTremor = Number(overlayData?.shoulder_width_px) || 0;
@@ -1483,79 +1480,6 @@ export function ValidationOverlayPlayer({
           },
         );
       }
-    }
-
-    if (!touchPerf) {
-    const startPt = toCanvas(startPalm);
-    const endPt = toCanvas(endPalm);
-
-    if (idx >= win.start_idx && idx <= win.end_idx) {
-      ctx.save();
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.shadowColor = "rgba(16,185,129,0.6)";
-      ctx.shadowBlur = 16;
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = "rgba(16,185,129,0.95)";
-      ctx.beginPath();
-      let first = true;
-      for (let i = win.start_idx; i <= idx; i++) {
-        const tf = frames[i]?.palm;
-        if (!tf) { continue; }
-        const tp = toCanvas(tf);
-        if (!tp) { continue; }
-        const tx = tp[0];
-        const ty = tp[1];
-        if (first) {
-          ctx.moveTo(tx, ty);
-          first = false;
-        } else {
-          ctx.lineTo(tx, ty);
-        }
-      }
-      ctx.stroke();
-      ctx.restore();
-
-      if (palm) {
-        dot([palm[0], palm[1]], { fill: "#fff", stroke: "#10b981", r: 3.5 });
-      }
-    }
-    if (startPt) {
-      dot(startPt, { fill: "#facc15", stroke: "#fff", r: 7 });
-      drawSimpleLabel("Start", startPt, startPt[0] > cx ? -52 : 20, 26, { color: "#fde047", border: "rgba(250,204,21,0.6)" });
-    }
-    if (endPt) {
-      dot(endPt, { fill: "#10b981", stroke: "#fff", r: 7 });
-      drawSimpleLabel("End", endPt, endPt[0] > cx ? -46 : 20, 26, { color: "#6ee7b7", border: "rgba(16,185,129,0.6)" });
-    }
-
-    const traceFrames = Math.max(12, Math.round(fps * 0.6));
-    const traceStart = Math.max(0, idx - traceFrames);
-    ctx.save();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.shadowColor = "rgba(250,204,21,0.40)";
-    ctx.shadowBlur = 10;
-    ctx.lineWidth = 5;
-    let prev = null;
-    for (let i = traceStart; i <= idx; i += 1) {
-      const tf = frames[i]?.palm;
-      if (!tf) { prev = null; continue; }
-      const tp = toCanvas(tf);
-      if (!tp) { prev = null; continue; }
-      const tx = tp[0];
-      const ty = tp[1];
-      const alpha = 0.25 + 0.7 * ((i - traceStart) / Math.max(1, idx - traceStart));
-      ctx.strokeStyle = `rgba(250,204,21,${Math.min(0.95, alpha).toFixed(2)})`;
-      if (prev) {
-        ctx.beginPath();
-        ctx.moveTo(prev[0], prev[1]);
-        ctx.lineTo(tx, ty);
-        ctx.stroke();
-      }
-      prev = [tx, ty];
-    }
-    ctx.restore();
     }
 
     if (idx >= win.start_idx && idx <= win.end_idx && !touchPerf) {
@@ -1745,7 +1669,7 @@ export function ValidationOverlayPlayer({
     ctx.fillText(`Speed ${Math.round(speed)} °/s`, gx, gy - 4);
     }
 
-  }, [frames, fps, win, peakV, startPalm, endPalm, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, tremorCameraTrack, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, isExpanded, overlayStyle]);
+  }, [frames, fps, win, peakV, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, tremorCameraTrack, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, isExpanded, overlayStyle]);
 
   const drawRecordingFrame = useCallback(() => {
     const video = videoRef.current;

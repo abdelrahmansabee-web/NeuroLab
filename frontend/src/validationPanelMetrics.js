@@ -56,6 +56,15 @@ export function overlayMovementWindow(overlayData) {
   return { startIdx, endIdx };
 }
 
+/** 5% of whole-clip peak hand speed — same pause gate as the live panel. */
+export function overlayPauseSpeedThreshold(frames) {
+  let peak = 0;
+  if (frames?.length) {
+    for (let i = 0; i < frames.length; i += 1) peak = Math.max(peak, frames[i]?.speed || 0);
+  }
+  return peak > 0 ? 0.05 * peak : 1.0;
+}
+
 export function elbowAngVelAt(frames, fps, idx) {
   if (idx <= 0 || idx >= frames.length) return 0;
   const a1 = frames[idx - 1]?.elbow_angle;
@@ -120,9 +129,7 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
   const peakFrames = overlayData.peak_frames || [];
   const f = frames[idx] || {};
 
-  const speeds = frames.map((fr) => fr.speed || 0);
-  const handPeakV = speeds.length ? Math.max(...speeds) : 1;
-  const speedThreshold = handPeakV > 0 ? 0.05 * handPeakV : 1.0;
+  const speedThreshold = overlayPauseSpeedThreshold(frames);
   const inMovement = idx >= startIdx && idx <= endIdx;
   const t0 = startIdx < frames.length ? (frames[startIdx].time || startIdx / fps) : 0;
 
