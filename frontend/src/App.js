@@ -57,6 +57,8 @@ import {
   resolveKinMetricValue,
   loadLiveKinResults,
   KIN_RESULTS_LS_KEY,
+  formatPanelAlignedKinValue,
+  isPanelTableKey,
 } from "./kinMetrics";
 import { inferWmftFromKinematics, applyWmftInference } from "./wmftInference";
 import { MOVEMENT_PROFILE_FIELDS, MOVEMENT_PROFILE_GROUP_LABELS, MOVEMENT_PROFILE_GROUP_ORDER, resolveProfileMetric, formatProfileValue, getMovementProfile } from "./movementProfile";
@@ -392,18 +394,19 @@ function stripKinResultsForSync(kin) {
   );
 }
 const stripKinResultsForStorage = stripKinResultsForSync;
-/** Prefer server overlay metrics; compute client-side only when needed. */
+/** Prefer the validation-video panel snapshot whenever overlay frames exist. */
 function resolveOverlayMetrics(overlay) {
   if (!overlay) return null;
   const server = overlay.metrics;
-  if (server && server.nvp != null && server.straightness != null) return server;
-  if (!overlay.frames?.length) return server || null;
-  try {
-    return computeOverlayMetrics(overlay) || server || null;
-  } catch (e) {
-    console.warn("computeOverlayMetrics failed:", e);
-    return server || null;
+  if (overlay.frames?.length) {
+    try {
+      const computed = computeOverlayMetrics(overlay);
+      if (computed) return { ...(server || {}), ...computed };
+    } catch (e) {
+      console.warn("computeOverlayMetrics failed:", e);
+    }
   }
+  return server || null;
 }
 function patientsForServerSync(list) {
   return list.map((p) => {
@@ -4854,35 +4857,42 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   const getMetricValue = (phase, key) => {
     const result = kinematicsResults[phase];
     if (!result) return KIN_EMPTY;
+    const overlay = overlayData?.[phase];
+    const om = overlay?.frames?.length
+      ? (() => { try { return computeOverlayMetrics(overlay); } catch { return result.overlay_metrics || null; } })()
+      : (result.overlay_metrics || result.validation_summary || null);
     if (key === "pause_stops_panel") {
-      const pt = resolveKinMetricValue(result, "pause_time_sec", overlayData?.[phase]);
-      const ns = resolveKinMetricValue(result, "number_of_stops", overlayData?.[phase]);
-      if (pt == null && ns == null) return KIN_EMPTY;
-      const pStr = pt != null ? formatKinValue("pause_time_sec", pt) : KIN_EMPTY;
-      const nStr = ns != null ? formatKinValue("number_of_stops", ns) : KIN_EMPTY;
-      return `${pStr} / ${nStr}`;
+      return formatPanelAlignedKinValue("pause_stops_panel", null, om);
     }
     const metricKey = key === "peak_velocity_panel" ? "peak_velocity_cm_s" : key;
-    const val = resolveKinMetricValue(result, metricKey, overlayData?.[phase]);
+    const val = resolveKinMetricValue(result, metricKey, overlay);
     if (val === null) return KIN_EMPTY;
     if (key === "side_analyzed" || key === "side") return val;
     return val;
   };
 
   const displayMetricValue = (phase, key) => {
+    const overlay = overlayData?.[phase];
+    const om = overlay?.frames?.length
+      ? (() => { try { return computeOverlayMetrics(overlay); } catch { return kinematicsResults[phase]?.overlay_metrics || null; } })()
+      : (kinematicsResults[phase]?.overlay_metrics || kinematicsResults[phase]?.validation_summary || null);
     if (key === "pause_stops_panel") {
-      return getMetricValue(phase, key);
+      return formatPanelAlignedKinValue("pause_stops_panel", null, om);
     }
     const val = getMetricValue(phase, key);
-    if (val === KIN_EMPTY || typeof val === "string") return val;
     const formatKey = key === "peak_velocity_panel" ? "peak_velocity_cm_s" : key;
+    if (isPanelTableKey(formatKey) || formatKey === "pause_stops_panel") {
+      const raw = val === KIN_EMPTY ? null : val;
+      return formatPanelAlignedKinValue(formatKey, raw, om);
+    }
+    if (val === KIN_EMPTY || typeof val === "string") return val;
     return formatKinValue(formatKey, val);
   };
 
   const KIN_TIPS = {
     task_complete: "Did the patient finish the expected phases (reach, lift/transport, return)? Higher = completed.",
     task_completion_ratio: "Share of expected task phases detected. Compare this before full-task smoothness.",
-    nvp_reach: "Velocity peaks during reach & grasp only.",
+    nvp_reach: "Same as the NVP chip on the validation-video panel (peaks counted up to movement-window end).",
     nvp_drink: "Velocity peaks while lifting the cup from the table to the highest point achieved.",
     nvp_transport: "Velocity peaks during the transport / drink-lift phase (same as NVP drink for drink task).",
     nvp_return: "Velocity peaks while returning the cup/hand to the table.",
@@ -4898,10 +4908,17 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     grasp_dwell_sec: "Terminal low-speed time at the end of reach (cup grasp fixation). Functional — not counted as path pause.",
     functional_hold_sec: "Grasp dwell + mouth/face hold during transport. Functional time, not path pause.",
     pause_time_sec_total: "All low-speed time including grasp/mouth dwell (exploratory).",
-    nvp: "Primary NVP = reach window (extra sips excluded). Same as NVP (reach) after re-analysis.",
-    straightness: "Primary straightness = reach window.",
-    pause_time_sec: "Primary path pause (grasp/mouth dwell and sip holds excluded).",
-    number_of_stops: "Primary path stops (dwell/sips excluded).",
+    nvp: "NVP on the validation-video panel (peaks up to movement end). Same number as the NVP chip on the overlay.",
+    nvp_reach: "Same as the NVP chip on the validation-video panel (peaks up to movement-window end).",
+    straightness: "Path straightness from the validation-video panel (same formula and 2 decimals).",
+    pause_time_sec: "Pause time from the validation-video panel: every frame below 5% of peak hand speed (no min-run / dwell split).",
+    number_of_stops: "Stops from the validation-video panel: speed threshold crossings (same as Pause / stops).",
+    trunk_ratio: "Trunk / palm displacement ratio from the validation-video panel (0–1, not percent).",
+    movement_time_sec: "Movement time from the validation-video panel (onset to window end).",
+    peak_velocity_cm_s: "Peak velocity from the validation-video panel (cm/s when calibrated, else elbow °/s).",
+    peak_elbow_ang_vel_deg_s: "Peak elbow angular velocity from the validation-video panel (max from clip start through movement end).",
+    shoulder_elevation_cm: "Shoulder elevation from the validation-video panel (cm when calibrated, else the panel ratio).",
+    tremor_8_12hz_power: "Tremor 8–12 Hz from the validation-video panel (same as Tremor 8–12 Hz on the overlay).",
     nvp_full_task: "NVP on the whole recording including all sip approaches — exploratory only; do not treat higher values from extra sips as worse movement.",
     trunk_ratio: "Trunk displacement / palm displacement. Lower = less trunk compensation.",
     shoulder_elevation_cm: "How much the affected shoulder rose (rest → peak), in cm using the 85 cm table scale. Lower = less shoulder hike.",
@@ -4925,7 +4942,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     finger_flex_ext_quality_index: "Finger open/close quality index from movement profile (0–100).",
     head_forward_flexion_compensation_index: "Combined head forward displacement and flexion compensation (0–1; lower = better).",
     adl_tremor_8_12hz_power: "Tremor 8–12 Hz during ADL phase (relative power).",
-    pause_stops_panel: "Path pause time (s) and stops — grasp/mouth dwell excluded (same definition as primary pause).",
+    pause_stops_panel: "Same Pause / stops row as the validation-video panel.",
   };
 
   const CARD_PREVIEW_KEYS = ["task_complete", "nvp_reach", "nvp_drink", "nvp_total", "drink_lift_height_cm"];
@@ -6394,8 +6411,12 @@ function buildSummaryRows(fd) {
   kinDisplay.forEach((item) => {
     const preRaw = resolveKinMetricValue(krLive.pre, item.k);
     const postRaw = resolveKinMetricValue(krLive.post, item.k);
-    const pre = preRaw != null ? formatKinValue(item.k, preRaw) : NA;
-    const post = postRaw != null ? formatKinValue(item.k, postRaw) : NA;
+    const pre = isPanelTableKey(item.k)
+      ? formatPanelAlignedKinValue(item.k, preRaw, krLive.pre?.overlay_metrics)
+      : (preRaw != null ? formatKinValue(item.k, preRaw) : NA);
+    const post = isPanelTableKey(item.k)
+      ? formatPanelAlignedKinValue(item.k, postRaw, krLive.post?.overlay_metrics)
+      : (postRaw != null ? formatKinValue(item.k, postRaw) : NA);
     const pNum = parseFloat(pre), qNum = parseFloat(post);
     const improving = (!isMissing(pre) && !isMissing(post))
       ? (pNum === qNum ? null : (item.dir === "lower" ? pNum > qNum : qNum > pNum))
@@ -6441,7 +6462,11 @@ const ReportSection = ({ fd, onChange, showToast }) => {
       const row = [v.label, v.unit];
       phases.forEach((p) => {
         const raw = resolveKinMetricValue(kr[p], v.key);
-        row.push(formatKinValue(v.key, raw));
+        row.push(
+          isPanelTableKey(v.key)
+            ? formatPanelAlignedKinValue(v.key, raw, kr[p]?.overlay_metrics)
+            : formatKinValue(v.key, raw),
+        );
       });
       return row;
     });
@@ -6935,7 +6960,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
   }
 </style></head><body><div class="wrap">
   <div class="header" style="background:${d.group === "1" ? "rgba(167,243,208,0.3)" : "rgba(251,207,232,0.4)"}">
-    <div style="display:flex;align-items:center;gap:14px"><img src="/raed-logo.png?v=32.53" alt="RA.ED AI" style="height:56px;width:auto"/><div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div></div>
+    <div style="display:flex;align-items:center;gap:14px"><img src="/raed-logo.png?v=32.54" alt="RA.ED AI" style="height:56px;width:auto"/><div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div></div>
     <div class="meta">${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}<br>${esc(d.name || "Participant")}</div>
   </div>
   <div class="patient">
@@ -9933,7 +9958,7 @@ export default function App() {
                       </button>
                     )}
                     <img
-                      src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.53`}
+                      src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.54`}
                       alt="RA.ED AI"
                       className="w-[8.75rem] h-auto object-contain"
                       style={{ background: "transparent" }}
