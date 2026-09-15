@@ -71,6 +71,16 @@ input[type="range"]::-webkit-slider-runnable-track {
   box-shadow: none !important;
 }
 
+/* Card placeholder: the real player is portaled to body so expand never moves <video>. */
+.validation-player-slot {
+  width: 100%;
+  min-height: 200px;
+  max-height: 80vh;
+  pointer-events: none;
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.28);
+}
+
 .validation-player-shell-bg {
   position: absolute !important;
   inset: 0 !important;
