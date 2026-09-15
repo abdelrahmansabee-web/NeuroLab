@@ -120,25 +120,27 @@ export function captureContainingBlockStyles(fromEl) {
   while (node && node !== document.documentElement) {
     const cs = window.getComputedStyle(node);
     if (computedNeedsUnlock(cs)) {
+      const target = node;
       const inline = {};
-      CONTAINING_BLOCK_STYLE_KEYS.forEach((key) => {
-        inline[key] = node.style[key];
-      });
-      saved.push({ node, inline });
-      node.style.overflow = "visible";
-      node.style.overflowX = "visible";
-      node.style.overflowY = "visible";
-      node.style.filter = "none";
-      node.style.webkitFilter = "none";
-      node.style.backdropFilter = "none";
-      node.style.webkitBackdropFilter = "none";
-      node.style.transform = "none";
-      node.style.willChange = "auto";
-      node.style.contain = "none";
-      node.style.perspective = "none";
-      node.style.clipPath = "none";
-      node.style.webkitClipPath = "none";
-      node.style.isolation = "auto";
+      for (let i = 0; i < CONTAINING_BLOCK_STYLE_KEYS.length; i += 1) {
+        const key = CONTAINING_BLOCK_STYLE_KEYS[i];
+        inline[key] = target.style[key];
+      }
+      saved.push({ node: target, inline });
+      target.style.overflow = "visible";
+      target.style.overflowX = "visible";
+      target.style.overflowY = "visible";
+      target.style.filter = "none";
+      target.style.webkitFilter = "none";
+      target.style.backdropFilter = "none";
+      target.style.webkitBackdropFilter = "none";
+      target.style.transform = "none";
+      target.style.willChange = "auto";
+      target.style.contain = "none";
+      target.style.perspective = "none";
+      target.style.clipPath = "none";
+      target.style.webkitClipPath = "none";
+      target.style.isolation = "auto";
     }
     node = node.parentElement;
   }
