@@ -62,24 +62,34 @@ test("slot reserve uses live video aspect then overlay frame size", () => {
   expect(overlaySlotReserveStyle(16 / 9).maxHeight).toBe("80vh");
 });
 
-test("containing-block unlock strips backdrop-filter but never overflow", () => {
+test("containing-block unlock beats stylesheet !important without touching overflow", () => {
+  const styleEl = document.createElement("style");
+  styleEl.textContent = ".glass-float { backdrop-filter: blur(12px) saturate(2.25) !important; overflow: auto; }";
+  document.head.appendChild(styleEl);
   const scroller = document.createElement("div");
   scroller.style.overflow = "auto";
   scroller.style.overflowY = "auto";
   const parent = document.createElement("div");
+  parent.className = "glass-float";
   parent.style.overflow = "hidden";
-  parent.style.backdropFilter = "blur(12px)";
   const child = document.createElement("div");
   parent.appendChild(child);
   scroller.appendChild(parent);
   document.body.appendChild(scroller);
+
   const saved = captureContainingBlockStyles(child);
   expect(parent.style.overflow).toBe("hidden");
   expect(scroller.style.overflow).toBe("auto");
   expect(scroller.style.overflowY).toBe("auto");
-  expect(parent.style.backdropFilter).toBe("none");
+  expect(parent.style.getPropertyPriority("transform")).toBe("important");
+  expect(parent.style.getPropertyValue("transform")).toBe("none");
+  expect(parent.style.getPropertyValue("filter")).toBe("none");
+  expect(parent.classList.contains("nl-overlay-escape")).toBe(true);
+
   restoreContainingBlockStyles(saved);
   expect(parent.style.overflow).toBe("hidden");
-  expect(parent.style.backdropFilter).toBe("blur(12px)");
+  expect(parent.classList.contains("nl-overlay-escape")).toBe(false);
+  expect(parent.style.getPropertyValue("backdrop-filter")).toBe("");
   document.body.removeChild(scroller);
+  document.head.removeChild(styleEl);
 });

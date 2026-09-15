@@ -2,19 +2,20 @@
 
 export const OVERLAY_PORTAL_Z_COMPACT = "auto";
 export const OVERLAY_PORTAL_Z_EXPANDED = 99999;
+export const OVERLAY_ESCAPE_CLASS = "nl-overlay-escape";
 
-/** Properties that create a containing block for position:fixed. Never overflow. */
-const CONTAINING_BLOCK_STYLE_KEYS = [
+/** CSS names. Inline !important is required to beat App.js glass `backdrop-filter: … !important`. */
+const CONTAINING_BLOCK_PROPS = [
   "filter",
-  "webkitFilter",
-  "backdropFilter",
-  "webkitBackdropFilter",
+  "-webkit-filter",
+  "backdrop-filter",
+  "-webkit-backdrop-filter",
   "transform",
-  "willChange",
+  "will-change",
   "contain",
   "perspective",
-  "clipPath",
-  "webkitClipPath",
+  "clip-path",
+  "-webkit-clip-path",
 ];
 
 export function overlaySlotAspect(overlayData, videoAspect) {
@@ -81,71 +82,47 @@ export function overlayPortalStyle({ isExpanded, slot } = {}) {
   return overlayPlayerChromeStyle({ isExpanded: false });
 }
 
-function isFixedContainingBlock(cs) {
-  if (!cs) return false;
-  if (cs.transform && cs.transform !== "none") return true;
-  if (cs.filter && cs.filter !== "none") return true;
-  const backdrop = cs.backdropFilter || cs.webkitBackdropFilter;
-  if (backdrop && backdrop !== "none") return true;
-  if (cs.perspective && cs.perspective !== "none") return true;
-  const contain = cs.contain || "";
-  if (/paint|layout|strict|content/.test(contain)) return true;
-  if (cs.clipPath && cs.clipPath !== "none") return true;
-  if (cs.webkitClipPath && cs.webkitClipPath !== "none") return true;
-  if (/transform|filter|backdrop|perspective|contain/i.test(cs.willChange || "")) return true;
-  return false;
-}
-
-function hasInlineContainingBlock(node) {
-  const st = node && node.style;
-  if (!st) return false;
-  if (st.transform && st.transform !== "none") return true;
-  if (st.filter && st.filter !== "none") return true;
-  if (st.backdropFilter && st.backdropFilter !== "none") return true;
-  if (st.webkitBackdropFilter && st.webkitBackdropFilter !== "none") return true;
-  if (st.perspective && st.perspective !== "none") return true;
-  return false;
+function propValue(prop) {
+  return prop === "will-change" ? "auto" : "none";
 }
 
 /**
- * Strip filter/transform containing blocks on the ancestor path only.
- * Never touch overflow — unlocking the iPad inner scroller freezes the page.
+ * Clear filter/transform containing blocks on the ancestor path.
+ * Uses inline !important so clinic glass `backdrop-filter: … !important` cannot keep
+ * position:fixed trapped (video on the right, results table painted on top).
+ * Never changes overflow — that froze the iPad scroller.
  */
 export function captureContainingBlockStyles(fromEl) {
   const saved = [];
   if (typeof window === "undefined" || !fromEl || !fromEl.parentElement) return saved;
   let node = fromEl.parentElement;
   while (node && node !== document.documentElement) {
-    const cs = window.getComputedStyle(node);
-    if (isFixedContainingBlock(cs) || hasInlineContainingBlock(node)) {
-      const target = node;
-      const inline = {};
-      for (let i = 0; i < CONTAINING_BLOCK_STYLE_KEYS.length; i += 1) {
-        const key = CONTAINING_BLOCK_STYLE_KEYS[i];
-        inline[key] = target.style[key];
-      }
-      saved.push({ node: target, inline });
-      target.style.filter = "none";
-      target.style.webkitFilter = "none";
-      target.style.backdropFilter = "none";
-      target.style.webkitBackdropFilter = "none";
-      target.style.transform = "none";
-      target.style.willChange = "auto";
-      target.style.contain = "none";
-      target.style.perspective = "none";
-      target.style.clipPath = "none";
-      target.style.webkitClipPath = "none";
+    const target = node;
+    const inline = {};
+    const priority = {};
+    for (let i = 0; i < CONTAINING_BLOCK_PROPS.length; i += 1) {
+      const prop = CONTAINING_BLOCK_PROPS[i];
+      inline[prop] = target.style.getPropertyValue(prop);
+      priority[prop] = target.style.getPropertyPriority(prop);
+      target.style.setProperty(prop, propValue(prop), "important");
     }
+    const addedClass = !target.classList.contains(OVERLAY_ESCAPE_CLASS);
+    if (addedClass) target.classList.add(OVERLAY_ESCAPE_CLASS);
+    saved.push({ node: target, inline, priority, addedClass });
     node = node.parentElement;
   }
   return saved;
 }
 
 export function restoreContainingBlockStyles(saved) {
-  (saved || []).forEach(({ node, inline }) => {
-    if (!node || !node.style || !inline) return;
-    CONTAINING_BLOCK_STYLE_KEYS.forEach((key) => {
-      node.style[key] = inline[key] || "";
+  (saved || []).forEach(({ node, inline, priority, addedClass }) => {
+    if (!node || !node.style) return;
+    if (addedClass) node.classList.remove(OVERLAY_ESCAPE_CLASS);
+    CONTAINING_BLOCK_PROPS.forEach((prop) => {
+      const prev = inline ? inline[prop] : "";
+      const pri = priority ? priority[prop] : "";
+      if (prev) node.style.setProperty(prop, prev, pri || "");
+      else node.style.removeProperty(prop);
     });
   });
 }
