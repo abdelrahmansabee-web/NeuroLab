@@ -666,6 +666,8 @@ export function ValidationOverlayPlayer({
   const [downloadBusy, setDownloadBusy] = useState(false);
   /** clinical = bone sticks; chalk = soft chalk limb ribbons (default) */
   const [overlayStyle, setOverlayStyle] = useState("chalk");
+  /** NVP / straightness / trunk / shoulder / pause marks on the drawing (not the right panel). */
+  const [showKinematicMarks, setShowKinematicMarks] = useState(true);
   const [renderProgress, setRenderProgress] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [videoAspect, setVideoAspect] = useState(null);
@@ -1306,7 +1308,7 @@ export function ValidationOverlayPlayer({
       }
     }
 
-    if (!isLeClinicalTask(clinicalTask, overlayData)) {
+    if (showKinematicMarks && !isLeClinicalTask(clinicalTask, overlayData)) {
       drawPanelKinematicMarks(ctx, {
         overlayData,
         frames,
@@ -1669,7 +1671,7 @@ export function ValidationOverlayPlayer({
     ctx.fillText(`Speed ${Math.round(speed)} °/s`, gx, gy - 4);
     }
 
-  }, [frames, fps, win, peakV, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, tremorCameraTrack, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, isExpanded, overlayStyle]);
+  }, [frames, fps, win, peakV, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, tremorCameraTrack, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, isExpanded, overlayStyle, showKinematicMarks]);
 
   const drawRecordingFrame = useCallback(() => {
     const video = videoRef.current;
@@ -2141,7 +2143,7 @@ export function ValidationOverlayPlayer({
   useEffect(() => {
     lastPaintMediaTimeRef.current = -1;
     drawOverlay();
-  }, [overlayStyle, drawOverlay]);
+  }, [overlayStyle, showKinematicMarks, drawOverlay]);
 
   useEffect(() => {
     autoRenderStartedRef.current = false;
@@ -2353,6 +2355,17 @@ export function ValidationOverlayPlayer({
               title={overlayStyle === "chalk" ? "Chalk limb ribbons (tap for clinical)" : "Clinical skeleton (tap for chalk)"}
             >
               {overlayStyle === "chalk" ? "Chalk" : "Clinic"}
+            </button>
+            <button
+              type="button"
+              onPointerDown={controlTap(() => setShowKinematicMarks((v) => !v))}
+              className={`validation-control-btn validation-control-chip ${
+                showKinematicMarks ? "is-active" : ""
+              }`}
+              aria-pressed={showKinematicMarks}
+              title={showKinematicMarks ? "Hide marks on the drawing" : "Show marks on the drawing"}
+            >
+              Marks
             </button>
             <button
               type="button"
