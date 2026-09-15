@@ -1,6 +1,6 @@
 /** Visual evidence helpers: link tremor / pinch quality numbers to what the skeleton shows. */
 
-import { formatTremorPower } from "./tremorMetrics";
+import { formatTremorPower, zeroCrossingHz } from "./tremorMetrics";
 
 /** Instantaneous tremor envelope intensity at frame idx (0–1-ish). */
 export function localTremorEnvelopeAt(overlayData, idx) {
@@ -129,6 +129,124 @@ export function buildPinchEvidenceLines(overlayData, liveApertureSw, romSw) {
     lines.push("Q ↑ when ROM ↑ and tremor/CV ↓");
   }
   return lines;
+}
+
+/**
+ * Draw the 8–12 Hz camera residual on the palm: amplified orbit + same-signal sparkline.
+ * Does not change metrics — paint only, from precomputed `track`.
+ */
+export function drawTremorCameraEvidence(ctx, {
+  anchor,
+  idx,
+  track,
+  cw,
+  ch,
+  dpr = 1,
+  livePow = null,
+  peakHz = null,
+  intensity = 0,
+} = {}) {
+  if (!ctx || !anchor || !track?.bandSpeed?.length) return;
+  const fps = track.fps || 60;
+  const n = track.n || track.bandSpeed.length;
+  const iEnd = Math.max(0, Math.min(n - 1, idx));
+  const look = Math.max(10, Math.round(fps * 0.45));
+  const i0 = Math.max(0, iEnd - look);
+  const dx0 = track.dx?.[iEnd] || 0;
+  const dy0 = track.dy?.[iEnd] || 0;
+
+  let peakPx = 0;
+  for (let i = i0; i <= iEnd; i += 1) {
+    const px = ((track.dx?.[i] || 0) - dx0) * cw;
+    const py = ((track.dy?.[i] || 0) - dy0) * ch;
+    peakPx = Math.max(peakPx, Math.hypot(px, py));
+  }
+  const spatialGain = peakPx > 1e-6 ? Math.min(26, 14 / peakPx) : 0;
+  const scribbleOn = spatialGain > 0 && peakPx * spatialGain > 1.2;
+
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowBlur = 0;
+
+  if (scribbleOn) {
+    ctx.beginPath();
+    let first = true;
+    for (let i = i0; i <= iEnd; i += 1) {
+      const x = anchor[0] + ((track.dx[i] || 0) - dx0) * cw * spatialGain;
+      const y = anchor[1] + ((track.dy[i] || 0) - dy0) * ch * spatialGain;
+      if (first) {
+        ctx.moveTo(x, y);
+        first = false;
+      } else {
+        ctx.lineTo(x, y);
+      }
+    }
+    const a = 0.35 + Math.min(0.55, intensity * 0.7);
+    ctx.strokeStyle = `rgba(251,113,133,${a.toFixed(2)})`;
+    ctx.lineWidth = Math.max(1.4, 1.8 * dpr);
+    ctx.stroke();
+  }
+
+  const sw = Math.max(58 * dpr, Math.min(84 * dpr, cw * 0.16));
+  const sh = Math.max(16 * dpr, 20 * dpr);
+  let sx = anchor[0] + 16 * dpr;
+  let sy = anchor[1] - sh / 2;
+  if (sx + sw > cw - 4) sx = Math.max(4, anchor[0] - sw - 16 * dpr);
+  if (sy < 12 * dpr) sy = Math.min(ch - sh - 4, anchor[1] + 14 * dpr);
+  sx = Math.max(4, Math.min(cw - sw - 4, sx));
+  sy = Math.max(12 * dpr, Math.min(ch - sh - 4, sy));
+
+  ctx.fillStyle = "rgba(40,10,18,0.55)";
+  ctx.strokeStyle = "rgba(251,113,133,0.45)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const rr = 4 * dpr;
+  ctx.moveTo(sx + rr, sy);
+  ctx.lineTo(sx + sw - rr, sy);
+  ctx.quadraticCurveTo(sx + sw, sy, sx + sw, sy + rr);
+  ctx.lineTo(sx + sw, sy + sh - rr);
+  ctx.quadraticCurveTo(sx + sw, sy + sh, sx + sw - rr, sy + sh);
+  ctx.lineTo(sx + rr, sy + sh);
+  ctx.quadraticCurveTo(sx, sy + sh, sx, sy + sh - rr);
+  ctx.lineTo(sx, sy + rr);
+  ctx.quadraticCurveTo(sx, sy, sx + rr, sy);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  const slice = track.bandSpeed.slice(i0, iEnd + 1);
+  let peakS = 0;
+  for (let i = 0; i < slice.length; i += 1) peakS = Math.max(peakS, Math.abs(slice[i] || 0));
+  const pad = 3 * dpr;
+  const innerW = sw - pad * 2;
+  const innerH = sh - pad * 2;
+  const midY = sy + sh / 2;
+  ctx.beginPath();
+  ctx.strokeStyle = "rgba(253,164,175,0.95)";
+  ctx.lineWidth = Math.max(1.2, 1.3 * dpr);
+  for (let i = 0; i < slice.length; i += 1) {
+    const x = sx + pad + (innerW * i) / Math.max(1, slice.length - 1);
+    const y = midY - (peakS > 1e-9 ? (slice[i] / peakS) * (innerH * 0.42) : 0);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  const visHz = zeroCrossingHz(slice, fps);
+  ctx.font = `600 ${Math.round(8 * dpr)}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.fillStyle = "rgba(254,205,211,0.95)";
+  ctx.textAlign = "left";
+  const hzTxt = visHz != null && visHz >= 5 && visHz <= 16
+    ? `${visHz.toFixed(0)} Hz`
+    : (peakHz != null && Number.isFinite(Number(peakHz)) ? `${Number(peakHz).toFixed(0)} Hz` : "8–12 Hz");
+  ctx.fillText(hzTxt, sx + pad, sy - 2 * dpr);
+  if (livePow != null && Number.isFinite(Number(livePow))) {
+    ctx.textAlign = "right";
+    ctx.fillText(formatTremorPower(livePow), sx + sw - pad, sy - 2 * dpr);
+    ctx.textAlign = "left";
+  }
+  ctx.restore();
 }
 
 /**
