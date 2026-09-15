@@ -23,6 +23,15 @@ import {
   pinchApertureWindowStats,
 } from "./overlayMetricEvidence";
 import { drawPanelKinematicMarks, drawTableSurfaceLine } from "./overlayPanelMarks";
+import { detectCupFromRgba } from "./overlayCupTable";
+import {
+  clientPointToOverlayNorm,
+  hitTableMark,
+  loadTableUserMark,
+  saveTableUserMark,
+  tableMarkHitGeom,
+} from "./overlayTableUserMark";
+import { isAppleTouchVideo, shouldRestartPlayback } from "./overlayVideoPlayback";
 import {
   drawClinicalSkeleton,
   drawChalkJoint,
@@ -38,6 +47,29 @@ const APP_BG_URL = "/bg.jpg";
 const APP_BG_FILTER = "blur(24px) brightness(0.55) saturate(0.80)";
 const APP_BG_SCALE = "scale(1.08)";
 const APP_BG_OVERLAY = "rgba(8, 8, 8, 0.18)";
+
+function sampleCupFromVideo(video, palm) {
+  if (!video || video.readyState < 2) return null;
+  if (isAppleTouchVideo()) return null;
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (!w || !h) return null;
+  try {
+    const cw = Math.min(w, 360);
+    const ch = Math.max(1, Math.round(h * (cw / w)));
+    if (!sampleCupFromVideo._c) sampleCupFromVideo._c = document.createElement("canvas");
+    const canvas = sampleCupFromVideo._c;
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(video, 0, 0, cw, ch);
+    const img = ctx.getImageData(0, 0, cw, ch);
+    return detectCupFromRgba(img.data, cw, ch, { palm });
+  } catch (_err) {
+    return null;
+  }
+}
 
 function AppShellBackground({ className = "" }) {
   return (
@@ -695,6 +727,20 @@ export function ValidationOverlayPlayer({
   const fingerStickyRef = useRef({});
   /** Last live finger canvas points (no EMA). Used only to reset on seeks. */
   const fingerSmoothRef = useRef({});
+  const cupLiveRef = useRef(null);
+  const cupTriesRef = useRef(0);
+  const tableUserRef = useRef(null);
+  const tableGeomRef = useRef(null);
+  const tableDragRef = useRef({ active: false, moved: false, pointerId: null, start: null });
+  const tablePlaceModeRef = useRef(false);
+  const skipPlayToggleRef = useRef(false);
+  const overlayDataRef = useRef(overlayData);
+  overlayDataRef.current = overlayData;
+  const videoUrlRef = useRef(videoUrl);
+  videoUrlRef.current = videoUrl;
+  const [tableUserMark, setTableUserMark] = useState(null);
+  const [tablePlaceMode, setTablePlaceMode] = useState(false);
+  const [tableDragging, setTableDragging] = useState(false);
 
   const phaseColor = useMemo(() => {
     const p = (phaseLabel || "").toLowerCase();
@@ -971,13 +1017,38 @@ export function ValidationOverlayPlayer({
     const elbow = pt("elbow");
     const shoulder = pt("shoulder");
 
-    drawTableSurfaceLine(ctx, overlayData, {
+    if (
+      !isAppleTouchVideo()
+      && !overlayData?.cup
+      && !tableUserRef.current
+      && !cupLiveRef.current
+      && cupTriesRef.current < 8
+      && video.readyState >= 2
+    ) {
+      const restI = Number.isFinite(Number(win?.start_idx)) ? Number(win.start_idx) : 0;
+      const restPalm = frames[restI]?.palm || overlayData?.start_palm;
+      cupTriesRef.current += 1;
+      const found = sampleCupFromVideo(video, restPalm);
+      if (found) cupLiveRef.current = found;
+    }
+
+    const overlayForTable = tableUserRef.current
+      ? { ...overlayData, table_user: tableUserRef.current }
+      : overlayData;
+    const tableGeom = drawTableSurfaceLine(ctx, overlayForTable, {
       shoulder,
+      frames,
+      idx,
+      startIdx: win.start_idx,
       cw,
       ch,
       shoulderWidthPx: Number(overlayData?.shoulder_width_px) || 0,
       noShadow: Boolean(touchPerf),
+      cup: overlayData?.cup || cupLiveRef.current,
+      userMark: tableUserRef.current,
+      placing: tablePlaceModeRef.current,
     });
+    tableGeomRef.current = tableMarkHitGeom(tableGeom, cw);
 
     const boneColor = SKELETON_PALETTE.bone;
     const boneOutline = SKELETON_PALETTE.boneOutline;
@@ -1300,7 +1371,7 @@ export function ValidationOverlayPlayer({
 
     if (showKinematicMarks && !isLeClinicalTask(clinicalTask, overlayData)) {
       drawPanelKinematicMarks(ctx, {
-        overlayData,
+        overlayData: overlayForTable,
         frames,
         idx,
         cw,
@@ -1988,6 +2059,14 @@ export function ValidationOverlayPlayer({
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
         mediaRecorderRef.current.stop();
       }
+      const dur = Number(video.duration);
+      if (Number.isFinite(dur) && dur > 0.08) {
+        try {
+          video.currentTime = Math.max(0, dur - 0.05);
+        } catch (_err) {
+          /* ignore */
+        }
+      }
       onEnded?.();
     };
 
@@ -2031,7 +2110,14 @@ export function ValidationOverlayPlayer({
   const togglePlay = () => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.paused) {
+    if (video.paused || video.ended) {
+      if (shouldRestartPlayback({
+        ended: video.ended,
+        currentTime: video.currentTime,
+        duration: video.duration,
+      })) {
+        video.currentTime = 0;
+      }
       video.play().catch(() => {});
     } else {
       video.pause();
@@ -2044,8 +2130,116 @@ export function ValidationOverlayPlayer({
     handler(e);
   };
 
-  /** Tap video stage to play/pause (ignore control chrome). */
+  const paintTableOverlay = () => {
+    lastPaintMediaTimeRef.current = -1;
+    drawOverlay();
+  };
+
+  const onTableChip = () => {
+    if (tablePlaceModeRef.current) {
+      setTablePlaceMode(false);
+      tablePlaceModeRef.current = false;
+      skipPlayToggleRef.current = true;
+      paintTableOverlay();
+      return;
+    }
+    const video = videoRef.current;
+    if (video && !video.paused) video.pause();
+    setTablePlaceMode(true);
+    tablePlaceModeRef.current = true;
+    skipPlayToggleRef.current = true;
+    paintTableOverlay();
+  };
+
+  const onTablePointerDown = (e) => {
+    if (e.button != null && e.button !== 0) return;
+    const t = e.target;
+    if (t instanceof Element && t.closest(".validation-player-controls, .validation-control-btn, .validation-seek-bar, .validation-player-topbar")) {
+      return;
+    }
+    const canvas = canvasRef.current;
+    const rect = canvas?.getBoundingClientRect?.();
+    const placing = tablePlaceModeRef.current;
+    const normHit = clientPointToOverlayNorm(e.clientX, e.clientY, rect);
+    const cssW = rect?.width || 0;
+    const cssH = rect?.height || 0;
+    const hit = hitTableMark(normHit, tableGeomRef.current, {
+      cssW,
+      cssH,
+      coarse: isCoarsePointerDevice(),
+    });
+    if (!placing && !hit) return;
+    const norm = placing
+      ? clientPointToOverlayNorm(e.clientX, e.clientY, rect, { clampToFrame: true })
+      : normHit;
+    if (!norm) {
+      if (placing) skipPlayToggleRef.current = true;
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    skipPlayToggleRef.current = true;
+    tableDragRef.current = {
+      active: true,
+      moved: Boolean(placing),
+      pointerId: e.pointerId,
+      start: { x: norm.x, y: norm.y },
+    };
+    setTableDragging(true);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (_err) {
+      /* ignore */
+    }
+    tableUserRef.current = { x: norm.x, y: norm.y, source: "user" };
+    setTableUserMark(tableUserRef.current);
+    paintTableOverlay();
+  };
+
+  const onTablePointerMove = (e) => {
+    const drag = tableDragRef.current;
+    if (!drag.active || (drag.pointerId != null && e.pointerId !== drag.pointerId)) return;
+    e.preventDefault();
+    const rect = canvasRef.current?.getBoundingClientRect?.();
+    const norm = clientPointToOverlayNorm(e.clientX, e.clientY, rect, { clampToFrame: true });
+    if (!norm) return;
+    if (drag.start && Math.abs(norm.x - drag.start.x) + Math.abs(norm.y - drag.start.y) > 0.006) {
+      drag.moved = true;
+    }
+    tableUserRef.current = { x: norm.x, y: norm.y, source: "user" };
+    paintTableOverlay();
+  };
+
+  const finishTableDrag = (e) => {
+    const drag = tableDragRef.current;
+    if (!drag.active) return false;
+    if (e && drag.pointerId != null && e.pointerId !== drag.pointerId) return true;
+    const rect = canvasRef.current?.getBoundingClientRect?.();
+    const norm = e
+      ? clientPointToOverlayNorm(e.clientX, e.clientY, rect, { clampToFrame: true })
+      : null;
+    const mark = norm || tableUserRef.current;
+    if (mark) {
+      const saved = saveTableUserMark(overlayDataRef.current, videoUrlRef.current, mark);
+      tableUserRef.current = saved;
+      setTableUserMark(saved);
+    }
+    tableDragRef.current = { active: false, moved: false, pointerId: null, start: null };
+    setTableDragging(false);
+    setTablePlaceMode(false);
+    tablePlaceModeRef.current = false;
+    skipPlayToggleRef.current = true;
+    paintTableOverlay();
+    return true;
+  };
+
+  /** Tap video stage to play/pause (ignore control chrome and table-mark drags). */
   const onVideoSurfacePointerUp = (e) => {
+    if (finishTableDrag(e)) return;
+    if (skipPlayToggleRef.current) {
+      skipPlayToggleRef.current = false;
+      return;
+    }
     if (e.button != null && e.button !== 0) return;
     const t = e.target;
     if (!(t instanceof Element)) return;
@@ -2133,13 +2327,25 @@ export function ValidationOverlayPlayer({
   useEffect(() => {
     lastPaintMediaTimeRef.current = -1;
     drawOverlay();
-  }, [overlayStyle, showKinematicMarks, drawOverlay]);
+  }, [overlayStyle, showKinematicMarks, tablePlaceMode, drawOverlay]);
 
   useEffect(() => {
     autoRenderStartedRef.current = false;
     setDownloadUrl(null);
     setRenderProgress(0);
+    cupLiveRef.current = null;
+    cupTriesRef.current = 0;
   }, [videoUrl]);
+
+  useEffect(() => {
+    const m = loadTableUserMark(overlayData, videoUrl);
+    tableUserRef.current = m;
+    setTableUserMark(m);
+    setTablePlaceMode(false);
+    tablePlaceModeRef.current = false;
+    tableDragRef.current = { active: false, moved: false, pointerId: null, start: null };
+    setTableDragging(false);
+  }, [videoUrl, overlayData?.overlay_video_filename]);
 
   useEffect(() => {
     tryAutoRender();
@@ -2261,9 +2467,12 @@ export function ValidationOverlayPlayer({
             ref={contentWrapRef}
             className={`validation-content-fit validation-content-box relative shrink-0 max-w-full max-h-full overflow-hidden cursor-pointer ${
               isExpanded ? "z-[8]" : "z-[8] w-full flex items-center justify-center"
-            }`}
+            }${tablePlaceMode ? " is-placing-table" : ""}${tableDragging ? " is-dragging-table" : ""}`}
             style={{ transform: "translateZ(0)", WebkitTransform: "translateZ(0)" }}
+            onPointerDown={onTablePointerDown}
+            onPointerMove={onTablePointerMove}
             onPointerUp={onVideoSurfacePointerUp}
+            onPointerCancel={finishTableDrag}
             role="button"
             tabIndex={0}
             aria-label={isPlaying ? "Pause video" : "Play video"}
@@ -2356,6 +2565,23 @@ export function ValidationOverlayPlayer({
               title={showKinematicMarks ? "Hide marks on the drawing" : "Show marks on the drawing"}
             >
               Marks
+            </button>
+            <button
+              type="button"
+              onPointerDown={controlTap(onTableChip)}
+              className={`validation-control-btn validation-control-chip ${
+                tablePlaceMode ? "is-table-place is-active" : (tableUserMark ? "is-active" : "")
+              }`}
+              aria-pressed={Boolean(tablePlaceMode || tableUserMark)}
+              title={
+                tablePlaceMode
+                  ? "Tap the table surface on the video, or tap Table to cancel"
+                  : tableUserMark
+                    ? "Table mark is set — tap to place it again, or drag the gold line"
+                    : "Tap Table, then tap the table surface on the video. You can also drag the gold line."
+              }
+            >
+              {tablePlaceMode ? "Tap table" : "Table"}
             </button>
             <button
               type="button"
