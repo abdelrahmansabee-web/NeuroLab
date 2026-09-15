@@ -4,6 +4,7 @@
  */
 import { overlayMovementWindow, overlayPauseSpeedThreshold } from "./validationPanelMetrics";
 import { addCupToSpan, tableYFromCup } from "./overlayCupTable";
+import { isSeatedTableY } from "./overlayCreamTable";
 import { clampTableUserMark } from "./overlayTableUserMark";
 
 const PATH_MOVE = "rgba(248,250,252,0.78)";
@@ -111,17 +112,22 @@ export function tableArmShoulderNorm(overlayData, frames, startIdx = null) {
  */
 export function armOnTableY(overlayData, frames, startIdx = null, idx = null) {
   const i0 = restFrameIndex(overlayData, startIdx);
+  const sh = restShoulderNorm(overlayData, frames, i0);
+  const minY = sh && sh[1] != null && Number.isFinite(Number(sh[1]))
+    ? Math.max(0.50, Number(sh[1]) + 0.10)
+    : 0.50;
   const ys = [];
   const take = (p) => {
     if (!p || p[1] == null || !Number.isFinite(Number(p[1]))) return;
     const y = Number(p[1]);
-    if (y >= 0.45) ys.push(y);
+    if (y >= minY) ys.push(y);
   };
   const fromFrame = (f) => {
     if (!f) return;
     take(f.palm);
     take(f.wrist);
     take(f.hl_wrist);
+    take(f.elbow);
   };
   if (frames?.length) {
     const a = Math.max(0, i0 - 1);
@@ -134,7 +140,8 @@ export function armOnTableY(overlayData, frames, startIdx = null, idx = null) {
   }
   take(overlayData?.start_palm);
   if (!ys.length) return null;
-  return Math.max(...ys);
+  const y = Math.max(...ys);
+  return isSeatedTableY(y) ? y : null;
 }
 
 /** Horizontal span of the table under the arm (palm…elbow…trunk), not the chair. */
@@ -250,8 +257,8 @@ export function robustShoulderNorm(overlayData, frames, idx, startIdx = null) {
   return [Number(cur[0]), y];
 }
 
-/** Table point on the supporting surface, nearest the arm-on-table shoulder. */
-export function tablePointUnderShoulder(overlayData, frames, startIdx = null, idx = null, cup = null, userMark = null) {
+/** Table point on the supporting surface, under the affected shoulder. */
+export function tablePointUnderShoulder(overlayData, frames, startIdx = null, idx = null, cup = null, userMark = null, creamY = null, hintY = null) {
   const user = clampTableUserMark(userMark || overlayData?.table_user);
   if (user) return { x: user.x, y: user.y };
 
@@ -261,33 +268,31 @@ export function tablePointUnderShoulder(overlayData, frames, startIdx = null, id
   const restPalm = restPalmNorm(overlayData, frames, i0);
   const armY = armOnTableY(overlayData, frames, i0, idx);
   const c = cup || overlayData?.cup || null;
-  const span = tableSpanX(overlayData, frames, i0, c);
   const frozen = overlayData?.table_under_shoulder;
 
-  let x = armSh?.[0] ?? restSh?.[0] ?? restPalm?.[0] ?? null;
-  if (
-    frozen && frozen.x != null && Number.isFinite(Number(frozen.x))
-    && span && Number(frozen.x) >= span.lo && Number(frozen.x) <= span.hi
-  ) {
+  let x = restSh?.[0] ?? armSh?.[0] ?? restPalm?.[0] ?? null;
+  if (x == null && frozen && frozen.x != null && Number.isFinite(Number(frozen.x))) {
     x = Number(frozen.x);
   }
-  if (x != null && span) {
-    x = Math.min(span.hi, Math.max(span.lo, x));
-  }
 
-  const cupY = tableYFromCup(c, armY);
-  let y = cupY != null ? cupY : armY;
-  if (cupY == null) {
-    const detected = (frozen && frozen.y != null && Number.isFinite(Number(frozen.y)))
-      ? Number(frozen.y)
-      : tableSurfaceYAtX(overlayData, x);
-    if (y != null && Number.isFinite(y)) {
-      if (detected != null && Number.isFinite(detected) && Math.abs(detected - y) <= 0.05) {
-        y = detected;
-      }
-    } else {
-      y = snapTableYToRestArm(detected, restPalm?.[1], restSh?.[1]);
-    }
+  const cream = Number(creamY ?? overlayData?.cream_table_y);
+  const hint = Number(hintY ?? overlayData?.table_y_hint);
+  const frozenY = frozen && frozen.y != null ? Number(frozen.y) : null;
+  const cupY = tableYFromCup(c, isSeatedTableY(armY) ? armY : null);
+
+  let y = null;
+  if (isSeatedTableY(cream)) y = cream;
+  else if (isSeatedTableY(cupY)) y = cupY;
+  else if (isSeatedTableY(hint)) y = hint;
+  else if (isSeatedTableY(frozenY)) y = frozenY;
+  else if (isSeatedTableY(armY)) y = armY;
+  else {
+    y = snapTableYToRestArm(
+      isSeatedTableY(tableSurfaceYAtX(overlayData, x)) ? tableSurfaceYAtX(overlayData, x) : null,
+      restPalm?.[1],
+      restSh?.[1],
+    );
+    if (!isSeatedTableY(y)) y = isSeatedTableY(armY) ? armY : null;
   }
   if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) return null;
   return { x, y };
@@ -304,17 +309,20 @@ export function tableLineUnderShoulder(overlayData, {
   idx = null,
   cup = null,
   userMark = null,
+  creamY = null,
+  hintY = null,
 } = {}) {
   if (!cw || !ch) return null;
-  const pt = tablePointUnderShoulder(overlayData, frames, startIdx, idx, cup, userMark);
+  const pt = tablePointUnderShoulder(overlayData, frames, startIdx, idx, cup, userMark, creamY, hintY);
   if (!pt) return null;
   const robust = frames && idx != null
     ? robustShoulderNorm(overlayData, frames, idx, startIdx)
     : null;
-  const tableX = pt.x * cw;
-  const tableY = pt.y * ch;
   const liveX = shoulder && Number.isFinite(Number(shoulder[0])) ? Number(shoulder[0]) : null;
   const liveY = shoulder && Number.isFinite(Number(shoulder[1])) ? Number(shoulder[1]) : null;
+  const userSet = Boolean(clampTableUserMark(userMark || overlayData?.table_user));
+  const tableX = userSet ? pt.x * cw : (liveX != null ? liveX : pt.x * cw);
+  const tableY = pt.y * ch;
   const colX = liveX != null ? liveX : tableX;
   const yTop = liveY != null
     ? liveY
@@ -330,7 +338,7 @@ export function tableLineUnderShoulder(overlayData, {
     colX,
     y: tableY,
     yNorm: pt.y,
-    xNorm: pt.x,
+    xNorm: tableX / cw,
     yTop,
   };
 }

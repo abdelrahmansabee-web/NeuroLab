@@ -132,7 +132,7 @@ test("a table edge on the chest snaps down to the resting palm", () => {
   expect(pt.x).toBeLessThan(0.40);
 });
 
-test("table point stays on the arm-table span even if the live shoulder moves", () => {
+test("gold table mark follows the live shoulder x and keeps table Y", () => {
   const overlay = makeOverlay();
   overlay.table_under_shoulder = { x: 0.30, y: 0.72 };
   const live = tableLineUnderShoulder(overlay, {
@@ -143,8 +143,8 @@ test("table point stays on the arm-table span even if the live shoulder moves", 
     cw: 200,
     ch: 100,
   });
-  expect(live.x / 200).toBeGreaterThan(0.16);
-  expect(live.x / 200).toBeLessThan(0.40);
+  expect(live.x / 200).toBeCloseTo(0.55, 8);
+  expect(live.colX / 200).toBeCloseTo(0.55, 8);
   expect(live.y).toBeCloseTo(0.72 * 100, 8);
 });
 
@@ -186,6 +186,25 @@ test("shoulder column sticks to the live skeleton landmark, table Y stays put", 
   expect(down.colX).toBeCloseTo(0.44 * 200, 8);
   expect(down.yTop).toBeCloseTo(0.29 * 100, 8);
   expect(down.y).toBeCloseTo(0.86 * 100, 8);
+});
+
+test("cream table Y wins over a chair-height frozen detector", () => {
+  const overlay = makeOverlay();
+  overlay.table_under_shoulder = { x: 0.30, y: 0.48 };
+  overlay.table_surface_y = 0.48;
+  overlay.frames[4].palm = [0.22, 0.50];
+  overlay.start_palm = [0.22, 0.50];
+  const pt = tablePointUnderShoulder(
+    overlay,
+    overlay.frames,
+    4,
+    10,
+    null,
+    null,
+    0.67,
+    null,
+  );
+  expect(pt.y).toBeCloseTo(0.67, 8);
 });
 
 test("a clinician table mark sits where it was placed, not on the chair", () => {
@@ -231,6 +250,5 @@ test("table mark sits on the beige surface, not a chest-high line over the chair
   overlay.frames[10].wrist = [0.28, 0.80];
   const pt = tablePointUnderShoulder(overlay, overlay.frames, 4, 10);
   expect(pt.y).toBeGreaterThan(0.78);
-  expect(pt.x).toBeLessThan(0.58);
-  expect(pt.x).toBeGreaterThan(0.14);
+  expect(pt.x).toBeCloseTo(0.72, 8);
 });

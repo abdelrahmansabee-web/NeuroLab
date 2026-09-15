@@ -4,6 +4,7 @@
  */
 
 export const TABLE_USER_MARK_PREFIX = "nl-table-user-mark:";
+export const TABLE_SURFACE_Y_HINT_KEY = "nl-table-surface-y-hint";
 
 function tableUserMarkCandidateKeys(overlayData, videoUrl) {
   const keys = [];
@@ -20,6 +21,33 @@ function tableUserMarkCandidateKeys(overlayData, videoUrl) {
 
 export function tableUserMarkStorageKey(overlayData, videoUrl) {
   return tableUserMarkCandidateKeys(overlayData, videoUrl)[0];
+}
+
+export function clampTableSurfaceY(y) {
+  const v = Number(y);
+  if (!Number.isFinite(v)) return null;
+  if (v < 0.56 || v > 0.90) return null;
+  return v;
+}
+
+export function loadSharedTableSurfaceY() {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    return clampTableSurfaceY(JSON.parse(localStorage.getItem(TABLE_SURFACE_Y_HINT_KEY)));
+  } catch (_err) {
+    return null;
+  }
+}
+
+export function saveSharedTableSurfaceY(y) {
+  const next = clampTableSurfaceY(y);
+  if (next == null || typeof localStorage === "undefined") return next;
+  try {
+    localStorage.setItem(TABLE_SURFACE_Y_HINT_KEY, JSON.stringify(next));
+  } catch (_err) {
+    /* quota */
+  }
+  return next;
 }
 
 export function clampTableUserMark(p) {
@@ -60,6 +88,7 @@ export function saveTableUserMark(overlayData, videoUrl, mark) {
       /* quota */
     }
   }
+  saveSharedTableSurfaceY(next.y);
   return next;
 }
 
