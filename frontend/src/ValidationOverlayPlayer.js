@@ -713,6 +713,8 @@ export function ValidationOverlayPlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [videoAspect, setVideoAspect] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const isExpandedRef = useRef(false);
+  isExpandedRef.current = isExpanded;
   const [isTouchUi, setIsTouchUi] = useState(false);
   const homeRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -814,14 +816,14 @@ export function ValidationOverlayPlayer({
       const sh = stageEl.clientHeight;
       const vw = video.videoWidth || 0;
       const vh = video.videoHeight || 0;
-      const gKey = `${sw}|${sh}|${vw}|${vh}|${isExpanded ? 1 : 0}`;
+      const gKey = `${sw}|${sh}|${vw}|${vh}|${isExpandedRef.current ? 1 : 0}`;
       if (gutterLayoutCacheRef.current.key !== gKey) {
         gutterLayout = syncLetterboxGutters(video, stageEl, {
           left: gutterLeftRef.current,
           right: gutterRightRef.current,
           top: gutterTopRef.current,
           bottom: gutterBottomRef.current,
-        }, contentEl, isExpanded);
+        }, contentEl, isExpandedRef.current);
         gutterLayoutCacheRef.current = { key: gKey, result: gutterLayout };
         canvasLayoutCacheRef.current = { key: "", result: null };
       }
@@ -1762,7 +1764,7 @@ export function ValidationOverlayPlayer({
     ctx.fillText(`Speed ${Math.round(speed)} °/s`, gx, gy - 4);
     }
 
-  }, [frames, fps, win, peakV, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, tremorCameraTrack, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, isExpanded, overlayStyle, showKinematicMarks]);
+  }, [frames, fps, win, peakV, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, tremorCameraTrack, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, overlayStyle, showKinematicMarks]);
 
   const drawRecordingFrame = useCallback(() => {
     const video = videoRef.current;
@@ -2436,8 +2438,8 @@ export function ValidationOverlayPlayer({
     html.classList.add("nl-overlay-expanded");
     const saved = captureContainingBlockStyles(player);
     const id = requestAnimationFrame(() => {
+      lastPaintMediaTimeRef.current = -1;
       drawOverlay();
-      window.dispatchEvent(new Event("resize"));
     });
     return () => {
       cancelAnimationFrame(id);

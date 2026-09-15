@@ -3,10 +3,8 @@
 export const OVERLAY_PORTAL_Z_COMPACT = "auto";
 export const OVERLAY_PORTAL_Z_EXPANDED = 99999;
 
+/** Properties that create a containing block for position:fixed. Never overflow. */
 const CONTAINING_BLOCK_STYLE_KEYS = [
-  "overflow",
-  "overflowX",
-  "overflowY",
   "filter",
   "webkitFilter",
   "backdropFilter",
@@ -17,7 +15,6 @@ const CONTAINING_BLOCK_STYLE_KEYS = [
   "perspective",
   "clipPath",
   "webkitClipPath",
-  "isolation",
 ];
 
 export function overlaySlotAspect(overlayData, videoAspect) {
@@ -84,42 +81,43 @@ export function overlayPortalStyle({ isExpanded, slot } = {}) {
   return overlayPlayerChromeStyle({ isExpanded: false });
 }
 
-function computedNeedsUnlock(cs) {
+function isFixedContainingBlock(cs) {
   if (!cs) return false;
-  const transform = cs.transform;
-  const filter = cs.filter;
+  if (cs.transform && cs.transform !== "none") return true;
+  if (cs.filter && cs.filter !== "none") return true;
   const backdrop = cs.backdropFilter || cs.webkitBackdropFilter;
-  const contain = cs.contain;
-  const willChange = cs.willChange || "";
-  const perspective = cs.perspective;
-  const clipPath = cs.clipPath || cs.webkitClipPath;
-  const overflowLocks = [cs.overflow, cs.overflowX, cs.overflowY].some(
-    (v) => v && v !== "visible" && v !== "unset" && v !== "auto" && v !== "clip",
-  );
-  // overflow:auto on the iPad inner scroller also clips position:fixed descendants
-  // once a filter/transform containing block exists on a parent.
-  const overflowScroll = [cs.overflow, cs.overflowX, cs.overflowY].some(
-    (v) => v === "auto" || v === "scroll" || v === "overlay" || v === "hidden",
-  );
-  if (transform && transform !== "none") return true;
-  if (filter && filter !== "none") return true;
   if (backdrop && backdrop !== "none") return true;
-  if (contain && contain !== "none") return true;
-  if (perspective && perspective !== "none") return true;
-  if (clipPath && clipPath !== "none") return true;
-  if (/transform|filter|backdrop|perspective|contain/i.test(willChange)) return true;
-  if (cs.isolation === "isolate") return true;
-  if (overflowLocks || overflowScroll) return true;
+  if (cs.perspective && cs.perspective !== "none") return true;
+  const contain = cs.contain || "";
+  if (/paint|layout|strict|content/.test(contain)) return true;
+  if (cs.clipPath && cs.clipPath !== "none") return true;
+  if (cs.webkitClipPath && cs.webkitClipPath !== "none") return true;
+  if (/transform|filter|backdrop|perspective|contain/i.test(cs.willChange || "")) return true;
   return false;
 }
 
+function hasInlineContainingBlock(node) {
+  const st = node && node.style;
+  if (!st) return false;
+  if (st.transform && st.transform !== "none") return true;
+  if (st.filter && st.filter !== "none") return true;
+  if (st.backdropFilter && st.backdropFilter !== "none") return true;
+  if (st.webkitBackdropFilter && st.webkitBackdropFilter !== "none") return true;
+  if (st.perspective && st.perspective !== "none") return true;
+  return false;
+}
+
+/**
+ * Strip filter/transform containing blocks on the ancestor path only.
+ * Never touch overflow — unlocking the iPad inner scroller freezes the page.
+ */
 export function captureContainingBlockStyles(fromEl) {
   const saved = [];
   if (typeof window === "undefined" || !fromEl || !fromEl.parentElement) return saved;
   let node = fromEl.parentElement;
   while (node && node !== document.documentElement) {
     const cs = window.getComputedStyle(node);
-    if (computedNeedsUnlock(cs)) {
+    if (isFixedContainingBlock(cs) || hasInlineContainingBlock(node)) {
       const target = node;
       const inline = {};
       for (let i = 0; i < CONTAINING_BLOCK_STYLE_KEYS.length; i += 1) {
@@ -127,9 +125,6 @@ export function captureContainingBlockStyles(fromEl) {
         inline[key] = target.style[key];
       }
       saved.push({ node: target, inline });
-      target.style.overflow = "visible";
-      target.style.overflowX = "visible";
-      target.style.overflowY = "visible";
       target.style.filter = "none";
       target.style.webkitFilter = "none";
       target.style.backdropFilter = "none";
@@ -140,7 +135,6 @@ export function captureContainingBlockStyles(fromEl) {
       target.style.perspective = "none";
       target.style.clipPath = "none";
       target.style.webkitClipPath = "none";
-      target.style.isolation = "auto";
     }
     node = node.parentElement;
   }
