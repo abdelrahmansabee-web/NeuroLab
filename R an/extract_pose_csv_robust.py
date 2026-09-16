@@ -202,8 +202,8 @@ def extract_pose_to_csv(
     data = []
     frame_idx = 0
     processed = 0
-    timestamp_ms = 0
-    step_ms = int(1000 / fps) if fps > 0 else 33
+    last_mp_ts = -1
+    ms_per_frame = 1000.0 / fps if fps > 1 else 33.333
 
     start_time = time.time()
 
@@ -214,7 +214,6 @@ def extract_pose_to_csv(
 
         if frame_idx % frame_step != 0:
             frame_idx += 1
-            timestamp_ms += step_ms
             continue
 
         if rotate_cw:
@@ -226,10 +225,13 @@ def extract_pose_to_csv(
         # تحويل إلى MediaPipe Image
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=processed_frame)
 
-        # كشف
-        result = detector.detect_for_video(mp_image, timestamp_ms)
+        mp_ts = int(round(frame_idx * ms_per_frame))
+        if mp_ts <= last_mp_ts:
+            mp_ts = last_mp_ts + 1
+        last_mp_ts = mp_ts
+        result = detector.detect_for_video(mp_image, mp_ts)
 
-        row = {'frame': frame_idx, 'time': timestamp_ms / 1000.0}
+        row = {'frame': frame_idx, 'time': frame_idx / fps}
 
         if result.pose_landmarks and len(result.pose_landmarks) > 0:
             landmarks = result.pose_landmarks[0]  # أول شخص فقط
@@ -267,7 +269,6 @@ def extract_pose_to_csv(
 
         data.append(row)
         processed += 1
-        timestamp_ms += step_ms * frame_step
         frame_idx += 1
 
         if show_progress and processed % 30 == 0:

@@ -34,6 +34,7 @@ import {
 import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import { overlayPlayerMountDelayMs } from "./overlayVideoPlayback";
+import { clinicTrialRoleFromPhase, summarizeOverlayClock } from "./analysisPhaseCompare";
 import SessionStatusBar, { revealSessionStatusBar } from "./SessionStatusBar";
 import PtrIosSpinner from "./PtrIosSpinner";
 import AuthGate, { authHeaders, clearAuthToken, rememberLoginEmail } from "./AuthGate";
@@ -4068,7 +4069,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       if (!res.ok) throw new Error(`Failed to load overlay data (${res.status})`);
       const overlay = await res.json();
       console.log("overlay-debug", csvFilename, {
-        affected_side: overlay.affected_side,
+        phase,
+        ...summarizeOverlayClock(overlay),
         table_surface_y: overlay.table_surface_y,
         table_surface_fallback: overlay.table_surface_fallback,
         table_under_shoulder: overlay.table_under_shoulder,
@@ -4465,6 +4467,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       const fd = new FormData();
       fd.append(isCsv ? "csv" : "video", file);
       fd.append("phase", phase);
+      fd.append("trial_role", clinicTrialRoleFromPhase(phase));
       // Use demographics paretic side when set; otherwise auto-detect from kinematics.
       fd.append("stroke_side", strokeSideHint);
       fd.append("affected_side", strokeSideHint);
@@ -7004,7 +7007,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
   }
 </style></head><body><div class="wrap">
   <div class="header" style="background:${d.group === "1" ? "rgba(167,243,208,0.3)" : "rgba(251,207,232,0.4)"}">
-    <div style="display:flex;align-items:center;gap:14px"><img src="/raed-logo.png?v=32.87" alt="RA.ED AI" style="height:56px;width:auto"/><div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div></div>
+    <div style="display:flex;align-items:center;gap:14px"><img src="/raed-logo.png?v=32.88" alt="RA.ED AI" style="height:56px;width:auto"/><div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div></div>
     <div class="meta">${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}<br>${esc(d.name || "Participant")}</div>
   </div>
   <div class="patient">
@@ -10034,7 +10037,7 @@ export default function App() {
                       </button>
                     )}
                     <img
-                      src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.87`}
+                      src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.88`}
                       alt="RA.ED AI"
                       className="w-[8.75rem] h-auto object-contain"
                       style={{ background: "transparent" }}

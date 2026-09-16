@@ -2,6 +2,7 @@ import {
   OVERLAY_VIDEO_PRELOAD,
   enqueueOverlayVideoAttach,
   getOverlayFrameState,
+  overlayPlaybackTargetTime,
   isAppleTouchVideo,
   overlayLivePaintFromCurrentTime,
   overlayPlaybackPaintStalled,
@@ -99,6 +100,37 @@ test("iOS video.duration shorter than overlay span does not run the skeleton ahe
   expect(stretched.alpha).toBeCloseTo(oneToOne.alpha, 10);
   expect(stretched.idx).toBe(0);
   expect(stretched.alpha).toBeCloseTo(0.9, 10);
+});
+
+test("9:18 PRE drink clip keeps pose fraction on the video fraction", () => {
+  const videoDuration = 9 * 60 + 18;
+  const playbackTime = 8 * 60 + 4;
+  const tN = videoDuration * (16 / (1000 / 60));
+  const target = overlayPlaybackTargetTime({
+    playbackTime,
+    videoDuration,
+    t0: 0,
+    tN,
+  });
+  expect(tN).toBeCloseTo(535.68, 1);
+  expect(target / tN).toBeCloseTo(playbackTime / videoDuration, 8);
+  expect(playbackTime - target).toBeGreaterThan(18);
+  const short = [{ time: 0 }, { time: 200 }, { time: 400 }];
+  expect(getOverlayFrameState(short, 60, playbackTime, videoDuration).idx).toBe(1);
+});
+
+test("long PRE overlay span shorter than the video does not finish the reach first", () => {
+  expect(overlayPlaybackTargetTime({
+    playbackTime: 15,
+    videoDuration: 30,
+    t0: 0,
+    tN: 28.8,
+  })).toBeCloseTo(14.4, 10);
+  const frames = [];
+  for (let i = 0; i <= 288; i += 1) frames.push({ time: i / 10 });
+  const mid = getOverlayFrameState(frames, 10, 15, 30);
+  expect(mid.idx).toBe(144);
+  expect(getOverlayFrameState(frames, 10, 15, 28.8).idx).toBe(150);
 });
 
 test("duration mismatch ignores small iOS drift and flags a baked-clip swap", () => {

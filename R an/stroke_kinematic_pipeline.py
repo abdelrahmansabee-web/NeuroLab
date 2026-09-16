@@ -76,6 +76,16 @@ def resolve_analysis_arm(
     return "auto"
 
 
+def trial_role_from_phase(phase: str = "pre") -> str:
+    """Clinic slot is the trial role. baseline/healthy → healthy (reference window)."""
+    ph = (phase or "pre").strip().lower()
+    if ph in ("baseline", "healthy"):
+        return "healthy"
+    if ph in ("pre", "post"):
+        return ph
+    return ph or "pre"
+
+
 # ============================================================
 # 1. SPARC
 # ============================================================
