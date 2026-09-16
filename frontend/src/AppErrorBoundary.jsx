@@ -19,7 +19,7 @@ export default class AppErrorBoundary extends React.Component {
           style={{ background: "#121820", color: "#fff", fontFamily: "Inter, system-ui, sans-serif" }}
         >
           <img
-            src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.85`}
+            src={`${process.env.PUBLIC_URL || ""}/raed-logo-navy.png?v=32.86`}
             alt="RA.ED AI"
             className="w-36 h-auto object-contain mb-4"
           />
