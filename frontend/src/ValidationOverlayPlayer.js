@@ -58,7 +58,6 @@ import {
   overlayBakeFreeEventName,
   overlayLivePaintFromCurrentTime,
   overlayPlaybackPaintStalled,
-  overlayPresentedDuration,
   overlaySourceLooksMismatched,
   overlayVideoLooksStalled,
   overlayVideoShouldRetryError,
@@ -798,15 +797,15 @@ export function ValidationOverlayPlayer({
 
   const getFrameIndex = useCallback((time) => {
     const video = videoRef.current;
-    const duration = overlayPresentedDuration(video?.duration);
+    const duration = video?.duration || overlayData?.duration_sec || 0;
     return getOverlayFrameState(frames, fps, time, duration).idx;
-  }, [frames, fps]);
+  }, [frames, fps, overlayData?.duration_sec]);
 
   const getFrameState = useCallback((time) => {
     const video = videoRef.current;
-    const duration = overlayPresentedDuration(video?.duration);
+    const duration = video?.duration || overlayData?.duration_sec || 0;
     return getOverlayFrameState(frames, fps, time, duration);
-  }, [frames, fps]);
+  }, [frames, fps, overlayData?.duration_sec]);
 
   const formatValue = (v, digits = 2) => {
     if (v == null || Number.isNaN(v)) return "—";

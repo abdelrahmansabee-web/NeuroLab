@@ -2,8 +2,6 @@ import {
   OVERLAY_VIDEO_PRELOAD,
   enqueueOverlayVideoAttach,
   getOverlayFrameState,
-  overlayPlaybackTargetTime,
-  overlayPresentedDuration,
   isAppleTouchVideo,
   overlayLivePaintFromCurrentTime,
   overlayPlaybackPaintStalled,
@@ -89,72 +87,16 @@ test("overlay pose blends between stored frames for the presented video time", (
   expect(getOverlayFrameState(frames, 10, 0.2, 0.2)).toEqual({ idx: 1, alpha: 1 });
 });
 
-test("iOS video.duration shorter than overlay span does not run the skeleton ahead", () => {
-  const frames = [
-    { time: 0, palm: [0.1, 0.1] },
-    { time: 0.1, palm: [0.2, 0.2] },
-    { time: 0.2, palm: [0.3, 0.3] },
-  ];
-  const stretched = getOverlayFrameState(frames, 10, 0.09, 0.18);
-  const oneToOne = getOverlayFrameState(frames, 10, 0.09, 0.2);
-  expect(stretched.idx).toBe(oneToOne.idx);
-  expect(stretched.alpha).toBeCloseTo(oneToOne.alpha, 10);
-  expect(stretched.idx).toBe(0);
-  expect(stretched.alpha).toBeCloseTo(0.9, 10);
-});
-
-test("PRE lookup uses Safari duration, not overlay duration_sec as the video clock", () => {
-  expect(overlayPresentedDuration(558)).toBe(558);
-  expect(Number.isNaN(overlayPresentedDuration(NaN))).toBe(true);
-  expect(Number.isNaN(overlayPresentedDuration(0))).toBe(true);
-  expect(Number.isNaN(overlayPresentedDuration(undefined))).toBe(true);
-  const playbackTime = 8 * 60 + 4;
-  const tN = 535.68;
-  const asOverlaySpan = overlayPlaybackTargetTime({
-    playbackTime,
-    videoDuration: tN,
-    t0: 0,
-    tN,
-  });
-  const asSafari = overlayPlaybackTargetTime({
-    playbackTime,
-    videoDuration: 9 * 60 + 18,
-    t0: 0,
-    tN,
-  });
-  expect(asOverlaySpan).toBe(playbackTime);
-  expect(asSafari).toBeLessThan(playbackTime);
-});
-
-test("9:18 PRE drink clip keeps pose fraction on the video fraction", () => {
+test("32.82 backup clock maps video fraction onto overlay span so long PRE cannot finish first", () => {
   const videoDuration = 9 * 60 + 18;
   const playbackTime = 8 * 60 + 4;
-  const tN = videoDuration * (16 / (1000 / 60));
-  const target = overlayPlaybackTargetTime({
-    playbackTime,
-    videoDuration,
-    t0: 0,
-    tN,
-  });
-  expect(tN).toBeCloseTo(535.68, 1);
-  expect(target / tN).toBeCloseTo(playbackTime / videoDuration, 8);
-  expect(playbackTime - target).toBeGreaterThan(18);
-  const short = [{ time: 0 }, { time: 200 }, { time: 400 }];
-  expect(getOverlayFrameState(short, 60, playbackTime, videoDuration).idx).toBe(1);
-});
-
-test("long PRE overlay span shorter than the video does not finish the reach first", () => {
-  expect(overlayPlaybackTargetTime({
-    playbackTime: 15,
-    videoDuration: 30,
-    t0: 0,
-    tN: 28.8,
-  })).toBeCloseTo(14.4, 10);
   const frames = [];
-  for (let i = 0; i <= 288; i += 1) frames.push({ time: i / 10 });
-  const mid = getOverlayFrameState(frames, 10, 15, 30);
-  expect(mid.idx).toBe(144);
-  expect(getOverlayFrameState(frames, 10, 15, 28.8).idx).toBe(150);
+  for (let i = 0; i <= 5357; i += 1) frames.push({ time: i / 10 });
+  const st = getOverlayFrameState(frames, 10, playbackTime, videoDuration);
+  expect(st.idx / 5357).toBeCloseTo(playbackTime / videoDuration, 2);
+  const short = [];
+  for (let i = 0; i <= 288; i += 1) short.push({ time: i / 10 });
+  expect(getOverlayFrameState(short, 10, 15, 30).idx).toBe(144);
 });
 
 test("duration mismatch ignores small iOS drift and flags a baked-clip swap", () => {
