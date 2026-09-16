@@ -59,6 +59,16 @@ function overlayFrameTime(frames, idx, t0, fps) {
 export const OVERLAY_SHORT_SPAN_PAD_SEC = 0.05;
 
 /**
+ * Safari / iPad media duration only. `overlay.duration_sec` is the pose span —
+ * passing it as videoDuration makes span≈dur so PRE short-span stretch never runs.
+ */
+export function overlayPresentedDuration(videoDuration) {
+  const v = Number(videoDuration);
+  if (Number.isFinite(v) && v > 0.05) return v;
+  return NaN;
+}
+
+/**
  * Pose CSV time was stamped with int(1000/fps) milliseconds. That clock runs
  * slow, so on a long PRE clip (rest + reach) overlay duration is shorter than
  * Safari's media time and 1:1 lookup finishes the skeleton first. POST and
