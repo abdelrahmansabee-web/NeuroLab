@@ -1,11 +1,6 @@
 /** Visual evidence helpers: link tremor / pinch quality numbers to what the skeleton shows. */
 
-import {
-  formatTremorAmplitude,
-  formatTremorPower,
-  TREMOR_NOISE_FLOOR_PX,
-  zeroCrossingHz,
-} from "./tremorMetrics";
+import { formatTremorPower, zeroCrossingHz } from "./tremorMetrics";
 
 /** Instantaneous tremor envelope intensity at frame idx (0–1-ish). */
 export function localTremorEnvelopeAt(overlayData, idx) {
@@ -84,22 +79,16 @@ export function pinchApertureWindowStats(frames, win, frameWidthPx, frameHeightP
   };
 }
 
-export function buildTremorEvidenceLines(overlayData, livePower, peakHz, absRmsPx = null) {
+export function buildTremorEvidenceLines(overlayData, livePower, peakHz) {
   const m = overlayData?.metrics || {};
   const power = livePower ?? m.tremor_8_12hz_power ?? m.hand_speed_tremor_8_12hz_power;
   const peak = peakHz ?? m.tremor_peak_freq_hz;
-  const abs = absRmsPx ?? m.tremor_abs_rms_px;
-  const sw = Number(overlayData?.shoulder_width_px) || 0;
-  const present = m.tremor_present;
   const lines = [];
-  lines.push(`Tremor 8–12 Hz: ${formatTremorAmplitude(abs, sw, present)}`);
+  lines.push(`Tremor 8–12 Hz: ${formatTremorPower(power)}`);
   if (peak != null && Number.isFinite(Number(peak))) {
     lines.push(`Peak in band: ${Number(peak).toFixed(1)} Hz`);
   }
-  if (power != null && Number(power) > 0) {
-    lines.push(`Relative band: ${formatTremorPower(power)}`);
-  }
-  lines.push("Source: palm 8–12 Hz amplitude (camera, not IMU)");
+  lines.push("Source: palm speed FFT (not clinical IMU)");
   return lines;
 }
 
@@ -143,14 +132,9 @@ export function buildPinchEvidenceLines(overlayData, liveApertureSw, romSw) {
 }
 
 /**
- * Draw the 8–12 Hz camera residual on the palm at true video scale (gain = 1).
+ * Draw the 8–12 Hz camera residual on the palm: amplified orbit + same-signal sparkline.
  * Does not change metrics — paint only, from precomputed `track`.
  */
-export function tremorScribbleSpatialGain(peakPx) {
-  if (!(Number(peakPx) >= TREMOR_NOISE_FLOOR_PX)) return 0;
-  return 1;
-}
-
 export function drawTremorCameraEvidence(ctx, {
   anchor,
   idx,
@@ -161,12 +145,8 @@ export function drawTremorCameraEvidence(ctx, {
   livePow = null,
   peakHz = null,
   intensity = 0,
-  present = true,
-  absRmsPx = null,
-  shoulderWidthPx = 0,
 } = {}) {
   if (!ctx || !anchor || !track?.bandSpeed?.length) return;
-  if (present === false) return;
   const fps = track.fps || 60;
   const n = track.n || track.bandSpeed.length;
   const iEnd = Math.max(0, Math.min(n - 1, idx));
@@ -181,8 +161,8 @@ export function drawTremorCameraEvidence(ctx, {
     const py = ((track.dy?.[i] || 0) - dy0) * ch;
     peakPx = Math.max(peakPx, Math.hypot(px, py));
   }
-  const spatialGain = tremorScribbleSpatialGain(peakPx);
-  const scribbleOn = spatialGain > 0;
+  const spatialGain = peakPx > 1e-6 ? Math.min(26, 14 / peakPx) : 0;
+  const scribbleOn = spatialGain > 0 && peakPx * spatialGain > 1.2;
 
   ctx.save();
   ctx.lineCap = "round";
@@ -261,12 +241,7 @@ export function drawTremorCameraEvidence(ctx, {
     ? `${visHz.toFixed(0)} Hz`
     : (peakHz != null && Number.isFinite(Number(peakHz)) ? `${Number(peakHz).toFixed(0)} Hz` : "8–12 Hz");
   ctx.fillText(hzTxt, sx + pad, sy - 2 * dpr);
-  const ampTxt = formatTremorAmplitude(absRmsPx, shoulderWidthPx, present);
-  if (ampTxt && ampTxt !== "—") {
-    ctx.textAlign = "right";
-    ctx.fillText(ampTxt, sx + sw - pad, sy - 2 * dpr);
-    ctx.textAlign = "left";
-  } else if (livePow != null && Number.isFinite(Number(livePow))) {
+  if (livePow != null && Number.isFinite(Number(livePow))) {
     ctx.textAlign = "right";
     ctx.fillText(formatTremorPower(livePow), sx + sw - pad, sy - 2 * dpr);
     ctx.textAlign = "left";
