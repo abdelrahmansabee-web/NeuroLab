@@ -33,10 +33,15 @@ import {
   saveSharedTableSurfaceY,
   tableMarkHitGeom,
 } from "./overlayTableUserMark";
+import { resetHoldIfSeek } from "./overlayPoseHold";
 import {
   getOverlayFrameState,
   isAppleTouchVideo,
+  overlayBakeFreeEventName,
+  overlaySourceLooksMismatched,
+  releaseOverlayBake,
   shouldRestartPlayback,
+  tryAcquireOverlayBake,
 } from "./overlayVideoPlayback";
 import {
   overlayPlayerChromeStyle,
@@ -44,6 +49,8 @@ import {
   overlaySlotReserveStyle,
   captureContainingBlockStyles,
   restoreContainingBlockStyles,
+  lockOverlayAppScroller,
+  unlockOverlayAppScroller,
 } from "./overlayExpandLayout";
 import {
   drawClinicalSkeleton,
@@ -647,6 +654,7 @@ export function ValidationOverlayPlayer({
   onEnded,
   onDownloadReady,
   onError,
+  onSourceMismatch,
 }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -695,6 +703,12 @@ export function ValidationOverlayPlayer({
   const vfcIdRef = useRef(null);
   const videoTimeRef = useRef(0);
   const autoRenderStartedRef = useRef(false);
+  const userPlayedRef = useRef(false);
+  const sourceMismatchNotifiedRef = useRef(false);
+  const onSourceMismatchRef = useRef(onSourceMismatch);
+  onSourceMismatchRef.current = onSourceMismatch;
+  const overlayDurationRef = useRef(overlayData?.duration_sec);
+  overlayDurationRef.current = overlayData?.duration_sec;
   const pendingDownloadRef = useRef(false);
   const savedTimeRef = useRef(0);
   const wasPlayingRef = useRef(false);
@@ -1269,6 +1283,7 @@ export function ValidationOverlayPlayer({
     // Hold last-good finger dots across ~0.4s of video frames (not paint FPS).
     const stickyHoldFrames = Math.max(10, Math.round(fps * 0.4));
     const stickyStore = fingerStickyRef.current;
+    resetHoldIfSeek(stickyStore, idx);
     const pushFingerDot = (fid, jname, cpt, style, live) => {
       if (!cpt) return;
       const key = `${fid}:${jname}`;
@@ -1819,15 +1834,30 @@ export function ValidationOverlayPlayer({
   const startRecording = useCallback(async () => {
     const video = videoRef.current;
     const recCanvas = recCanvasRef.current;
-    if (!video || !recCanvas) return;
+    if (!video || !recCanvas) {
+      autoRenderStartedRef.current = false;
+      releaseOverlayBake();
+      return;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") return;
     recordingRef.current = true;
     canvasLayoutCacheRef.current = { key: "", result: null };
     // Paint one native-res frame before capture so the first recorded frame is not blank.
     drawOverlay();
     drawRecordingFrame();
-    const { videoBitsPerSecond, captureFps } = await estimateBakeBitrate(video);
-    const stream = recCanvas.captureStream(captureFps);
+    let videoBitsPerSecond;
+    let captureFps;
+    let stream;
+    try {
+      ({ videoBitsPerSecond, captureFps } = await estimateBakeBitrate(video));
+      stream = recCanvas.captureStream(captureFps);
+    } catch (err) {
+      autoRenderStartedRef.current = false;
+      recordingRef.current = false;
+      releaseOverlayBake();
+      onError?.(err?.message || "Could not start high-quality bake");
+      return;
+    }
     const mimeType = getSupportedMimeType();
     let recorder;
     try {
@@ -1836,7 +1866,15 @@ export function ValidationOverlayPlayer({
       try {
         recorder = new MediaRecorder(stream, { mimeType, bitsPerSecond: videoBitsPerSecond });
       } catch {
-        recorder = new MediaRecorder(stream, { mimeType });
+        try {
+          recorder = new MediaRecorder(stream, { mimeType });
+        } catch (err) {
+          autoRenderStartedRef.current = false;
+          recordingRef.current = false;
+          releaseOverlayBake();
+          onError?.(err?.message || "Could not start high-quality bake");
+          return;
+        }
       }
     }
     mediaRecorderRef.current = recorder;
@@ -1846,6 +1884,7 @@ export function ValidationOverlayPlayer({
     };
     recorder.onstop = () => {
       recordingRef.current = false;
+      releaseOverlayBake();
       canvasLayoutCacheRef.current = { key: "", result: null };
       const blob = new Blob(recordedChunksRef.current, { type: mimeType.includes("mp4") ? "video/mp4" : "video/webm" });
       const url = URL.createObjectURL(blob);
@@ -1872,7 +1911,9 @@ export function ValidationOverlayPlayer({
       video.currentTime = 0;
       await video.play();
     } catch (err) {
+      autoRenderStartedRef.current = false;
       recordingRef.current = false;
+      releaseOverlayBake();
       try {
         if (recorder.state === "recording") recorder.stop();
       } catch {
@@ -1937,6 +1978,9 @@ export function ValidationOverlayPlayer({
     ) {
       return;
     }
+    if (userPlayedRef.current || isExpandedRef.current) return;
+    if ((video.currentTime || 0) > 0.12) return;
+    if (!tryAcquireOverlayBake()) return;
     autoRenderStartedRef.current = true;
     startRecording();
   }, [autoRender, downloadUrl, frames.length, startRecording]);
@@ -2040,6 +2084,13 @@ export function ValidationOverlayPlayer({
       lastPaintMediaTimeRef.current = -1;
       setDisplayDuration(video.duration || 0);
       setDisplayTime(video.currentTime || 0);
+      if (
+        !sourceMismatchNotifiedRef.current
+        && overlaySourceLooksMismatched(video.duration, overlayDurationRef.current)
+      ) {
+        sourceMismatchNotifiedRef.current = true;
+        onSourceMismatchRef.current?.();
+      }
       schedulePaint();
       tryAutoRender();
     };
@@ -2178,6 +2229,7 @@ export function ValidationOverlayPlayer({
       })) {
         video.currentTime = 0;
       }
+      userPlayedRef.current = true;
       video.play().catch(() => {});
     } else {
       video.pause();
@@ -2352,12 +2404,14 @@ export function ValidationOverlayPlayer({
     if (!isExpanded) return undefined;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    const scrollerLock = lockOverlayAppScroller();
     const onKey = (e) => {
       if (e.key === "Escape") exitExpanded();
     };
     window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prevOverflow;
+      unlockOverlayAppScroller(scrollerLock);
       window.removeEventListener("keydown", onKey);
     };
   }, [isExpanded, exitExpanded]);
@@ -2391,6 +2445,8 @@ export function ValidationOverlayPlayer({
 
   useEffect(() => {
     autoRenderStartedRef.current = false;
+    userPlayedRef.current = false;
+    sourceMismatchNotifiedRef.current = false;
     setDownloadUrl(null);
     setRenderProgress(0);
     cupLiveRef.current = null;
@@ -2411,6 +2467,13 @@ export function ValidationOverlayPlayer({
 
   useEffect(() => {
     tryAutoRender();
+  }, [tryAutoRender]);
+
+  useEffect(() => {
+    const onFree = () => tryAutoRender();
+    const name = overlayBakeFreeEventName();
+    window.addEventListener(name, onFree);
+    return () => window.removeEventListener(name, onFree);
   }, [tryAutoRender]);
 
   useLayoutEffect(() => {
@@ -2564,7 +2627,13 @@ export function ValidationOverlayPlayer({
                 className={`block object-contain bg-transparent pointer-events-none ${
                   isExpanded ? "w-full h-full" : "w-full h-full max-w-full max-h-[80vh]"
                 }`}
-                onError={(e) => onError?.(e?.target?.error || new Error("Video failed to load"))}
+                onError={(e) => {
+                  const el = e?.currentTarget || e?.target;
+                  const mediaErr = el?.error;
+                  if (mediaErr?.code === 1) return;
+                  if (mediaErr?.code === 4 && (!el?.src || el.readyState < 2)) return;
+                  onError?.(mediaErr || new Error("Video failed to load"));
+                }}
               />
               <canvas
                 ref={canvasRef}

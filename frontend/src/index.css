@@ -107,6 +107,12 @@ html.nl-overlay-expanded [data-nl-app-scroll] {
   z-index: 2147483000 !important;
 }
 
+/* Sticky clinic bar is z-60; <main> is z-30 so expand inside main painted under it.
+   Raise main only — do not hide or unstick the top bar (that reflowed the clinic). */
+html.nl-overlay-expanded main {
+  z-index: 80 !important;
+}
+
 html.nl-overlay-expanded .validation-player-home,
 html.nl-overlay-expanded .nl-overlay-escape,
 html.nl-overlay-expanded.nl-touch .nl-overlay-escape,

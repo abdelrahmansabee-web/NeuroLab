@@ -3,6 +3,7 @@ import {
   evaluateRecallPieces,
   formatRecallToast,
   planPatientRecall,
+  shouldReuseRecentRecall,
   summarizeRecallRows,
 } from "./driveSessionRestore";
 
@@ -104,5 +105,16 @@ describe("driveSessionRestore", () => {
       pdfOk: true,
     });
     expect(row.complete).toBe(true);
+  });
+
+  test("empty boot recall does not consume the 45s cooldown", () => {
+    const empty = summarizeRecallRows([]);
+    expect(empty.attempted).toBe(false);
+    expect(shouldReuseRecentRecall(empty, Date.now() - 1000, Date.now())).toBe(false);
+    const real = summarizeRecallRows([{ expected: true, complete: true }]);
+    expect(real.attempted).toBe(true);
+    expect(shouldReuseRecentRecall(real, Date.now() - 1000, Date.now())).toBe(true);
+    expect(shouldReuseRecentRecall(real, Date.now() - 1000, Date.now(), { force: true })).toBe(false);
+    expect(shouldReuseRecentRecall(real, Date.now() - 46000, Date.now())).toBe(false);
   });
 });

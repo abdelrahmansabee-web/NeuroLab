@@ -7,6 +7,8 @@ import {
   readSlotBox,
   captureContainingBlockStyles,
   restoreContainingBlockStyles,
+  lockOverlayAppScroller,
+  unlockOverlayAppScroller,
   OVERLAY_PORTAL_Z_COMPACT,
   OVERLAY_PORTAL_Z_EXPANDED,
   OVERLAY_APP_SCROLL_EXPANDED_Z,
@@ -48,11 +50,26 @@ test("expanded iPad scroller stacks above the clinic sidebar", () => {
   expect(OVERLAY_APP_SCROLL_EXPANDED_Z).toBeGreaterThan(100);
 });
 
-test("expand CSS raises the scroller and does not reflow the clinic top bar", () => {
+test("expand locks the clinic app scroller the same way the actions sheet does", () => {
+  const scroller = document.createElement("div");
+  scroller.setAttribute("data-nl-app-scroll", "1");
+  scroller.style.overflow = "auto";
+  document.body.appendChild(scroller);
+  const saved = lockOverlayAppScroller();
+  expect(scroller.style.overflow).toBe("hidden");
+  expect(scroller.style.touchAction).toBe("none");
+  unlockOverlayAppScroller(saved);
+  expect(scroller.style.overflow).toBe("auto");
+  expect(scroller.style.touchAction).toBe("");
+  document.body.removeChild(scroller);
+});
+
+test("expand CSS raises the scroller and main above the sticky top bar without hiding it", () => {
   const fs = require("fs");
   const path = require("path");
   const css = fs.readFileSync(path.join(__dirname, "index.css"), "utf8");
   expect(css).toMatch(/html\.nl-overlay-expanded \[data-nl-app-scroll\]/);
+  expect(css).toMatch(/html\.nl-overlay-expanded main\s*\{[\s\S]*?z-index:\s*80/);
   expect(css).not.toMatch(/html\.nl-overlay-expanded \.nl-clinic-shell-topbar/);
   expect(css).not.toMatch(/html\.nl-overlay-expanded \.nl-clinic-main/);
 });
