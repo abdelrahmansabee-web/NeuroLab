@@ -1,0 +1,28 @@
+=== Remaining OpenCap/OpenSim mentions ===
+None found.
+
+=== References section ===
+[297] 8.   Wagh V, Scott MW, Andrushko JW, Jones CB, Larssen BC, Boyd LA, Kraeutner SN. Using MediaPipe to track upper-limb reaching movements after stroke: a proof-of-principle study. J Neuroeng Rehabil. 2025 Nov 25;22(1):268.
+[308] 14. Staacks S, Hütz S, Heinke H, Stampfer C. Advanced tools for smartphone-based experiments: phyphox. Phys Teach. 2021;59(3):214-215.
+[309] 15. Dobkin BH, Dorsch A. The promise of mHealth: physical activity, fitness, and stroke. Neurorehabil Neural Repair. 2011;25(8):711-715.
+[310] 16. Dobkin BH. Wearable motion sensors to continuously measure real-world physical activities. Curr Opin Neurol. 2013;26(6):602-608.
+
+=== Key tool-assignment paragraphs ===
+
+--- MediaPipe will quantify ---
+For this purpose, a dual-sensor kinematic setup combining MediaPipe Pose Landmarker (markerless video-based motion capture) with Phyphox smartphone accelerometry is introduced. MediaPipe will quantify spatial and angular parameters (trunk displacement, shoulder girdle elevation, elbow angle) from side-view video, while Phyphox will capture time- and acceleration-based parameters (movement smoothness, movement time, peak velocity) from a wrist-mounted smartphone accelerometer. Hence, by objective
+
+--- Phyphox will capture ---
+For this purpose, a dual-sensor kinematic setup combining MediaPipe Pose Landmarker (markerless video-based motion capture) with Phyphox smartphone accelerometry is introduced. MediaPipe will quantify spatial and angular parameters (trunk displacement, shoulder girdle elevation, elbow angle) from side-view video, while Phyphox will capture time- and acceleration-based parameters (movement smoothness, movement time, peak velocity) from a wrist-mounted smartphone accelerometer. Hence, by objective
+
+--- Movement Smoothness (Spectral Arc Length ---
+·     Movement Smoothness (Spectral Arc Length - SPARC): Calculated from the wrist accelerometer absolute velocity profile [√(x²+y²+z²)]. SPARC quantifies the smoothness of the speed profile by measuring the arc length of its normalized Fourier spectrum; more negative values indicate smoother, less segmented movement. Increase in SPARC (i.e., less negative) reflects loss of motor control and more stop-and-go behavior. Reduction in SPARC (more negative) will be interpreted as increased movement s
+
+--- Trunk Ratio ---
+o Measurement Method: Calculated from MediaPipe trunk and hand landmark trajectories as the ratio of trunk displacement to hand displacement during the reaching phase (Trunk Ratio). Higher values indicate greater reliance on trunk compensation.
+
+--- side-view camera ---
+o Measurement Method: Calculated by measuring the relative vertical (Y axis) displacement of the affected-side Shoulder marker with respect to its resting position during movement. The side-view camera orientation maximizes the accuracy of pure vertical elevation.
+
+--- wrist-mounted ---
+For this purpose, a dual-sensor kinematic setup combining MediaPipe Pose Landmarker (markerless video-based motion capture) with Phyphox smartphone accelerometry is introduced. MediaPipe will quantify spatial and angular parameters (trunk displacement, shoulder girdle elevation, elbow angle) from side-view video, while Phyphox will capture time- and acceleration-based parameters (movement smoothness, movement time, peak velocity) from a wrist-mounted smartphone accelerometer. Hence, by objective

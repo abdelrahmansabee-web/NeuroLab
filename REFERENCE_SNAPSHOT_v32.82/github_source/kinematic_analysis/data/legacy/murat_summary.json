@@ -1,0 +1,61 @@
+{
+  "patient": "murat",
+  "locked_camera_view": "oblique",
+  "pre": {
+    "sparc": -2.4980370956533893,
+    "sparc_window_onset_frame": 33,
+    "sparc_window_offset_frame": 105,
+    "reach_amplitude_sw": 0.35964922668278665,
+    "native_reach_amplitude_sw": 0.4406,
+    "trunk_ratio": 0.5804661876011177,
+    "movement_time_sec": 1.2166666666666666,
+    "peak_velocity_cm_s": 84.71256489438629,
+    "sparc_matched": -2.4980370956533893,
+    "sparc_interpretation": {
+      "value": -2.498,
+      "rating": "good",
+      "description": "Smooth with only mild compensation or fatigue."
+    }
+  },
+  "post": {
+    "sparc": -2.824366339363171,
+    "sparc_window_onset_frame": 83,
+    "sparc_window_offset_frame": 176,
+    "reach_amplitude_sw": 0.36585550871430134,
+    "native_reach_amplitude_sw": 0.297,
+    "trunk_ratio": 0.3976469612281727,
+    "movement_time_sec": 1.5666666666666667,
+    "peak_velocity_cm_s": 8.822767870256682,
+    "sparc_matched": -2.824366339363171,
+    "sparc_interpretation": {
+      "value": -2.8244,
+      "rating": "moderate",
+      "description": "Some segmentation or trunk compensation present."
+    }
+  },
+  "healthy": {
+    "sparc": -3.154527525786449,
+    "sparc_window_onset_frame": 136,
+    "sparc_window_offset_frame": 186,
+    "reach_amplitude_sw": 0.3378933218377596,
+    "native_reach_amplitude_sw": 0.3297,
+    "trunk_ratio": 0.18283972249451536,
+    "movement_time_sec": 0.85,
+    "peak_velocity_cm_s": 21.167104723865585,
+    "sparc_matched": -3.154527525786449,
+    "sparc_interpretation": {
+      "value": -3.1545,
+      "rating": "moderate",
+      "description": "Some segmentation or trunk compensation present."
+    }
+  },
+  "sparc_comparison_valid": false,
+  "sparc_comparison_issues": [
+    "Healthy SPARC is not higher than Pre SPARC; likely window or amplitude mismatch.",
+    "Post SPARC is not lower than Healthy SPARC; check for true recovery ceiling or window mismatch.",
+    "Post SPARC is not higher than Pre SPARC; no smoothness recovery detected."
+  ],
+  "sparc_comparison_warnings": [
+    "Amplitude spread too large to apply safe amplitude matching (max/min = 1.48, min = 0.30 SW); interpret cross-condition SPARC cautiously."
+  ]
+}
