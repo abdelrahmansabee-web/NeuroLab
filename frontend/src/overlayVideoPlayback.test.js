@@ -25,8 +25,12 @@ test("overlay pose blends between stored frames for the presented video time", (
     { time: 0.2, palm: [0.3, 0.3] },
   ];
   expect(getOverlayFrameState(frames, 10, 0, 0.2)).toEqual({ idx: 0, alpha: 0 });
-  expect(getOverlayFrameState(frames, 10, 0.04, 0.2)).toEqual({ idx: 0, alpha: 0.4 });
-  expect(getOverlayFrameState(frames, 10, 0.09, 0.2)).toEqual({ idx: 0, alpha: 0.9 });
+  const mid = getOverlayFrameState(frames, 10, 0.04, 0.2);
+  expect(mid.idx).toBe(0);
+  expect(mid.alpha).toBeCloseTo(0.4, 10);
+  const near = getOverlayFrameState(frames, 10, 0.09, 0.2);
+  expect(near.idx).toBe(0);
+  expect(near.alpha).toBeCloseTo(0.9, 10);
   expect(getOverlayFrameState(frames, 10, 0.2, 0.2)).toEqual({ idx: 1, alpha: 1 });
 });
 
