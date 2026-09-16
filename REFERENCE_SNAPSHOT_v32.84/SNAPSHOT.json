@@ -1,0 +1,47 @@
+{
+  "snapshot_id": "REFERENCE_SNAPSHOT_v32.84",
+  "created_at": "2026-09-16T19:40:39Z",
+  "purpose": "Full restore point after the clinician confirmed PRE overlay video picture shows on iPad (clinic UI 32.84). Keep live original after Analyze; 32.82 overlay clock; 32.72 lerp; 32.81 RVFC; in-card compact.",
+  "nl_version": "32.84",
+  "clinician_verified": [
+    "PRE overlay patient picture shows after a fresh Analyze on iPad"
+  ],
+  "hf_space": {
+    "url": "https://huggingface.co/spaces/AbdelrahmanSabee/raedai",
+    "app_url": "https://abdelrahmansabee-raedai.hf.space/",
+    "git_url": "https://huggingface.co/spaces/AbdelrahmanSabee/raedai.git",
+    "commit": "5484f840372fd3b5c34b481b666d05b46d4bcf8d",
+    "commit_title": "32.84: keep the live PRE file so the iPad picture can show",
+    "frontend_nl_version": "32.84",
+    "js": "main.9ca7aacc.js",
+    "css": "main.c7750f11.css",
+    "sdk": "docker",
+    "app_port": 7860
+  },
+  "github": {
+    "url": "https://github.com/abdelrahmansabee-web/NeuroLab",
+    "ref": "cursor/backup-full-v3284-f95a",
+    "source_commit": "1075c62a808fe853060f3750755fcdec2cfeb765",
+    "frontend_nl_version": "32.84",
+    "note": "github_source is GitHub HEAD 32.84 (keep live PRE file after Analyze). Dirty CRA stubs were not copied."
+  },
+  "bytes": {
+    "github_source": 35109938,
+    "hf_space": 6774764,
+    "total": 41988447
+  },
+  "file_count": 807,
+  "excluded": [
+    ".git",
+    "venv/",
+    "node_modules/",
+    "uploads/ outputs/ data/ (patient runtime data)",
+    "backend/results and kinematic_analysis/videos (kept on the git tag, too large to duplicate here)",
+    "*.task MediaPipe models (Dockerfile downloads at build)",
+    "*.js.map source maps",
+    "stale HF main.<hash>.js bundles other than the live 32.84 files",
+    "HF Space secrets (JWT_SECRET, MFA_ENCRYPTION_KEY, Google Drive credentials)",
+    "nested REFERENCE_SNAPSHOT_v28.81 / v32.52 / v32.72 / v32.82 and backups/",
+    "dirty CRA stubs AuthGate.jsx analysisPlan.js index.js patientImport.js thesisDocs.js"
+  ]
+}
