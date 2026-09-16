@@ -102,6 +102,23 @@ test("iOS video.duration shorter than overlay span does not run the skeleton ahe
   expect(stretched.alpha).toBeCloseTo(0.9, 10);
 });
 
+test("9:18 PRE drink clip keeps pose fraction on the video fraction", () => {
+  const videoDuration = 9 * 60 + 18;
+  const playbackTime = 8 * 60 + 4;
+  const tN = videoDuration * (16 / (1000 / 60));
+  const target = overlayPlaybackTargetTime({
+    playbackTime,
+    videoDuration,
+    t0: 0,
+    tN,
+  });
+  expect(tN).toBeCloseTo(535.68, 1);
+  expect(target / tN).toBeCloseTo(playbackTime / videoDuration, 8);
+  expect(playbackTime - target).toBeGreaterThan(18);
+  const short = [{ time: 0 }, { time: 200 }, { time: 400 }];
+  expect(getOverlayFrameState(short, 60, playbackTime, videoDuration).idx).toBe(1);
+});
+
 test("long PRE overlay span shorter than the video does not finish the reach first", () => {
   expect(overlayPlaybackTargetTime({
     playbackTime: 15,
