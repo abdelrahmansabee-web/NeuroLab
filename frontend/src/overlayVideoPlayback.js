@@ -23,8 +23,8 @@ function overlayFrameTime(frames, idx, t0, fps) {
 
 /**
  * Map the presented video time to the overlay sample for that picture.
- * Snap to the nearest stored landmark frame (no blend toward the next sample) so
- * the skeleton is the pose computed for this video time, not a halfway pose.
+ * Blend between stored landmark frames (32.72 freeze) so the skeleton follows
+ * playback time between samples instead of snapping to the nearer pose.
  */
 export function getOverlayFrameState(frames, fps, playbackTime, videoDuration) {
   if (!frames?.length) return { idx: 0, alpha: 0 };
@@ -52,10 +52,10 @@ export function getOverlayFrameState(frames, fps, playbackTime, videoDuration) {
   }
   const tLo = overlayFrameTime(frames, lo, t0, rate);
   const tHi = overlayFrameTime(frames, hi, t0, rate);
-  if (tHi > tLo + 1e-9 && (targetTime - tLo) > (tHi - targetTime)) {
-    return { idx: hi, alpha: 0 };
-  }
-  return { idx: lo, alpha: 0 };
+  const alpha = tHi > tLo + 1e-9
+    ? Math.max(0, Math.min(1, (targetTime - tLo) / (tHi - tLo)))
+    : 0;
+  return { idx: lo, alpha };
 }
 
 export function getOverlayFrameIndex(frames, fps, playbackTime, videoDuration) {
