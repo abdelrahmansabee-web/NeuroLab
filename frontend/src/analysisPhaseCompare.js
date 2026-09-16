@@ -145,5 +145,8 @@ export function compareClinicPhasePipelines({ strokeSide = "right" } = {}) {
     prePostSameArm: true,
     healthyOppositeArm: true,
     overlayBuilderShared: true,
+    // Same overlay builder. PRE lead is a long-clip analysis clock:
+    // int(1000/fps) CSV time runs slow vs Safari, so 1:1 paint finishes first.
+    preLeadIsShortOverlaySpan: true,
   };
 }
