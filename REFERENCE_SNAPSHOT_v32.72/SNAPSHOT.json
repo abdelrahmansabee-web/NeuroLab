@@ -1,0 +1,44 @@
+{
+  "snapshot_id": "REFERENCE_SNAPSHOT_v32.72",
+  "created_at": "2026-09-16T03:48:17Z",
+  "purpose": "Full restore point of the working RA.ED AI / NeuroLab program (Hugging Face Space + GitHub source) at clinic UI 32.72. Videos stay in cards; enlarge uses the same video node.",
+  "nl_version": "32.72",
+  "hf_space": {
+    "url": "https://huggingface.co/spaces/AbdelrahmanSabee/raedai",
+    "app_url": "https://abdelrahmansabee-raedai.hf.space/",
+    "git_url": "https://huggingface.co/spaces/AbdelrahmanSabee/raedai.git",
+    "commit": "5a22b03961873ddcc7a83353645b7d61cd6b2e82",
+    "commit_title": "32.72: keep overlay videos in their cards while scrolling",
+    "frontend_nl_version": "32.72",
+    "js": "main.db80789d.js",
+    "css": "main.5019aa03.css",
+    "sdk": "docker",
+    "app_port": 7860
+  },
+  "github": {
+    "url": "https://github.com/abdelrahmansabee-web/NeuroLab",
+    "ref": "cursor/backup-full-v3272-f95a",
+    "source_commit": "28c6d0f116bea2b597e0e1018037dd8d5118f6cb",
+    "frontend_nl_version": "32.72",
+    "note": "github_source is GitHub HEAD 32.72 (in-card overlay players). Dirty CRA stubs were not copied."
+  },
+  "bytes": {
+    "github_source": 35029127,
+    "hf_space": 6749743,
+    "total": 41880876
+  },
+  "file_count": 795,
+  "excluded": [
+    ".git",
+    "venv/",
+    "node_modules/",
+    "uploads/ outputs/ data/ (patient runtime data)",
+    "backend/results and kinematic_analysis/videos (kept on the git tag, too large to duplicate here)",
+    "*.task MediaPipe models (Dockerfile downloads at build)",
+    "*.js.map source maps",
+    "stale HF main.<hash>.js bundles other than the live 32.72 files",
+    "HF Space secrets (JWT_SECRET, MFA_ENCRYPTION_KEY, Google Drive credentials)",
+    "nested REFERENCE_SNAPSHOT_v28.81 / v32.52 and backups/",
+    "dirty CRA stubs AuthGate.jsx analysisPlan.js index.js patientImport.js thesisDocs.js"
+  ]
+}

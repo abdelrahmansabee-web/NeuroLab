@@ -1,0 +1,28 @@
+DOLDURULMUŞ ETİK REVİZYON FORMLARI
+Tarih: 15/06/2026
+
+Kaynak: manuscript + UPDATED_CORRECTED + Outlook.pdf (Etik Kurul yanıtı)
+
+Revizyon kapsamı:
+  • Çok merkezli: Biruni Üniversitesi Hastanesi eklendi
+  • Yardımcı araştırmacı: Doç. Dr. Çiğdem Çınar
+
+Oluşturulan dosyalar:
+  • IRB Başvuru: insan-arastirmalari-etik-kurul-basvuru-formu-DOLDURULMUS.doc
+  • Özgeçmiş: ozgecmis-formu_Abdelrahman_Sabee_DOLDURULMUS.doc
+  • Düzeltme Bildirimi: insan-arastirmalar-etik-kurulu-duzeltme-bildirim-formu-DOLDURULMUS.docx
+  • Kurum İzni Biruni: kurum_izni_biruni_DOLDURULMUS.docx
+
+MANUEL TAMAMLANMASI GEREKEN ALANLAR (Abdelrahman özgeçmiş):
+  • Doğum tarihi ve yeri
+  • Cep telefonu
+  • Lisans mezuniyet üniversitesi ve yılı
+  • İş tecrübesi tablosu
+
+İMZALAR:
+  • Tüm formlara ıslak imza
+  • IRB formunda değişiklikler kırmızı renkte (otomatik uygulandı — kontrol edin)
+  • PDF olarak tarayıp etikkurul@istinye.edu.tr adresine gönderin
+
+Ek belgeler (hazır):
+  • Cigdem_Cinar_Ozgecmis_EK.docx (imzalı güncel tarihli kopya alın)

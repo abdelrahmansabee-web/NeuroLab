@@ -1,0 +1,81 @@
+/* iPad/iPhone only. No live backdrop-filter (that is what made Safari stutter).
+   Original glass frost came from blur(8px) over the dark photo. Without it the
+   panels were almost invisible. These fills stand in for that frost.
+   Not the rejected solid-black smoothness overlays. */
+
+html.nl-ipad-paint.nl-touch .sidebar-shell,
+html.nl-ipad-paint.nl-touch .glass-float,
+html.nl-ipad-paint.nl-touch .content-shell,
+html.nl-ipad-paint.nl-touch .content-shell .glass-float,
+html.nl-ipad-paint.nl-touch .content-shell .content-panel-glass,
+html.nl-ipad-paint.nl-touch .section-header,
+html.nl-ipad-paint.nl-touch .gselect-trigger,
+html.nl-ipad-paint.nl-touch .gselect-menu,
+html.nl-ipad-paint.nl-touch .app-topbar-glass,
+html.nl-ipad-paint.nl-touch [class*="backdrop-blur"],
+html.nl-ipad-paint .sidebar-shell,
+html.nl-ipad-paint .glass-float,
+html.nl-ipad-paint .content-shell,
+html.nl-ipad-paint .section-header,
+html.nl-ipad-paint .gselect-trigger,
+html.nl-ipad-paint .gselect-menu,
+html.nl-ipad-paint .app-topbar-glass,
+html.nl-ipad-paint [class*="backdrop-blur"],
+html.nl-touch .sidebar-shell,
+html.nl-touch .glass-float,
+html.nl-touch .content-shell,
+html.nl-touch .section-header,
+html.nl-touch .app-topbar-glass,
+html.nl-touch [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.nl-touch .glass-float,
+html.nl-ipad-paint .glass-float,
+html.nl-touch .content-panel-glass,
+html.nl-ipad-paint .content-panel-glass,
+html.nl-touch [class*="backdrop-blur"],
+html.nl-ipad-paint [class*="backdrop-blur"] {
+  background-color: rgba(18, 24, 36, 0.34) !important;
+}
+
+html.nl-touch .content-shell,
+html.nl-ipad-paint .content-shell {
+  background-color: rgba(16, 22, 32, 0.42) !important;
+}
+
+html.nl-touch .sidebar-shell,
+html.nl-ipad-paint .sidebar-shell,
+html.nl-touch .app-topbar-glass,
+html.nl-ipad-paint .app-topbar-glass,
+html.nl-touch .section-header,
+html.nl-ipad-paint .section-header {
+  background-color: rgba(16, 22, 32, 0.50) !important;
+}
+
+html.nl-touch .fixed.inset-0.z-0 > .absolute.inset-0:nth-child(2),
+html.nl-ipad-paint .fixed.inset-0.z-0 > .absolute.inset-0:nth-child(2) {
+  background-color: rgba(8, 8, 8, 0.36) !important;
+}
+
+/* Old cached JS may still live-blur the full-screen photo. */
+html.nl-ipad-paint .fixed.inset-0.z-0 > .absolute.inset-0:first-child,
+html.nl-ipad-paint.nl-touch .fixed.inset-0.z-0 > .absolute.inset-0:first-child,
+html.nl-touch .fixed.inset-0.z-0 > .absolute.inset-0:first-child {
+  filter: none !important;
+  -webkit-filter: none !important;
+  transform: none !important;
+}
+
+html.nl-ipad-paint aside,
+html.nl-ipad-paint main,
+html.nl-ipad-paint .fixed.top-0,
+html.nl-ipad-paint.nl-touch aside,
+html.nl-ipad-paint.nl-touch main,
+html.nl-ipad-paint.nl-touch .fixed.top-0,
+html.nl-touch aside,
+html.nl-touch main,
+html.nl-touch .fixed.top-0 {
+  will-change: auto !important;
+}
