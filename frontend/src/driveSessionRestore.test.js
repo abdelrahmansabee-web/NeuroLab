@@ -55,8 +55,9 @@ describe("driveSessionRestore", () => {
     });
     expect(row.complete).toBe(false);
     expect(row.missing).toEqual(
-      expect.arrayContaining(["Clinic PDF", "Pre original video", "Pre overlay"]),
+      expect.arrayContaining(["Pre original video", "Pre overlay"]),
     );
+    expect(row.missing).not.toContain("Clinic PDF");
     expect(row.missing).not.toContain("Pre analysis");
   });
 
@@ -98,13 +99,37 @@ describe("driveSessionRestore", () => {
       ["pre_validation_original.mp4", "pre_validation_overlay.json"],
     );
     expect(plan.phases[0].wantUnified).toBe(false);
+    expect(plan.wantPdf).toBe(false);
     const row = evaluateRecallPieces(plan, {
       cacheByPhase: {
         pre: { overlay, originalVideoBlob: original, kinematicsSnapshot: { csv_filename: "a.csv" } },
       },
-      pdfOk: true,
+      pdfOk: false,
     });
     expect(row.complete).toBe(true);
+    expect(row.missing).not.toContain("Clinic PDF");
+  });
+
+  test("requires clinic PDF only when Drive listing has one", () => {
+    const overlay = { frames: [{ t: 0 }] };
+    const original = new Blob([new Uint8Array([9])], { type: "video/mp4" });
+    const plan = planPatientRecall(
+      patient({
+        id: "108",
+        name: "Ada",
+        pre: { csv_filename: "a.csv", video_filename: "a.mp4", movement_time_sec: 1 },
+      }),
+      ["pre_validation_original.mp4", "pre_validation_overlay.json", "108_Ada.pdf"],
+    );
+    expect(plan.wantPdf).toBe(true);
+    const missingPdf = evaluateRecallPieces(plan, {
+      cacheByPhase: {
+        pre: { overlay, originalVideoBlob: original, kinematicsSnapshot: { csv_filename: "a.csv" } },
+      },
+      pdfOk: false,
+    });
+    expect(missingPdf.complete).toBe(false);
+    expect(missingPdf.missing).toContain("Clinic PDF");
   });
 
   test("empty boot recall does not consume the 45s cooldown", () => {

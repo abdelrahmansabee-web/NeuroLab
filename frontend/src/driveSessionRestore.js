@@ -109,7 +109,7 @@ export function planPatientRecall(patient, driveNames = []) {
     id: String(demo.participantId || "").trim(),
     name: String(demo.name || demo.fullName || "").trim(),
     hasDemo,
-    wantPdf: anyPhase || kinds.has("clinic_report"),
+    wantPdf: kinds.has("clinic_report"),
     anyPhase,
     phases,
   };
