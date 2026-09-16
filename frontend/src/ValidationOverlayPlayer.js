@@ -58,13 +58,19 @@ import {
   overlayBakeFreeEventName,
   overlayLivePaintFromCurrentTime,
   overlayPlaybackPaintStalled,
+  overlayNeedsDecoderYield,
   overlaySourceLooksMismatched,
+  overlayVideoIsParked,
   overlayVideoLooksStalled,
   overlayVideoShouldRetryError,
+  registerOverlayVideoElement,
   releaseOverlayBake,
   reloadOverlayVideoElement,
+  restoreOverlayVideoDecoders,
   shouldRestartPlayback,
+  subscribeOverlayDecoderPark,
   tryAcquireOverlayBake,
+  yieldOverlayVideoDecoders,
 } from "./overlayVideoPlayback";
 import {
   overlayPlayerChromeStyle,
@@ -705,6 +711,7 @@ export function ValidationOverlayPlayer({
   const [progress, setProgress] = useState(0);
   const [displayTime, setDisplayTime] = useState(0);
   const [displayDuration, setDisplayDuration] = useState(0);
+  const [decoderParked, setDecoderParked] = useState(false);
   const [recording, setRecording] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState(null);
   const [downloadBusy, setDownloadBusy] = useState(false);
@@ -2099,6 +2106,7 @@ export function ValidationOverlayPlayer({
     };
 
     const onLoadedMetadata = () => {
+      if (overlayVideoIsParked(video)) return;
       canvasLayoutCacheRef.current = { key: "", result: null };
       gutterLayoutCacheRef.current = { key: "", result: null };
       const vw = video.videoWidth || 1;
@@ -2473,6 +2481,12 @@ export function ValidationOverlayPlayer({
   }, [overlayStyle, showKinematicMarks, tablePlaceMode, drawOverlay]);
 
   useEffect(() => {
+    const syncParked = () => setDecoderParked(overlayVideoIsParked(videoRef.current));
+    syncParked();
+    return subscribeOverlayDecoderPark(syncParked);
+  }, [videoUrl]);
+
+  useEffect(() => {
     autoRenderStartedRef.current = false;
     userPlayedRef.current = false;
     sourceMismatchNotifiedRef.current = false;
@@ -2488,12 +2502,40 @@ export function ValidationOverlayPlayer({
     const video = videoRef.current;
     if (!video || !videoUrl) return undefined;
     video.preload = OVERLAY_VIDEO_PRELOAD;
+    const unregister = registerOverlayVideoElement(video);
     let cancelled = false;
     const startedAt = Date.now();
+    let releasedSiblings = [];
+
+    const restoreSiblings = () => {
+      if (!releasedSiblings.length) return;
+      const toRestore = releasedSiblings;
+      releasedSiblings = [];
+      toRestore.forEach((item) => {
+        enqueueOverlayVideoAttach(() => {
+          restoreOverlayVideoDecoders([item]);
+        });
+      });
+    };
+
+    const onGotDuration = () => {
+      if (cancelled) return;
+      if (Number(video.duration) > 0.05) restoreSiblings();
+    };
+    video.addEventListener("loadedmetadata", onGotDuration);
+
+    const borrowDecoderIfNeeded = () => {
+      if (!isAppleTouchVideo()) return;
+      if (releasedSiblings.length) return;
+      if (!overlayNeedsDecoderYield(video)) return;
+      releasedSiblings = yieldOverlayVideoDecoders(video);
+    };
 
     const kickLoad = () => enqueueOverlayVideoAttach(() => {
       if (cancelled || !videoRef.current) return;
+      if (overlayVideoIsParked(video)) return;
       if (video.readyState >= 1 && Number(video.duration) > 0.05) return;
+      borrowDecoderIfNeeded();
       try {
         video.load();
       } catch { /* ignore */ }
@@ -2503,6 +2545,7 @@ export function ValidationOverlayPlayer({
 
     const stallId = window.setInterval(() => {
       if (cancelled || recordingRef.current) return;
+      if (overlayVideoIsParked(video)) return;
       if (!overlayVideoLooksStalled({
         readyState: video.readyState,
         duration: video.duration,
@@ -2513,16 +2556,19 @@ export function ValidationOverlayPlayer({
       videoReloadTriesRef.current += 1;
       enqueueOverlayVideoAttach(() => {
         if (cancelled) return;
+        borrowDecoderIfNeeded();
         reloadOverlayVideoElement(video);
       });
     }, OVERLAY_VIDEO_STALL_MS);
 
     const onMediaError = () => {
       if (cancelled) return;
+      if (overlayVideoIsParked(video)) return;
       if (!overlayVideoShouldRetryError(video.error?.code, videoReloadTriesRef.current)) return;
       videoReloadTriesRef.current += 1;
       enqueueOverlayVideoAttach(() => {
         if (cancelled) return;
+        borrowDecoderIfNeeded();
         reloadOverlayVideoElement(video);
       });
     };
@@ -2532,6 +2578,9 @@ export function ValidationOverlayPlayer({
       cancelled = true;
       window.clearInterval(stallId);
       video.removeEventListener("error", onMediaError);
+      video.removeEventListener("loadedmetadata", onGotDuration);
+      unregister();
+      restoreSiblings();
     };
   }, [videoUrl]);
 
@@ -2700,7 +2749,7 @@ export function ValidationOverlayPlayer({
           >
               <video
                 ref={videoRef}
-                src={videoUrl}
+                src={decoderParked ? undefined : videoUrl}
                 playsInline
                 webkit-playsinline="true"
                 muted

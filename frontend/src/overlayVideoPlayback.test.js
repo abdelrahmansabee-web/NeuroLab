@@ -7,14 +7,38 @@ import {
   overlayPlaybackPaintStalled,
   overlayPlayerMountDelayMs,
   overlaySourceLooksMismatched,
+  overlayNeedsDecoderYield,
   overlayVideoLooksStalled,
   overlayVideoShouldRetryError,
+  overlayVideoIsParked,
+  registerOverlayVideoElement,
   releaseOverlayBake,
   reloadOverlayVideoElement,
   resetOverlayVideoAttachQueueForTests,
+  resetOverlayVideoElementsForTests,
+  restoreOverlayVideoDecoders,
   shouldRestartPlayback,
+  subscribeOverlayDecoderPark,
   tryAcquireOverlayBake,
+  yieldOverlayVideoDecoders,
 } from "./overlayVideoPlayback";
+
+function fakeOverlayVideo(src) {
+  const video = {
+    src,
+    preload: "",
+    getAttribute: (name) => (name === "src" ? video.src : null),
+    setAttribute: (name, value) => {
+      if (name === "src") video.src = value;
+    },
+    removeAttribute: (name) => {
+      if (name === "src") video.src = "";
+    },
+    pause: () => {},
+    load: () => {},
+  };
+  return video;
+}
 
 test("replay starts over when the clip has ended", () => {
   expect(shouldRestartPlayback({ ended: true, currentTime: 12, duration: 12 })).toBe(true);
@@ -178,4 +202,57 @@ test("overlay video attach queue runs tasks in order", async () => {
   ]);
   expect(order).toEqual(["a", "b", "c"]);
   resetOverlayVideoAttachQueueForTests();
+});
+
+test("third overlay clip yields sibling decoders then restores them", () => {
+  resetOverlayVideoElementsForTests();
+  const pre = fakeOverlayVideo("blob:pre");
+  const post = fakeOverlayVideo("blob:post");
+  const healthy = fakeOverlayVideo("blob:healthy");
+  const parks = [];
+  const unsub = subscribeOverlayDecoderPark(() => {
+    parks.push({
+      pre: overlayVideoIsParked(pre),
+      post: overlayVideoIsParked(post),
+      healthy: overlayVideoIsParked(healthy),
+    });
+  });
+  const unreg = [
+    registerOverlayVideoElement(pre),
+    registerOverlayVideoElement(post),
+    registerOverlayVideoElement(healthy),
+  ];
+  expect(overlayNeedsDecoderYield(pre)).toBe(true);
+  expect(overlayNeedsDecoderYield(post)).toBe(true);
+  const released = yieldOverlayVideoDecoders(pre);
+  expect(pre.src).toBe("blob:pre");
+  expect(post.src).toBe("");
+  expect(healthy.src).toBe("");
+  expect(released).toHaveLength(2);
+  expect(overlayVideoIsParked(pre)).toBe(false);
+  expect(overlayVideoIsParked(post)).toBe(true);
+  expect(overlayVideoIsParked(healthy)).toBe(true);
+  expect(overlayNeedsDecoderYield(pre)).toBe(false);
+  expect(reloadOverlayVideoElement(post)).toBe(false);
+  expect(parks[parks.length - 1]).toEqual({ pre: false, post: true, healthy: true });
+  restoreOverlayVideoDecoders(released);
+  expect(post.src).toBe("blob:post");
+  expect(healthy.src).toBe("blob:healthy");
+  expect(post.preload).toBe(OVERLAY_VIDEO_PRELOAD);
+  expect(overlayVideoIsParked(post)).toBe(false);
+  expect(overlayVideoIsParked(healthy)).toBe(false);
+  expect(parks[parks.length - 1]).toEqual({ pre: false, post: false, healthy: false });
+  unsub();
+  unreg.forEach((fn) => fn());
+  resetOverlayVideoElementsForTests();
+});
+
+test("two overlay clips do not yield a decoder", () => {
+  resetOverlayVideoElementsForTests();
+  const pre = fakeOverlayVideo("blob:pre");
+  const post = fakeOverlayVideo("blob:post");
+  registerOverlayVideoElement(pre);
+  registerOverlayVideoElement(post);
+  expect(overlayNeedsDecoderYield(pre)).toBe(false);
+  resetOverlayVideoElementsForTests();
 });

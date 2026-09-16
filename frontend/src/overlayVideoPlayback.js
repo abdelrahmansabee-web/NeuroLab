@@ -151,7 +151,7 @@ export function overlayVideoShouldRetryError(mediaErrorCode, reloadAttempts) {
 }
 
 export function reloadOverlayVideoElement(video) {
-  if (!video) return false;
+  if (!video || overlayVideoIsParked(video)) return false;
   const src = video.getAttribute("src") || video.src || "";
   if (!src) return false;
   try {
@@ -170,6 +170,102 @@ export function reloadOverlayVideoElement(video) {
 }
 
 let overlayAttachTail = Promise.resolve();
+const overlayVideoElements = new Set();
+let overlayDecoderParked = new WeakMap();
+const overlayDecoderListeners = new Set();
+
+function overlayVideoSrc(video) {
+  if (!video) return "";
+  return video.getAttribute?.("src") || video.src || "";
+}
+
+function notifyOverlayDecoderPark() {
+  overlayDecoderListeners.forEach((fn) => {
+    try {
+      fn();
+    } catch { /* ignore */ }
+  });
+}
+
+/** Track live overlay <video> nodes so a stalled third clip can borrow a decoder. */
+export function registerOverlayVideoElement(video) {
+  if (!video) return () => {};
+  overlayVideoElements.add(video);
+  return () => {
+    overlayVideoElements.delete(video);
+    overlayDecoderParked.delete(video);
+  };
+}
+
+export function subscribeOverlayDecoderPark(listener) {
+  if (typeof listener !== "function") return () => {};
+  overlayDecoderListeners.add(listener);
+  return () => {
+    overlayDecoderListeners.delete(listener);
+  };
+}
+
+export function overlayVideoIsParked(video) {
+  return Boolean(video) && overlayDecoderParked.has(video);
+}
+
+export function resetOverlayVideoElementsForTests() {
+  overlayVideoElements.clear();
+  overlayDecoderParked = new WeakMap();
+  overlayDecoderListeners.clear();
+}
+
+export function overlayNeedsDecoderYield(keep) {
+  let others = 0;
+  overlayVideoElements.forEach((video) => {
+    if (!video || video === keep) return;
+    if (overlayVideoIsParked(video)) return;
+    if (overlayVideoSrc(video)) others += 1;
+  });
+  return others >= 2;
+}
+
+/**
+ * iPad keeps a decoder for paused overlay clips. The third never fires
+ * loadedmetadata (0:00/0:00, skeleton on black). Drop sibling src until the
+ * kept clip has duration, then restore. Do not call this on desktop.
+ * Park the node so React `src={videoUrl}` cannot put the decoder back.
+ */
+export function yieldOverlayVideoDecoders(keep) {
+  const released = [];
+  overlayVideoElements.forEach((video) => {
+    if (!video || video === keep) return;
+    const src = overlayVideoSrc(video);
+    if (!src) return;
+    const preload = video.preload || OVERLAY_VIDEO_PRELOAD;
+    overlayDecoderParked.set(video, { src, preload });
+    released.push({ video, src, preload });
+    try {
+      video.pause();
+    } catch { /* ignore */ }
+    try {
+      video.removeAttribute("src");
+      video.load();
+    } catch { /* ignore */ }
+  });
+  if (released.length) notifyOverlayDecoderPark();
+  return released;
+}
+
+export function restoreOverlayVideoDecoders(released) {
+  let changed = false;
+  (released || []).forEach(({ video, src, preload }) => {
+    if (!video || !src) return;
+    overlayDecoderParked.delete(video);
+    video.setAttribute("src", src);
+    video.preload = preload || OVERLAY_VIDEO_PRELOAD;
+    try {
+      video.load();
+    } catch { /* ignore */ }
+    changed = true;
+  });
+  if (changed) notifyOverlayDecoderPark();
+}
 
 /** One overlay clip calls load() at a time so iPad decode does not drop the third. */
 export function enqueueOverlayVideoAttach(task) {
