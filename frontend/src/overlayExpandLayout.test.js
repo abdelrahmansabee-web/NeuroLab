@@ -145,4 +145,6 @@ test("compact overlay tools wrap instead of painting labels over icons", () => {
   expect(css).not.toMatch(/\.validation-controls-tools\s*\{[^}]*flex-wrap:\s*nowrap/s);
   expect(css).toMatch(/container-name:\s*overlay-controls/);
   expect(css).toMatch(/@container overlay-controls/);
+  expect(css).toMatch(/\.validation-control-icon\.is-active/);
+  expect(css).toMatch(/\.validation-control-icon\.is-table-place/);
 });
