@@ -87,6 +87,20 @@ test("overlay pose blends between stored frames for the presented video time", (
   expect(getOverlayFrameState(frames, 10, 0.2, 0.2)).toEqual({ idx: 1, alpha: 1 });
 });
 
+test("iOS video.duration shorter than overlay span does not run the skeleton ahead", () => {
+  const frames = [
+    { time: 0, palm: [0.1, 0.1] },
+    { time: 0.1, palm: [0.2, 0.2] },
+    { time: 0.2, palm: [0.3, 0.3] },
+  ];
+  const stretched = getOverlayFrameState(frames, 10, 0.09, 0.18);
+  const oneToOne = getOverlayFrameState(frames, 10, 0.09, 0.2);
+  expect(stretched.idx).toBe(oneToOne.idx);
+  expect(stretched.alpha).toBeCloseTo(oneToOne.alpha, 10);
+  expect(stretched.idx).toBe(0);
+  expect(stretched.alpha).toBeCloseTo(0.9, 10);
+});
+
 test("duration mismatch ignores small iOS drift and flags a baked-clip swap", () => {
   expect(overlaySourceLooksMismatched(12.08, 12)).toBe(false);
   expect(overlaySourceLooksMismatched(24, 12)).toBe(true);
