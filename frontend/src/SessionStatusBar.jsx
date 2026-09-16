@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { useReducedMotion } from "framer-motion";
 import {
   AlertCircle,
   Check,
@@ -9,7 +9,6 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { NL_TWEEN_OVERLAY } from "./motionPresets";
 import {
   SESSION_PHASES,
   SESSION_STATUS_LS,
@@ -26,13 +25,10 @@ import {
 
 const PATIENTS_SYNC_EVENT = "neurolab-patients-synced";
 
-const GLASS = {
-  backgroundColor: "rgba(18, 24, 32, 0.92)",
-  border: "1px solid rgba(255,255,255,0.08)",
-  boxShadow: "0 24px 60px -28px rgba(0,0,0,0.55)",
-  backdropFilter: "blur(22px) saturate(1.6)",
-  WebkitBackdropFilter: "blur(22px) saturate(1.6)",
-};
+/** Same liquid-glass shell as GSelect dropdown menus in App.js. */
+const MENU_GLASS_CLS =
+  "gselect-menu-portal relative overflow-hidden app-topbar-glass glass-float bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
+const MENU_GLASS_SHADOW = "0 24px 60px -30px rgba(0,0,0,0.18)";
 
 const TONE_DOT = {
   ready: "bg-emerald-400",
@@ -95,12 +91,12 @@ function PhasePills({ phases }) {
 
 function SessionRow({ row, expanded, onToggle, onOpen }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] overflow-hidden">
+    <div className="rounded-xl overflow-hidden">
       <div className="flex items-stretch">
         <button
           type="button"
           onClick={onToggle}
-          className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-2 text-left hover:bg-white/[0.04]"
+          className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-2 text-left hover:bg-white/[0.06]"
         >
           <ChevronDown
             className={`w-3.5 h-3.5 text-white/40 flex-shrink-0 transition-transform ${expanded ? "" : "-rotate-90"}`}
@@ -131,7 +127,7 @@ function SessionRow({ row, expanded, onToggle, onOpen }) {
         <button
           type="button"
           onClick={() => onOpen(row.record)}
-          className="px-2.5 text-[10px] font-semibold text-sky-200/90 hover:bg-sky-400/10 border-l border-white/[0.06] flex-shrink-0"
+          className="px-2.5 text-[10px] font-semibold text-sky-200/90 hover:bg-white/[0.06] flex-shrink-0"
         >
           Open
         </button>
@@ -190,6 +186,7 @@ export default function SessionStatusBar({
   const [noAutoOpen, setNoAutoOpen] = useState(() => lsGet(SESSION_STATUS_LS.noAutoOpen));
   const [panelPos, setPanelPos] = useState({ top: 56, right: 12 });
   const [recalling, setRecalling] = useState(() => isDriveRecallRunning());
+  const reduceMotion = useReducedMotion();
 
   const refresh = useCallback(() => {
     setInventory(summarizeInventory(getPatients?.() || [], readLastDriveRecall()));
@@ -362,27 +359,32 @@ export default function SessionStatusBar({
       </button>
 
       {typeof document !== "undefined" &&
+        open &&
         createPortal(
-          <AnimatePresence>
-            {open && (
-              <motion.div
-                ref={panelRef}
-                key="session-status-panel"
-                role="dialog"
-                aria-label={inventory.fromDrive ? "Sessions recalled from Drive" : "Loaded sessions"}
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={NL_TWEEN_OVERLAY}
-                className="fixed z-[210] flex flex-col rounded-2xl overflow-hidden"
-                style={{
-                  ...GLASS,
-                  top: panelPos.top,
-                  right: panelPos.right,
-                  width: panelPos.width || 360,
-                  maxHeight: "min(70vh, calc(100dvh - 72px))",
-                }}
-              >
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-label={inventory.fromDrive ? "Sessions recalled from Drive" : "Loaded sessions"}
+            className={MENU_GLASS_CLS}
+            style={{
+              position: "fixed",
+              top: panelPos.top,
+              right: panelPos.right,
+              width: panelPos.width || 360,
+              maxHeight: "min(70vh, calc(100dvh - 72px))",
+              zIndex: 999999,
+              borderRadius: 12,
+              boxShadow: MENU_GLASS_SHADOW,
+              transform: "translateZ(0)",
+              WebkitTransform: "translateZ(0)",
+              isolation: "isolate",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div
+              className={`gselect-menu-body relative z-[1] flex min-h-0 flex-1 flex-col overflow-hidden${reduceMotion ? "" : " gselect-menu-body--animate"}`}
+            >
                 <div className="flex items-start justify-between gap-2 px-3 pt-3 pb-2">
                   <div>
                     <div className="text-[13px] font-extrabold text-white/90">
@@ -449,7 +451,7 @@ export default function SessionStatusBar({
                   )}
                 </div>
 
-                <div className="px-3 py-2.5 border-t border-white/[0.06] space-y-2">
+                <div className="px-3 py-2.5 space-y-2">
                   <label className="flex items-center gap-2 text-[11px] text-white/55 cursor-pointer">
                     <input
                       type="checkbox"
@@ -471,9 +473,8 @@ export default function SessionStatusBar({
                     <span className="text-[10px] text-white/30">Tap the chip to reopen</span>
                   </div>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>,
+            </div>
+          </div>,
           document.body,
         )}
     </>
