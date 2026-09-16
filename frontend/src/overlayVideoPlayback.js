@@ -111,6 +111,75 @@ export function overlaySourceLooksMismatched(videoDuration, overlayDuration) {
 const OVERLAY_BAKE_FREE_EVENT = "nl-overlay-bake-free";
 let overlayBakeBusy = false;
 
+/** Compact 3-up iPad: never fully buffer every clip at once. */
+export const OVERLAY_VIDEO_PRELOAD = "metadata";
+export const OVERLAY_VIDEO_STALL_MS = 1400;
+export const OVERLAY_VIDEO_RELOAD_MAX = 2;
+export const OVERLAY_PLAYER_STAGGER_MS = 560;
+
+/** Mount the next overlay player only after earlier ones have a head start. */
+export function overlayPlayerMountDelayMs(alreadyMountedCount) {
+  const n = Math.max(0, Number(alreadyMountedCount) || 0);
+  return n <= 0 ? 0 : OVERLAY_PLAYER_STAGGER_MS;
+}
+
+/** iOS often never fires error or loadedmetadata on the 3rd concurrent <video>. */
+export function overlayVideoLooksStalled({
+  readyState,
+  duration,
+  videoWidth,
+  elapsedMs,
+  stallMs = OVERLAY_VIDEO_STALL_MS,
+} = {}) {
+  const elapsed = Number(elapsedMs);
+  if (!Number.isFinite(elapsed) || elapsed < stallMs) return false;
+  const rs = Number(readyState) || 0;
+  const dur = Number(duration);
+  const w = Number(videoWidth) || 0;
+  if (rs >= 1 && Number.isFinite(dur) && dur > 0.05) return false;
+  if (rs >= 2 && w > 1) return false;
+  return true;
+}
+
+export function overlayVideoShouldRetryError(mediaErrorCode, reloadAttempts) {
+  if ((Number(reloadAttempts) || 0) >= OVERLAY_VIDEO_RELOAD_MAX) return false;
+  const code = Number(mediaErrorCode);
+  return code === 2 || code === 3 || code === 4;
+}
+
+export function reloadOverlayVideoElement(video) {
+  if (!video) return false;
+  const src = video.getAttribute("src") || video.src || "";
+  if (!src) return false;
+  try {
+    video.pause();
+  } catch { /* ignore */ }
+  try {
+    video.removeAttribute("src");
+    video.load();
+  } catch { /* ignore */ }
+  video.setAttribute("src", src);
+  video.preload = OVERLAY_VIDEO_PRELOAD;
+  try {
+    video.load();
+  } catch { /* ignore */ }
+  return true;
+}
+
+let overlayAttachTail = Promise.resolve();
+
+/** One overlay clip calls load() at a time so iPad decode does not drop the third. */
+export function enqueueOverlayVideoAttach(task) {
+  const run = typeof task === "function" ? task : () => {};
+  const next = overlayAttachTail.then(() => run());
+  overlayAttachTail = next.then(() => undefined, () => undefined);
+  return next;
+}
+
+export function resetOverlayVideoAttachQueueForTests() {
+  overlayAttachTail = Promise.resolve();
+}
+
 export function tryAcquireOverlayBake() {
   if (overlayBakeBusy) return false;
   overlayBakeBusy = true;

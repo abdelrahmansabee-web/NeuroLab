@@ -136,3 +136,13 @@ test("containing-block unlock beats stylesheet !important without touching overf
   document.body.removeChild(scroller);
   document.head.removeChild(styleEl);
 });
+
+test("compact overlay tools wrap instead of painting labels over icons", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const css = fs.readFileSync(path.join(__dirname, "index.css"), "utf8");
+  expect(css).toMatch(/\.validation-controls-tools\s*\{[^}]*flex-wrap:\s*wrap/s);
+  expect(css).not.toMatch(/\.validation-controls-tools\s*\{[^}]*flex-wrap:\s*nowrap/s);
+  expect(css).toMatch(/container-name:\s*overlay-controls/);
+  expect(css).toMatch(/@container overlay-controls/);
+});
