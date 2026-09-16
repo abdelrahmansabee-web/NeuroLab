@@ -36,13 +36,20 @@ import {
 } from "./overlayTableUserMark";
 import { resetHoldIfSeek } from "./overlayPoseHold";
 import {
+  OVERLAY_VIDEO_PRELOAD,
+  OVERLAY_VIDEO_RELOAD_MAX,
+  OVERLAY_VIDEO_STALL_MS,
+  enqueueOverlayVideoAttach,
   getOverlayFrameState,
   isAppleTouchVideo,
   overlayBakeFreeEventName,
   overlayLivePaintFromCurrentTime,
   overlayPlaybackPaintStalled,
   overlaySourceLooksMismatched,
+  overlayVideoLooksStalled,
+  overlayVideoShouldRetryError,
   releaseOverlayBake,
+  reloadOverlayVideoElement,
   shouldRestartPlayback,
   tryAcquireOverlayBake,
 } from "./overlayVideoPlayback";
@@ -708,6 +715,7 @@ export function ValidationOverlayPlayer({
   const autoRenderStartedRef = useRef(false);
   const userPlayedRef = useRef(false);
   const sourceMismatchNotifiedRef = useRef(false);
+  const videoReloadTriesRef = useRef(0);
   const onSourceMismatchRef = useRef(onSourceMismatch);
   onSourceMismatchRef.current = onSourceMismatch;
   const overlayDurationRef = useRef(overlayData?.duration_sec);
@@ -2455,11 +2463,63 @@ export function ValidationOverlayPlayer({
     autoRenderStartedRef.current = false;
     userPlayedRef.current = false;
     sourceMismatchNotifiedRef.current = false;
+    videoReloadTriesRef.current = 0;
     setDownloadUrl(null);
     setRenderProgress(0);
     cupLiveRef.current = null;
     tableCreamRef.current = null;
     tableCreamTriesRef.current = 0;
+  }, [videoUrl]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !videoUrl) return undefined;
+    video.preload = OVERLAY_VIDEO_PRELOAD;
+    let cancelled = false;
+    const startedAt = Date.now();
+
+    const kickLoad = () => enqueueOverlayVideoAttach(() => {
+      if (cancelled || !videoRef.current) return;
+      if (video.readyState >= 1 && Number(video.duration) > 0.05) return;
+      try {
+        video.load();
+      } catch { /* ignore */ }
+    });
+
+    kickLoad();
+
+    const stallId = window.setInterval(() => {
+      if (cancelled || recordingRef.current) return;
+      if (!overlayVideoLooksStalled({
+        readyState: video.readyState,
+        duration: video.duration,
+        videoWidth: video.videoWidth,
+        elapsedMs: Date.now() - startedAt,
+      })) return;
+      if (videoReloadTriesRef.current >= OVERLAY_VIDEO_RELOAD_MAX) return;
+      videoReloadTriesRef.current += 1;
+      enqueueOverlayVideoAttach(() => {
+        if (cancelled) return;
+        reloadOverlayVideoElement(video);
+      });
+    }, OVERLAY_VIDEO_STALL_MS);
+
+    const onMediaError = () => {
+      if (cancelled) return;
+      if (!overlayVideoShouldRetryError(video.error?.code, videoReloadTriesRef.current)) return;
+      videoReloadTriesRef.current += 1;
+      enqueueOverlayVideoAttach(() => {
+        if (cancelled) return;
+        reloadOverlayVideoElement(video);
+      });
+    };
+    video.addEventListener("error", onMediaError);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(stallId);
+      video.removeEventListener("error", onMediaError);
+    };
   }, [videoUrl]);
 
   useEffect(() => {
@@ -2631,7 +2691,7 @@ export function ValidationOverlayPlayer({
                 playsInline
                 webkit-playsinline="true"
                 muted
-                preload="auto"
+                preload={OVERLAY_VIDEO_PRELOAD}
                 className={`block object-contain bg-transparent pointer-events-none ${
                   isExpanded ? "w-full h-full" : "w-full h-full max-w-full max-h-[80vh]"
                 }`}
@@ -2639,7 +2699,7 @@ export function ValidationOverlayPlayer({
                   const el = e?.currentTarget || e?.target;
                   const mediaErr = el?.error;
                   if (mediaErr?.code === 1) return;
-                  if (mediaErr?.code === 4 && (!el?.src || el.readyState < 2)) return;
+                  if (videoReloadTriesRef.current < OVERLAY_VIDEO_RELOAD_MAX) return;
                   onError?.(mediaErr || new Error("Video failed to load"));
                 }}
               />

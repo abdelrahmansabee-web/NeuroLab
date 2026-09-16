@@ -1,10 +1,17 @@
 import {
+  OVERLAY_VIDEO_PRELOAD,
+  enqueueOverlayVideoAttach,
   getOverlayFrameState,
   isAppleTouchVideo,
   overlayLivePaintFromCurrentTime,
   overlayPlaybackPaintStalled,
+  overlayPlayerMountDelayMs,
   overlaySourceLooksMismatched,
+  overlayVideoLooksStalled,
+  overlayVideoShouldRetryError,
   releaseOverlayBake,
+  reloadOverlayVideoElement,
+  resetOverlayVideoAttachQueueForTests,
   shouldRestartPlayback,
   tryAcquireOverlayBake,
 } from "./overlayVideoPlayback";
@@ -93,4 +100,70 @@ test("overlay bake lock allows only one MediaRecorder at a time", () => {
   releaseOverlayBake();
   expect(tryAcquireOverlayBake()).toBe(true);
   releaseOverlayBake();
+});
+
+test("third overlay player waits before mounting next to live clips", () => {
+  expect(overlayPlayerMountDelayMs(0)).toBe(0);
+  expect(overlayPlayerMountDelayMs(1)).toBeGreaterThan(0);
+  expect(overlayPlayerMountDelayMs(2)).toBe(overlayPlayerMountDelayMs(1));
+});
+
+test("overlay video stall is the empty 0:00/0:00 third-player case", () => {
+  expect(overlayVideoLooksStalled({
+    readyState: 0,
+    duration: 0,
+    videoWidth: 0,
+    elapsedMs: 200,
+  })).toBe(false);
+  expect(overlayVideoLooksStalled({
+    readyState: 0,
+    duration: NaN,
+    videoWidth: 0,
+    elapsedMs: 1600,
+  })).toBe(true);
+  expect(overlayVideoLooksStalled({
+    readyState: 1,
+    duration: 8.1,
+    videoWidth: 0,
+    elapsedMs: 1600,
+  })).toBe(false);
+});
+
+test("iOS media error 4 retries until the reload budget is spent", () => {
+  expect(overlayVideoShouldRetryError(4, 0)).toBe(true);
+  expect(overlayVideoShouldRetryError(3, 1)).toBe(true);
+  expect(overlayVideoShouldRetryError(4, 2)).toBe(false);
+  expect(overlayVideoShouldRetryError(1, 0)).toBe(false);
+});
+
+test("reload restores src with metadata preload", () => {
+  const calls = [];
+  const video = {
+    src: "blob:phase-pre",
+    getAttribute: (name) => (name === "src" ? "blob:phase-pre" : null),
+    setAttribute: (name, value) => {
+      if (name === "src") video.src = value;
+    },
+    removeAttribute: (name) => {
+      if (name === "src") video.src = "";
+    },
+    pause: () => calls.push("pause"),
+    load: () => calls.push("load"),
+  };
+  expect(reloadOverlayVideoElement(video)).toBe(true);
+  expect(video.src).toBe("blob:phase-pre");
+  expect(video.preload).toBe(OVERLAY_VIDEO_PRELOAD);
+  expect(calls).toEqual(["pause", "load", "load"]);
+});
+
+test("overlay video attach queue runs tasks in order", async () => {
+  resetOverlayVideoAttachQueueForTests();
+  const order = [];
+  await Promise.all([
+    enqueueOverlayVideoAttach(() => { order.push("a"); }),
+    enqueueOverlayVideoAttach(() => { order.push("b"); }),
+    enqueueOverlayVideoAttach(() => { order.push("c"); }),
+  ]);
+  expect(order).toEqual(["a", "b", "c"]);
+  resetOverlayVideoAttachQueueForTests();
 });

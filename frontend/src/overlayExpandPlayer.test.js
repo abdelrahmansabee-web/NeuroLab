@@ -2,6 +2,10 @@ import React from "react";
 import { render, fireEvent } from "@testing-library/react";
 import { ValidationOverlayPlayer } from "./ValidationOverlayPlayer";
 
+beforeAll(() => {
+  HTMLMediaElement.prototype.load = function load() {};
+});
+
 const overlayData = {
   frames: [
     {
@@ -144,4 +148,48 @@ test("expand html class stays when overlay data identity changes", () => {
   );
   expect(document.documentElement.classList.contains("nl-overlay-expanded")).toBe(true);
   expect(getByTitle("Exit fullscreen")).toBeTruthy();
+});
+
+test("compact overlay chrome keeps chip labels off the icon buttons", () => {
+  window.matchMedia = (query) => ({
+    matches: true,
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+  });
+  window.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  };
+  HTMLCanvasElement.prototype.getContext = () => ({
+    clearRect() {},
+    fillRect() {},
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    arc() {},
+    closePath() {},
+    stroke() {},
+    fill() {},
+    save() {},
+    restore() {},
+    measureText: () => ({ width: 10 }),
+    createLinearGradient: () => ({ addColorStop() {} }),
+    createRadialGradient: () => ({ addColorStop() {} }),
+  });
+
+  const { container, getByTitle } = render(
+    <ValidationOverlayPlayer videoUrl="blob:test-overlay" overlayData={overlayData} phaseLabel="Pre" />,
+  );
+  const video = container.querySelector("video");
+  expect(video.getAttribute("preload")).toBe("metadata");
+  const tools = container.querySelector(".validation-controls-tools");
+  expect(tools).toBeTruthy();
+  const chips = [...tools.querySelectorAll(".validation-control-chip")].map((el) => el.textContent.trim());
+  expect(chips).toEqual(expect.arrayContaining(["Chalk", "Marks", "Table"]));
+  expect(getByTitle("Fullscreen")).toBeTruthy();
+  expect(getByTitle("Download overlay video")).toBeTruthy();
 });

@@ -313,6 +313,8 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   max-width: 100%;
   box-sizing: border-box;
   overflow: visible;
+  container-type: inline-size;
+  container-name: overlay-controls;
 }
 
 .validation-player-fullscreen .validation-player-controls {
@@ -335,14 +337,16 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
 }
 
 .validation-controls-tools {
-  justify-content: stretch;
-  flex-wrap: nowrap;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 
 .validation-controls-tools > .validation-control-btn,
 .validation-controls-tools > .validation-control-busy {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 0 0 auto;
+  min-width: 40px;
+  max-width: 100%;
 }
 
 .validation-controls-time {
@@ -394,7 +398,7 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   justify-content: center;
   gap: 6px;
   min-height: 40px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-radius: 12px;
   font-size: 11px;
   font-weight: 600;
@@ -402,6 +406,8 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.06);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .validation-control-chip.is-active {
@@ -479,6 +485,19 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
 
 /* Narrow portrait / iPad split pane — keep tools readable */
 @media (max-width: 900px) {
+  .validation-control-download span {
+    display: none;
+  }
+  .validation-controls-tools > .validation-control-download {
+    flex: 0 0 40px;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+  }
+}
+
+/* Each 3-column card is narrow even on a wide iPad viewport. */
+@container overlay-controls (max-width: 380px) {
   .validation-control-download span {
     display: none;
   }
