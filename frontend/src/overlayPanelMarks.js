@@ -188,7 +188,8 @@ export function tableSurfaceYAtX(overlayData, xNorm) {
   const frozen = overlayData?.table_under_shoulder;
   if (frozen && frozen.y != null && Number.isFinite(Number(frozen.y))) {
     if (xNorm == null || frozen.x == null || Math.abs(Number(xNorm) - Number(frozen.x)) < 0.08) {
-      return Number(frozen.y);
+      const fy = Number(frozen.y);
+      if (isSeatedTableY(fy)) return fy;
     }
   }
   const prof = overlayData?.table_edge_y;
@@ -205,10 +206,10 @@ export function tableSurfaceYAtX(overlayData, xNorm) {
     if (Number.isFinite(b)) return b;
   }
   const ty = overlayData?.table_surface_y;
-  if (ty != null && Number(ty) >= 0 && Number(ty) <= 1) return Number(ty);
+  if (isSeatedTableY(ty)) return Number(ty);
   const anc = overlayData?.shoulder_palm_anchor;
-  if (Array.isArray(anc) && anc[1] != null && Number.isFinite(Number(anc[1]))) return Number(anc[1]);
-  if (anc && typeof anc === "object" && anc.y != null && Number.isFinite(Number(anc.y))) {
+  if (Array.isArray(anc) && isSeatedTableY(anc[1])) return Number(anc[1]);
+  if (anc && typeof anc === "object" && isSeatedTableY(anc.y)) {
     return Number(anc.y);
   }
   return null;
@@ -404,17 +405,17 @@ export function resolveShoulderRestY(overlayData, frames, startIdx, xNorm = null
     overlayData?.cup,
     overlayData?.table_user,
   );
-  if (pt) return pt.y;
+  if (pt && isSeatedTableY(pt.y)) return pt.y;
   const armY = armOnTableY(overlayData, frames, startIdx);
-  if (armY != null) return armY;
+  if (isSeatedTableY(armY)) return armY;
   const fromTable = snapTableYToRestArm(
     tableSurfaceYAtX(overlayData, xNorm),
     restPalmNorm(overlayData, frames, startIdx)?.[1],
     restShoulderNorm(overlayData, frames, startIdx)?.[1],
   );
-  if (fromTable != null) return fromTable;
+  if (isSeatedTableY(fromTable)) return fromTable;
   const rest = restPalmNorm(overlayData, frames, startIdx);
-  if (rest && rest[1] != null && Number.isFinite(Number(rest[1]))) return Number(rest[1]);
+  if (rest && isSeatedTableY(rest[1])) return Number(rest[1]);
   return null;
 }
 

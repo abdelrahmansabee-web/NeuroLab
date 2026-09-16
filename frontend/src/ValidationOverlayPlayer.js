@@ -2623,7 +2623,13 @@ export function ValidationOverlayPlayer({
                 className={`block object-contain bg-transparent pointer-events-none ${
                   isExpanded ? "w-full h-full" : "w-full h-full max-w-full max-h-[80vh]"
                 }`}
-                onError={(e) => onError?.(e?.target?.error || new Error("Video failed to load"))}
+                onError={(e) => {
+                  const el = e?.currentTarget || e?.target;
+                  const mediaErr = el?.error;
+                  if (mediaErr?.code === 1) return;
+                  if (mediaErr?.code === 4 && (!el?.src || el.readyState < 2)) return;
+                  onError?.(mediaErr || new Error("Video failed to load"));
+                }}
               />
               <canvas
                 ref={canvasRef}
