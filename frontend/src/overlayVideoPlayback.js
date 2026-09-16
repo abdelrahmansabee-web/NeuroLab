@@ -169,6 +169,57 @@ export function reloadOverlayVideoElement(video) {
   return true;
 }
 
+export function isBrowserNativeOverlayVideoName(name) {
+  const lower = String(name || "").toLowerCase();
+  return lower.endsWith(".mp4")
+    || lower.endsWith(".m4v")
+    || lower.endsWith(".mov")
+    || lower.endsWith(".webm");
+}
+
+/** iOS will not decode a blob URL whose type is empty or octet-stream. */
+export function playbackVideoBlob(blob, filename) {
+  if (!(blob instanceof Blob) || blob.size <= 0) return blob;
+  const type = String(blob.type || "").toLowerCase();
+  if (type.startsWith("video/") && type !== "application/octet-stream") return blob;
+  const name = String(filename || "").toLowerCase();
+  const mime = name.endsWith(".webm")
+    ? "video/webm"
+    : name.endsWith(".mov")
+      ? "video/quicktime"
+      : "video/mp4";
+  return new Blob([blob], { type: mime });
+}
+
+/** Force-replace after Analyze used to revoke the live file then restore stale IDB. */
+export function shouldApplyCachedOriginalVideo({ force } = {}) {
+  return !force;
+}
+
+/**
+ * Safari often never fires loadedmetadata on a muted overlay <video> until play().
+ * Do not strip sibling src (that 32.83 yield parked POST/HEALTHY and still left PRE empty).
+ */
+export function kickOverlayVideoElement(video) {
+  if (!video) return false;
+  try {
+    video.load();
+  } catch { /* ignore */ }
+  if (!isAppleTouchVideo() || typeof video.play !== "function") return true;
+  try {
+    video.muted = true;
+    const playing = video.play();
+    if (playing && typeof playing.then === "function") {
+      playing.then(() => {
+        try {
+          video.pause();
+        } catch { /* ignore */ }
+      }).catch(() => {});
+    }
+  } catch { /* ignore */ }
+  return true;
+}
+
 let overlayAttachTail = Promise.resolve();
 
 /** One overlay clip calls load() at a time so iPad decode does not drop the third. */

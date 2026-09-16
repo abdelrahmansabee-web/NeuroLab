@@ -33,7 +33,12 @@ import {
 } from "./thesisDocs";
 import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
-import { overlayPlayerMountDelayMs } from "./overlayVideoPlayback";
+import {
+  overlayPlayerMountDelayMs,
+  isBrowserNativeOverlayVideoName,
+  playbackVideoBlob,
+  shouldApplyCachedOriginalVideo,
+} from "./overlayVideoPlayback";
 import { clinicTrialRoleFromPhase, summarizeOverlayClock } from "./analysisPhaseCompare";
 import SessionStatusBar, { revealSessionStatusBar } from "./SessionStatusBar";
 import PtrIosSpinner from "./PtrIosSpinner";
@@ -3953,8 +3958,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     const isVideo = !file.name.toLowerCase().endsWith(".csv");
     let upd;
     if (isVideo) {
-      const lower = file.name.toLowerCase();
-      const browserNativeVideo = lower.endsWith(".mp4") || lower.endsWith(".webm");
+      const browserNativeVideo = isBrowserNativeOverlayVideoName(file.name);
       let videoUrl;
       if (browserNativeVideo) {
         videoUrl = URL.createObjectURL(file);
@@ -4179,12 +4183,14 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       if (!validationCacheMatchesResult(cached, phaseResult, { relaxCsvMatch: true })) return false;
       const blob = cached?.originalVideoBlob;
       if (!(blob instanceof Blob) || blob.size <= 0) return false;
-      applyValidationCacheToState(phase, { originalVideoBlob: blob });
+      applyValidationCacheToState(phase, {
+        originalVideoBlob: playbackVideoBlob(blob, filename),
+      });
       return true;
     };
 
     try {
-      if (await applyCachedOriginal()) return;
+      if (shouldApplyCachedOriginalVideo({ force }) && await applyCachedOriginal()) return;
 
       const candidates = [];
       const add = (name) => {
@@ -4202,7 +4208,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         const res = await fetch(url);
         if (res.status === 404) continue;
         if (!res.ok) throw new Error(`Failed (${res.status})`);
-        const blob = await res.blob();
+        const blob = playbackVideoBlob(await res.blob(), name);
         if (!blob.size) continue;
         loaded = blob;
         loadedName = name;
@@ -4240,10 +4246,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   const ensureOriginalVideoBlob = useCallback(async (phase, file, serverFilename) => {
     const fileLower = file?.name?.toLowerCase() || "";
     const fileIsCsv = fileLower.endsWith(".csv");
-    const browserNative = fileLower.endsWith(".mp4") || fileLower.endsWith(".webm");
+    const browserNative = isBrowserNativeOverlayVideoName(file?.name);
 
-    // Always play the same file the server analyzed (incl. *_rotated.mp4). Local iPhone
-    // blobs can disagree with Safari rotation vs OpenCV overlay coordinates.
+    // Keep the live iPad file if it already plays. Force-fetch after Analyze
+    // revoked that URL, then IDB/server often left PRE at 0:00/0:00.
+    if (originalVideoBlobsRef.current[phase]) return true;
     if (serverFilename) {
       await loadOriginalVideoBlob(phase, serverFilename, { force: true });
       if (originalVideoBlobsRef.current[phase]) return true;
@@ -4337,6 +4344,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       const prev = overlayVideoSyncedRef.current[ph.k];
       if (prev === name && originalVideoBlobsRef.current[ph.k]) return;
       overlayVideoSyncedRef.current[ph.k] = name;
+      if (originalVideoBlobsRef.current[ph.k]) return;
       loadOriginalVideoBlob(ph.k, name, { force: Boolean(prev && prev !== name) });
     });
   }, [overlayData, loadOriginalVideoBlob]);

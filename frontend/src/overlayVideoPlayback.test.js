@@ -9,6 +9,10 @@ import {
   overlaySourceLooksMismatched,
   overlayVideoLooksStalled,
   overlayVideoShouldRetryError,
+  kickOverlayVideoElement,
+  isBrowserNativeOverlayVideoName,
+  playbackVideoBlob,
+  shouldApplyCachedOriginalVideo,
   releaseOverlayBake,
   reloadOverlayVideoElement,
   resetOverlayVideoAttachQueueForTests,
@@ -178,4 +182,29 @@ test("overlay video attach queue runs tasks in order", async () => {
   ]);
   expect(order).toEqual(["a", "b", "c"]);
   resetOverlayVideoAttachQueueForTests();
+});
+
+test("kick loads overlay video without parking sibling src", () => {
+  const calls = [];
+  const video = {
+    load: () => calls.push("load"),
+    play: () => {
+      calls.push("play");
+      return Promise.resolve();
+    },
+    pause: () => calls.push("pause"),
+  };
+  expect(kickOverlayVideoElement(video)).toBe(true);
+  expect(calls).toEqual(["load"]);
+});
+
+test("fetched originals without a video MIME become playable mp4", () => {
+  const raw = new Blob([new Uint8Array([1, 2, 3])], { type: "application/octet-stream" });
+  expect(playbackVideoBlob(raw, "drink_pre.mp4").type).toBe("video/mp4");
+  const tagged = new Blob([new Uint8Array([1])], { type: "video/mp4" });
+  expect(playbackVideoBlob(tagged, "drink_pre.mp4")).toBe(tagged);
+  expect(shouldApplyCachedOriginalVideo({ force: true })).toBe(false);
+  expect(shouldApplyCachedOriginalVideo({ force: false })).toBe(true);
+  expect(isBrowserNativeOverlayVideoName("clip.MOV")).toBe(true);
+  expect(isBrowserNativeOverlayVideoName("notes.csv")).toBe(false);
 });

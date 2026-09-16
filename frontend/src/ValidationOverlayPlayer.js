@@ -61,6 +61,7 @@ import {
   overlaySourceLooksMismatched,
   overlayVideoLooksStalled,
   overlayVideoShouldRetryError,
+  kickOverlayVideoElement,
   releaseOverlayBake,
   reloadOverlayVideoElement,
   shouldRestartPlayback,
@@ -2494,9 +2495,7 @@ export function ValidationOverlayPlayer({
     const kickLoad = () => enqueueOverlayVideoAttach(() => {
       if (cancelled || !videoRef.current) return;
       if (video.readyState >= 1 && Number(video.duration) > 0.05) return;
-      try {
-        video.load();
-      } catch { /* ignore */ }
+      kickOverlayVideoElement(video);
     });
 
     kickLoad();
@@ -2514,6 +2513,7 @@ export function ValidationOverlayPlayer({
       enqueueOverlayVideoAttach(() => {
         if (cancelled) return;
         reloadOverlayVideoElement(video);
+        kickOverlayVideoElement(video);
       });
     }, OVERLAY_VIDEO_STALL_MS);
 
@@ -2524,6 +2524,7 @@ export function ValidationOverlayPlayer({
       enqueueOverlayVideoAttach(() => {
         if (cancelled) return;
         reloadOverlayVideoElement(video);
+        kickOverlayVideoElement(video);
       });
     };
     video.addEventListener("error", onMediaError);
