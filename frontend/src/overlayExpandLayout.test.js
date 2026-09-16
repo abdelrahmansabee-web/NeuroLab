@@ -48,6 +48,15 @@ test("expanded iPad scroller stacks above the clinic sidebar", () => {
   expect(OVERLAY_APP_SCROLL_EXPANDED_Z).toBeGreaterThan(100);
 });
 
+test("expand CSS hides the clinic shell top bar so it cannot cover the video", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const css = fs.readFileSync(path.join(__dirname, "index.css"), "utf8");
+  expect(css).toMatch(/html\.nl-overlay-expanded \.nl-clinic-shell-topbar/);
+  expect(css).toMatch(/html\.nl-overlay-expanded \.nl-clinic-main/);
+  expect(css).toMatch(/visibility:\s*hidden/);
+});
+
 test("legacy overlayPortalStyle compact no longer pins a fixed slot", () => {
   const style = overlayPortalStyle({
     isExpanded: false,

@@ -5,7 +5,6 @@ import {
   buildTremorCameraTrack,
   formatTremorAmplitude,
   resolveTremorMetrics,
-  TREMOR_NOISE_FLOOR_PX,
 } from "./tremorMetrics";
 import {
   computeValidationPanelLive,
@@ -35,11 +34,6 @@ import {
   tableMarkHitGeom,
 } from "./overlayTableUserMark";
 import { isAppleTouchVideo, shouldRestartPlayback } from "./overlayVideoPlayback";
-import {
-  holdTrackingNoise,
-  overlayTrackingNoisePx,
-  resetHoldIfSeek,
-} from "./overlayPoseHold";
 import {
   overlayPlayerChromeStyle,
   overlaySlotAspect,
@@ -748,8 +742,6 @@ export function ValidationOverlayPlayer({
   const fingerStickyRef = useRef({});
   /** Last live finger canvas points (no EMA). Used only to reset on seeks. */
   const fingerSmoothRef = useRef({});
-  /** Display-only ~2 px hold so rest pose does not jitter. Not tracking math. */
-  const poseHoldRef = useRef({});
   const cupLiveRef = useRef(null);
   const tableCreamRef = useRef(null);
   const tableHintYRef = useRef(null);
@@ -883,9 +875,6 @@ export function ValidationOverlayPlayer({
     if (!f) return;
 
     const color = phaseColor;
-    const holdPx = overlayTrackingNoisePx(cw, ch);
-    resetHoldIfSeek(poseHoldRef.current, idx);
-    const poseHoldStore = poseHoldRef.current;
 
     function pt(name) {
       const p = f[name];
@@ -899,7 +888,7 @@ export function ValidationOverlayPlayer({
       }
       const isHandLm = /^(index|thumb|pinky|middle|ring|hl_wrist)$/.test(name);
       if (isHandLm && (nx <= 0.0002 || nx >= 0.9998 || ny <= 0.0002 || ny >= 0.9998)) return null;
-      return holdTrackingNoise(poseHoldStore, name, [nx * cw, ny * ch], holdPx);
+      return [nx * cw, ny * ch];
     }
 
     function toCanvas(p) {
@@ -1314,8 +1303,7 @@ export function ValidationOverlayPlayer({
     const pushFingerDot = (fid, jname, cpt, style, live) => {
       if (!cpt) return;
       const key = `${fid}:${jname}`;
-      const deadbanded = holdTrackingNoise(poseHoldStore, `fj:${key}`, cpt, holdPx);
-      const smoothed = smoothFinger(key, deadbanded, live);
+      const smoothed = smoothFinger(key, cpt, live);
       if (live) {
         stickyStore[key] = { cpt: [...smoothed], untilIdx: idx + stickyHoldFrames };
         jointDots.push({ fid, jname, cpt: smoothed, style, sticky: false });
@@ -1479,49 +1467,41 @@ export function ValidationOverlayPlayer({
       const fhPx = Number(overlayData?.frame_height_px) || ch;
       const swPx = swPxTremor;
 
-      // Tremor halo at true 8–12 Hz residual scale (no spatialGain).
+      // Visible tremor mark when abs 8–12 Hz is above the noise floor (no 14–26× gain).
       if (tremorPresent && tremorAnchor && idx >= win.start_idx && idx <= win.end_idx) {
-        const residualPx = tremorCameraTrack
-          ? Math.hypot(
-            (tremorCameraTrack.dx?.[idx] || 0) * cw,
-            (tremorCameraTrack.dy?.[idx] || 0) * ch,
-          )
-          : Number(tremorAbsRms) || 0;
-        if (residualPx >= TREMOR_NOISE_FLOOR_PX) {
-          const r = residualPx;
-          const alphaHalo = 0.18 + Math.min(0.55, tremorIntensity * 0.45);
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(tremorAnchor[0], tremorAnchor[1], r, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(251,113,133,${Math.min(0.95, alphaHalo).toFixed(2)})`;
-          ctx.lineWidth = 1.6;
-          ctx.shadowColor = "rgba(251,113,133,0.45)";
-          ctx.shadowBlur = 6;
-          ctx.stroke();
-          ctx.restore();
-          drawSimpleLabel(
-            `Tr ${formatTremorAmplitude(tremorAbsRms, swPxTremor, true)}${tremorPeakHz != null ? ` · ${Number(tremorPeakHz).toFixed(1)}Hz` : ""}`,
+        const r = 14 + Math.min(1, tremorIntensity) * 18;
+        const alphaHalo = 0.18 + Math.min(0.5, tremorIntensity * 0.45);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(tremorAnchor[0], tremorAnchor[1], r, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(251,113,133,${Math.min(0.95, alphaHalo).toFixed(2)})`;
+        ctx.lineWidth = 2.2;
+        ctx.shadowColor = "rgba(251,113,133,0.45)";
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+        ctx.restore();
+        drawSimpleLabel(
+          `Tr ${formatTremorAmplitude(tremorAbsRms, swPxTremor, true)}${tremorPeakHz != null ? ` · ${Number(tremorPeakHz).toFixed(1)}Hz` : ""}`,
+          tremorAnchor,
+          tremorAnchor[0] > cx ? -150 : 20,
+          -52,
+          { color: "#fda4af", border: "rgba(251,113,133,0.55)", bg: "rgba(40,10,18,0.85)" },
+        );
+        if (showExtendedKin) {
+          drawEvidenceCard(
+            ctx,
+            buildTremorEvidenceLines(overlayData, tremorLivePow, tremorPeakHz, tremorAbsRms),
             tremorAnchor,
-            tremorAnchor[0] > cx ? -150 : 20,
-            -52,
-            { color: "#fda4af", border: "rgba(251,113,133,0.55)", bg: "rgba(40,10,18,0.85)" },
+            {
+              cw,
+              ch,
+              dpr,
+              offsetX: tremorAnchor[0] > cx ? -210 : 18,
+              offsetY: -118,
+              border: "rgba(251,113,133,0.4)",
+              titleColor: "#fecdd3",
+            },
           );
-          if (showExtendedKin) {
-            drawEvidenceCard(
-              ctx,
-              buildTremorEvidenceLines(overlayData, tremorLivePow, tremorPeakHz, tremorAbsRms),
-              tremorAnchor,
-              {
-                cw,
-                ch,
-                dpr,
-                offsetX: tremorAnchor[0] > cx ? -210 : 18,
-                offsetY: -118,
-                border: "rgba(251,113,133,0.4)",
-                titleColor: "#fecdd3",
-              },
-            );
-          }
         }
       }
 
