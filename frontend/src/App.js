@@ -7007,7 +7007,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
   }
 </style></head><body><div class="wrap">
   <div class="header" style="background:${d.group === "1" ? "rgba(167,243,208,0.3)" : "rgba(251,207,232,0.4)"}">
-    <div style="display:flex;align-items:center;gap:14px"><img src="/raed-logo.png?v=32.89" alt="RA.ED AI" style="height:56px;width:auto"/><div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div></div>
+    <div style="display:flex;align-items:center;gap:14px"><img src="/raed-logo.png?v=32.90" alt="RA.ED AI" style="height:56px;width:auto"/><div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div></div>
     <div class="meta">${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}<br>${esc(d.name || "Participant")}</div>
   </div>
   <div class="patient">
@@ -10037,7 +10037,7 @@ export default function App() {
                       </button>
                     )}
                     <img
-                      src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.89`}
+                      src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.90`}
                       alt="RA.ED AI"
                       className="w-[8.75rem] h-auto object-contain"
                       style={{ background: "transparent" }}
@@ -10397,19 +10397,10 @@ export default function App() {
           backdrop-filter: blur(8px) saturate(1.45) !important;
           -webkit-backdrop-filter: blur(8px) saturate(1.45) !important;
         }
-        /* iPad inner-div scroll: blur on lab cards sticks a GPU copy over the scrolled panel. */
-        html.nl-touch [data-nl-app-scroll] .content-shell,
-        html.nl-touch [data-nl-app-scroll] .content-shell .glass-float:not(.app-topbar-glass),
-        html.nl-touch [data-nl-app-scroll] .content-shell .content-panel-glass {
-          backdrop-filter: none !important;
-          -webkit-backdrop-filter: none !important;
-        }
-        html.nl-touch [data-nl-app-scroll] .content-shell {
-          background-color: rgba(16, 22, 32, 0.55) !important;
-        }
-        html.nl-touch [data-nl-app-scroll] .content-shell .glass-float:not(.app-topbar-glass),
-        html.nl-touch [data-nl-app-scroll] .content-shell .content-panel-glass {
-          background-color: rgba(10, 14, 22, 0.88) !important;
+        html.nl-touch .content-shell .glass-float:not(.section-header):not(.app-topbar-glass),
+        html.nl-touch .content-shell .content-panel-glass {
+          backdrop-filter: blur(6px) saturate(1.25) !important;
+          -webkit-backdrop-filter: blur(6px) saturate(1.25) !important;
         }
         html.nl-touch .sidebar-shell::before,
         html.nl-touch .sidebar-shell::after,

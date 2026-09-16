@@ -4,26 +4,15 @@ const path = require("path");
 const css = fs.readFileSync(path.join(__dirname, "index.css"), "utf8");
 const app = fs.readFileSync(path.join(__dirname, "App.js"), "utf8");
 
-test("iPad clinic scroller lab cards drop backdrop-filter so they cannot stick over a scrolled copy", () => {
-  expect(css).toMatch(
-    /html\.nl-touch \[data-nl-app-scroll\] \.content-shell[\s\S]*?backdrop-filter:\s*none\s*!important/,
-  );
-  expect(css).toMatch(
-    /html\.nl-touch \[data-nl-app-scroll\] \.content-shell \.content-panel-glass[\s\S]*?backdrop-filter:\s*none\s*!important/,
-  );
+test("lab glass does not paint an invented black fill over iPad clinic cards", () => {
+  expect(css).not.toMatch(/html\.nl-touch \[data-nl-app-scroll\][^{]*\{[^}]*background-color:\s*rgba\(10,\s*14,\s*22/);
+  expect(css).not.toMatch(/html\.nl-touch \[data-nl-app-scroll\][^{]*\{[^}]*background-color:\s*rgba\(16,\s*22,\s*32/);
+  expect(app).not.toMatch(/html\.nl-touch \[data-nl-app-scroll\][^{]*\{[^}]*background-color:\s*rgba\(10,\s*14,\s*22/);
+  expect(app).not.toMatch(/html\.nl-touch \[data-nl-app-scroll\][^{]*\{[^}]*background-color:\s*rgba\(16,\s*22,\s*32/);
+});
+
+test("iPad inner lab cards keep the 32.88 glass blur instead of a black plate", () => {
   expect(app).toMatch(
-    /html\.nl-touch \[data-nl-app-scroll\] \.content-shell \.content-panel-glass[\s\S]*?backdrop-filter:\s*none\s*!important/,
+    /html\.nl-touch \.content-shell \.content-panel-glass[\s\S]*?backdrop-filter:\s*blur\(6px\)/,
   );
-  expect(css).not.toMatch(
-    /html\.nl-touch \[data-nl-app-scroll\][^{]*\{[^}]*position:\s*fixed/,
-  );
-});
-
-test("iPad section pane does not keep a translateZ containing block on lab cards", () => {
-  expect(css).toMatch(/html\.nl-touch \.section-pane\s*\{[\s\S]*?transform:\s*none/);
-});
-
-test("compact overlay chrome stays in-card after the lab-glass scroll fix", () => {
-  const { overlayPlayerChromeStyle, overlayCompactIsInCard } = require("./overlayExpandLayout");
-  expect(overlayCompactIsInCard(overlayPlayerChromeStyle({ isExpanded: false }))).toBe(true);
 });

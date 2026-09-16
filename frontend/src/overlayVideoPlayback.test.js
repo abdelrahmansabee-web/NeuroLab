@@ -3,6 +3,7 @@ import {
   enqueueOverlayVideoAttach,
   getOverlayFrameState,
   overlayPlaybackTargetTime,
+  overlayPresentedDuration,
   isAppleTouchVideo,
   overlayLivePaintFromCurrentTime,
   overlayPlaybackPaintStalled,
@@ -100,6 +101,29 @@ test("iOS video.duration shorter than overlay span does not run the skeleton ahe
   expect(stretched.alpha).toBeCloseTo(oneToOne.alpha, 10);
   expect(stretched.idx).toBe(0);
   expect(stretched.alpha).toBeCloseTo(0.9, 10);
+});
+
+test("PRE lookup uses Safari duration, not overlay duration_sec as the video clock", () => {
+  expect(overlayPresentedDuration(558)).toBe(558);
+  expect(Number.isNaN(overlayPresentedDuration(NaN))).toBe(true);
+  expect(Number.isNaN(overlayPresentedDuration(0))).toBe(true);
+  expect(Number.isNaN(overlayPresentedDuration(undefined))).toBe(true);
+  const playbackTime = 8 * 60 + 4;
+  const tN = 535.68;
+  const asOverlaySpan = overlayPlaybackTargetTime({
+    playbackTime,
+    videoDuration: tN,
+    t0: 0,
+    tN,
+  });
+  const asSafari = overlayPlaybackTargetTime({
+    playbackTime,
+    videoDuration: 9 * 60 + 18,
+    t0: 0,
+    tN,
+  });
+  expect(asOverlaySpan).toBe(playbackTime);
+  expect(asSafari).toBeLessThan(playbackTime);
 });
 
 test("9:18 PRE drink clip keeps pose fraction on the video fraction", () => {
