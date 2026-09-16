@@ -1,0 +1,21 @@
+=== baseline_20260603_165330_baseline.csv ===
+rows: 358
+duration: 11.88 s
+fps: 30.06
+frame size: None x None
+cols sample: ['NOSE_X', 'NOSE_Y', 'NOSE_Z', 'LEFT_SHOULDER_X', 'LEFT_SHOULDER_Y', 'LEFT_SHOULDER_Z', 'RIGHT_SHOULDER_X', 'RIGHT_SHOULDER_Y', 'RIGHT_SHOULDER_Z', 'LEFT_ELBOW_X']
+
+=== pre_20260603_165439_pre.csv ===
+rows: 758
+duration: 25.24 s
+fps: 29.99
+frame size: None x None
+cols sample: ['NOSE_X', 'NOSE_Y', 'NOSE_Z', 'LEFT_SHOULDER_X', 'LEFT_SHOULDER_Y', 'LEFT_SHOULDER_Z', 'RIGHT_SHOULDER_X', 'RIGHT_SHOULDER_Y', 'RIGHT_SHOULDER_Z', 'LEFT_ELBOW_X']
+
+=== post_20260603_165651_post.csv ===
+rows: 562
+duration: 18.68 s
+fps: 30.03
+frame size: None x None
+cols sample: ['NOSE_X', 'NOSE_Y', 'NOSE_Z', 'LEFT_SHOULDER_X', 'LEFT_SHOULDER_Y', 'LEFT_SHOULDER_Z', 'RIGHT_SHOULDER_X', 'RIGHT_SHOULDER_Y', 'RIGHT_SHOULDER_Z', 'LEFT_ELBOW_X']
+

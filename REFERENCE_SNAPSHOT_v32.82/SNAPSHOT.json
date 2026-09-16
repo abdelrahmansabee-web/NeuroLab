@@ -1,0 +1,44 @@
+{
+  "snapshot_id": "REFERENCE_SNAPSHOT_v32.82",
+  "created_at": "2026-09-16T10:03:47Z",
+  "purpose": "Full restore point of the working RA.ED AI / NeuroLab program (Hugging Face Space + GitHub source) at clinic UI 32.82. Overlay lerp, presented-frame paint, and 32.72 tremor mark.",
+  "nl_version": "32.82",
+  "hf_space": {
+    "url": "https://huggingface.co/spaces/AbdelrahmanSabee/raedai",
+    "app_url": "https://abdelrahmansabee-raedai.hf.space/",
+    "git_url": "https://huggingface.co/spaces/AbdelrahmanSabee/raedai.git",
+    "commit": "5573042d3c9c7adf2e60d7836f5167f3fc0042cf",
+    "commit_title": "32.82: restore 32.72 overlay blend between stored frames",
+    "frontend_nl_version": "32.82",
+    "js": "main.72cb8383.js",
+    "css": "main.46e6a924.css",
+    "sdk": "docker",
+    "app_port": 7860
+  },
+  "github": {
+    "url": "https://github.com/abdelrahmansabee-web/NeuroLab",
+    "ref": "cursor/backup-full-v3282-f95a",
+    "source_commit": "9fc9cef0f5e997af4433bdfaf699db64ff1ffad1",
+    "frontend_nl_version": "32.82",
+    "note": "github_source is GitHub HEAD 32.82 (overlay lerp + presented clock + tremor mark). Dirty CRA stubs were not copied."
+  },
+  "bytes": {
+    "github_source": 35069935,
+    "hf_space": 6762137,
+    "total": 41934830
+  },
+  "file_count": 801,
+  "excluded": [
+    ".git",
+    "venv/",
+    "node_modules/",
+    "uploads/ outputs/ data/ (patient runtime data)",
+    "backend/results and kinematic_analysis/videos (kept on the git tag, too large to duplicate here)",
+    "*.task MediaPipe models (Dockerfile downloads at build)",
+    "*.js.map source maps",
+    "stale HF main.<hash>.js bundles other than the live 32.82 files",
+    "HF Space secrets (JWT_SECRET, MFA_ENCRYPTION_KEY, Google Drive credentials)",
+    "nested REFERENCE_SNAPSHOT_v28.81 / v32.52 / v32.72 and backups/",
+    "dirty CRA stubs AuthGate.jsx analysisPlan.js index.js patientImport.js thesisDocs.js"
+  ]
+}

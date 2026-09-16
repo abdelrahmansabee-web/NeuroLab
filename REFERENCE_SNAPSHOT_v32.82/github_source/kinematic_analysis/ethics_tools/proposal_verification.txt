@@ -1,0 +1,44 @@
+
+=== OpenCap ===
+For this purpose, the integration of OpenCap, a recently developed markerless motion capture system that utilizes artificial intelligence to enable accurate clinical quantification of three‐dimensional (3D) kinematic measures, is introduced (8). Hence, by quantifying objectively parameters of motion, such as movement smoothness, trunk displacement and Shoulder Girdle Elevation we can quantify the "how" of a movement, which is an important mediator between central neural planning and peripheral motor execution (8). Furthermore, the combination of this kinematic analysis with the Box and Block Test (BBT) allows to relate the quality of movement with functional dexterity in everyday life (9).
+RUNS: [default]For this purpose, the integration o | [default]OpenCap | [default], a recently developed  | [default]markerless | [default] motion capture system that utilize
+
+=== MediaPipe ===
+Keywords: Motor imagery, action observation, stroke, MediaPipe, Phyphox, kinematics, upper limb rehabilitation.
+RUNS: [FF0000]Keywords: Motor imagery, action obs
+
+=== Phyphox ===
+Keywords: Motor imagery, action observation, stroke, MediaPipe, Phyphox, kinematics, upper limb rehabilitation.
+RUNS: [FF0000]Keywords: Motor imagery, action obs
+
+=== Movement Smoothness ===
+·     Movement Smoothness (Number of Velocity Peaks - NVP): Calculated from the hand marker (3rd Metacarpal head) velocity profile. One smooth movement is usually made up of one accelerating and one decelerating phase. Increase in velocity peaks means segmentation of movement (the movement becomes more jerk like) due to loss of motor control. Reduction in NVP will be interpreted as increased movement smoothness. 
+RUNS: [default]·     Movement Smoothness (Number o
+
+=== Number of Velocity Peaks ===
+·     Movement Smoothness (Number of Velocity Peaks - NVP): Calculated from the hand marker (3rd Metacarpal head) velocity profile. One smooth movement is usually made up of one accelerating and one decelerating phase. Increase in velocity peaks means segmentation of movement (the movement becomes more jerk like) due to loss of motor control. Reduction in NVP will be interpreted as increased movement smoothness. 
+RUNS: [default]·     Movement Smoothness (Number o
+
+=== Shoulder Girdle Elevation ===
+For this purpose, the integration of OpenCap, a recently developed markerless motion capture system that utilizes artificial intelligence to enable accurate clinical quantification of three‐dimensional (3D) kinematic measures, is introduced (8). Hence, by quantifying objectively parameters of motion, such as movement smoothness, trunk displacement and Shoulder Girdle Elevation we can quantify the "how" of a movement, which is an important mediator between central neural planning and peripheral motor execution (8). Furthermore, the combination of this kinematic analysis with the Box and Block Test (BBT) allows to relate the quality of movement with functional dexterity in everyday life (9).
+RUNS: [default]For this purpose, the integration o | [default]OpenCap | [default], a recently developed  | [default]markerless | [default] motion capture system that utilize
+
+=== Trunk Displacement ===
+H₀: One session of PETTLEP based AOMI will not lead to significant changes in kinematic parameters (movement smoothness, Trunk Displacement, Shoulder Girdle Elevation) or gross manual dexterity (Box and Block Test) of the paretic upper extremity in individuals post stroke as compared to the control group. 
+RUNS: [default]H₀: One session of PETTLEP based AO
+
+=== Primary Outcomes ===
+Primary Outcomes:
+RUNS: [default]Primary Outcomes | [default]:
+
+=== Baseline Assessment ===
+1. Baseline Assessment: After the system calibration, active 3 runs of a routine Reach-to-Grasp task will be performed by each subject. Their movement kinematics will be recorded using the OpenCap system (pre-intervention movement quality: Movement Smoothness and Trunk Displacement) to capture.
+RUNS: [default]1. Baseline Assessment: After the s | [default]OpenCap | [default] system (pre-intervention movement 
+
+=== Data Collection Setup ===
+Data Collection Setup: To evaluate immediate kinematic modifications, recordings will be taken prior to and immediately following the single training session. For MediaPipe analysis, a smartphone or webcam will be used to record a side-view (sagittal plane) video of the affected upper limb and trunk. The camera will be mounted on a tripod at a fixed height, positioned perpendicular to the reaching plane at a standardized distance of 1.5 m to 2.0 m. For Phyphox analysis, a standard smartphone will be secured on the affected-side wrist using an armband or Velcro strap; the Phyphox application will record linear acceleration from the built-in tri-axial accelerometer at approximately 100 Hz.
+RUNS: [FF0000]Data Collection Setup: To evaluate 
+
+=== 14. Wagh ===
+14. Wagh V, Scott MW, Andrushko JW, Jones CB, Larssen BC, Boyd LA, Kraeutner SN. Using MediaPipe to track upper-limb reaching movements after stroke: a proof-of-principle study. J Neuroeng Rehabil. 2025 Nov 25;22(1):268.
+RUNS: [FF0000]14. Wagh V, Scott MW, Andrushko JW,

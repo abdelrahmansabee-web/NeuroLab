@@ -1,0 +1,9 @@
+
+=== (8,14,15) ===
+[29] For this purpose, a dual-sensor kinematic setup combining MediaPipe Pose Landmarker (markerless video-based motion capture) with Phyphox smartphone accelerometry is introduced. MediaPipe will quantify spatial and angular parameters (trunk displacement, shoulder girdle elevation, elbow angle) from side-view video, while Phyphox will capture time- and acceleration-based parameters (movement smoothne
+
+=== (8,14). ===
+[107] The video data will be processed locally using the MediaPipe Pose Landmarker (33 landmark, 2D) pipeline to extract joint trajectories, and the smartphone accelerometer data will be processed locally using a Python pipeline. The following specific kinematic measures will be computed according to their functional importance (8,14).
+
+=== (17,18). ===
+[113] ·     The primary outcome of this study is the change in movement smoothness of the affected upper limb, as measured by the Spectral Arc Length (SPARC) derived from the Phyphox wrist accelerometer recording. The smartphone, secured on the affected-side wrist, records tri-axial linear acceleration at approximately 100 Hz; the resulting CSV file is imported into a Python pipeline to compute the abso
