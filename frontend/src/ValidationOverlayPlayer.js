@@ -38,6 +38,8 @@ import {
   getOverlayFrameState,
   isAppleTouchVideo,
   overlayBakeFreeEventName,
+  overlayLivePaintFromCurrentTime,
+  overlayPlaybackPaintStalled,
   overlaySourceLooksMismatched,
   releaseOverlayBake,
   shouldRestartPlayback,
@@ -2011,6 +2013,11 @@ export function ValidationOverlayPlayer({
       if (!videoRef.current || !canvasRef.current) return;
       const touchLive = isCoarsePointerDevice();
       if (touchLive && !videoRef.current.paused) {
+        if (!overlayLivePaintFromCurrentTime({
+          playing: true,
+          useVideoFrameCallback: useVfc,
+          rafFallback: rafActive,
+        })) return;
         runPaint();
         return;
       }
@@ -2183,8 +2190,13 @@ export function ValidationOverlayPlayer({
 
     const watchdogId = window.setInterval(() => {
       if (video.paused || video.ended) return;
-      const t = video.currentTime || 0;
-      if (Math.abs(t - lastPaintMediaTimeRef.current) > 0.12) {
+      if (useVfc && vfcIdRef.current && lastPaintMediaTimeRef.current < 0) return;
+      if (overlayPlaybackPaintStalled({
+        currentTime: video.currentTime,
+        lastPaintMediaTime: lastPaintMediaTimeRef.current,
+        paused: video.paused,
+        ended: video.ended,
+      })) {
         kickPlaybackPaint();
       }
     }, 180);

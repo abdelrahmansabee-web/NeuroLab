@@ -15,6 +15,40 @@ export function isAppleTouchVideo() {
   return navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1;
 }
 
+export const OVERLAY_PAINT_STALL_SEC = 0.12;
+
+/**
+ * Live iPad paints must use RVFC mediaTime. video.currentTime lags the picture on iOS.
+ * RAF fallback (no RVFC, or RVFC threw) still paints from currentTime.
+ */
+export function overlayLivePaintFromCurrentTime({
+  playing,
+  useVideoFrameCallback,
+  rafFallback,
+} = {}) {
+  if (!playing) return true;
+  if (useVideoFrameCallback && !rafFallback) return false;
+  return true;
+}
+
+/**
+ * Playback moved forward without a paint. currentTime behind last mediaTime is
+ * iOS clock lag, not a stalled callback — do not use Math.abs.
+ */
+export function overlayPlaybackPaintStalled({
+  currentTime,
+  lastPaintMediaTime,
+  paused,
+  ended,
+  threshold = OVERLAY_PAINT_STALL_SEC,
+} = {}) {
+  if (paused || ended) return false;
+  const t = Number(currentTime);
+  const last = Number(lastPaintMediaTime);
+  if (!Number.isFinite(t) || !Number.isFinite(last)) return false;
+  return (t - last) > threshold;
+}
+
 function overlayFrameTime(frames, idx, t0, fps) {
   const frame = frames[idx];
   if (!frame) return t0 + idx / fps;

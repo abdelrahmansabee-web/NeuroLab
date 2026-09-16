@@ -1,6 +1,8 @@
 import {
   getOverlayFrameState,
   isAppleTouchVideo,
+  overlayLivePaintFromCurrentTime,
+  overlayPlaybackPaintStalled,
   overlaySourceLooksMismatched,
   releaseOverlayBake,
   shouldRestartPlayback,
@@ -16,6 +18,50 @@ test("replay starts over when the clip has ended", () => {
 
 test("Apple touch detection is false in jsdom by default", () => {
   expect(isAppleTouchVideo()).toBe(false);
+});
+
+test("live playback with RVFC does not paint from lagging currentTime", () => {
+  expect(overlayLivePaintFromCurrentTime({
+    playing: true,
+    useVideoFrameCallback: true,
+    rafFallback: false,
+  })).toBe(false);
+  expect(overlayLivePaintFromCurrentTime({
+    playing: true,
+    useVideoFrameCallback: true,
+    rafFallback: true,
+  })).toBe(true);
+  expect(overlayLivePaintFromCurrentTime({
+    playing: false,
+    useVideoFrameCallback: true,
+    rafFallback: false,
+  })).toBe(true);
+  expect(overlayLivePaintFromCurrentTime({
+    playing: true,
+    useVideoFrameCallback: false,
+    rafFallback: false,
+  })).toBe(true);
+});
+
+test("iOS currentTime behind mediaTime is not a stalled overlay paint", () => {
+  expect(overlayPlaybackPaintStalled({
+    currentTime: 0.85,
+    lastPaintMediaTime: 1.0,
+    paused: false,
+    ended: false,
+  })).toBe(false);
+  expect(overlayPlaybackPaintStalled({
+    currentTime: 1.2,
+    lastPaintMediaTime: 1.0,
+    paused: false,
+    ended: false,
+  })).toBe(true);
+  expect(overlayPlaybackPaintStalled({
+    currentTime: 1.2,
+    lastPaintMediaTime: 1.0,
+    paused: true,
+    ended: false,
+  })).toBe(false);
 });
 
 test("overlay pose blends between stored frames for the presented video time", () => {
