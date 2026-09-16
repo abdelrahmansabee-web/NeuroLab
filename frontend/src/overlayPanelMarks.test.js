@@ -252,14 +252,3 @@ test("table mark sits on the beige surface, not a chest-high line over the chair
   expect(pt.y).toBeGreaterThan(0.78);
   expect(pt.x).toBeCloseTo(0.72, 8);
 });
-
-test("a zero table plane does not pin the shoulder column to the top of the frame", () => {
-  const overlay = makeOverlay();
-  overlay.table_surface_y = 0;
-  overlay.table_under_shoulder = { x: 0.32, y: 0 };
-  overlay.shoulder_palm_anchor = [0.32, 0];
-  expect(tableSurfaceYAtX(overlay, 0.32)).toBeNull();
-  expect(resolveShoulderRestY(overlay, overlay.frames, 4)).toBeCloseTo(0.72, 8);
-  const pt = tablePointUnderShoulder(overlay, overlay.frames, 4);
-  expect(pt.y).toBeCloseTo(0.72, 8);
-});

@@ -64,11 +64,12 @@ test("expand locks the clinic app scroller the same way the actions sheet does",
   document.body.removeChild(scroller);
 });
 
-test("expand CSS raises the scroller and does not reflow the clinic top bar", () => {
+test("expand CSS raises the scroller and main above the sticky top bar without hiding it", () => {
   const fs = require("fs");
   const path = require("path");
   const css = fs.readFileSync(path.join(__dirname, "index.css"), "utf8");
   expect(css).toMatch(/html\.nl-overlay-expanded \[data-nl-app-scroll\]/);
+  expect(css).toMatch(/html\.nl-overlay-expanded main\s*\{[\s\S]*?z-index:\s*80/);
   expect(css).not.toMatch(/html\.nl-overlay-expanded \.nl-clinic-shell-topbar/);
   expect(css).not.toMatch(/html\.nl-overlay-expanded \.nl-clinic-main/);
 });
