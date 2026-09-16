@@ -55,69 +55,26 @@ function overlayFrameTime(frames, idx, t0, fps) {
   return frame.time ?? t0 + idx / fps;
 }
 
-/** Ignore sub-frame Safari vs CSV length noise; still catch 60fps ms truncation. */
-export const OVERLAY_SHORT_SPAN_PAD_SEC = 0.05;
-
-/**
- * Safari / iPad media duration only. `overlay.duration_sec` is the pose span —
- * passing it as videoDuration makes span≈dur so PRE short-span stretch never runs.
- */
-export function overlayPresentedDuration(videoDuration) {
-  const v = Number(videoDuration);
-  if (Number.isFinite(v) && v > 0.05) return v;
-  return NaN;
-}
-
-/**
- * Pose CSV time was stamped with int(1000/fps) milliseconds. That clock runs
- * slow, so on a long PRE clip (rest + reach) overlay duration is shorter than
- * Safari's media time and 1:1 lookup finishes the skeleton first. POST and
- * healthy clips are short enough that the same error is not visible.
- *
- * Scale playback into the overlay span only when the overlay is shorter.
- * Never scale onto a shorter HTMLMediaElement.duration — that iOS drift is
- * what made the skeleton run ahead in 32.87.
- */
-export function overlayPlaybackTargetTime({
-  playbackTime,
-  videoDuration,
-  t0,
-  tN,
-} = {}) {
-  const tStart = Number(t0);
-  const tEnd = Number(tN);
-  const tPlay = Number(playbackTime);
-  const start = Number.isFinite(tStart) ? tStart : 0;
-  if (!Number.isFinite(tPlay)) return start;
-  const span = Number.isFinite(tEnd) ? tEnd - start : NaN;
-  const dur = Number(videoDuration);
-  if (Number.isFinite(dur) && Number.isFinite(span) && dur > span + OVERLAY_SHORT_SPAN_PAD_SEC && span > 1e-6) {
-    return start + (Math.max(0, tPlay) / dur) * span;
-  }
-  return tPlay;
-}
-
 /**
  * Map the presented video time to the overlay sample for that picture.
  * Blend between stored landmark frames (32.72 freeze) so the skeleton follows
  * playback time between samples instead of snapping to the nearer pose.
  *
- * frame.time is the analyzed video clock. Do not shrink it onto a short
- * HTMLMediaElement.duration (iOS). Do stretch playback across a short overlay
- * span — truncated PRE analysis clocks finish the reach before the person.
+ * Restored from backup/2026-09-16-full-v32.82: always map the video fraction
+ * onto the overlay span. Do not 1:1 lookup on a truncated PRE analysis clock.
  */
 export function getOverlayFrameState(frames, fps, playbackTime, videoDuration) {
   if (!frames?.length) return { idx: 0, alpha: 0 };
   const rate = Number(fps) > 0 ? Number(fps) : 30;
   const t0 = frames[0].time ?? 0;
   const tN = frames[frames.length - 1].time ?? t0 + (frames.length - 1) / rate;
-  let targetTime = overlayPlaybackTargetTime({
-    playbackTime,
-    videoDuration,
-    t0,
-    tN,
-  });
-  if (!Number.isFinite(targetTime)) targetTime = t0;
+  const overlaySpan = tN - t0;
+  let targetTime = playbackTime;
+  if (videoDuration > 0 && overlaySpan > 1e-6) {
+    targetTime = t0 + (playbackTime / videoDuration) * overlaySpan;
+  } else {
+    targetTime = t0 + playbackTime;
+  }
   targetTime = Math.max(t0, Math.min(tN, targetTime));
 
   if (frames.length === 1) return { idx: 0, alpha: 0 };
