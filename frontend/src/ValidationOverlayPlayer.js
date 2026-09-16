@@ -1,5 +1,18 @@
 import React, { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
-import { Play, Pause, Maximize, Minimize2, ChevronLeft, ChevronRight, Download, X } from "lucide-react";
+import {
+  Play,
+  Pause,
+  Maximize,
+  Minimize2,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  X,
+  Pencil,
+  Bone,
+  Crosshair,
+  Table2,
+} from "lucide-react";
 import { downloadBlob } from "./downloadUtils";
 import {
   buildTremorCameraTrack,
@@ -2756,40 +2769,43 @@ export function ValidationOverlayPlayer({
             <button
               type="button"
               onPointerDown={controlTap(() => setOverlayStyle((s) => (s === "chalk" ? "clinical" : "chalk")))}
-              className={`validation-control-btn validation-control-chip ${
+              className={`validation-control-btn validation-control-icon ${
                 overlayStyle === "chalk" ? "is-active" : ""
               }`}
+              aria-label={overlayStyle === "chalk" ? "Chalk" : "Clinic"}
               title={overlayStyle === "chalk" ? "Chalk limb ribbons (tap for clinical)" : "Clinical skeleton (tap for chalk)"}
             >
-              {overlayStyle === "chalk" ? "Chalk" : "Clinic"}
+              {overlayStyle === "chalk" ? <Pencil className="w-4 h-4" /> : <Bone className="w-4 h-4" />}
             </button>
             <button
               type="button"
               onPointerDown={controlTap(() => setShowKinematicMarks((v) => !v))}
-              className={`validation-control-btn validation-control-chip ${
+              className={`validation-control-btn validation-control-icon ${
                 showKinematicMarks ? "is-active" : ""
               }`}
+              aria-label="Marks"
               aria-pressed={showKinematicMarks}
               title={showKinematicMarks ? "Hide marks on the drawing" : "Show marks on the drawing"}
             >
-              Marks
+              <Crosshair className="w-4 h-4" />
             </button>
             <button
               type="button"
               onPointerDown={controlTap(onTableChip)}
-              className={`validation-control-btn validation-control-chip ${
+              className={`validation-control-btn validation-control-icon ${
                 tablePlaceMode ? "is-table-place is-active" : (tableUserMark ? "is-active" : "")
               }`}
+              aria-label="Table"
               aria-pressed={Boolean(tablePlaceMode || tableUserMark)}
               title={
                 tablePlaceMode
-                  ? "Tap the table surface on the video, or tap Table to cancel"
+                  ? "Tap the table surface on the video, or tap again to cancel"
                   : tableUserMark
                     ? "Table mark is set — tap to place it again, or drag the gold line"
-                    : "Tap Table, then tap the table surface on the video. You can also drag the gold line."
+                    : "Tap, then tap the table surface on the video. You can also drag the gold line."
               }
             >
-              {tablePlaceMode ? "Tap table" : "Table"}
+              <Table2 className="w-4 h-4" />
             </button>
             <button
               type="button"

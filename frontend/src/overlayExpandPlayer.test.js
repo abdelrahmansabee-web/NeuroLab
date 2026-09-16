@@ -150,7 +150,7 @@ test("expand html class stays when overlay data identity changes", () => {
   expect(getByTitle("Exit fullscreen")).toBeTruthy();
 });
 
-test("compact overlay chrome keeps chip labels off the icon buttons", () => {
+test("compact overlay chrome uses icons instead of Chalk Marks Table text", () => {
   window.matchMedia = (query) => ({
     matches: true,
     media: query,
@@ -188,8 +188,10 @@ test("compact overlay chrome keeps chip labels off the icon buttons", () => {
   expect(video.getAttribute("preload")).toBe("metadata");
   const tools = container.querySelector(".validation-controls-tools");
   expect(tools).toBeTruthy();
-  const chips = [...tools.querySelectorAll(".validation-control-chip")].map((el) => el.textContent.trim());
-  expect(chips).toEqual(expect.arrayContaining(["Chalk", "Marks", "Table"]));
+  expect(tools.textContent).not.toMatch(/Chalk|Clinic|Marks|Table/);
+  expect(getByTitle("Chalk limb ribbons (tap for clinical)")).toBeTruthy();
+  expect(getByTitle("Hide marks on the drawing")).toBeTruthy();
+  expect(getByTitle("Tap, then tap the table surface on the video. You can also drag the gold line.")).toBeTruthy();
   expect(getByTitle("Fullscreen")).toBeTruthy();
   expect(getByTitle("Download overlay video")).toBeTruthy();
 });

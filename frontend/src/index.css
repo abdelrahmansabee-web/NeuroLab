@@ -382,7 +382,7 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
 }
 
 .validation-controls-tools > .validation-control-icon {
-  width: auto;
+  width: 40px;
   min-width: 40px;
 }
 
@@ -410,13 +410,15 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   text-overflow: ellipsis;
 }
 
-.validation-control-chip.is-active {
+.validation-control-chip.is-active,
+.validation-control-icon.is-active {
   background: rgba(255, 255, 255, 0.16);
   border-color: rgba(255, 255, 255, 0.28);
   color: #fff;
 }
 
-.validation-control-chip.is-table-place {
+.validation-control-chip.is-table-place,
+.validation-control-icon.is-table-place {
   background: rgba(245, 158, 11, 0.22);
   border-color: rgba(245, 158, 11, 0.55);
   color: #fde68a;
