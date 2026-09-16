@@ -1,0 +1,28 @@
+=== Remaining OpenCap/OpenSim mentions ===
+[297] 8.   Uhlrich SD, Falisse A, Kidziński Ł, Muccini J, Ko M, Chaudhari AS, et al. OpenCap: 3D human movement dynamics from smartphone videos. PLOS Comput Biol. 2023;19(10):e1011462.
+
+
+=== Key updated paragraphs ===
+
+--- MediaPipe ---
+For this purpose, a dual-sensor kinematic setup combining MediaPipe Pose Landmarker (markerless video-based motion capture) with Phyphox smartphone accelerometry is introduced. MediaPipe will quantify spatial and angular parameters (trunk displacement, shoulder girdle elevation, elbow angle) from side-view video, while Phyphox will capture time- and acceleration-based parameters (movement smoothness, movement time, peak velocity) from a wrist-mounted smartphone accelerometer. Hence, by objectively quantifying the "how" of movement, we can examine the mediator between central neural planning an
+
+--- Phyphox ---
+For this purpose, a dual-sensor kinematic setup combining MediaPipe Pose Landmarker (markerless video-based motion capture) with Phyphox smartphone accelerometry is introduced. MediaPipe will quantify spatial and angular parameters (trunk displacement, shoulder girdle elevation, elbow angle) from side-view video, while Phyphox will capture time- and acceleration-based parameters (movement smoothness, movement time, peak velocity) from a wrist-mounted smartphone accelerometer. Hence, by objectively quantifying the "how" of movement, we can examine the mediator between central neural planning an
+
+--- SPARC ---
+The video camera will be configured to record at 1080p resolution and 60 frames per second (fps). Recordings will be conducted in a room with consistent, diffuse lighting to avoid backlighting or shadows that could interfere with AI tracking. The same MediaPipe Pose Landmarker model and processing parameters will be used for all participant analyses to ensure data comparability. The Phyphox CSV output will be imported into a Python-based pipeline for SPARC, movement-time and peak-velocity computation.
+
+--- Data Collection Setup ---
+Data Collection Setup: To evaluate immediate kinematic modifications, recordings will be taken prior to and immediately following the single training session. For MediaPipe analysis, a smartphone or webcam will be used to record a side-view (sagittal plane) video of the affected upper limb and trunk. The camera will be mounted on a tripod at a fixed height, positioned perpendicular to the reaching plane at a standardized distance of 1.5 m to 2.0 m. For Phyphox analysis, a standard smartphone will be secured on the affected-side wrist using an armband or Velcro strap; the Phyphox application wi
+
+--- Primary outcome ---
+
+--- Baseline Assessment ---
+1. Baseline Assessment: After the system calibration, each subject will perform 3 runs of a routine Reach-to-Grasp task. Movement kinematics will be recorded simultaneously: MediaPipe will capture side-view video for trunk displacement, shoulder girdle elevation and elbow angle; Phyphox will record wrist accelerometry for movement smoothness (SPARC), movement time and peak velocity (pre-intervention movement quality).
+
+--- Shoulder Girdle Elevation ---
+Does one session of PETTLEP based AOMI lead to immediate improvements in movement smoothness, trunk compensation, Shoulder Girdle Elevation , and gross manual dexterity of the affected upper limb in stroke survivors compared to a cognitive & somatic control?
+
+--- Trunk Displacement ---
+H₀: One session of PETTLEP based AOMI will not lead to significant changes in kinematic parameters (movement smoothness, Trunk Displacement, Shoulder Girdle Elevation) or gross manual dexterity (Box and Block Test) of the paretic upper extremity in individuals post stroke as compared to the control group. 

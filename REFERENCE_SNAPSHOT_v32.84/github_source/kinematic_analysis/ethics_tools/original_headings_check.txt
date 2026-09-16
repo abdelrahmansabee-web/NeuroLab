@@ -1,0 +1,18 @@
+
+=== Birincil Sonuç Ölçütü: ===
+
+Birincil Sonuç Ölçütü:
+RUNS: [FF0000]
+ | [FF0000]Birincil Sonuç Ölçütü:
+
+=== Veri Toplama Yöntemleri ===
+Veri Toplama Yöntemleri
+RUNS: [FF0000]Veri Toplama Yöntemleri
+
+=== İkincil Sonuç Ölçütleri: ===
+
+
+İkincil Sonuç Ölçütleri:
+RUNS: [FF0000]
+ | [FF0000]
+ | [000000]İkincil Sonuç Ölçütleri:

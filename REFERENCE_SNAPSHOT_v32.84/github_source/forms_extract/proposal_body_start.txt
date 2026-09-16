@@ -1,0 +1,40 @@
+0 p: ÖĞRENCİ BİLGİLERİ (Student’ Information):
+1 p: 
+2 p: Adı Soyadı (Name Surname): Abdelrahman Walid Hamza Mohamed Elsayed Sabee
+3 p: 
+4 p: No (Number): 2433095024
+5 p: 
+6 p: Anabilim Dalı (Department): Physiotherapy and Rehabilitation
+7 p: 
+8 p: Program Adı (Program): Physiotherapy and Rehabilitation Master's Degree Program with Thesis
+9 p: 
+10 p: Danışmanı (Advisor): Asst. Prof. Begüm Kara Kaya
+11 p: 
+12 p: ☒TEZ KONUSU ÖNERİSİ (THESIS TOPIC PROPOSAL):
+13 p: 
+14 p: Tezin Başlığı /Adı (Thesis Title/Name):
+15 p: 
+16 p: Immediate Effects of PETTLEP-Based AOMI on Upper Limb Kinematics in Stroke Survivors: A Randomized C
+17 p: 
+18 p: 
+19 p: Tezin Konusu ve Amacı 
+20 p: (Thesis’s Subject and Purpose): 
+21 p: 
+22 p: Stroke is the third leading cause of adult disability globally, and long-term motor, muscle tone and
+23 p: 
+24 p: In conventional treatments, emphasis is put on task practice; but a large number of stroke survivors
+25 p: 
+26 p: But the quality and rigor of the mental simulation in MI will determine how powerful it will be. To 
+27 p: 
+28 p: 
+29 p: For this purpose, the integration of OpenCap, a recently developed markerless motion capture system 
+30 p: 
+31 p: Therefore, the expectation of this study is to fill a critical gap in neuro-rehabilitation literatur
+32 p: 
+33 p: Keywords: Motor imagery, action observation, stroke, OpenCap, kinematics, upper limb rehabilitation.
+34 p: 
+35 p:  
+36 p: 
+37 p: Research Question
+38 p: 
+39 p: Does one session of PETTLEP based AOMI lead to immediate improvements in movement smoothness, trunk 
