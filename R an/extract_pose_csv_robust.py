@@ -27,6 +27,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import pandas as pd
+from pose_xyz_fill import fill_landmark_xyz_keep_visibility
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
@@ -130,32 +131,8 @@ def get_pose_landmarker(model_path: str = DEFAULT_MODEL_PATH) -> vision.PoseLand
     return vision.PoseLandmarker.create_from_options(options)
 
 def interpolate_landmarks(df: pd.DataFrame, max_gap: int = 8) -> pd.DataFrame:
-    """
-    استيفاء خطي للنقاط الضعيفة أو المفقودة (مهم جداً)
-    يعمل فقط على الأعمدة الرقمية.
-    """
-    numeric_cols = [c for c in df.columns if c not in ['frame', 'time']]
-    
-    # استبدل القيم المنخفضة جداً (تحت 0.2 visibility) بـ NaN
-    for col in numeric_cols:
-        if '_VISIBILITY' in col:
-            vis_col = col
-            base = col.replace('_VISIBILITY', '')
-            x_col = f"{base}_X"
-            y_col = f"{base}_Y"
-            z_col = f"{base}_Z"
-            
-            # إذا كانت الـ visibility منخفضة → اجعل X,Y,Z = NaN
-            low_vis = df[vis_col] < 0.25
-            df.loc[low_vis, [x_col, y_col, z_col]] = np.nan
-    
-    # استيفاء خطي
-    df[numeric_cols] = df[numeric_cols].interpolate(method='linear', limit=max_gap, limit_direction='both')
-    
-    # املأ الباقي بـ forward/backward fill
-    df[numeric_cols] = df[numeric_cols].ffill().bfill()
-    
-    return df
+    """Fill XYZ for Analyze. Do not copy later visibility onto unseen PRE rest."""
+    return fill_landmark_xyz_keep_visibility(df, max_gap=max_gap)
 
 def extract_pose_to_csv(
     video_path: str,
