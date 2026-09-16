@@ -19,7 +19,9 @@ DEFAULT_FOLDER_NAME = "NeuroLab_Backups"
 # The clinic Gmail folder (leading space in the Drive name). Never create a second copy.
 CLINIC_DRIVE_FOLDER_ID = "1o30Gi0XlWtpHoI5rsUoc8217IWoJUInK"
 FOLDER_NAME_ALIASES = (" NeuroLab_Backups", "NeuroLab_Backups")
-DEFAULT_REDIRECT = "https://abdelrahmansabee-neurolab.hf.space/auth/drive/callback"
+CANONICAL_APP_ORIGIN = "https://abdelrahmansabee-raedai.hf.space"
+DEFAULT_REDIRECT = CANONICAL_APP_ORIGIN + "/auth/drive/callback"
+_LEGACY_OAUTH_HOSTS = ("abdelrahmansabee-neurolab.hf.space",)
 
 
 def _data_dir() -> Path:
@@ -49,7 +51,19 @@ def client_secret() -> str:
 
 
 def redirect_uri() -> str:
-    return (os.environ.get("GOOGLE_OAUTH_REDIRECT_URI") or DEFAULT_REDIRECT).strip()
+    """Callback on the live RA.ED AI Space. Ignore the retired neurolab host."""
+    env = (os.environ.get("GOOGLE_OAUTH_REDIRECT_URI") or "").strip()
+    space_host = (os.environ.get("SPACE_HOST") or os.environ.get("SPACE_ABSOLUTE_URL") or "").strip()
+    if space_host.startswith("http://") or space_host.startswith("https://"):
+        origin = space_host.rstrip("/")
+    else:
+        host = space_host.split("/")[0].strip()
+        origin = ("https://" + host) if host else ""
+    if origin and all(legacy not in origin for legacy in _LEGACY_OAUTH_HOSTS):
+        return origin + "/auth/drive/callback"
+    if env and all(legacy not in env for legacy in _LEGACY_OAUTH_HOSTS):
+        return env
+    return DEFAULT_REDIRECT
 
 
 def oauth_client_configured() -> bool:
@@ -121,7 +135,7 @@ def persist_refresh_token_secret(refresh: str) -> None:
     repo = (
         os.environ.get("SPACE_REPO_ID")
         or os.environ.get("HF_SPACE_ID")
-        or "AbdelrahmanSabee/neurolab"
+        or "AbdelrahmanSabee/raedai"
     ).strip()
     if not refresh:
         return

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-  <title>NeuroLab — Connect Google Drive</title>
+  <title>RA.ED AI — Connect Google Drive</title>
   <style>
     body { margin:0; background:#121820; color:#e8eef6; font-family: Inter, system-ui, sans-serif; }
     .wrap { max-width: 32rem; margin: 8vh auto; padding: 0 1.25rem 3rem; }
@@ -44,30 +44,42 @@
       <p id="detail"></p>
       <button class="btn" id="connect" type="button" hidden>Connect Drive</button>
       <p style="margin-top:1.2rem;font-size:.85rem;color:rgba(255,255,255,.55)">
-        Open this page from the Home Screen icon, not from Safari.
-        Inside each patient folder: the clinic PDF, and validation videos when they exist:
-        <code>pre_validation.mp4</code>
-        <code>post_validation.mp4</code>
-        <code>healthy_validation.mp4</code>
-        Do not use a folder named <code>videos</code>. If a phase has no video, an empty folder is fine.
+        Use the Home Screen app or <code>abdelrahmansabee-raedai.hf.space</code> — not the huggingface.co Spaces tab.
+        Google sign-in cannot finish inside that embed.
       </p>
-      <p style="margin-top:1.2rem"><a href="/">Back to NeuroLab</a></p>
+      <p style="margin-top:1.2rem"><a href="/">Back to RA.ED AI</a></p>
     </div>
   </div>
   <script>
+    const APP = "https://abdelrahmansabee-raedai.hf.space";
+    (function breakout() {
+      const dest = APP + "/connect-drive" + (location.search || "");
+      try {
+        if (window.top && window.top !== window.self) {
+          window.top.location.replace(dest);
+          return;
+        }
+      } catch (e) { /* ignore */ }
+      if (/huggingface\.co$/i.test(location.hostname)) {
+        location.replace(dest);
+      }
+    })();
     const statusEl = document.getElementById("status");
     const setupEl = document.getElementById("setup");
     const folderEl = document.getElementById("folder");
     const detailEl = document.getElementById("detail");
     const btn = document.getElementById("connect");
-    document.getElementById("redir").textContent =
-      "https://abdelrahmansabee-neurolab.hf.space/auth/drive/callback";
+    document.getElementById("redir").textContent = APP + "/auth/drive/callback";
     const params = new URLSearchParams(location.search);
-    if (params.get("ok") === "1") {
+    if (params.get("ok") === "1" || params.get("drive") === "connected") {
       statusEl.className = "ok";
-      statusEl.textContent = "Drive is connected. Wait a few seconds for a file to appear in the folder.";
+      statusEl.textContent = "Drive is connected. Returning to RA.ED AI to recall sessions…";
+      setTimeout(function () { location.replace("/?drive=connected"); }, 600);
     }
-    if (params.get("error")) {
+    if (params.get("error") === "signin") {
+      statusEl.className = "warn";
+      statusEl.textContent = "Sign in to RA.ED AI first, then tap Connect Drive again.";
+    } else if (params.get("error")) {
       statusEl.className = "warn";
       statusEl.textContent = "Connect failed: " + params.get("error");
     }
@@ -78,7 +90,7 @@
         folderEl.textContent = "Could not list Drive folder files right now.";
         return;
       }
-      const name = inv.folderName || "NeuroLab_Backups";
+      const name = inv.folderName || "RAED_AI_Backups";
       const videos = inv.videoCount || 0;
       const jsons = inv.jsonCount || 0;
       const files = inv.fileCount || 0;
@@ -104,10 +116,32 @@
     ])
       .then(([d, inv]) => {
         showFolder(inv);
-        if (d.ready) {
+        if (d && d.redirectUri) document.getElementById("redir").textContent = d.redirectUri;
+        const bindConnect = (label) => {
+          btn.hidden = false;
+          btn.textContent = label || "Connect Drive";
+          btn.onclick = async () => {
+            btn.disabled = true;
+            const r = await fetch("/auth/drive/connect-cookie", {
+              method: "POST",
+              credentials: "same-origin",
+              headers,
+            });
+            if (!r.ok) {
+              statusEl.className = "warn";
+              statusEl.textContent = "Sign in to RA.ED AI first.";
+              btn.disabled = false;
+              return;
+            }
+            const body = await r.json().catch(() => ({}));
+            window.location.href = body.connectPath || "/auth/drive/connect";
+          };
+        };
+        if (d.ready && d.email && !d.staleTokenHint) {
           statusEl.className = "ok";
-          statusEl.textContent = "Drive is connected" + (d.email ? " (" + d.email + ")" : "") + ".";
+          statusEl.textContent = "Drive is connected (" + d.email + ").";
           if (d.folderName) detailEl.textContent = "Folder: " + d.folderName;
+          bindConnect("Reconnect Drive");
           return;
         }
         if (!d.clientConfigured) {
@@ -118,27 +152,18 @@
         }
         if (!token) {
           statusEl.className = "warn";
-          statusEl.textContent = "Sign in to NeuroLab from the Home Screen icon first, then open this page again.";
+          statusEl.textContent = "Sign in to RA.ED AI from the Home Screen icon first, then open this page again.";
           return;
         }
         statusEl.className = "warn";
-        statusEl.textContent = "Drive is not connected, so the folder is empty. Tap the button and sign in with the Gmail that has the 5 TB.";
-        btn.hidden = false;
-        btn.onclick = async () => {
-          btn.disabled = true;
-          const r = await fetch("/auth/drive/connect-cookie", {
-            method: "POST",
-            credentials: "same-origin",
-            headers,
-          });
-          if (!r.ok) {
-            statusEl.className = "warn";
-            statusEl.textContent = "Sign in to NeuroLab first.";
-            btn.disabled = false;
-            return;
-          }
-          window.location.href = "/auth/drive/connect";
-        };
+        if (d.ready && (d.staleTokenHint || !d.email)) {
+          statusEl.textContent =
+            "Drive token looks incomplete after a Space restart. Tap Reconnect and sign in again with the clinic Gmail.";
+          bindConnect("Reconnect Drive");
+          return;
+        }
+        statusEl.textContent = "Drive is not connected. Tap the button and sign in with the Gmail that has the clinic Drive.";
+        bindConnect("Connect Drive");
       })
       .catch(() => {
         statusEl.className = "warn";

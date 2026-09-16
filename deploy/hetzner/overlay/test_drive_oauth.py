@@ -31,8 +31,22 @@ class DriveOauthTests(unittest.TestCase):
                     self.assertNotIn(b"rt-1", raw_bytes)
 
     def test_redirect_default(self) -> None:
-        with patch.dict(os.environ, {"GOOGLE_OAUTH_REDIRECT_URI": ""}, clear=False):
-            self.assertIn("auth/drive/callback", drive_oauth.redirect_uri())
+        with patch.dict(os.environ, {"GOOGLE_OAUTH_REDIRECT_URI": "", "SPACE_HOST": ""}, clear=False):
+            self.assertEqual(
+                drive_oauth.redirect_uri(),
+                "https://abdelrahmansabee-raedai.hf.space/auth/drive/callback",
+            )
+
+    def test_redirect_uri_ignores_legacy_neurolab_env(self) -> None:
+        env = {
+            "GOOGLE_OAUTH_REDIRECT_URI": "https://abdelrahmansabee-neurolab.hf.space/auth/drive/callback",
+            "SPACE_HOST": "abdelrahmansabee-raedai.hf.space",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            self.assertEqual(
+                drive_oauth.redirect_uri(),
+                "https://abdelrahmansabee-raedai.hf.space/auth/drive/callback",
+            )
 
     def test_status_asks_for_reconnect_when_client_set(self) -> None:
         env = {
