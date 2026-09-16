@@ -1314,8 +1314,8 @@ export function ValidationOverlayPlayer({
     const pushFingerDot = (fid, jname, cpt, style, live) => {
       if (!cpt) return;
       const key = `${fid}:${jname}`;
-      const held = holdTrackingNoise(poseHoldStore, `fj:${key}`, cpt, holdPx);
-      const smoothed = smoothFinger(key, held, live);
+      const deadbanded = holdTrackingNoise(poseHoldStore, `fj:${key}`, cpt, holdPx);
+      const smoothed = smoothFinger(key, deadbanded, live);
       if (live) {
         stickyStore[key] = { cpt: [...smoothed], untilIdx: idx + stickyHoldFrames };
         jointDots.push({ fid, jname, cpt: smoothed, style, sticky: false });
