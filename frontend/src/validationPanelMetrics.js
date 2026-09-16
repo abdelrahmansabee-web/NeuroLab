@@ -4,6 +4,7 @@
  */
 import {
   computeLiveTremorPower,
+  formatTremorAmplitude,
   formatTremorPower,
   resolveTremorMetrics,
 } from "./tremorMetrics";
@@ -213,6 +214,7 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
     startIdx,
     Math.max(startIdx, idx),
     overlayData?.shoulder_width_px || 0,
+    overlayData,
   );
   let adlTremorLive = null;
   if (overlayData?.adl_window) {
@@ -222,6 +224,7 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
       overlayData.adl_window.start_idx ?? startIdx,
       Math.max(overlayData.adl_window.start_idx ?? startIdx, idx),
       overlayData?.shoulder_width_px || 0,
+      overlayData,
     );
   }
   const resolvedTremor = resolveTremorMetrics(overlayData);
@@ -255,6 +258,18 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
       idx >= endIdx
         ? resolvedTremor?.tremor_8_12hz_power
         : tremorLive?.tremor_8_12hz_power ?? resolvedTremor?.tremor_8_12hz_power,
+    tremor_abs_rms_px:
+      idx >= endIdx
+        ? resolvedTremor?.tremor_abs_rms_px
+        : tremorLive?.tremor_abs_rms_px ?? resolvedTremor?.tremor_abs_rms_px,
+    tremor_abs_rms_sw:
+      idx >= endIdx
+        ? resolvedTremor?.tremor_abs_rms_sw
+        : tremorLive?.tremor_abs_rms_sw ?? resolvedTremor?.tremor_abs_rms_sw,
+    tremor_present:
+      idx >= endIdx
+        ? resolvedTremor?.tremor_present
+        : tremorLive?.tremor_present ?? resolvedTremor?.tremor_present,
     tremor_index:
       idx >= endIdx
         ? resolvedTremor?.tremor_index
@@ -270,6 +285,7 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
       ?? resolvedTremor?.adl_tremor_8_12hz_power
       ?? tremorLive?.tremor_8_12hz_power
       ?? resolvedTremor?.tremor_8_12hz_power,
+    shoulder_width_px: Number(overlayData?.shoulder_width_px) || 0,
   };
 }
 
@@ -292,6 +308,12 @@ function panelToOverlayMetrics(panel) {
   assignIfNum(out, "movement_time_sec", panel.movementTime);
   assignIfNum(out, "peak_elbow_ang_vel_deg_s", panel.peakElbowAngVel);
   assignIfNum(out, "tremor_8_12hz_power", panel.tremor_8_12hz_power);
+  assignIfNum(out, "tremor_abs_rms_px", panel.tremor_abs_rms_px);
+  assignIfNum(out, "tremor_abs_rms_sw", panel.tremor_abs_rms_sw);
+  if (panel.tremor_present === true || panel.tremor_present === false) {
+    out.tremor_present = panel.tremor_present;
+  }
+  assignIfNum(out, "shoulder_width_px", panel.shoulder_width_px);
   assignIfNum(out, "tremor_index", panel.tremor_index);
   assignIfNum(out, "tremor_peak_freq_hz", panel.tremor_peak_freq_hz);
   assignIfNum(out, "index_tremor_8_12hz_power", panel.index_tremor_8_12hz_power);
@@ -454,7 +476,12 @@ export function formatPanelAlignedKinValue(metricKey, value, overlayMetrics = nu
     return `${formatFixed(val, 0)} \u00b0/s`;
   }
   if (metricKey === "elbow_angle_mean_deg") return formatFixed(val, 1);
-  if (metricKey === "tremor_8_12hz_power") return formatTremorPower(val);
+  if (metricKey === "tremor_8_12hz_power") {
+    if (om.tremor_abs_rms_px != null || om.tremor_present === false) {
+      return formatTremorAmplitude(om.tremor_abs_rms_px, om.shoulder_width_px, om.tremor_present);
+    }
+    return formatTremorPower(val);
+  }
   if (metricKey === "tremor_peak_freq_hz") {
     if (Number.isNaN(val)) return "\u2014";
     return `${val.toFixed(1)} Hz`;

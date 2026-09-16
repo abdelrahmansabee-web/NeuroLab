@@ -3,7 +3,7 @@ import { Play, Pause, Maximize, Minimize2, ChevronLeft, ChevronRight, Download, 
 import { downloadBlob } from "./downloadUtils";
 import {
   buildTremorCameraTrack,
-  formatTremorPower,
+  formatTremorAmplitude,
   resolveTremorMetrics,
 } from "./tremorMetrics";
 import {
@@ -33,7 +33,11 @@ import {
   saveSharedTableSurfaceY,
   tableMarkHitGeom,
 } from "./overlayTableUserMark";
-import { isAppleTouchVideo, shouldRestartPlayback } from "./overlayVideoPlayback";
+import {
+  getOverlayFrameState,
+  isAppleTouchVideo,
+  shouldRestartPlayback,
+} from "./overlayVideoPlayback";
 import {
   overlayPlayerChromeStyle,
   overlaySlotAspect,
@@ -97,41 +101,6 @@ function AppShellBackground({ className = "" }) {
       <div className="absolute inset-0" style={{ background: APP_BG_OVERLAY }} />
     </div>
   );
-}
-
-/** Map video.currentTime to overlay frame index (handles duration drift vs served MP4). */
-function getOverlayFrameIndex(frames, fps, playbackTime, videoDuration) {
-  return getOverlayFrameState(frames, fps, playbackTime, videoDuration).idx;
-}
-
-/** Frame index + blend alpha for smooth landmark sync between overlay samples. */
-function getOverlayFrameState(frames, fps, playbackTime, videoDuration) {
-  if (!frames?.length) return { idx: 0, alpha: 0 };
-  const t0 = frames[0].time ?? 0;
-  const tN = frames[frames.length - 1].time ?? t0 + (frames.length - 1) / fps;
-  const overlaySpan = tN - t0;
-  let targetTime = playbackTime;
-  if (videoDuration > 0 && overlaySpan > 1e-6) {
-    targetTime = t0 + (playbackTime / videoDuration) * overlaySpan;
-  } else {
-    targetTime = t0 + playbackTime;
-  }
-  targetTime = Math.max(t0, Math.min(tN, targetTime));
-
-  if (frames.length === 1) return { idx: 0, alpha: 0 };
-
-  let lo = 0;
-  let hi = frames.length - 1;
-  while (lo < hi - 1) {
-    const mid = (lo + hi) >> 1;
-    const tm = frames[mid].time ?? t0 + mid / fps;
-    if (tm <= targetTime) lo = mid;
-    else hi = mid;
-  }
-  const tLo = frames[lo].time ?? t0 + lo / fps;
-  const tHi = frames[hi].time ?? t0 + hi / fps;
-  const alpha = tHi > tLo + 1e-9 ? Math.max(0, Math.min(1, (targetTime - tLo) / (tHi - tLo))) : 0;
-  return { idx: lo, alpha };
 }
 
 function overlayCanvasDpr() {
@@ -640,8 +609,11 @@ function formatPanelRowValue(row, live, overlayData, formatValue) {
     return "—";
   }
   if (row.kind === "tremor") {
-    const v = live[row.tremorKey];
-    return formatTremorPower(v);
+    return formatTremorAmplitude(
+      live.tremor_abs_rms_px,
+      overlayData?.shoulder_width_px,
+      live.tremor_present,
+    );
   }
   if (row.kind === "tremorIndex") {
     const v = live[row.tremorKey];
@@ -1140,6 +1112,8 @@ export function ValidationOverlayPlayer({
           tremor_8_12hz_power: panelLive?.tremor_8_12hz_power,
           tremor_index: panelLive?.tremor_index,
           tremor_peak_freq_hz: panelLive?.tremor_peak_freq_hz,
+          tremor_abs_rms_px: panelLive?.tremor_abs_rms_px,
+          tremor_present: panelLive?.tremor_present,
         },
         adlData: {
           tremor_8_12hz_power: panelLive?.adl_tremor_8_12hz_power,
@@ -1416,7 +1390,7 @@ export function ValidationOverlayPlayer({
       });
     }
 
-    // --- Tremor: backup pulsing halo on the hand + 8–12 Hz camera sparkline ---
+    // --- Tremor: 1:1 residual halo + scribble only when abs 8–12 Hz exceeds noise floor ---
     const tremorAnchor = palm || pt("wrist") || pt("hl_wrist");
     const swPxTremor = Number(overlayData?.shoulder_width_px) || 0;
     const tremorEnv = tremorAnchor ? localTremorEnvelopeAt(overlayData, idx) : null;
@@ -1430,8 +1404,16 @@ export function ValidationOverlayPlayer({
       idx >= win.end_idx
         ? resolvedTremor?.tremor_peak_freq_hz
         : tremorLive?.tremor_peak_freq_hz ?? resolvedTremor?.tremor_peak_freq_hz;
+    const tremorAbsRms =
+      idx >= win.end_idx
+        ? resolvedTremor?.tremor_abs_rms_px
+        : tremorLive?.tremor_abs_rms_px ?? resolvedTremor?.tremor_abs_rms_px;
+    const tremorPresent =
+      (idx >= win.end_idx
+        ? resolvedTremor?.tremor_present
+        : tremorLive?.tremor_present ?? resolvedTremor?.tremor_present) === true;
 
-    if (tremorAnchor && idx >= win.start_idx && idx <= win.end_idx && tremorCameraTrack) {
+    if (tremorPresent && tremorAnchor && idx >= win.start_idx && idx <= win.end_idx && tremorCameraTrack) {
       drawTremorCameraEvidence(ctx, {
         anchor: tremorAnchor,
         idx,
@@ -1442,6 +1424,9 @@ export function ValidationOverlayPlayer({
         livePow: tremorLivePow,
         peakHz: tremorPeakHz,
         intensity: tremorIntensity,
+        present: true,
+        absRmsPx: tremorAbsRms,
+        shoulderWidthPx: swPxTremor,
       });
     }
 
@@ -1451,47 +1436,41 @@ export function ValidationOverlayPlayer({
       const fhPx = Number(overlayData?.frame_height_px) || ch;
       const swPx = swPxTremor;
 
-      // Tremor halo from backup (REFERENCE_SNAPSHOT / v32.52): pulsing ring on the palm.
-      if (tremorAnchor && idx >= win.start_idx && idx <= win.end_idx) {
-        if (tremorIntensity > 0.02 || tremorLivePow != null) {
-          const r = 14 + tremorIntensity * 42;
-          const alphaHalo = 0.12 + tremorIntensity * 0.55;
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(tremorAnchor[0], tremorAnchor[1], r, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(251,113,133,${Math.min(0.95, alphaHalo).toFixed(2)})`;
-          ctx.lineWidth = 2.5 + tremorIntensity * 3;
-          ctx.shadowColor = "rgba(251,113,133,0.65)";
-          ctx.shadowBlur = 12 + tremorIntensity * 18;
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(tremorAnchor[0], tremorAnchor[1], Math.max(6, r * 0.45), 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(251,113,133,${(0.08 + tremorIntensity * 0.28).toFixed(2)})`;
-          ctx.fill();
-          ctx.restore();
-          drawSimpleLabel(
-            `Tr ${formatTremorPower(tremorLivePow)}${tremorPeakHz != null ? ` · ${Number(tremorPeakHz).toFixed(1)}Hz` : ""}`,
+      // Visible tremor mark when abs 8–12 Hz is above the noise floor (no 14–26× gain).
+      if (tremorPresent && tremorAnchor && idx >= win.start_idx && idx <= win.end_idx) {
+        const r = 14 + Math.min(1, tremorIntensity) * 18;
+        const alphaHalo = 0.18 + Math.min(0.5, tremorIntensity * 0.45);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(tremorAnchor[0], tremorAnchor[1], r, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(251,113,133,${Math.min(0.95, alphaHalo).toFixed(2)})`;
+        ctx.lineWidth = 2.2;
+        ctx.shadowColor = "rgba(251,113,133,0.45)";
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+        ctx.restore();
+        drawSimpleLabel(
+          `Tr ${formatTremorAmplitude(tremorAbsRms, swPxTremor, true)}${tremorPeakHz != null ? ` · ${Number(tremorPeakHz).toFixed(1)}Hz` : ""}`,
+          tremorAnchor,
+          tremorAnchor[0] > cx ? -150 : 20,
+          -52,
+          { color: "#fda4af", border: "rgba(251,113,133,0.55)", bg: "rgba(40,10,18,0.85)" },
+        );
+        if (showExtendedKin) {
+          drawEvidenceCard(
+            ctx,
+            buildTremorEvidenceLines(overlayData, tremorLivePow, tremorPeakHz, tremorAbsRms),
             tremorAnchor,
-            tremorAnchor[0] > cx ? -150 : 20,
-            -52,
-            { color: "#fda4af", border: "rgba(251,113,133,0.55)", bg: "rgba(40,10,18,0.85)" },
+            {
+              cw,
+              ch,
+              dpr,
+              offsetX: tremorAnchor[0] > cx ? -210 : 18,
+              offsetY: -118,
+              border: "rgba(251,113,133,0.4)",
+              titleColor: "#fecdd3",
+            },
           );
-          if (showExtendedKin || tremorLivePow != null) {
-            drawEvidenceCard(
-              ctx,
-              buildTremorEvidenceLines(overlayData, tremorLivePow, tremorPeakHz),
-              tremorAnchor,
-              {
-                cw,
-                ch,
-                dpr,
-                offsetX: tremorAnchor[0] > cx ? -210 : 18,
-                offsetY: -118,
-                border: "rgba(251,113,133,0.4)",
-                titleColor: "#fecdd3",
-              },
-            );
-          }
         }
       }
 
@@ -1603,6 +1582,12 @@ export function ValidationOverlayPlayer({
         tremor_8_12hz_power: panelLive?.tremor_8_12hz_power
           ?? tremorLive?.tremor_8_12hz_power
           ?? resolvedTremor?.tremor_8_12hz_power,
+        tremor_abs_rms_px: panelLive?.tremor_abs_rms_px
+          ?? tremorLive?.tremor_abs_rms_px
+          ?? resolvedTremor?.tremor_abs_rms_px,
+        tremor_present: panelLive?.tremor_present
+          ?? tremorLive?.tremor_present
+          ?? resolvedTremor?.tremor_present,
         tremor_index: panelLive?.tremor_index
           ?? tremorLive?.tremor_index
           ?? resolvedTremor?.tremor_index,
@@ -2437,15 +2422,20 @@ export function ValidationOverlayPlayer({
     }
     html.classList.add("nl-overlay-expanded");
     const saved = captureContainingBlockStyles(player);
+    return () => {
+      html.classList.remove("nl-overlay-expanded");
+      restoreContainingBlockStyles(saved);
+    };
+  }, [isExpanded]);
+
+  useLayoutEffect(() => {
+    if (!isExpanded) return undefined;
+    lastPaintMediaTimeRef.current = -1;
     const id = requestAnimationFrame(() => {
       lastPaintMediaTimeRef.current = -1;
       drawOverlay();
     });
-    return () => {
-      cancelAnimationFrame(id);
-      html.classList.remove("nl-overlay-expanded");
-      restoreContainingBlockStyles(saved);
-    };
+    return () => cancelAnimationFrame(id);
   }, [isExpanded, drawOverlay]);
 
   useEffect(() => {

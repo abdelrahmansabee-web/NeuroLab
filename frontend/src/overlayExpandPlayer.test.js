@@ -90,3 +90,58 @@ test("expand keeps the same in-card video node", () => {
   expect(home.querySelector("video")).toBe(video);
   expect(document.documentElement.classList.contains("nl-overlay-expanded")).toBe(false);
 });
+
+test("expand html class stays when overlay data identity changes", () => {
+  window.matchMedia = (query) => ({
+    matches: false,
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+  });
+  window.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  };
+  HTMLCanvasElement.prototype.getContext = () => ({
+    clearRect() {},
+    fillRect() {},
+    strokeRect() {},
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    quadraticCurveTo() {},
+    bezierCurveTo() {},
+    arc() {},
+    closePath() {},
+    stroke() {},
+    fill() {},
+    save() {},
+    restore() {},
+    translate() {},
+    scale() {},
+    setLineDash() {},
+    drawImage() {},
+    measureText: () => ({ width: 10 }),
+    createLinearGradient: () => ({ addColorStop() {} }),
+    createRadialGradient: () => ({ addColorStop() {} }),
+  });
+
+  const { getByTitle, rerender } = render(
+    <ValidationOverlayPlayer videoUrl="blob:test-overlay" overlayData={overlayData} phaseLabel="Post" />,
+  );
+  fireEvent.pointerDown(getByTitle("Fullscreen"));
+  expect(document.documentElement.classList.contains("nl-overlay-expanded")).toBe(true);
+
+  rerender(
+    <ValidationOverlayPlayer
+      videoUrl="blob:test-overlay"
+      overlayData={{ ...overlayData, version: "recalled" }}
+      phaseLabel="Post"
+    />,
+  );
+  expect(document.documentElement.classList.contains("nl-overlay-expanded")).toBe(true);
+  expect(getByTitle("Exit fullscreen")).toBeTruthy();
+});

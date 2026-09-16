@@ -40,6 +40,8 @@ import { downloadBlob as downloadBlobUtil, blobToBase64 } from "./downloadUtils"
 import {
   loadValidationSessionArtifact,
   saveValidationSessionArtifact,
+  shouldHydrateMediaBlobIntoState,
+  shouldHydrateOverlayIntoState,
   validationCacheMatchesResult,
 } from "./validationSessionCache";
 import {
@@ -3741,14 +3743,18 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     let applied = false;
     if (cached.overlay?.frames?.length) {
       startTransition(() => {
-        setOverlayData((prev) => ({ ...prev, [phase]: cached.overlay }));
+        setOverlayData((prev) => (
+          shouldHydrateOverlayIntoState(prev[phase], cached.overlay)
+            ? { ...prev, [phase]: cached.overlay }
+            : prev
+        ));
       });
       applied = true;
     }
     if (cached.originalVideoBlob instanceof Blob && cached.originalVideoBlob.size > 0) {
-      const objectUrl = URL.createObjectURL(cached.originalVideoBlob);
       setOriginalVideoBlobs((prev) => {
-        if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+        if (!shouldHydrateMediaBlobIntoState(prev[phase], cached.originalVideoBlob)) return prev;
+        const objectUrl = URL.createObjectURL(cached.originalVideoBlob);
         const next = { ...prev, [phase]: objectUrl };
         originalVideoBlobsRef.current = next;
         return next;
@@ -3756,9 +3762,9 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       applied = true;
     }
     if (cached.unifiedVideoBlob instanceof Blob && cached.unifiedVideoBlob.size > 0) {
-      const objectUrl = URL.createObjectURL(cached.unifiedVideoBlob);
       setVideoBlobs((prev) => {
-        if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+        if (!shouldHydrateMediaBlobIntoState(prev[phase], cached.unifiedVideoBlob)) return prev;
+        const objectUrl = URL.createObjectURL(cached.unifiedVideoBlob);
         const next = { ...prev, [phase]: objectUrl };
         videoBlobsRef.current = next;
         return next;
@@ -6961,7 +6967,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
   }
 </style></head><body><div class="wrap">
   <div class="header" style="background:${d.group === "1" ? "rgba(167,243,208,0.3)" : "rgba(251,207,232,0.4)"}">
-    <div style="display:flex;align-items:center;gap:14px"><img src="/raed-logo.png?v=32.72" alt="RA.ED AI" style="height:56px;width:auto"/><div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div></div>
+    <div style="display:flex;align-items:center;gap:14px"><img src="/raed-logo.png?v=32.75" alt="RA.ED AI" style="height:56px;width:auto"/><div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div></div>
     <div class="meta">${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}<br>${esc(d.name || "Participant")}</div>
   </div>
   <div class="patient">
@@ -9959,7 +9965,7 @@ export default function App() {
                       </button>
                     )}
                     <img
-                      src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.72`}
+                      src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.75`}
                       alt="RA.ED AI"
                       className="w-[8.75rem] h-auto object-contain"
                       style={{ background: "transparent" }}

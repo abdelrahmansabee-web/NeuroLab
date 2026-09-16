@@ -92,6 +92,20 @@ export async function blobFromObjectUrl(objectUrl) {
   }
 }
 
+/** Don't rewrite a live overlay with the same IDB copy — that remounts the player. */
+export function shouldHydrateOverlayIntoState(prevOverlay, incomingOverlay) {
+  if (!incomingOverlay?.frames?.length) return false;
+  if (prevOverlay?.frames?.length) return false;
+  return true;
+}
+
+/** Don't revoke a playing blob URL just because Drive recall re-applied the same bytes. */
+export function shouldHydrateMediaBlobIntoState(prevObjectUrl, incomingBlob) {
+  if (!(incomingBlob instanceof Blob) || incomingBlob.size <= 0) return false;
+  if (typeof prevObjectUrl === "string" && prevObjectUrl.length > 0) return false;
+  return true;
+}
+
 /** Reject stale cache rows from a previous analyze on the same patient/phase.
  *  When HF ephemeral files are gone, allow restore if the cached row has usable
  *  overlay/video even if csv_filename no longer matches the live Space path.
