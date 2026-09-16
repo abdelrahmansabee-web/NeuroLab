@@ -121,6 +121,24 @@ function isStandalonePWA() {
     || window.navigator.standalone === true;
 }
 
+const RAED_APP_ORIGIN = "https://abdelrahmansabee-raedai.hf.space";
+
+/** Google OAuth cannot finish inside the huggingface.co Spaces iframe. */
+function openConnectDrive() {
+  const dest = `${RAED_APP_ORIGIN}/connect-drive`;
+  try {
+    if (window.top && window.top !== window.self) {
+      window.top.location.href = dest;
+      return;
+    }
+  } catch (e) { /* ignore */ }
+  if (typeof window !== "undefined" && /huggingface\.co$/i.test(window.location.hostname)) {
+    window.location.href = dest;
+    return;
+  }
+  window.location.href = "/connect-drive";
+}
+
 /** iPad / iPhone / coarse pointer ? lighter glass & no Framer tap springs. */
 function isTouchUi() {
   if (typeof window === "undefined") return false;
@@ -6216,7 +6234,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
           )}
           <GBtn
             variant="default"
-            onClick={() => { window.location.href = "/connect-drive"; }}
+            onClick={() => { openConnectDrive(); }}
             title="Reconnect Google Drive (same window — keeps PWA session)"
           >
             <HardDrive className="w-4 h-4" />
@@ -6976,7 +6994,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
   }
 </style></head><body><div class="wrap">
   <div class="header" style="background:${d.group === "1" ? "rgba(167,243,208,0.3)" : "rgba(251,207,232,0.4)"}">
-    <div style="display:flex;align-items:center;gap:14px"><img src="/raed-logo.png?v=32.83" alt="RA.ED AI" style="height:56px;width:auto"/><div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div></div>
+    <div style="display:flex;align-items:center;gap:14px"><img src="/raed-logo.png?v=32.84" alt="RA.ED AI" style="height:56px;width:auto"/><div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div></div>
     <div class="meta">${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}<br>${esc(d.name || "Participant")}</div>
   </div>
   <div class="patient">
@@ -8980,11 +8998,20 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
+    const params = new URLSearchParams(window.location.search);
+    const justConnected = params.get("drive") === "connected";
+    if (justConnected) {
+      params.delete("drive");
+      const qs = params.toString();
+      try {
+        window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
+      } catch { /* ignore */ }
+    }
     const run = () => {
       if (cancelled || isKinAnalyzeActive()) return;
-      startDriveSessionRecall(loadPatients(), { showToast });
+      startDriveSessionRecall(loadPatients(), { showToast, force: justConnected });
     };
-    const t = setTimeout(run, 2800);
+    const t = setTimeout(run, justConnected ? 600 : 2800);
     const onSynced = (ev) => {
       if (ev?.detail?.skipDriveRecall) return;
       if (cancelled || isKinAnalyzeActive()) return;
@@ -9328,7 +9355,7 @@ export default function App() {
       { onClick: () => importRef.current?.click(), icon: <FileUp />, label: "Import patient", colorClass: "hover:text-emerald-300" },
       { onClick: () => bgRef.current?.click(), icon: <ImageIcon />, label: "Background" },
       { onClick: () => { goToSection("database"); if (!isDesktop) setSidebar(false); }, icon: <Database />, label: "Database" },
-      { onClick: () => { window.location.href = "/connect-drive"; }, icon: <HardDrive />, label: "Connect Drive", colorClass: "hover:text-sky-300" },
+      { onClick: () => { openConnectDrive(); }, icon: <HardDrive />, label: "Connect Drive", colorClass: "hover:text-sky-300" },
       ...(user?.is_admin ? [{ onClick: () => { goToSection("users"); if (!isDesktop) setSidebar(false); }, icon: <Users />, label: "Users", colorClass: "hover:text-violet-300" }] : []),
       { onClick: logout, icon: <LogOut />, label: "Sign out", colorClass: "hover:text-rose-300" },
     ];
@@ -9997,7 +10024,7 @@ export default function App() {
                       </button>
                     )}
                     <img
-                      src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.83`}
+                      src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.84`}
                       alt="RA.ED AI"
                       className="w-[8.75rem] h-auto object-contain"
                       style={{ background: "transparent" }}
