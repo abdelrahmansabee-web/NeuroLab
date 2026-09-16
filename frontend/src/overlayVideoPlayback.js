@@ -61,3 +61,36 @@ export function getOverlayFrameState(frames, fps, playbackTime, videoDuration) {
 export function getOverlayFrameIndex(frames, fps, playbackTime, videoDuration) {
   return getOverlayFrameState(frames, fps, playbackTime, videoDuration).idx;
 }
+
+/**
+ * Baked/composited clips are often much longer or shorter than the analyzed
+ * original. Small iOS duration drift (a few percent) is not a mismatch.
+ */
+export function overlaySourceLooksMismatched(videoDuration, overlayDuration) {
+  const v = Number(videoDuration);
+  const o = Number(overlayDuration);
+  if (!(v > 1) || !(o > 1)) return false;
+  const ratio = v > o ? v / o : o / v;
+  return ratio >= 1.45;
+}
+
+const OVERLAY_BAKE_FREE_EVENT = "nl-overlay-bake-free";
+let overlayBakeBusy = false;
+
+export function tryAcquireOverlayBake() {
+  if (overlayBakeBusy) return false;
+  overlayBakeBusy = true;
+  return true;
+}
+
+export function releaseOverlayBake() {
+  if (!overlayBakeBusy) return;
+  overlayBakeBusy = false;
+  try {
+    window.dispatchEvent(new Event(OVERLAY_BAKE_FREE_EVENT));
+  } catch { /* ignore */ }
+}
+
+export function overlayBakeFreeEventName() {
+  return OVERLAY_BAKE_FREE_EVENT;
+}

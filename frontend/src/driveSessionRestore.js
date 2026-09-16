@@ -20,6 +20,16 @@ export const DRIVE_RECALL_EVENT = "neurolab-drive-recall";
 export const DRIVE_RECALL_START_EVENT = "neurolab-drive-recall-start";
 export const DRIVE_RECALL_LS = "nl_drive_recall_v1";
 export const PATIENTS_SYNC_EVENT = "neurolab-patients-synced";
+export const RECALL_COOLDOWN_MS = 45000;
+
+/** Empty boot recall must not block the real list that arrives a few seconds later. */
+export function shouldReuseRecentRecall(lastSummary, lastRecallAt, now = Date.now(), opts = {}) {
+  if (opts.force) return false;
+  if (!lastSummary) return false;
+  if (!Number.isFinite(Number(lastRecallAt)) || now - lastRecallAt >= RECALL_COOLDOWN_MS) return false;
+  if (!lastSummary.attempted) return false;
+  return true;
+}
 
 export const RECALL_PHASES = [
   { k: "pre", l: "Pre", drive: "pre" },
@@ -392,7 +402,7 @@ export async function recallAnalyzedSessionsFromDrive(patients, opts = {}) {
   if (typeof opts === "function") opts = { onDone: opts };
   if (opts.onDone) recallWaiters.push(opts.onDone);
   if (recallPromise) return recallPromise;
-  if (!opts.force && lastSummary && Date.now() - lastRecallAt < 45000) {
+  if (shouldReuseRecentRecall(lastSummary, lastRecallAt, Date.now(), opts)) {
     const waiters = recallWaiters.splice(0);
     waiters.forEach((fn) => {
       try { fn(lastSummary); } catch { /* ignore */ }
