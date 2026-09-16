@@ -18,7 +18,7 @@ from scipy.signal import savgol_filter
 
 try:
     from extract_pose_csv_robust import LANDMARK_NAMES
-except ImportError:
+except Exception:
     LANDMARK_NAMES = []
 
 
@@ -91,35 +91,14 @@ def _interpolate_landmark_gaps(
     max_gap: int = 10,
     vis_threshold: float = 0.22,
 ) -> np.ndarray:
-    arr = np.asarray(series, dtype=float).copy()
-    if visibility is not None:
-        vis = np.asarray(visibility, dtype=float)
-        bad = vis < vis_threshold
-        arr[bad] = np.nan
-    n = len(arr)
-    isnan = ~np.isfinite(arr)
-    if not isnan.any():
-        return arr
-    idx = np.arange(n)
-    good = np.isfinite(arr)
-    if good.sum() < 2:
-        return arr
-    arr[isnan] = np.interp(idx[isnan], idx[good], arr[good])
-    # Short-gap only: re-mask long gaps then fill again
-    i = 0
-    while i < n:
-        if np.isfinite(arr[i]):
-            i += 1
-            continue
-        g0 = i
-        while i < n and not np.isfinite(arr[i]):
-            i += 1
-        if (i - g0) > max_gap and g0 > 0 and i < n:
-            arr[g0:i] = np.nan
-    good = np.isfinite(arr)
-    if good.sum() >= 2:
-        arr[~good] = np.interp(idx[~good], idx[good], arr[good])
-    return arr
+    from pose_gap_fill import interpolate_interior_gaps
+
+    return interpolate_interior_gaps(
+        series,
+        visibility=visibility,
+        max_gap=max_gap,
+        vis_threshold=vis_threshold,
+    )
 
 
 def apply_one_euro_series(
@@ -131,13 +110,19 @@ def apply_one_euro_series(
 ) -> np.ndarray:
     v = np.asarray(values, dtype=float)
     t = np.asarray(times, dtype=float)
-    if len(v) < 2:
-        return v.copy()
-    out = np.empty_like(v)
-    filt = OneEuroFilter1D(t[0], v[0], min_cutoff=min_cutoff, beta=beta)
-    out[0] = v[0]
-    for i in range(1, len(v)):
-        out[i] = filt(t[i], v[i])
+    out = np.full_like(v, np.nan, dtype=float)
+    if len(v) == 0:
+        return out
+    filt = None
+    for i in range(len(v)):
+        if not np.isfinite(v[i]) or not np.isfinite(t[i]):
+            filt = None
+            continue
+        if filt is None:
+            filt = OneEuroFilter1D(t[i], v[i], min_cutoff=min_cutoff, beta=beta)
+            out[i] = v[i]
+        else:
+            out[i] = filt(t[i], v[i])
     return out
 
 
@@ -178,7 +163,7 @@ def refine_pose_landmarks_df(
             filled = _interpolate_landmark_gaps(raw, vis, max_gap=max_gap)
             smoothed = apply_one_euro_series(filled, times, min_cutoff=min_cutoff, beta=beta)
             win = max(5, int(savgol_window_s * fs) | 1)
-            if len(smoothed) >= win:
+            if len(smoothed) >= win and np.isfinite(smoothed).all():
                 try:
                     smoothed = savgol_filter(smoothed, window_length=win, polyorder=2, mode="interp")
                 except ValueError:
