@@ -33,7 +33,11 @@ import {
   saveSharedTableSurfaceY,
   tableMarkHitGeom,
 } from "./overlayTableUserMark";
-import { isAppleTouchVideo, shouldRestartPlayback } from "./overlayVideoPlayback";
+import {
+  getOverlayFrameState,
+  isAppleTouchVideo,
+  shouldRestartPlayback,
+} from "./overlayVideoPlayback";
 import {
   overlayPlayerChromeStyle,
   overlaySlotAspect,
@@ -97,41 +101,6 @@ function AppShellBackground({ className = "" }) {
       <div className="absolute inset-0" style={{ background: APP_BG_OVERLAY }} />
     </div>
   );
-}
-
-/** Map video.currentTime to overlay frame index (handles duration drift vs served MP4). */
-function getOverlayFrameIndex(frames, fps, playbackTime, videoDuration) {
-  return getOverlayFrameState(frames, fps, playbackTime, videoDuration).idx;
-}
-
-/** Frame index + blend alpha for smooth landmark sync between overlay samples. */
-function getOverlayFrameState(frames, fps, playbackTime, videoDuration) {
-  if (!frames?.length) return { idx: 0, alpha: 0 };
-  const t0 = frames[0].time ?? 0;
-  const tN = frames[frames.length - 1].time ?? t0 + (frames.length - 1) / fps;
-  const overlaySpan = tN - t0;
-  let targetTime = playbackTime;
-  if (videoDuration > 0 && overlaySpan > 1e-6) {
-    targetTime = t0 + (playbackTime / videoDuration) * overlaySpan;
-  } else {
-    targetTime = t0 + playbackTime;
-  }
-  targetTime = Math.max(t0, Math.min(tN, targetTime));
-
-  if (frames.length === 1) return { idx: 0, alpha: 0 };
-
-  let lo = 0;
-  let hi = frames.length - 1;
-  while (lo < hi - 1) {
-    const mid = (lo + hi) >> 1;
-    const tm = frames[mid].time ?? t0 + mid / fps;
-    if (tm <= targetTime) lo = mid;
-    else hi = mid;
-  }
-  const tLo = frames[lo].time ?? t0 + lo / fps;
-  const tHi = frames[hi].time ?? t0 + hi / fps;
-  const alpha = tHi > tLo + 1e-9 ? Math.max(0, Math.min(1, (targetTime - tLo) / (tHi - tLo))) : 0;
-  return { idx: lo, alpha };
 }
 
 function overlayCanvasDpr() {
@@ -2453,15 +2422,20 @@ export function ValidationOverlayPlayer({
     }
     html.classList.add("nl-overlay-expanded");
     const saved = captureContainingBlockStyles(player);
+    return () => {
+      html.classList.remove("nl-overlay-expanded");
+      restoreContainingBlockStyles(saved);
+    };
+  }, [isExpanded]);
+
+  useLayoutEffect(() => {
+    if (!isExpanded) return undefined;
+    lastPaintMediaTimeRef.current = -1;
     const id = requestAnimationFrame(() => {
       lastPaintMediaTimeRef.current = -1;
       drawOverlay();
     });
-    return () => {
-      cancelAnimationFrame(id);
-      html.classList.remove("nl-overlay-expanded");
-      restoreContainingBlockStyles(saved);
-    };
+    return () => cancelAnimationFrame(id);
   }, [isExpanded, drawOverlay]);
 
   useEffect(() => {

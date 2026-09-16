@@ -107,20 +107,6 @@ html.nl-overlay-expanded [data-nl-app-scroll] {
   z-index: 2147483000 !important;
 }
 
-/* Clinic top bar is sticky/fixed z-60; <main> is z-30 so expand (inside main) sat under it. */
-html.nl-overlay-expanded .nl-clinic-shell-topbar {
-  position: relative !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-  z-index: 0 !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-html.nl-overlay-expanded .nl-clinic-main {
-  z-index: 80 !important;
-}
-
 html.nl-overlay-expanded .validation-player-home,
 html.nl-overlay-expanded .nl-overlay-escape,
 html.nl-overlay-expanded.nl-touch .nl-overlay-escape,
