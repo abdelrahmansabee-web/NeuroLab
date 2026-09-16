@@ -49,6 +49,8 @@ import {
   overlaySlotReserveStyle,
   captureContainingBlockStyles,
   restoreContainingBlockStyles,
+  lockOverlayAppScroller,
+  unlockOverlayAppScroller,
 } from "./overlayExpandLayout";
 import {
   drawClinicalSkeleton,
@@ -2402,12 +2404,14 @@ export function ValidationOverlayPlayer({
     if (!isExpanded) return undefined;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    const scrollerLock = lockOverlayAppScroller();
     const onKey = (e) => {
       if (e.key === "Escape") exitExpanded();
     };
     window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prevOverflow;
+      unlockOverlayAppScroller(scrollerLock);
       window.removeEventListener("keydown", onKey);
     };
   }, [isExpanded, exitExpanded]);

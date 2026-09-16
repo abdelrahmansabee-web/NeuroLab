@@ -11,6 +11,31 @@ export const OVERLAY_ESCAPE_CLASS = "nl-overlay-escape";
 export const OVERLAY_APP_SCROLL_ATTR = "data-nl-app-scroll";
 export const OVERLAY_APP_SCROLL_EXPANDED_Z = 2147483000;
 
+/**
+ * iPad clinic scroll is `fixed inset-0 overflow-y-auto`, not document.body.
+ * Expand already sets body overflow hidden (no-op on that scroller). Lock the
+ * same node App.js uses for the actions sheet. Do not change ancestor overflow
+ * inside captureContainingBlockStyles — that froze the page.
+ */
+export function lockOverlayAppScroller() {
+  if (typeof document === "undefined") return null;
+  const el = document.querySelector(`[${OVERLAY_APP_SCROLL_ATTR}]`);
+  if (!el) return null;
+  const prev = {
+    overflow: el.style.overflow,
+    touchAction: el.style.touchAction,
+  };
+  el.style.overflow = "hidden";
+  el.style.touchAction = "none";
+  return { el, prev };
+}
+
+export function unlockOverlayAppScroller(saved) {
+  if (!saved?.el) return;
+  saved.el.style.overflow = saved.prev?.overflow || "";
+  saved.el.style.touchAction = saved.prev?.touchAction || "";
+}
+
 /** CSS names. Inline !important is required to beat App.js glass `backdrop-filter: … !important`. */
 const CONTAINING_BLOCK_PROPS = [
   "filter",

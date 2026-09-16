@@ -7,6 +7,8 @@ import {
   readSlotBox,
   captureContainingBlockStyles,
   restoreContainingBlockStyles,
+  lockOverlayAppScroller,
+  unlockOverlayAppScroller,
   OVERLAY_PORTAL_Z_COMPACT,
   OVERLAY_PORTAL_Z_EXPANDED,
   OVERLAY_APP_SCROLL_EXPANDED_Z,
@@ -46,6 +48,20 @@ test("compact chrome stays in-flow so iPad scroll keeps the video in its card", 
 
 test("expanded iPad scroller stacks above the clinic sidebar", () => {
   expect(OVERLAY_APP_SCROLL_EXPANDED_Z).toBeGreaterThan(100);
+});
+
+test("expand locks the clinic app scroller the same way the actions sheet does", () => {
+  const scroller = document.createElement("div");
+  scroller.setAttribute("data-nl-app-scroll", "1");
+  scroller.style.overflow = "auto";
+  document.body.appendChild(scroller);
+  const saved = lockOverlayAppScroller();
+  expect(scroller.style.overflow).toBe("hidden");
+  expect(scroller.style.touchAction).toBe("none");
+  unlockOverlayAppScroller(saved);
+  expect(scroller.style.overflow).toBe("auto");
+  expect(scroller.style.touchAction).toBe("");
+  document.body.removeChild(scroller);
 });
 
 test("expand CSS raises the scroller and does not reflow the clinic top bar", () => {
