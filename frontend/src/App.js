@@ -34,6 +34,7 @@ import {
 import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
 import { overlayPlayerMountDelayMs } from "./overlayVideoPlayback";
+import { clinicTrialRoleFromPhase, summarizeOverlayClock } from "./analysisPhaseCompare";
 import SessionStatusBar, { revealSessionStatusBar } from "./SessionStatusBar";
 import PtrIosSpinner from "./PtrIosSpinner";
 import AuthGate, { authHeaders, clearAuthToken, rememberLoginEmail } from "./AuthGate";
@@ -4068,7 +4069,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       if (!res.ok) throw new Error(`Failed to load overlay data (${res.status})`);
       const overlay = await res.json();
       console.log("overlay-debug", csvFilename, {
-        affected_side: overlay.affected_side,
+        phase,
+        ...summarizeOverlayClock(overlay),
         table_surface_y: overlay.table_surface_y,
         table_surface_fallback: overlay.table_surface_fallback,
         table_under_shoulder: overlay.table_under_shoulder,
@@ -4465,6 +4467,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       const fd = new FormData();
       fd.append(isCsv ? "csv" : "video", file);
       fd.append("phase", phase);
+      fd.append("trial_role", clinicTrialRoleFromPhase(phase));
       // Use demographics paretic side when set; otherwise auto-detect from kinematics.
       fd.append("stroke_side", strokeSideHint);
       fd.append("affected_side", strokeSideHint);

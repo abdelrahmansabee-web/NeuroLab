@@ -24,7 +24,7 @@ _RAN_DIR = _BASE.parent / "R an" if (_BASE.parent / "R an" / "extract_pose_csv_r
 if str(_RAN_DIR) not in sys.path:
     sys.path.insert(0, str(_RAN_DIR))
 from mediapipe_csv_extractor import extract_from_video  # noqa: E402
-from stroke_kinematic_pipeline import resolve_analysis_arm  # noqa: E402
+from stroke_kinematic_pipeline import resolve_analysis_arm, trial_role_from_phase  # noqa: E402
 
 
 # ΓöÇΓöÇΓöÇ Paths ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
@@ -156,6 +156,7 @@ async def analyze_video(
     shoulder_width_cm: str = Form("auto"),
     cutoff_frequency: str = Form("4.0"),
     filter_order: str = Form("4"),
+    trial_role: str = Form(""),
 ):
     try:
         # ΓöÇΓöÇ 1. Save uploaded video ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
@@ -172,7 +173,8 @@ async def analyze_video(
         print(f"   Video : {video.filename}")
         print(f"   Phase : {phase}")
         resolved_arm = resolve_analysis_arm(phase, stroke_side, affected_side)
-        print(f"   Arm   : {resolved_arm} (stroke_side={stroke_side}, requested={affected_side})")
+        role = (trial_role or "").strip() or trial_role_from_phase(phase)
+        print(f"   Arm   : {resolved_arm} (stroke_side={stroke_side}, requested={affected_side}, role={role})")
         print(f"{'='*60}\n")
 
         if resolved_arm == "auto":
@@ -250,6 +252,7 @@ async def analyze_video(
             best_trial_metric=best_trial_metric or "sparc",
             phase_name=phase.upper(),
             camera_view="auto",
+            trial_role=role,
         )
 
         if isinstance(analysis, dict) and analysis.get("error"):
@@ -355,6 +358,7 @@ async def analyze_csv(
     patient_height_cm: str = Form("auto"),
     trial_count: str = Form("1"),
     best_trial_metric: str = Form("sparc"),
+    trial_role: str = Form(""),
 ):
     """Upload a CSV + run kinematic analysis + OpenSim IK (skip video pose extraction).
     Optional metric_scale (meters) or shoulder_width_cm to get cm values.
@@ -371,7 +375,8 @@ async def analyze_csv(
         print(f"\n{'='*60}")
         print(f"CSV analysis: {csv.filename} -> {csv_path.name}")
         resolved_arm = resolve_analysis_arm(phase, stroke_side, affected_side)
-        print(f"Arm: {resolved_arm} (phase={phase}, stroke_side={stroke_side})")
+        role = (trial_role or "").strip() or trial_role_from_phase(phase)
+        print(f"Arm: {resolved_arm} (phase={phase}, stroke_side={stroke_side}, role={role})")
         print(f"{'='*60}\n")
 
         cutoff = float(cutoff_frequency)
@@ -397,6 +402,7 @@ async def analyze_csv(
             best_trial_metric=best_trial_metric or "sparc",
             phase_name=phase.upper(),
             camera_view="auto",
+            trial_role=role,
         )
 
         if isinstance(analysis, dict) and analysis.get("error"):

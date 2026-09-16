@@ -3,13 +3,14 @@
 import sys
 import traceback
 from pathlib import Path
+from typing import Optional
 
 _ROOT = Path(__file__).resolve().parent
 _RAN = _ROOT.parent / "R an" if (_ROOT.parent / "R an" / "stroke_kinematic_pipeline.py").exists() else _ROOT
 if str(_RAN) not in sys.path:
     sys.path.insert(0, str(_RAN))
 
-from stroke_kinematic_pipeline import analyze_stroke_kinematic_csv  # noqa: E402
+from stroke_kinematic_pipeline import analyze_stroke_kinematic_csv, trial_role_from_phase  # noqa: E402
 
 
 def analyze_reach_and_wipe(
@@ -26,9 +27,11 @@ def analyze_reach_and_wipe(
     frame_width: int = 1920,
     frame_height: int = 1080,
     velocity_threshold_px_s: float = 5.0,
+    trial_role: Optional[str] = None,
 ) -> dict:
     """Run view-agnostic stroke kinematic pipeline (SPARC + 5 secondary vars)."""
     try:
+        role = (trial_role or "").strip().lower() or trial_role_from_phase(phase_name)
         r = analyze_stroke_kinematic_csv(
             file_path,
             affected_side=affected_side,
@@ -38,6 +41,7 @@ def analyze_reach_and_wipe(
             velocity_threshold_px_s=velocity_threshold_px_s,
             name=phase_name or Path(file_path).stem,
             camera_view=camera_view,
+            trial_role=role,
         )
         if r.get("error"):
             return {"error": r["error"]}
