@@ -41,3 +41,43 @@ def overlay_hide_unseen(x, y, vis, threshold: float = 0.5):
     xs[hide] = np.nan
     ys[hide] = np.nan
     return xs, ys
+
+
+def resample_visibility(vis, old_t, new_t):
+    """Resample visibility without copying a later reach onto unseen rest.
+
+    np.interp on only-finite samples holds the first confident vis backward
+    across NaN rest frames. Treat missing vis as 0 (unseen) first.
+    """
+    y = np.asarray(vis, dtype=float).reshape(-1)
+    t = np.asarray(old_t, dtype=float).reshape(-1)
+    nt = np.asarray(new_t, dtype=float).reshape(-1)
+    y = np.where(np.isfinite(y), y, 0.0)
+    if nt.size == 0:
+        return np.zeros(0, dtype=float)
+    if t.size == 0 or y.size == 0:
+        return np.zeros(nt.size, dtype=float)
+    n = min(t.size, y.size)
+    t = t[:n]
+    y = y[:n]
+    if n == 1:
+        return np.full(nt.size, y[0], dtype=float)
+    return np.interp(nt, t, y)
+
+
+def overlay_blank_unseen_wrist(wrist_x, wrist_y, *arrays):
+    """Drop palm/fingers/HL when the pose wrist is unseen.
+
+    Index and Hand Landmarker can still carry a copied reach after the wrist
+    was hidden. POST rest keeps a visible wrist, so those arrays stay.
+    """
+    unseen = ~np.isfinite(np.asarray(wrist_x, dtype=float)) | ~np.isfinite(
+        np.asarray(wrist_y, dtype=float)
+    )
+    out = []
+    for a in arrays:
+        b = np.asarray(a, dtype=float).copy()
+        if b.shape[:1] == unseen.shape:
+            b[unseen] = np.nan
+        out.append(b)
+    return out
