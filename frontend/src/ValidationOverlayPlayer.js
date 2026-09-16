@@ -3,8 +3,9 @@ import { Play, Pause, Maximize, Minimize2, ChevronLeft, ChevronRight, Download, 
 import { downloadBlob } from "./downloadUtils";
 import {
   buildTremorCameraTrack,
-  formatTremorPower,
+  formatTremorAmplitude,
   resolveTremorMetrics,
+  TREMOR_NOISE_FLOOR_PX,
 } from "./tremorMetrics";
 import {
   computeValidationPanelLive,
@@ -34,6 +35,11 @@ import {
   tableMarkHitGeom,
 } from "./overlayTableUserMark";
 import { isAppleTouchVideo, shouldRestartPlayback } from "./overlayVideoPlayback";
+import {
+  holdTrackingNoise,
+  overlayTrackingNoisePx,
+  resetHoldIfSeek,
+} from "./overlayPoseHold";
 import {
   overlayPlayerChromeStyle,
   overlaySlotAspect,
@@ -640,8 +646,11 @@ function formatPanelRowValue(row, live, overlayData, formatValue) {
     return "—";
   }
   if (row.kind === "tremor") {
-    const v = live[row.tremorKey];
-    return formatTremorPower(v);
+    return formatTremorAmplitude(
+      live.tremor_abs_rms_px,
+      overlayData?.shoulder_width_px,
+      live.tremor_present,
+    );
   }
   if (row.kind === "tremorIndex") {
     const v = live[row.tremorKey];
@@ -739,6 +748,8 @@ export function ValidationOverlayPlayer({
   const fingerStickyRef = useRef({});
   /** Last live finger canvas points (no EMA). Used only to reset on seeks. */
   const fingerSmoothRef = useRef({});
+  /** Display-only ~2 px hold so rest pose does not jitter. Not tracking math. */
+  const poseHoldRef = useRef({});
   const cupLiveRef = useRef(null);
   const tableCreamRef = useRef(null);
   const tableHintYRef = useRef(null);
@@ -872,6 +883,9 @@ export function ValidationOverlayPlayer({
     if (!f) return;
 
     const color = phaseColor;
+    const holdPx = overlayTrackingNoisePx(cw, ch);
+    resetHoldIfSeek(poseHoldRef.current, idx);
+    const poseHoldStore = poseHoldRef.current;
 
     function pt(name) {
       const p = f[name];
@@ -885,7 +899,7 @@ export function ValidationOverlayPlayer({
       }
       const isHandLm = /^(index|thumb|pinky|middle|ring|hl_wrist)$/.test(name);
       if (isHandLm && (nx <= 0.0002 || nx >= 0.9998 || ny <= 0.0002 || ny >= 0.9998)) return null;
-      return [nx * cw, ny * ch];
+      return holdTrackingNoise(poseHoldStore, name, [nx * cw, ny * ch], holdPx);
     }
 
     function toCanvas(p) {
@@ -1140,6 +1154,8 @@ export function ValidationOverlayPlayer({
           tremor_8_12hz_power: panelLive?.tremor_8_12hz_power,
           tremor_index: panelLive?.tremor_index,
           tremor_peak_freq_hz: panelLive?.tremor_peak_freq_hz,
+          tremor_abs_rms_px: panelLive?.tremor_abs_rms_px,
+          tremor_present: panelLive?.tremor_present,
         },
         adlData: {
           tremor_8_12hz_power: panelLive?.adl_tremor_8_12hz_power,
@@ -1298,7 +1314,8 @@ export function ValidationOverlayPlayer({
     const pushFingerDot = (fid, jname, cpt, style, live) => {
       if (!cpt) return;
       const key = `${fid}:${jname}`;
-      const smoothed = smoothFinger(key, cpt, live);
+      const held = holdTrackingNoise(poseHoldStore, `fj:${key}`, cpt, holdPx);
+      const smoothed = smoothFinger(key, held, live);
       if (live) {
         stickyStore[key] = { cpt: [...smoothed], untilIdx: idx + stickyHoldFrames };
         jointDots.push({ fid, jname, cpt: smoothed, style, sticky: false });
@@ -1416,7 +1433,7 @@ export function ValidationOverlayPlayer({
       });
     }
 
-    // --- Tremor: backup pulsing halo on the hand + 8–12 Hz camera sparkline ---
+    // --- Tremor: 1:1 residual halo + scribble only when abs 8–12 Hz exceeds noise floor ---
     const tremorAnchor = palm || pt("wrist") || pt("hl_wrist");
     const swPxTremor = Number(overlayData?.shoulder_width_px) || 0;
     const tremorEnv = tremorAnchor ? localTremorEnvelopeAt(overlayData, idx) : null;
@@ -1430,8 +1447,16 @@ export function ValidationOverlayPlayer({
       idx >= win.end_idx
         ? resolvedTremor?.tremor_peak_freq_hz
         : tremorLive?.tremor_peak_freq_hz ?? resolvedTremor?.tremor_peak_freq_hz;
+    const tremorAbsRms =
+      idx >= win.end_idx
+        ? resolvedTremor?.tremor_abs_rms_px
+        : tremorLive?.tremor_abs_rms_px ?? resolvedTremor?.tremor_abs_rms_px;
+    const tremorPresent =
+      (idx >= win.end_idx
+        ? resolvedTremor?.tremor_present
+        : tremorLive?.tremor_present ?? resolvedTremor?.tremor_present) === true;
 
-    if (tremorAnchor && idx >= win.start_idx && idx <= win.end_idx && tremorCameraTrack) {
+    if (tremorPresent && tremorAnchor && idx >= win.start_idx && idx <= win.end_idx && tremorCameraTrack) {
       drawTremorCameraEvidence(ctx, {
         anchor: tremorAnchor,
         idx,
@@ -1442,6 +1467,9 @@ export function ValidationOverlayPlayer({
         livePow: tremorLivePow,
         peakHz: tremorPeakHz,
         intensity: tremorIntensity,
+        present: true,
+        absRmsPx: tremorAbsRms,
+        shoulderWidthPx: swPxTremor,
       });
     }
 
@@ -1451,35 +1479,37 @@ export function ValidationOverlayPlayer({
       const fhPx = Number(overlayData?.frame_height_px) || ch;
       const swPx = swPxTremor;
 
-      // Tremor halo from backup (REFERENCE_SNAPSHOT / v32.52): pulsing ring on the palm.
-      if (tremorAnchor && idx >= win.start_idx && idx <= win.end_idx) {
-        if (tremorIntensity > 0.02 || tremorLivePow != null) {
-          const r = 14 + tremorIntensity * 42;
-          const alphaHalo = 0.12 + tremorIntensity * 0.55;
+      // Tremor halo at true 8–12 Hz residual scale (no spatialGain).
+      if (tremorPresent && tremorAnchor && idx >= win.start_idx && idx <= win.end_idx) {
+        const residualPx = tremorCameraTrack
+          ? Math.hypot(
+            (tremorCameraTrack.dx?.[idx] || 0) * cw,
+            (tremorCameraTrack.dy?.[idx] || 0) * ch,
+          )
+          : Number(tremorAbsRms) || 0;
+        if (residualPx >= TREMOR_NOISE_FLOOR_PX) {
+          const r = residualPx;
+          const alphaHalo = 0.18 + Math.min(0.55, tremorIntensity * 0.45);
           ctx.save();
           ctx.beginPath();
           ctx.arc(tremorAnchor[0], tremorAnchor[1], r, 0, Math.PI * 2);
           ctx.strokeStyle = `rgba(251,113,133,${Math.min(0.95, alphaHalo).toFixed(2)})`;
-          ctx.lineWidth = 2.5 + tremorIntensity * 3;
-          ctx.shadowColor = "rgba(251,113,133,0.65)";
-          ctx.shadowBlur = 12 + tremorIntensity * 18;
+          ctx.lineWidth = 1.6;
+          ctx.shadowColor = "rgba(251,113,133,0.45)";
+          ctx.shadowBlur = 6;
           ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(tremorAnchor[0], tremorAnchor[1], Math.max(6, r * 0.45), 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(251,113,133,${(0.08 + tremorIntensity * 0.28).toFixed(2)})`;
-          ctx.fill();
           ctx.restore();
           drawSimpleLabel(
-            `Tr ${formatTremorPower(tremorLivePow)}${tremorPeakHz != null ? ` · ${Number(tremorPeakHz).toFixed(1)}Hz` : ""}`,
+            `Tr ${formatTremorAmplitude(tremorAbsRms, swPxTremor, true)}${tremorPeakHz != null ? ` · ${Number(tremorPeakHz).toFixed(1)}Hz` : ""}`,
             tremorAnchor,
             tremorAnchor[0] > cx ? -150 : 20,
             -52,
             { color: "#fda4af", border: "rgba(251,113,133,0.55)", bg: "rgba(40,10,18,0.85)" },
           );
-          if (showExtendedKin || tremorLivePow != null) {
+          if (showExtendedKin) {
             drawEvidenceCard(
               ctx,
-              buildTremorEvidenceLines(overlayData, tremorLivePow, tremorPeakHz),
+              buildTremorEvidenceLines(overlayData, tremorLivePow, tremorPeakHz, tremorAbsRms),
               tremorAnchor,
               {
                 cw,
@@ -1603,6 +1633,12 @@ export function ValidationOverlayPlayer({
         tremor_8_12hz_power: panelLive?.tremor_8_12hz_power
           ?? tremorLive?.tremor_8_12hz_power
           ?? resolvedTremor?.tremor_8_12hz_power,
+        tremor_abs_rms_px: panelLive?.tremor_abs_rms_px
+          ?? tremorLive?.tremor_abs_rms_px
+          ?? resolvedTremor?.tremor_abs_rms_px,
+        tremor_present: panelLive?.tremor_present
+          ?? tremorLive?.tremor_present
+          ?? resolvedTremor?.tremor_present,
         tremor_index: panelLive?.tremor_index
           ?? tremorLive?.tremor_index
           ?? resolvedTremor?.tremor_index,

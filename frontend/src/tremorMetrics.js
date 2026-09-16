@@ -3,6 +3,9 @@
 export const TREMOR_BAND_HZ = [8.0, 12.0];
 export const TREMOR_MIN_DURATION_S = 0.75;
 export const TREMOR_INDEX_SCALE = 6.0;
+/** Camera/MediaPipe jitter in the 8–12 Hz band is typically < 2 px RMS. */
+export const TREMOR_NOISE_FLOOR_PX = 2;
+export const TREMOR_PEAK_SNR = 2.5;
 
 function fillShortNanGaps(y, maxGap = 4) {
   const out = y.slice();
@@ -107,7 +110,14 @@ export function tremorBandPower(signal, fs, fLo = TREMOR_BAND_HZ[0], fHi = TREMO
 }
 
 /** Dominant frequency (Hz) within 8–12 Hz band — matches backend tremor_peak_freq_hz. */
-export function tremorPeakFreqHz(signal, fs, fLo = TREMOR_BAND_HZ[0], fHi = TREMOR_BAND_HZ[1], minDurationS = TREMOR_MIN_DURATION_S) {
+export function tremorPeakFreqHz(
+  signal,
+  fs,
+  fLo = TREMOR_BAND_HZ[0],
+  fHi = TREMOR_BAND_HZ[1],
+  minDurationS = TREMOR_MIN_DURATION_S,
+  { requireSnr = true } = {},
+) {
   if (!fs || fs <= 0 || !signal?.length) return null;
   let y = fillShortNanGaps(signal.map((v) => Number(v)));
   const minN = Math.max(16, Math.round(minDurationS * fs));
@@ -121,15 +131,85 @@ export function tremorPeakFreqHz(signal, fs, fLo = TREMOR_BAND_HZ[0], fHi = TREM
   if (hi <= lo) return null;
   let peakFreq = null;
   let peakPower = -1;
+  const bandPowers = [];
   for (let k = 1; k < spec.length; k += 1) {
     const freq = (k * fs) / y.length;
     if (freq < lo || freq > hi) continue;
+    bandPowers.push(spec[k]);
     if (spec[k] > peakPower) {
       peakPower = spec[k];
       peakFreq = freq;
     }
   }
+  if (peakFreq == null || peakPower <= 1e-12) return null;
+  if (requireSnr && bandPowers.length >= 3) {
+    const sorted = bandPowers.slice().sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)] || 0;
+    if (peakPower < TREMOR_PEAK_SNR * Math.max(median, 1e-12)) return null;
+  }
   return peakFreq;
+}
+
+export function tremorNoiseFloorPx(shoulderWidthPx = 0) {
+  const sw = Number(shoulderWidthPx);
+  const fromSw = Number.isFinite(sw) && sw > 0 ? 0.004 * sw : 0;
+  return Math.max(TREMOR_NOISE_FLOOR_PX, fromSw);
+}
+
+function seriesLooksLikePixels(px, py) {
+  let maxAbs = 0;
+  const n = Math.min(px.length, py.length);
+  for (let i = 0; i < n; i += 1) {
+    const ax = Math.abs(Number(px[i]) || 0);
+    const ay = Math.abs(Number(py[i]) || 0);
+    if (ax > maxAbs) maxAbs = ax;
+    if (ay > maxAbs) maxAbs = ay;
+  }
+  return maxAbs > 2;
+}
+
+/** RMS of 8–12 Hz palm displacement in video pixels (true amplitude, not relative %). */
+export function tremorBandAbsRmsPx(pxNorm, pyNorm, fs, frameW, frameH, minDurationS = TREMOR_MIN_DURATION_S) {
+  if (!pxNorm?.length || !pyNorm?.length || !(fs > 0)) return null;
+  const n = Math.min(pxNorm.length, pyNorm.length);
+  if (n < Math.max(16, Math.round(minDurationS * fs))) return null;
+  const alreadyPx = seriesLooksLikePixels(pxNorm, pyNorm);
+  const sx = alreadyPx ? 1 : Number(frameW) || 0;
+  const sy = alreadyPx ? 1 : Number(frameH) || 0;
+  if (!(sx > 0) || !(sy > 0)) return null;
+  const x = linearDetrend(pxNorm.slice(0, n).map((v) => Number(v) || 0));
+  const y = linearDetrend(pyNorm.slice(0, n).map((v) => Number(v) || 0));
+  const bx = bandpassZeroPhase(x, fs);
+  const by = bandpassZeroPhase(y, fs);
+  const pad = Math.min(Math.max(4, Math.round(fs * 0.12)), Math.floor(n / 5));
+  let ss = 0;
+  let count = 0;
+  for (let i = pad; i < n - pad; i += 1) {
+    const dx = bx[i] * sx;
+    const dy = by[i] * sy;
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) continue;
+    ss += dx * dx + dy * dy;
+    count += 1;
+  }
+  if (count < 8) return null;
+  return Math.sqrt(ss / count);
+}
+
+function peakHzFromPalm(px, py, fps) {
+  const n = Math.min(px.length, py.length);
+  if (n < 8) return tremorPeakFreqHz(px, fps);
+  let vx = 0;
+  let vy = 0;
+  for (let i = 0; i < n; i += 1) {
+    vx += (Number(px[i]) || 0) ** 2;
+    vy += (Number(py[i]) || 0) ** 2;
+  }
+  return tremorPeakFreqHz(vx >= vy ? px : py, fps);
+}
+
+export function tremorIsPresent(absRmsPx, shoulderWidthPx = 0) {
+  if (absRmsPx == null || !Number.isFinite(absRmsPx)) return false;
+  return absRmsPx >= tremorNoiseFloorPx(shoulderWidthPx);
 }
 
 export function tremorIndexFromPower(power) {
@@ -169,6 +249,49 @@ function gradientSpeed(values, fps) {
   return out;
 }
 
+function palmSeries(frames, startIdx, endIdx) {
+  const px = [];
+  const py = [];
+  for (let i = startIdx; i <= endIdx && i < frames.length; i += 1) {
+    const p = frames[i]?.palm;
+    px.push(p && Number.isFinite(Number(p[0])) ? Number(p[0]) : 0);
+    py.push(p && Number.isFinite(Number(p[1])) ? Number(p[1]) : 0);
+  }
+  return { px, py };
+}
+
+function gatedTremorOut(handPower, peakHz, absRmsPx, shoulderWidthPx) {
+  const measured = absRmsPx != null && Number.isFinite(absRmsPx);
+  const absRounded = measured ? Math.round(absRmsPx * 1000) / 1000 : null;
+  const sw = Number(shoulderWidthPx);
+  const absSw = absRounded != null && Number.isFinite(sw) && sw > 0
+    ? Math.round((absRounded / sw) * 1e6) / 1e6
+    : null;
+  if (measured && !tremorIsPresent(absRmsPx, shoulderWidthPx)) {
+    return {
+      tremor_8_12hz_power: 0,
+      hand_speed_tremor_8_12hz_power: 0,
+      tremor_index: 100,
+      tremor_peak_freq_hz: null,
+      tremor_abs_rms_px: absRounded,
+      tremor_abs_rms_sw: absSw,
+      tremor_present: false,
+    };
+  }
+  const out = {
+    tremor_present: measured ? true : null,
+    tremor_abs_rms_px: absRounded,
+    tremor_abs_rms_sw: absSw,
+  };
+  if (handPower != null) {
+    out.tremor_8_12hz_power = Math.round(handPower * 10000) / 10000;
+    out.hand_speed_tremor_8_12hz_power = out.tremor_8_12hz_power;
+    out.tremor_index = tremorIndexFromPower(handPower);
+  }
+  if (peakHz != null) out.tremor_peak_freq_hz = Math.round(peakHz * 100) / 100;
+  return out;
+}
+
 /** Full-window tremor from overlay frames (movement window). */
 export function computeTremorFromOverlay(overlayData, windowOverride = null) {
   if (!overlayData?.frames?.length) return null;
@@ -179,40 +302,39 @@ export function computeTremorFromOverlay(overlayData, windowOverride = null) {
   const endIdx = Math.max(startIdx, Math.min(frames.length - 1, win.end_idx || frames.length - 1));
   const sw = Number(overlayData.shoulder_width_px) || 0;
   const norm = sw > 0 ? sw : 1;
+  const frameW = Number(overlayData.frame_width_px) || 0;
+  const frameH = Number(overlayData.frame_height_px) || 0;
 
   const handSpeeds = segmentSpeeds(frames, startIdx, endIdx, true).map((v) => v / norm);
   const handPower = tremorBandPower(handSpeeds, fps);
+  const { px, py } = palmSeries(frames, startIdx, endIdx);
+  const peakHz = peakHzFromPalm(px, py, fps);
+  const absRmsPx = tremorBandAbsRmsPx(px, py, fps, frameW, frameH);
+
+  const out = gatedTremorOut(handPower, peakHz, absRmsPx, sw);
 
   const elbowAngles = angularVelocitySeries(frames, startIdx, endIdx, "elbow_angle");
   const elbowVel = gradientSpeed(elbowAngles, fps);
   const elbowPower = tremorBandPower(elbowVel, fps);
-
-  const out = {};
-  if (handPower != null) {
-    out.tremor_8_12hz_power = Math.round(handPower * 10000) / 10000;
-    out.hand_speed_tremor_8_12hz_power = out.tremor_8_12hz_power;
-    out.tremor_index = tremorIndexFromPower(handPower);
-    const peakHz = tremorPeakFreqHz(handSpeeds, fps);
-    if (peakHz != null) out.tremor_peak_freq_hz = Math.round(peakHz * 100) / 100;
-  }
-  if (elbowPower != null) {
+  if (out.tremor_present && elbowPower != null) {
     out.elbow_tremor_8_12hz_power = Math.round(elbowPower * 10000) / 10000;
   }
   return Object.keys(out).length ? out : null;
 }
 
 /** Cumulative tremor from movement start → currentIdx (live panel). */
-export function computeLiveTremorPower(frames, fps, startIdx, currentIdx, shoulderWidthPx = 0) {
+export function computeLiveTremorPower(frames, fps, startIdx, currentIdx, shoulderWidthPx = 0, overlayData = null) {
   if (!frames?.length || currentIdx < startIdx) return null;
   const endIdx = Math.min(currentIdx, frames.length - 1);
   const sw = shoulderWidthPx > 0 ? shoulderWidthPx : 1;
   const speeds = segmentSpeeds(frames, startIdx, endIdx, true).map((v) => v / sw);
   const power = tremorBandPower(speeds, fps);
-  if (power == null) return null;
-  return {
-    tremor_8_12hz_power: Math.round(power * 10000) / 10000,
-    tremor_index: tremorIndexFromPower(power),
-  };
+  const { px, py } = palmSeries(frames, startIdx, endIdx);
+  const peakHz = peakHzFromPalm(px, py, fps);
+  const frameW = Number(overlayData?.frame_width_px) || 0;
+  const frameH = Number(overlayData?.frame_height_px) || 0;
+  const absRmsPx = tremorBandAbsRmsPx(px, py, fps, frameW, frameH);
+  return gatedTremorOut(power, peakHz, absRmsPx, shoulderWidthPx);
 }
 
 export function computeAdlTremorFromOverlay(overlayData) {
@@ -224,20 +346,29 @@ export function computeAdlTremorFromOverlay(overlayData) {
   });
 }
 
-/** Prefer backend metric when within tolerance; else client recompute. */
+/** Prefer backend metric when within tolerance; else client recompute. Always apply the noise floor. */
 export function resolveTremorMetrics(overlayData) {
   const backend = overlayData?.metrics || {};
   const computed = computeTremorFromOverlay(overlayData);
   const adlComputed = computeAdlTremorFromOverlay(overlayData);
   const out = { ...(computed || {}) };
 
+  if (computed?.tremor_present === false) {
+    out.tremor_8_12hz_power = 0;
+    out.hand_speed_tremor_8_12hz_power = 0;
+    out.tremor_index = 100;
+    out.tremor_peak_freq_hz = null;
+    out.index_tremor_8_12hz_power = 0;
+    out.elbow_tremor_8_12hz_power = 0;
+    out.adl_tremor_8_12hz_power = 0;
+    out.tremor_present = false;
+    return out;
+  }
+
   const pick = (key) => {
     const b = backend[key];
     if (b != null && b !== "" && !Number.isNaN(Number(b))) {
-      const bv = Number(b);
-      const cv = out[key];
-      if (cv == null || Math.abs(bv - cv) <= 0.002) return bv;
-      return bv;
+      return Number(b);
     }
     return out[key] ?? null;
   };
@@ -256,12 +387,31 @@ export function resolveTremorMetrics(overlayData) {
     out.adl_tremor_8_12hz_power = adlComputed.tremor_8_12hz_power;
   }
 
+  if (computed?.tremor_present === false || adlComputed?.tremor_present === false) {
+    if (adlComputed?.tremor_present === false) out.adl_tremor_8_12hz_power = 0;
+  }
+
   return out;
 }
 
 export function formatTremorPower(val) {
   if (val == null || Number.isNaN(val)) return "—";
+  if (Number(val) === 0) return "0";
   return `${(Number(val) * 100).toFixed(1)}% rel`;
+}
+
+/** Absolute 8–12 Hz palm amplitude for the panel / overlay label. */
+export function formatTremorAmplitude(absRmsPx, shoulderWidthPx = 0, present = undefined) {
+  if (present === false) return "0";
+  if (absRmsPx == null || !Number.isFinite(Number(absRmsPx))) return "—";
+  const px = Number(absRmsPx);
+  if (!tremorIsPresent(px, shoulderWidthPx)) return "0";
+  const sw = Number(shoulderWidthPx);
+  const pxTxt = `${px.toFixed(1)} px`;
+  if (Number.isFinite(sw) && sw > 0) {
+    return `${pxTxt} · ${((100 * px) / sw).toFixed(2)}% SW`;
+  }
+  return pxTxt;
 }
 
 export function formatTremorIndex(val) {
