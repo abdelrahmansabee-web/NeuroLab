@@ -536,6 +536,31 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   transform: translateZ(0);
 }
 
+/*
+ * iPad clinic scroll is overflow-y-auto + a transformed PTR inner.
+ * backdrop-filter on in-flow lab cards becomes a stuck compositor layer:
+ * the POST quality card floats over a scrolled copy of the same metrics.
+ * Top bar keeps blur (sticky by design). Compact overlay stays in-card.
+ */
+html.nl-touch [data-nl-app-scroll] .content-shell,
+html.nl-touch [data-nl-app-scroll] .content-shell .glass-float:not(.app-topbar-glass),
+html.nl-touch [data-nl-app-scroll] .content-shell .content-panel-glass {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html.nl-touch [data-nl-app-scroll] .content-shell {
+  background-color: rgba(16, 22, 32, 0.55) !important;
+}
+html.nl-touch [data-nl-app-scroll] .content-shell .glass-float:not(.app-topbar-glass),
+html.nl-touch [data-nl-app-scroll] .content-shell .content-panel-glass {
+  background-color: rgba(10, 14, 22, 0.88) !important;
+}
+html.nl-touch .section-pane {
+  transform: none;
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
+}
+
 /* Kinematics analysis — film strip animation */
 @keyframes kin-ring-pulse {
   0%, 100% {
