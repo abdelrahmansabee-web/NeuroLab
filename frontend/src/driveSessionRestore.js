@@ -70,13 +70,22 @@ export async function coalesceRecallPatients(seed, opts = {}) {
   return remote;
 }
 
-/** Empty boot recall must not block the real list that arrives a few seconds later. */
+/** Empty or incomplete boot recall must not block the real Drive download. */
 export function shouldReuseRecentRecall(lastSummary, lastRecallAt, now = Date.now(), opts = {}) {
   if (opts.force) return false;
   if (!lastSummary) return false;
   if (!Number.isFinite(Number(lastRecallAt)) || now - lastRecallAt >= RECALL_COOLDOWN_MS) return false;
   if (!lastSummary.attempted) return false;
+  if (Number(lastSummary.incomplete || 0) > 0) return false;
   return true;
+}
+
+function applyStandaloneRecallPlan(plan) {
+  if (!plan || !isStandaloneDisplay()) return plan;
+  return {
+    ...plan,
+    phases: (plan.phases || []).map((ph) => ({ ...ph, wantUnified: false })),
+  };
 }
 
 export const RECALL_PHASES = [
@@ -291,10 +300,17 @@ function mergeKinIntoPatient(patient, phase, snap) {
   };
 }
 
+async function pullDriveBlob(patientKey, name, subfolder, timeoutMs, retries = 0) {
+  let blob = await fetchDriveFile(patientKey, name, subfolder, { timeoutMs });
+  if (blobOk(blob) || retries < 1) return blob;
+  return fetchDriveFile(patientKey, name, subfolder, { timeoutMs });
+}
+
 async function recallOnePhase(patientKey, phasePlan, existingCache) {
   const phase = phasePlan.phase;
   const cache = existingCache || { patientKey, phase };
   const next = { ...cache, patientKey, phase };
+  const timeoutMs = isStandaloneDisplay() ? 90000 : 180000;
   const needs = {
     original: phasePlan.wantOriginal && !blobOk(next.originalVideoBlob),
     overlay: phasePlan.wantOverlay && !overlayOk(next.overlay),
@@ -302,21 +318,21 @@ async function recallOnePhase(patientKey, phasePlan, existingCache) {
     unified: phasePlan.wantUnified && !blobOk(next.unifiedVideoBlob),
   };
   if (needs.overlay) {
-    const blob = await fetchDriveFile(patientKey, validationOverlayDriveName(phase), "data");
+    const blob = await pullDriveBlob(patientKey, validationOverlayDriveName(phase), "data", timeoutMs, 1);
     const parsed = await parseJsonBlob(blob);
     if (overlayOk(parsed)) next.overlay = parsed;
   }
   if (needs.kin) {
-    const blob = await fetchDriveFile(patientKey, validationKinematicsDriveName(phase), "data");
+    const blob = await pullDriveBlob(patientKey, validationKinematicsDriveName(phase), "data", timeoutMs, 1);
     const parsed = await parseJsonBlob(blob);
     if (parsed) next.kinematicsSnapshot = parsed;
   }
   if (needs.original) {
-    const blob = await fetchDriveFile(patientKey, validationOriginalDriveName(phase), "videos");
+    const blob = await pullDriveBlob(patientKey, validationOriginalDriveName(phase), "videos", timeoutMs, 1);
     if (blobOk(blob)) next.originalVideoBlob = blob;
   }
   if (needs.unified) {
-    const blob = await fetchDriveFile(patientKey, validationUnifiedDriveName(phase), "videos");
+    const blob = await pullDriveBlob(patientKey, validationUnifiedDriveName(phase), "videos", timeoutMs, 0);
     if (blobOk(blob)) next.unifiedVideoBlob = blob;
   }
   next.savedAt = Date.now();
@@ -330,7 +346,7 @@ async function recallOnePatient(patient) {
     return evaluateRecallPieces(planPatientRecall(patient, []), {});
   }
   const driveNames = await listPatientDriveFiles(patientKey);
-  const plan = planPatientRecall(patient, driveNames);
+  const plan = applyStandaloneRecallPlan(planPatientRecall(patient, driveNames));
   const kinds = driveKindsFromNames(driveNames);
   let pdfOk = kinds.has("clinic_report");
   if (plan.wantPdf && !pdfOk) {
@@ -466,11 +482,24 @@ export async function recallAnalyzedSessionsFromDrive(patients, opts = {}) {
     try {
       window.dispatchEvent(new Event(DRIVE_RECALL_START_EVENT));
     } catch { /* ignore */ }
-    const rows = await mapPool(list, recallPoolSize(), (patient) => recallOnePatient(patient));
-    const summary = summarizeRecallRows(rows);
+    let summary;
+    try {
+      const rows = await mapPool(list, recallPoolSize(), async (patient) => {
+        try {
+          return await recallOnePatient(patient);
+        } catch (err) {
+          console.warn("drive recall patient failed:", err);
+          return evaluateRecallPieces(planPatientRecall(patient, []), {});
+        }
+      });
+      summary = summarizeRecallRows(rows);
+      saveMergedPatients(rows);
+    } catch (err) {
+      console.warn("drive recall failed:", err);
+      summary = summarizeRecallRows([]);
+    }
     lastRecallAt = Date.now();
     lastSummary = summary;
-    saveMergedPatients(rows);
     persistRecallSummary(summary);
     const waiters = recallWaiters.splice(0);
     waiters.forEach((fn) => {

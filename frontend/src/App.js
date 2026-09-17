@@ -60,10 +60,11 @@ import {
 import { canonicalDriveName, clinicReportDriveName } from "./driveDocIdentity";
 import {
   DRIVE_RECALL_EVENT,
+  DRIVE_RECALL_START_EVENT,
   formatRecallToast,
   recallAnalyzedSessionsFromDrive,
-  shouldWaitForPatientsBeforeRecall,
   coalesceRecallPatients,
+  isDriveRecallRunning,
 } from "./driveSessionRestore";
 import {
   analysisResultErrorMessage,
@@ -770,8 +771,26 @@ async function restoreFromDrive() {
   }
 }
 
-function startDriveSessionRecall(patients, { showToast, force = false } = {}) {
+function emitRecallChipDone(detail = {}) {
+  if (isDriveRecallRunning()) return;
+  try {
+    window.dispatchEvent(new CustomEvent(DRIVE_RECALL_EVENT, {
+      detail: {
+        attempted: false,
+        complete: 0,
+        incomplete: 0,
+        rows: [],
+        ...detail,
+      },
+    }));
+  } catch { /* ignore */ }
+}
+
+function startDriveSessionRecall(patients, { showToast, force = false, retryIncomplete = true } = {}) {
   return (async () => {
+    try {
+      window.dispatchEvent(new Event(DRIVE_RECALL_START_EVENT));
+    } catch { /* ignore */ }
     let list;
     try {
       list = await coalesceRecallPatients(patients, {
@@ -797,12 +816,14 @@ function startDriveSessionRecall(patients, { showToast, force = false } = {}) {
         showToast?.("Sign in on this Home Screen icon to recall sessions from Drive", "error");
       }
       console.warn("Drive session recall patient pull failed:", err);
+      emitRecallChipDone({ error: "auth" });
       return null;
     }
     if (!list.length) {
       if (isStandalonePWA()) {
         showToast?.("No sessions on this icon yet — sign in here, then wait for Recalling", "warning");
       }
+      emitRecallChipDone();
       return null;
     }
     return recallAnalyzedSessionsFromDrive(list, {
@@ -810,10 +831,20 @@ function startDriveSessionRecall(patients, { showToast, force = false } = {}) {
       onDone: (summary) => {
         const msg = formatRecallToast(summary);
         if (msg) showToast?.(msg, summary.incomplete ? "warning" : "success");
+        if (retryIncomplete && isStandalonePWA() && Number(summary?.incomplete) > 0) {
+          setTimeout(() => {
+            startDriveSessionRecall(loadPatients(), {
+              showToast,
+              force: true,
+              retryIncomplete: false,
+            });
+          }, 8000);
+        }
       },
     });
   })().catch((err) => {
     console.warn("Drive session recall failed:", err);
+    emitRecallChipDone({ error: "failed" });
     return null;
   });
 }
@@ -1113,11 +1144,12 @@ async function syncPatientsWithServerInner({ showToast, silent = false, skipDriv
   try {
     const now = Date.now();
     const localEmpty = !Array.isArray(localPts) || localPts.length === 0;
-    // Silent boot skips Drive for speed ? EXCEPT when this origin has no patients
-    // (Space rename / new Home Screen): then Drive folder+PDF restore is required.
+    // skipDrive must win even when this Home Screen icon has no local patients.
+    // Waiting on /auth/restore (up to 240s) blocked /api/patients from saving,
+    // so Recalling never started while Safari's already-synced list sat on the server.
     const skipDriveRestore =
-      !localEmpty &&
-      (skipDrive || silent || now - lastSilentDriveRestoreAt < SILENT_DRIVE_RESTORE_MS);
+      skipDrive ||
+      (!localEmpty && (silent || now - lastSilentDriveRestoreAt < SILENT_DRIVE_RESTORE_MS));
     const driveRestoreP = skipDriveRestore
       ? Promise.resolve([])
       : restoreFromDrive().then((pts) => {
@@ -1297,11 +1329,13 @@ async function applyIpadLocalStorageBackup() {
 /** One-time strong restore after Space rename / empty new-origin PWA. */
 async function restoreStudyDataFromServer({ showToast } = {}) {
   await applyIpadLocalStorageBackup();
-  // Silent: pull server+Drive patients without waiting on Drive backup/rebuild.
-  // Home Screen apps die if restore blocks on a full Drive rewrite before recall.
-  const result = await syncPatientsWithServer({ showToast, silent: true, skipDrive: false });
+  // Pull the server list first. Drive folder/PDF rebuild runs only if that list is empty.
+  let result = await syncPatientsWithServer({ showToast, silent: true, skipDrive: true });
+  if (!result?.patients?.length) {
+    result = await syncPatientsWithServer({ showToast, silent: true, skipDrive: false });
+  }
   if (result?.patients?.length) {
-    startDriveSessionRecall(result.patients, { force: true });
+    startDriveSessionRecall(result.patients, { showToast, force: true });
   }
   return result;
 }
@@ -9067,27 +9101,18 @@ export default function App() {
         window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
       } catch { /* ignore */ }
     }
-    const started = Date.now();
     const run = () => {
       if (cancelled || isKinAnalyzeActive()) return;
-      const pts = loadPatients();
-      if (shouldWaitForPatientsBeforeRecall(pts, {
-        standalone: isStandalonePWA(),
-        waitedMs: Date.now() - started,
-      })) {
-        setTimeout(run, 1000);
-        return;
-      }
-      startDriveSessionRecall(pts, {
+      startDriveSessionRecall(loadPatients(), {
         showToast,
-        force: justConnected || (isStandalonePWA() && pts.length > 0),
+        force: justConnected || isStandalonePWA(),
       });
     };
-    const t = setTimeout(run, justConnected ? 600 : 2800);
+    const t = setTimeout(run, justConnected ? 600 : isStandalonePWA() ? 400 : 2800);
     const onSynced = (ev) => {
       if (ev?.detail?.skipDriveRecall) return;
       if (cancelled || isKinAnalyzeActive()) return;
-      startDriveSessionRecall(loadPatients(), { showToast });
+      startDriveSessionRecall(loadPatients(), { showToast, force: isStandalonePWA() });
     };
     const onShow = () => {
       if (cancelled || isKinAnalyzeActive()) return;
