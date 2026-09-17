@@ -26,9 +26,9 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "./?_v=32.87",
+  "start_url": "./?_v=32.88",
   "scope": ".",
-  "display": "standalone",
+  "display": "browser",
   "theme_color": "#121820",
   "background_color": "#121820",
   "orientation": "any"

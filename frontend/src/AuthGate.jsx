@@ -53,8 +53,11 @@ export default function AuthGate({ children }) {
         throw new Error("not authenticated");
       })
       .then((data) => {
+        if (data?.token) {
+          try { localStorage.setItem(AUTH_TOKEN_KEY, data.token); } catch {}
+        }
         setState("unlocked");
-        plantAuthCookie(getAuthToken());
+        plantAuthCookie(data?.token || getAuthToken());
       })
       .catch(() => setState("locked"));
   }, []);

@@ -52,6 +52,24 @@ export function recallPoolSize(opts = {}) {
   return standalone ? 1 : 2;
 }
 
+/** Home Screen storage starts empty — pull the server list before giving up. */
+export async function coalesceRecallPatients(seed, opts = {}) {
+  const clean = (list) => (Array.isArray(list) ? list : []).filter((p) => p && typeof p === "object" && !p._archived);
+  const fromSeed = clean(seed);
+  if (fromSeed.length) return fromSeed;
+  const fromLoaded = clean(typeof opts.loadPatients === "function" ? opts.loadPatients() : []);
+  if (fromLoaded.length) return fromLoaded;
+  if (typeof opts.pullRemotePatients !== "function") return [];
+  const remote = clean(await opts.pullRemotePatients());
+  if (!remote.length) return [];
+  if (typeof opts.savePatients === "function") {
+    const saved = opts.savePatients(remote);
+    const fromSaved = clean(saved);
+    return fromSaved.length ? fromSaved : remote;
+  }
+  return remote;
+}
+
 /** Empty boot recall must not block the real list that arrives a few seconds later. */
 export function shouldReuseRecentRecall(lastSummary, lastRecallAt, now = Date.now(), opts = {}) {
   if (opts.force) return false;

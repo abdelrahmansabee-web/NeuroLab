@@ -6,6 +6,7 @@ import {
   recallPoolSize,
   shouldReuseRecentRecall,
   shouldWaitForPatientsBeforeRecall,
+  coalesceRecallPatients,
   summarizeRecallRows,
 } from "./driveSessionRestore";
 
@@ -155,5 +156,22 @@ describe("driveSessionRestore", () => {
   test("home screen recalls one patient at a time", () => {
     expect(recallPoolSize({ standalone: true })).toBe(1);
     expect(recallPoolSize({ standalone: false })).toBe(2);
+  });
+
+  test("empty home-screen recall pulls the server patient list", async () => {
+    const remote = [patient({ id: "122" })];
+    const pulled = await coalesceRecallPatients([], {
+      loadPatients: () => [],
+      pullRemotePatients: async () => remote,
+    });
+    expect(pulled).toHaveLength(1);
+    expect(pulled[0].demographics.participantId).toBe("122");
+    const local = await coalesceRecallPatients([], {
+      loadPatients: () => [patient({ id: "101" })],
+      pullRemotePatients: async () => {
+        throw new Error("should not pull");
+      },
+    });
+    expect(local[0].demographics.participantId).toBe("101");
   });
 });

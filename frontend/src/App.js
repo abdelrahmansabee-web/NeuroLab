@@ -63,6 +63,7 @@ import {
   formatRecallToast,
   recallAnalyzedSessionsFromDrive,
   shouldWaitForPatientsBeforeRecall,
+  coalesceRecallPatients,
 } from "./driveSessionRestore";
 import {
   analysisResultErrorMessage,
@@ -770,15 +771,48 @@ async function restoreFromDrive() {
 }
 
 function startDriveSessionRecall(patients, { showToast, force = false } = {}) {
-  const list = Array.isArray(patients) && patients.length ? patients : loadPatients();
-  if (!list.length) return Promise.resolve(null);
-  return recallAnalyzedSessionsFromDrive(list, {
-    force,
-    onDone: (summary) => {
-      const msg = formatRecallToast(summary);
-      if (msg) showToast?.(msg, summary.incomplete ? "warning" : "success");
-    },
-  }).catch((err) => {
+  return (async () => {
+    let list;
+    try {
+      list = await coalesceRecallPatients(patients, {
+        loadPatients,
+        savePatients: (remote) => {
+          const merged = mergePatientLists(loadPatients(), remote);
+          return savePatients(merged);
+        },
+        pullRemotePatients: async () => {
+          const r = await fetchWithTimeout("/api/patients", {}, 45000);
+          if (r.status === 401 || r.status === 403) {
+            const err = new Error("auth");
+            err.code = r.status;
+            throw err;
+          }
+          if (!r.ok) return [];
+          const data = await r.json().catch(() => []);
+          return Array.isArray(data) ? data : [];
+        },
+      });
+    } catch (err) {
+      if (err?.code === 401 || err?.code === 403) {
+        showToast?.("Sign in on this Home Screen icon to recall sessions from Drive", "error");
+      }
+      console.warn("Drive session recall patient pull failed:", err);
+      return null;
+    }
+    if (!list.length) {
+      if (isStandalonePWA()) {
+        showToast?.("No sessions on this icon yet — sign in here, then wait for Recalling", "warning");
+      }
+      return null;
+    }
+    return recallAnalyzedSessionsFromDrive(list, {
+      force,
+      onDone: (summary) => {
+        const msg = formatRecallToast(summary);
+        if (msg) showToast?.(msg, summary.incomplete ? "warning" : "success");
+      },
+    });
+  })().catch((err) => {
     console.warn("Drive session recall failed:", err);
     return null;
   });
@@ -9055,11 +9089,23 @@ export default function App() {
       if (cancelled || isKinAnalyzeActive()) return;
       startDriveSessionRecall(loadPatients(), { showToast });
     };
+    const onShow = () => {
+      if (cancelled || isKinAnalyzeActive()) return;
+      if (!isStandalonePWA()) return;
+      startDriveSessionRecall(loadPatients(), { showToast });
+    };
+    const onVis = () => {
+      if (!document.hidden) onShow();
+    };
     window.addEventListener(PATIENTS_SYNC_EVENT, onSynced);
+    window.addEventListener("pageshow", onShow);
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       cancelled = true;
       clearTimeout(t);
       window.removeEventListener(PATIENTS_SYNC_EVENT, onSynced);
+      window.removeEventListener("pageshow", onShow);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, [showToast]);
 
