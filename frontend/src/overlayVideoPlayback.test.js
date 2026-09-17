@@ -4,6 +4,8 @@ import {
   getOverlayFrameState,
   blendOverlayLandmark,
   overlayLandmarkAt,
+  shouldSmoothOverlayBodyKey,
+  smoothXyZeroPhase,
   isAppleTouchVideo,
   overlayLivePaintFromCurrentTime,
   overlayNeedsRafUntilFirstVfcPaint,
@@ -127,28 +129,52 @@ test("32.82 backup clock maps video fraction onto overlay span so long PRE canno
   expect(getOverlayFrameState(short, 10, 15, 30).idx).toBe(144);
 });
 
-test("centripetal Catmull-Rom hits stored samples and stays between neighbors", () => {
+test("32.72 lerp hits stored samples and does not overshoot a spike", () => {
   const p0 = [0, 0];
   const p1 = [0, 0];
   const p2 = [10, 0];
-  const p3 = [10, 0];
+  const p3 = [0, 0];
   expect(blendOverlayLandmark(p0, p1, p2, p3, 0)).toEqual(p1);
   expect(blendOverlayLandmark(p0, p1, p2, p3, 1)).toEqual(p2);
   const mid = blendOverlayLandmark(p0, p1, p2, p3, 0.5);
-  expect(mid[0]).toBeGreaterThan(4);
-  expect(mid[0]).toBeLessThan(6);
+  expect(mid[0]).toBeCloseTo(5, 8);
   expect(mid[1]).toBeCloseTo(0, 8);
   const frames = [
-    { palm: [0, 0] },
-    { palm: [2, 0] },
-    { palm: [8, 0] },
-    { palm: [10, 0] },
+    { index: [0, 0] },
+    { index: [2, 0] },
+    { index: [8, 0] },
+    { index: [10, 0] },
   ];
-  const atSample = overlayLandmarkAt(frames, 1, 0, "palm");
+  const atSample = overlayLandmarkAt(frames, 1, 0, "index");
   expect(atSample[0]).toBeCloseTo(2, 8);
-  const between = overlayLandmarkAt(frames, 1, 0.5, "palm");
-  expect(between[0]).toBeGreaterThan(2);
-  expect(between[0]).toBeLessThan(8);
+  const between = overlayLandmarkAt(frames, 1, 0.5, "index");
+  expect(between[0]).toBeCloseTo(5, 8);
+});
+
+test("display-only zero-phase damps body jitter and leaves stored palm alone", () => {
+  const xs = Array.from({ length: 16 }, (_, i) => (i % 2) * 0.04);
+  const ys = Array.from({ length: 16 }, () => 0);
+  const sm = smoothXyZeroPhase(xs, ys);
+  const rawVar = xs.reduce((s, v, i) => s + (i ? (v - xs[i - 1]) ** 2 : 0), 0);
+  const smVar = sm.x.reduce((s, v, i) => s + (i ? (v - sm.x[i - 1]) ** 2 : 0), 0);
+  expect(smVar).toBeLessThan(rawVar * 0.5);
+
+  const frames = [];
+  for (let i = 0; i < 24; i += 1) {
+    frames.push({
+      wrist: [0.4 + (i % 2) * 0.04, 0.5],
+      palm: [0.42 + (i % 2) * 0.04, 0.52],
+      index: [0.42 + (i % 2) * 0.04, 0.52],
+      hand_hl: true,
+    });
+  }
+  expect(shouldSmoothOverlayBodyKey("wrist", frames)).toBe(true);
+  expect(shouldSmoothOverlayBodyKey("palm", frames)).toBe(false);
+  expect(shouldSmoothOverlayBodyKey("index", frames)).toBe(false);
+  const drawn = overlayLandmarkAt(frames, 10, 0, "wrist");
+  expect(Math.abs(drawn[0] - 0.42)).toBeLessThan(0.02);
+  expect(frames[10].palm[0]).toBeCloseTo(0.42, 8);
+  expect(frames[10].wrist[0]).toBeCloseTo(0.4, 8);
 });
 
 test("duration mismatch ignores small iOS drift and flags a baked-clip swap", () => {
