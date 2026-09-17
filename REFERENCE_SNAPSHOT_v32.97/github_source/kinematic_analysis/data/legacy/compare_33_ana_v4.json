@@ -1,0 +1,34 @@
+{
+  "healthy": {
+    "video": "D:\\Thesis app\\participants\\3 مرضى\\33\\انا\\Healthy.MOV",
+    "side": "left",
+    "sparc": -1.951,
+    "reach_amplitude_sw": 3.686,
+    "movement_time_sec": 2.274,
+    "peak_velocity_pct": 100.0,
+    "trunk_ratio": 0.0394,
+    "shoulder_elevation_cm": 8.48,
+    "elbow_angle_deg": 178.8,
+    "sparc_rating": "good"
+  },
+  "affected": {
+    "video": "D:\\Thesis app\\participants\\3 مرضى\\33\\انا\\Affected .mov",
+    "side": "right",
+    "sparc": -4.383,
+    "reach_amplitude_sw": 6.393,
+    "movement_time_sec": 3.515,
+    "peak_velocity_pct": 8.4,
+    "trunk_ratio": 0.3584,
+    "shoulder_elevation_cm": 9.37,
+    "elbow_angle_deg": 44.7,
+    "sparc_rating": "poor"
+  },
+  "relative_to_healthy_percent": {
+    "reach_amplitude_sw": 173.4,
+    "movement_time_sec": 154.6,
+    "peak_velocity_pct": 8.4,
+    "trunk_ratio": 910.0,
+    "shoulder_elevation_cm": 110.5,
+    "elbow_angle_deg": 25.0
+  }
+}

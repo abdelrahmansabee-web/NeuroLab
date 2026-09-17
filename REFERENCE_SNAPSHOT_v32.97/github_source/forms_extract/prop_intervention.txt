@@ -1,0 +1,76 @@
+177|Intervention:
+178|The intervention protocol follows the NeuroLab PETTLEP-based AOMI session application (22 minutes total): a 2-minute sensorimotor transfer calibration phase followed by five 4-minute blocks (20 minutes), administered immediately after pre-assessment in the same environmental setting. Unlike earlier scaffolded protocols with interleaved physical practice, this version excludes overt execution during imagery to isolate the specific cognitive-motor effects of observation and imagery and to reduce burden on participants with severe motor impairment.
+179|1. Baseline Assessment: After system calibration, three Reach & Wipe trials are performed at each time point (pre and post), with the mean used for analysis. Kinematics are recorded via the MediaPipe pipeline (pre-intervention smoothness_pause_pct, total_trunk_palm_ratio, and shoulder_vert_norm).
+180|2. Intervention Phase: Participants are randomized to Experimental (PETTLEP-AOMI) or Control (cognitive/somatic) groups. Both sessions last 22 minutes in the same room with headphones, tablet at standardized height, and pre-recorded standardized digital audio files to ensure replication across participants and sites.
+181|Experimental Group — PETTLEP-Based AOMI (NeuroLab protocol):
+182|Calibration (2 min): Participants learn the notice–name–transfer strategy on the unaffected limb. They attend to a specific kinesthetic sensation (e.g., smoothness, stability, relaxation), label it with a single-word cue, and mentally transfer that sensation to the affected limb. Supported limb awareness and surface-contact anchoring enhance sensorimotor engagement without resistance or active movement.
+183|Standardized therapist scripts (Reach & Wipe — adapted from NeuroLab PETTLEP guide): (1) Setup — sit upright, feet flat, back supported; towel under affected hand on table; slow deep breath. (2) External observation (block minute 1) — watch mirror-reversed video; note relaxed shoulder and stable trunk, no compensatory elevation. (3) Internal imagery (minutes 2–3) — eyes closed; first-person view; focus on upper arm and shoulder muscles; imagine real-time reach (~3 s) and return (~3 s). (4) Emotion — feel towel slide smoothly; comfort and confidence without strain. (5) Learning — if imagery becomes jerky, return to last smooth point; adjust script per block (e.g., finger opening). After each block: vividness rating (1–10) and kinesthetic muscle sensation check.
+184|Each of five 4-minute blocks comprises: Minute 1 — Action Observation of mirror-reversed first-person video of the participant’s own unaffected upper limb performing Reach & Wipe (horizontally flipped to appear as the affected side); Minutes 2–3 — Corrective motor imagery with eyes closed, guided by block-specific audio cues delivered via headphones; Minute 4 — Rest with eyes open, without movement or mental imagery.
+185|If imagined movement becomes jerky, effortful, or associated with trunk or shoulder compensation, the participant mentally returns to the last smooth point and continues with the corrected motor plan.
+186|Block 1 — Movement Initiation Transfer: attention to calm, clear start; imagery transfers an easy “start now” signal without hesitation or rush.
+187|Block 2 — Trunk Stability Transfer: attention to quiet, stable trunk; imagery reinforces feedforward postural control — arm reaches forward while trunk remains still and supported.
+188|Block 3 — Shoulder Girdle Control Transfer: attention to low, relaxed shoulder; imagery transfers a calm, heavy shoulder staying away from the ear throughout reach.
+189|Block 4 — Elbow Opening and Muscle Quieting: attention to easy elbow opening; imagery targets smooth extension and reduced co-contraction / antagonist quieting.
+190|Block 5 — Integrated Smooth Movement: all constraints integrated — clear start, stable trunk, relaxed shoulder, smooth elbow, continuous hand trajectory — imagining complete Reach & Wipe at natural timing.
+191|Total dose: 2 min calibration + 5 min observation + 10 min corrective imagery + 5 min rest = 22 min. Mental chronometry is verified after each block (“Did the imagined movement feel at the same pace as normal?”). The supervising physiotherapist completes a structured fidelity checklist after each block (engagement, eyes closed during imagery, no overt movement, adverse events).
+192|Control Group — Cognitive and Somatic Control (matched 22 min):
+193|Five 4-minute blocks preceded by a 2-minute introductory relaxation phase, matching AOMI in duration, room setup, tablet presence, headphones, and overall cognitive engagement while avoiding sensorimotor activation. Blocks alternate Body Scanning (sequential somatic attention from feet to head — warmth, pressure, chair contact — without movement or movement imagery) and Spatial Navigation (mental tour of a familiar home/route, visualizing spatial layout without human limb movement). Both tasks use standardized headphone audio.
+194|Implementation of the PETTLEP Framework:
+195|P – Physical: identical seated posture and Reach & Wipe starting configuration as assessment.
+196|E – Environment: same room, chair, lighting, table distance, and tablet placement as assessment.
+197|T – Task: Reach & Wipe — in-air reaching and wiping; imagery constraints target initiation, smoothness, trunk–limb dissociation, and shoulder control.
+198|T – Timing: real-time imagery; mental chronometry checked after each block with corrective guidance if temporal distortion is reported.
+199|L – Learning: observation-then-imagery cycles with notice–name–transfer calibration; individualized mirror-reversed video provides calibrated visual reference before each imagery bout.
+200|E – Emotion: audio cues emphasize ease, fluidity, heaviness of shoulder, stillness of trunk; counteract anxiety and effort-related hypertonicity.
+201|P – Perspective: internal first-person kinesthetic imagery; mirror-reversed video reinforces anatomical congruence with the affected side.
+202|Functional Relevance of the Reach & Wipe Task:
+203|Reach & Wipe was selected for ecological validity in upper limb control, suitability for single-camera markerless tracking, and sensitivity to compensatory trunk lean and shoulder elevation. The proximal-to-distal block order mirrors normal motor control (initiation and trunk stability before distal reach). Kinematic outcomes (smoothness_pause_pct, total_trunk_palm_ratio, shoulder_vert_norm, total_peak_velocity) quantify movement quality beyond ordinal clinical scales and align with the NeuroLab analysis pipeline used for automated, blinded extraction at both Istinye and Biruni sites.
+204|RCT note: Physical Reach & Wipe execution occurs only during pre/post assessment (three trials, mean analysed). The 22-minute intervention contains observation and imagery only — mapping clinic PETTLEP structure (video observation + mental practice + feedback) to five 4-minute blocks without interleaved physical practice during the session.
+205|
+206|
+207|
+208|
+209|
+210|
+211|
+212|
+213|
+214|
+215|
+216|
+217|
+218|
+219|
+220|
+221|
+222|
+223|
+224|
+225|
+226|
+227|
+228|
+229|
+230|
+231|
+232|
+233|
+234|
+235|
+236|
+237|
+238|
+239|
+240|
+241|
+242|
+243|
+244|
+245|
+246|
+247|
+248|
+249|
+250|
+251|
+252|Statistical Analysis:
