@@ -21,6 +21,36 @@ export const DRIVE_RECALL_START_EVENT = "neurolab-drive-recall-start";
 export const DRIVE_RECALL_LS = "nl_drive_recall_v1";
 export const PATIENTS_SYNC_EVENT = "neurolab-patients-synced";
 export const RECALL_COOLDOWN_MS = 45000;
+export const EMPTY_RECALL_WAIT_MS = 28000;
+
+export function isStandaloneDisplay() {
+  try {
+    return (typeof window !== "undefined")
+      && (
+        (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+        || window.navigator.standalone === true
+      );
+  } catch {
+    return false;
+  }
+}
+
+/** Home Screen storage is empty; wait for server restore before a no-op recall. */
+export function shouldWaitForPatientsBeforeRecall(patients, opts = {}) {
+  const list = Array.isArray(patients) ? patients : [];
+  if (list.length) return false;
+  if (opts.standalone === false) return false;
+  const standalone = opts.standalone === true || isStandaloneDisplay();
+  if (!standalone) return false;
+  const waited = Number(opts.waitedMs);
+  const maxWait = Number(opts.maxWaitMs) > 0 ? Number(opts.maxWaitMs) : EMPTY_RECALL_WAIT_MS;
+  return Number.isFinite(waited) ? waited < maxWait : true;
+}
+
+export function recallPoolSize(opts = {}) {
+  const standalone = opts.standalone === true || isStandaloneDisplay();
+  return standalone ? 1 : 2;
+}
 
 /** Empty boot recall must not block the real list that arrives a few seconds later. */
 export function shouldReuseRecentRecall(lastSummary, lastRecallAt, now = Date.now(), opts = {}) {
@@ -199,9 +229,11 @@ async function listPatientDriveFiles(patientKey) {
   if (!patientKey) return [];
   try {
     const q = new URLSearchParams({ patientKey, scope: "auto" });
+    const tokenHeaders = authHeaders();
+    delete tokenHeaders["Content-Type"];
     const res = await fetch(`/auth/list-patient-files?${q.toString()}`, {
       credentials: "same-origin",
-      headers: authHeaders(),
+      headers: tokenHeaders,
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -416,7 +448,7 @@ export async function recallAnalyzedSessionsFromDrive(patients, opts = {}) {
     try {
       window.dispatchEvent(new Event(DRIVE_RECALL_START_EVENT));
     } catch { /* ignore */ }
-    const rows = await mapPool(list, 2, (patient) => recallOnePatient(patient));
+    const rows = await mapPool(list, recallPoolSize(), (patient) => recallOnePatient(patient));
     const summary = summarizeRecallRows(rows);
     lastRecallAt = Date.now();
     lastSummary = summary;

@@ -22,6 +22,18 @@ export function authHeaders() {
   return headers;
 }
 
+async function plantAuthCookie(token) {
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    await fetch("/auth/drive/connect-cookie", {
+      method: "POST",
+      credentials: "same-origin",
+      headers,
+    });
+  } catch { /* Home Screen cookie jar; ignore if the route is waking up */ }
+}
+
 export default function AuthGate({ children }) {
   const [state, setState] = useState("loading");
   const [mode, setMode] = useState("login");
@@ -42,6 +54,7 @@ export default function AuthGate({ children }) {
       })
       .then((data) => {
         setState("unlocked");
+        plantAuthCookie(getAuthToken());
       })
       .catch(() => setState("locked"));
   }, []);
@@ -98,6 +111,10 @@ export default function AuthGate({ children }) {
       }
       if (data.token) {
         try { localStorage.setItem(AUTH_TOKEN_KEY, data.token); } catch {}
+        await plantAuthCookie(data.token);
+      }
+      if (mode === "login") {
+        try { localStorage.setItem("raed_origin_restore_pending", "1"); } catch {}
       }
       if (mode === "reset") {
         setSuccess(data.message || "Password updated.");

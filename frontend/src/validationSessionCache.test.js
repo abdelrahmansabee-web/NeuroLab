@@ -2,6 +2,9 @@ import {
   shouldHydrateMediaBlobIntoState,
   shouldHydrateOverlayIntoState,
   validationCacheMatchesResult,
+  freezeMediaBlob,
+  reviveMediaBlob,
+  MEDIA_BUF_MARK,
 } from "./validationSessionCache";
 
 test("Drive recall does not replace an overlay that is already on screen", () => {
@@ -25,4 +28,20 @@ test("cache match still requires a csv name unless relaxCsvMatch", () => {
   const cached = { overlay: { frames: [{ t: 0 }] } };
   expect(validationCacheMatchesResult(cached, {})).toBe(false);
   expect(validationCacheMatchesResult(cached, {}, { relaxCsvMatch: true })).toBe(true);
+});
+
+test("iOS Home Screen stores video blobs as ArrayBuffer and revives them", async () => {
+  const blob = new Blob([new Uint8Array([9, 8, 7])], { type: "video/mp4" });
+  const frozen = await freezeMediaBlob(blob);
+  expect(frozen[MEDIA_BUF_MARK]).toBe(1);
+  expect(frozen.data.byteLength).toBe(3);
+  const revived = reviveMediaBlob(frozen);
+  expect(revived).toBeInstanceOf(Blob);
+  expect(revived.size).toBe(3);
+  expect(revived.type).toBe("video/mp4");
+  expect(validationCacheMatchesResult(
+    { originalVideoBlob: frozen, overlay: { frames: [{ t: 0 }] } },
+    {},
+    { relaxCsvMatch: true },
+  )).toBe(true);
 });

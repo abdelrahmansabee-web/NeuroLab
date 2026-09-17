@@ -50,6 +50,7 @@ import {
   shouldHydrateMediaBlobIntoState,
   shouldHydrateOverlayIntoState,
   validationCacheMatchesResult,
+  requestClinicPersistentStorage,
 } from "./validationSessionCache";
 import {
   backupValidationArtifactsToDrive,
@@ -61,6 +62,7 @@ import {
   DRIVE_RECALL_EVENT,
   formatRecallToast,
   recallAnalyzedSessionsFromDrive,
+  shouldWaitForPatientsBeforeRecall,
 } from "./driveSessionRestore";
 import {
   analysisResultErrorMessage,
@@ -1187,7 +1189,8 @@ async function syncPatientsWithServerInner({ showToast, silent = false, skipDriv
       );
     }
     console.warn("Patient sync error:", err);
-    return { ok: false, patients: localPts, pushed: false, timedOut };
+    const kept = loadPatients();
+    return { ok: false, patients: kept.length ? kept : localPts, pushed: false, timedOut };
   }
 }
 
@@ -1260,8 +1263,9 @@ async function applyIpadLocalStorageBackup() {
 /** One-time strong restore after Space rename / empty new-origin PWA. */
 async function restoreStudyDataFromServer({ showToast } = {}) {
   await applyIpadLocalStorageBackup();
-  // Prefer server + Drive merge; empty local must not wipe server records.
-  const result = await syncPatientsWithServer({ showToast, silent: false, skipDrive: false });
+  // Silent: pull server+Drive patients without waiting on Drive backup/rebuild.
+  // Home Screen apps die if restore blocks on a full Drive rewrite before recall.
+  const result = await syncPatientsWithServer({ showToast, silent: true, skipDrive: false });
   if (result?.patients?.length) {
     startDriveSessionRecall(result.patients, { force: true });
   }
@@ -9018,6 +9022,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    requestClinicPersistentStorage();
     let cancelled = false;
     const params = new URLSearchParams(window.location.search);
     const justConnected = params.get("drive") === "connected";
@@ -9028,9 +9033,21 @@ export default function App() {
         window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
       } catch { /* ignore */ }
     }
+    const started = Date.now();
     const run = () => {
       if (cancelled || isKinAnalyzeActive()) return;
-      startDriveSessionRecall(loadPatients(), { showToast, force: justConnected });
+      const pts = loadPatients();
+      if (shouldWaitForPatientsBeforeRecall(pts, {
+        standalone: isStandalonePWA(),
+        waitedMs: Date.now() - started,
+      })) {
+        setTimeout(run, 1000);
+        return;
+      }
+      startDriveSessionRecall(pts, {
+        showToast,
+        force: justConnected || (isStandalonePWA() && pts.length > 0),
+      });
     };
     const t = setTimeout(run, justConnected ? 600 : 2800);
     const onSynced = (ev) => {

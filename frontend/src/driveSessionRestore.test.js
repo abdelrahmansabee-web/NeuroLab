@@ -3,7 +3,9 @@ import {
   evaluateRecallPieces,
   formatRecallToast,
   planPatientRecall,
+  recallPoolSize,
   shouldReuseRecentRecall,
+  shouldWaitForPatientsBeforeRecall,
   summarizeRecallRows,
 } from "./driveSessionRestore";
 
@@ -141,5 +143,17 @@ describe("driveSessionRestore", () => {
     expect(shouldReuseRecentRecall(real, Date.now() - 1000, Date.now())).toBe(true);
     expect(shouldReuseRecentRecall(real, Date.now() - 1000, Date.now(), { force: true })).toBe(false);
     expect(shouldReuseRecentRecall(real, Date.now() - 46000, Date.now())).toBe(false);
+  });
+
+  test("home screen waits for restored patients instead of recalling an empty list", () => {
+    expect(shouldWaitForPatientsBeforeRecall([], { standalone: true, waitedMs: 0 })).toBe(true);
+    expect(shouldWaitForPatientsBeforeRecall([], { standalone: true, waitedMs: 30000 })).toBe(false);
+    expect(shouldWaitForPatientsBeforeRecall([patient()], { standalone: true, waitedMs: 0 })).toBe(false);
+    expect(shouldWaitForPatientsBeforeRecall([], { standalone: false, waitedMs: 0 })).toBe(false);
+  });
+
+  test("home screen recalls one patient at a time", () => {
+    expect(recallPoolSize({ standalone: true })).toBe(1);
+    expect(recallPoolSize({ standalone: false })).toBe(2);
   });
 });

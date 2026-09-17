@@ -51,9 +51,11 @@ export async function fetchDriveFile(patientKey, name, subfolder = "videos", opt
         subfolder,
         scope: "auto",
       });
+      const tokenHeaders = authHeaders();
+      delete tokenHeaders["Content-Type"];
       const res = await fetch(`/auth/restore-file?${q.toString()}`, {
         credentials: "same-origin",
-        headers: authHeaders(),
+        headers: tokenHeaders,
         signal: ctrl?.signal,
       });
       if (res.status === 404 || !res.ok) continue;
