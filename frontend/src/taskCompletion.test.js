@@ -3,6 +3,7 @@ import {
   inferPalmTaskShape,
   motionConfirmsAdlComplete,
   enrichKinematicCompletion,
+  countTaskNvpFromPeaks,
 } from "./taskCompletion";
 
 function drinkFrames() {
@@ -77,4 +78,49 @@ test("idle hands do not become Complete", () => {
   };
   const still = { frames: Array.from({ length: 16 }, () => ({ palm: [0.5, 0.72] })) };
   expect(deriveTaskCompletion(result, still).taskComplete).toBe(false);
+});
+
+test("stored nvp_total cannot stay below nvp_reach", () => {
+  const enriched = enrichKinematicCompletion({
+    nvp_reach: 13,
+    nvp_drink: 4,
+    nvp_return: 1,
+    nvp_total: 7,
+  });
+  expect(enriched.nvp_reach).toBe(13);
+  expect(enriched.nvp_drink).toBe(4);
+  expect(enriched.nvp_return).toBe(1);
+  expect(enriched.nvp_total).toBeGreaterThanOrEqual(enriched.nvp_reach);
+  expect(enriched.nvp_total).toBe(13);
+});
+
+test("NVP rows recount from the same peak_frames as the overlay", () => {
+  const overlay = {
+    fps: 60,
+    frames: Array.from({ length: 40 }, (_, i) => ({ time: i / 60, palm: [0.4, 0.7], speed: 12 })),
+    movement_window: { start_idx: 4, end_idx: 30 },
+    peak_frames: [2, 6, 10, 16, 22, 28],
+  };
+  const result = {
+    nvp_reach: 99,
+    nvp_drink: 99,
+    nvp_return: 99,
+    nvp_total: 1,
+    task_phases: [
+      { id: "reach_grasp", start_frame: 4, end_frame: 12 },
+      { id: "transport_drink", start_frame: 13, end_frame: 22 },
+      { id: "return", start_frame: 23, end_frame: 30 },
+    ],
+  };
+  const fromPeaks = countTaskNvpFromPeaks(result, overlay);
+  expect(fromPeaks.nvp_reach).toBe(2);
+  expect(fromPeaks.nvp_drink).toBe(2);
+  expect(fromPeaks.nvp_return).toBe(1);
+  expect(fromPeaks.nvp_total).toBe(5);
+  const enriched = enrichKinematicCompletion(result, overlay);
+  expect(enriched.nvp_reach).toBe(2);
+  expect(enriched.nvp_drink).toBe(2);
+  expect(enriched.nvp_return).toBe(1);
+  expect(enriched.nvp_total).toBe(5);
+  expect(enriched.nvp_total).toBeGreaterThanOrEqual(enriched.nvp_reach);
 });

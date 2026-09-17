@@ -71,6 +71,75 @@ function overlayFrameTime(frames, idx, t0, fps) {
   return frame.time ?? t0 + idx / fps;
 }
 
+function asLandmark(p) {
+  if (!p || p[0] == null || p[1] == null) return null;
+  const x = Number(p[0]);
+  const y = Number(p[1]);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return [x, y];
+}
+
+function centripetalCatmullRom(p0, p1, p2, p3, t) {
+  const alpha = 0.5;
+  const chord = (a, b) => {
+    const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    return Math.pow(Math.max(d, 1e-9), alpha);
+  };
+  const t0 = 0;
+  const t1 = t0 + chord(p0, p1);
+  const t2 = t1 + chord(p1, p2);
+  const t3 = t2 + chord(p2, p3);
+  const tVal = t1 + (t2 - t1) * Math.max(0, Math.min(1, t));
+  const lerp = (a, b, ta, tb, tq) => {
+    const span = tb - ta;
+    if (Math.abs(span) < 1e-12) return [a[0], a[1]];
+    const u = (tq - ta) / span;
+    return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
+  };
+  const A1 = lerp(p0, p1, t0, t1, tVal);
+  const A2 = lerp(p1, p2, t1, t2, tVal);
+  const A3 = lerp(p2, p3, t2, t3, tVal);
+  const B1 = lerp(A1, A2, t0, t2, tVal);
+  const B2 = lerp(A2, A3, t1, t3, tVal);
+  return lerp(B1, B2, t1, t2, tVal);
+}
+
+/**
+ * Clock-locked centripetal Catmull-Rom between stored samples.
+ * Interpolates the pose (hits every sample, no EMA lag). Maximum smoothness
+ * that still stays on the analyzed overlay clock.
+ */
+export function blendOverlayLandmark(prev, a, b, next, alpha) {
+  const p1 = asLandmark(a);
+  const p2 = asLandmark(b);
+  if (!p1 && !p2) return null;
+  if (!p1) return p2;
+  if (!p2 || !(alpha > 0)) return p1;
+  if (alpha >= 1) return p2;
+  const p0 = asLandmark(prev) || p1;
+  const p3 = asLandmark(next) || p2;
+  return centripetalCatmullRom(p0, p1, p2, p3, alpha);
+}
+
+/** Sample a landmark at getOverlayFrameState idx/alpha using 4 neighboring frames. */
+export function overlayLandmarkAt(frames, idx, alpha, getter) {
+  if (!frames?.length) return null;
+  const i1 = Math.max(0, Math.min(frames.length - 1, Number(idx) || 0));
+  const i0 = Math.max(0, i1 - 1);
+  const i2 = Math.min(frames.length - 1, i1 + 1);
+  const i3 = Math.min(frames.length - 1, i2 + 1);
+  const pick = typeof getter === "function"
+    ? getter
+    : (frame) => frame?.[getter];
+  return blendOverlayLandmark(
+    pick(frames[i0]),
+    pick(frames[i1]),
+    pick(frames[i2]),
+    pick(frames[i3]),
+    alpha,
+  );
+}
+
 /**
  * Map the presented video time to the overlay sample for that picture.
  * Blend between stored landmark frames (32.72 freeze) so the skeleton follows

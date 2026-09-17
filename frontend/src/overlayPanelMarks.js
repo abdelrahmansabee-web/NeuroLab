@@ -2,7 +2,11 @@
  * Sparse on-video marks that prove the UE panel numbers.
  * Paint only — uses the same palm / peak_frames / pause threshold as the panel.
  */
-import { overlayMovementWindow, overlayPauseSpeedThreshold } from "./validationPanelMetrics";
+import {
+  nvpPeakIndicesInWindow,
+  overlayMovementWindow,
+  overlayPauseSpeedThreshold,
+} from "./validationPanelMetrics";
 import { addCupToSpan, tableYFromCup } from "./overlayCupTable";
 import { isSeatedTableY } from "./overlayCreamTable";
 import { clampTableUserMark } from "./overlayTableUserMark";
@@ -16,9 +20,7 @@ const TRUNK = "rgba(250,204,21,0.92)";
 const SHOULDER = "rgba(245,158,11,0.9)";
 
 export function nvpPeakIndicesOnPath(peakFrames, startIdx, untilIdx) {
-  return (peakFrames || []).filter(
-    (pi) => Number.isFinite(Number(pi)) && pi >= startIdx && pi <= untilIdx,
-  );
+  return nvpPeakIndicesInWindow(peakFrames, startIdx, untilIdx);
 }
 
 export function classifyPalmPath(frames, startIdx, untilIdx, speedThreshold) {

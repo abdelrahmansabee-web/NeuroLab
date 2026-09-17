@@ -67,6 +67,7 @@ test("path marks pause only on frames below the panel speed gate", () => {
 test("NVP dots are peak_frames on the path up to now, not after the window", () => {
   expect(nvpPeakIndicesOnPath([6, 10, 18], 4, 14)).toEqual([6, 10]);
   expect(nvpPeakIndicesOnPath([6, 10, 18], 4, 6)).toEqual([6]);
+  expect(nvpPeakIndicesOnPath([2, 6, 10, 18], 4, 14)).toEqual([6, 10]);
 });
 
 test("straightness chord uses window start palm to current palm", () => {

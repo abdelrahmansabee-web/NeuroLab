@@ -35,7 +35,7 @@ function makeOverlay() {
     fps,
     frames,
     movement_window: { start_idx: 4, end_idx: 14 },
-    peak_frames: [6, 10, 18],
+    peak_frames: [2, 6, 10, 18],
     metrics: {
       peak_velocity_cm_s: 41.7,
       shoulder_elevation_cm: 3.4,
@@ -87,6 +87,13 @@ test("resolveKinMetricValue prefers panel NVP over backend nvp_reach", () => {
   expect(resolveKinMetricValue(phaseResult, "nvp_reach", overlay)).toBe(2);
   expect(resolveKinMetricValue(phaseResult, "nvp", overlay)).toBe(2);
   expect(resolveKinMetricValue(phaseResult, "pause_time_sec", overlay)).toBeCloseTo(1 / 60, 8);
+});
+
+test("panel NVP ignores peaks before movement onset", () => {
+  const overlay = makeOverlay();
+  const panel = computeValidationPanelLive(overlay, 14);
+  expect(panel.nvp).toBe(2);
+  expect(overlay.peak_frames).toEqual([2, 6, 10, 18]);
 });
 
 test("panel-aligned format matches video panel decimals (ratio, not percent)", () => {

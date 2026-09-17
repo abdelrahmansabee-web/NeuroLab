@@ -23,6 +23,7 @@ import {
 import {
   computeValidationPanelLive,
   elbowAngVelAt,
+  nvpPeakIndicesInWindow,
   pickOverlayMetric,
 } from "./validationPanelMetrics";
 import {
@@ -54,6 +55,8 @@ import {
   OVERLAY_VIDEO_STALL_MS,
   enqueueOverlayVideoAttach,
   getOverlayFrameState,
+  overlayLandmarkAt,
+  blendOverlayLandmark,
   isAppleTouchVideo,
   overlayBakeFreeEventName,
   overlayLivePaintFromCurrentTime,
@@ -881,20 +884,17 @@ export function ValidationOverlayPlayer({
     const updatePanelCharts = !touchPerf || video.paused;
     const f = frames[idx];
     const fNext = frames[Math.min(idx + 1, frames.length - 1)];
+    const fPrev = frames[Math.max(0, idx - 1)];
+    const fNext2 = frames[Math.min(idx + 2, frames.length - 1)];
     if (!f) return;
 
     const color = phaseColor;
 
     function pt(name) {
-      const p = f[name];
-      const pn = alpha > 0 ? fNext?.[name] : null;
-      if (!p || p[0] == null || p[1] == null) return null;
-      let nx = p[0];
-      let ny = p[1];
-      if (pn && pn[0] != null && pn[1] != null && alpha > 0) {
-        nx = p[0] + (pn[0] - p[0]) * alpha;
-        ny = p[1] + (pn[1] - p[1]) * alpha;
-      }
+      const blended = overlayLandmarkAt(frames, idx, alpha, name);
+      if (!blended) return null;
+      const nx = blended[0];
+      const ny = blended[1];
       const isHandLm = /^(index|thumb|pinky|middle|ring|hl_wrist)$/.test(name);
       if (isHandLm && (nx <= 0.0002 || nx >= 0.9998 || ny <= 0.0002 || ny >= 0.9998)) return null;
       return [nx * cw, ny * ch];
@@ -1129,7 +1129,7 @@ export function ValidationOverlayPlayer({
     });
     const handRoot = skel.palmPt || skel.forearmEnd || pt("wrist");
 
-    const currentNVP = peakFrames.filter((pi) => pi <= idx).length;
+    const currentNVP = nvpPeakIndicesInWindow(peakFrames, win.start_idx || 0, idx).length;
 
     let panelLive = liveMetricsCacheRef.current?.panelLive;
     if (updatePanelMetrics) {
@@ -1268,15 +1268,10 @@ export function ValidationOverlayPlayer({
     };
     const JOINT_ORDER = ["mcp", "ip", "tip"];
 
-    function jointToCanvas(pair, pairNext) {
-      if (!pair || pair[0] == null || pair[1] == null) return null;
-      let nx = pair[0];
-      let ny = pair[1];
-      if (pairNext && pairNext[0] != null && pairNext[1] != null && alpha > 0) {
-        nx = pair[0] + (pairNext[0] - pair[0]) * alpha;
-        ny = pair[1] + (pairNext[1] - pair[1]) * alpha;
-      }
-      return [nx * cw, ny * ch];
+    function jointToCanvas(pair, pairNext, pairPrev, pairNext2) {
+      const blended = blendOverlayLandmark(pairPrev, pair, pairNext, pairNext2, alpha);
+      if (!blended) return null;
+      return [blended[0] * cw, blended[1] * ch];
     }
 
     // Pre-v37 overlays re-anchored HL tips onto pose wrist (floated off fingers).
@@ -1330,8 +1325,15 @@ export function ValidationOverlayPlayer({
         const fj = fingerJoints[fid];
         if (!fj) return;
         JOINT_ORDER.forEach((jname) => {
+          const fjPrev = fPrev?.finger_joints?.[fid];
           const fjNext = fNext?.finger_joints?.[fid];
-          let cpt = jointToCanvas(fj[jname], fjNext?.[jname]);
+          const fjNext2 = fNext2?.finger_joints?.[fid];
+          let cpt = jointToCanvas(
+            fj[jname],
+            fjNext?.[jname],
+            fjPrev?.[jname],
+            fjNext2?.[jname],
+          );
           if (!cpt && jname === "tip") cpt = pt(fid);
           cpt = undoReanchor(cpt);
           const coordsOk = Boolean(cpt)

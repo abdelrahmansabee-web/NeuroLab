@@ -12,7 +12,6 @@ import {
 /** Table / report keys that must copy the validation-video panel (not server SPSS fields). */
 export const PANEL_TABLE_KEYS = [
   "nvp",
-  "nvp_reach",
   "movement_time_sec",
   "straightness",
   "peak_velocity_cm_s",
@@ -55,6 +54,21 @@ export function overlayMovementWindow(overlayData) {
   const startIdx = Math.max(0, Math.min(last, win.start_idx || 0));
   const endIdx = Math.max(startIdx, Math.min(last, win.end_idx ?? last));
   return { startIdx, endIdx };
+}
+
+/** Peaks on the path from onset through untilIdx — same gate as overlay NVP dots. */
+export function nvpPeakIndicesInWindow(peakFrames, startIdx, untilIdx) {
+  const lo = Number(startIdx);
+  const hi = Number(untilIdx);
+  if (!Number.isFinite(lo) || !Number.isFinite(hi)) return [];
+  return (peakFrames || []).filter((pi) => {
+    const n = Number(pi);
+    return Number.isFinite(n) && n >= lo && n <= hi;
+  });
+}
+
+export function countNvpPeaksInWindow(peakFrames, startIdx, untilIdx) {
+  return nvpPeakIndicesInWindow(peakFrames, startIdx, untilIdx).length;
 }
 
 /** 5% of whole-clip peak hand speed — same pause gate as the live panel. */
@@ -134,7 +148,7 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
   const inMovement = idx >= startIdx && idx <= endIdx;
   const t0 = startIdx < frames.length ? (frames[startIdx].time || startIdx / fps) : 0;
 
-  const nvp = peakFrames.filter((pi) => pi <= idx).length;
+  const nvp = countNvpPeaksInWindow(peakFrames, startIdx, Math.min(idx, endIdx));
 
   let peakElbowAngVel = 0;
   for (let i = 1; i <= idx && i < frames.length; i += 1) {
@@ -465,7 +479,9 @@ export function formatPanelAlignedKinValue(metricKey, value, overlayMetrics = nu
 
   if (value == null || value === "\u2014" || Number.isNaN(Number(value))) return "\u2014";
   const val = Number(value);
-  if (metricKey === "nvp" || metricKey === "nvp_reach" || metricKey === "number_of_stops") return formatFixed(val, 0);
+  if (metricKey === "nvp" || metricKey === "nvp_reach" || metricKey === "nvp_drink"
+    || metricKey === "nvp_transport" || metricKey === "nvp_return" || metricKey === "nvp_total"
+    || metricKey === "number_of_stops") return formatFixed(val, 0);
   if (metricKey === "straightness" || metricKey === "trunk_ratio" || metricKey === "movement_time_sec") {
     if (val <= 0) return "\u2014";
     return formatFixed(val, 2);
