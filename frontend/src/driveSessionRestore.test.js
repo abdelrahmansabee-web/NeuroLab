@@ -11,6 +11,7 @@ import {
   summarizeRecallRows,
   shouldDeferBootRecallUntilEmailRestore,
   recallPhaseFetchSteps,
+  shouldPushLocalRecallToDrive,
 } from "./driveSessionRestore";
 
 function patient({ id, name, pre, post, baseline } = {}) {
@@ -207,5 +208,11 @@ describe("driveSessionRestore", () => {
       wantKin: false,
       wantUnified: false,
     }, { originalVideoBlob: cachedOriginal })).toEqual(["overlay"]);
+  });
+
+  test("an icon that already has the original must copy it to Drive for other icons", () => {
+    const original = new Blob([new Uint8Array([1])], { type: "video/mp4" });
+    expect(shouldPushLocalRecallToDrive({ originalVideoBlob: original }, { originalVideoBlob: original })).toBe(true);
+    expect(shouldPushLocalRecallToDrive({}, { originalVideoBlob: original })).toBe(false);
   });
 });

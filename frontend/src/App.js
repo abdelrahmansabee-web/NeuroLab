@@ -54,6 +54,7 @@ import {
   requestClinicPersistentStorage,
 } from "./validationSessionCache";
 import {
+  backupDriveArtifact,
   backupValidationArtifactsToDrive,
   restoreValidationArtifactsFromDrive,
   validationUnifiedDriveName,
@@ -639,7 +640,8 @@ function pumpDriveFileBackupQueue() {
       }
       const job = driveFileBackupQueue.shift();
       try {
-        await backupFileToDrive(job.name, job.blob, job.opts);
+        const ok = await backupFileToDrive(job.name, job.blob, job.opts);
+        if (!ok) driveFileBackupDone.delete(job.key);
       } catch {
         driveFileBackupDone.delete(job.key);
       }
@@ -654,9 +656,14 @@ function pumpDriveFileBackupQueue() {
   }
 }
 
+function isDriveVideoBackup(name, blob) {
+  if (/\.(mp4|mov|m4v|webm)$/i.test(String(name || ""))) return true;
+  return String(blob?.type || "").toLowerCase().startsWith("video/");
+}
+
 function scheduleDriveFileBackup(name, blob, opts = {}) {
   if (!blob || !(blob instanceof Blob)) return;
-  if (blob.size > DRIVE_FILE_MAX_BYTES) {
+  if (!isDriveVideoBackup(name, blob) && blob.size > DRIVE_FILE_MAX_BYTES) {
     console.warn("Drive backup skipped (file too large):", name, blob.size);
     return;
   }
@@ -705,8 +712,11 @@ function backupSessionKinematicsVideosToDrive(kinematicsData, demographics) {
 
 async function backupFileToDrive(name, blob, opts = {}) {
   try {
-    const contentBase64 = await blobToBase64(blob);
     const { patientKey, subfolder, scope } = opts;
+    if (patientKey) {
+      return backupDriveArtifact(patientKey, name, blob, subfolder || "videos");
+    }
+    const contentBase64 = await blobToBase64(blob);
     const r = await fetch("/auth/backup-file", {
       method: "POST",
       credentials: "same-origin",
@@ -720,7 +730,17 @@ async function backupFileToDrive(name, blob, opts = {}) {
         scope: scope || undefined,
       }),
     });
-    return r.ok;
+    if (!r.ok) return false;
+    try {
+      const body = await r.json();
+      if (body?.skipped) {
+        console.warn("Drive backup skipped:", name, body.reason);
+        return false;
+      }
+    } catch {
+      /* ignore non-JSON */
+    }
+    return true;
   } catch (e) {
     console.warn("Drive file backup failed:", e);
     return false;

@@ -2,13 +2,14 @@
  * Recall analyzed sessions from Google Drive into IndexedDB on program open.
  * Hugging Face has no lasting video disk; Drive is the copy that must be fetched again.
  */
-import { authHeaders } from "./AuthGate";
 import { clinicReportDriveName, documentKind, patientDriveKeyFromDemographics } from "./driveDocIdentity";
 import {
   loadValidationSessionArtifact,
   saveValidationSessionArtifact,
 } from "./validationSessionCache";
 import {
+  backupValidationArtifactsToDrive,
+  driveTokenHeaders,
   fetchDriveFile,
   validationKinematicsDriveName,
   validationOriginalDriveName,
@@ -69,6 +70,13 @@ export function recallPoolSize(opts = {}) {
 /** Blank Home Screen / new icon: wait for the signed-in email restore, do not race an empty recall. */
 export function shouldDeferBootRecallUntilEmailRestore(patients) {
   return !Array.isArray(patients) || patients.length === 0;
+}
+
+const localDrivePushOnce = new Set();
+
+/** Safari / an icon that already has the original must copy it to Drive for every other icon. */
+export function shouldPushLocalRecallToDrive(existingCache, recalled) {
+  return blobOk(existingCache?.originalVideoBlob) && blobOk(recalled?.originalVideoBlob);
 }
 
 /** PRE original first so a new icon can play the analyzed clip before overlay JSON finishes. */
@@ -285,8 +293,7 @@ async function listPatientDriveFiles(patientKey) {
   if (!patientKey) return [];
   try {
     const q = new URLSearchParams({ patientKey, scope: "auto" });
-    const tokenHeaders = authHeaders();
-    delete tokenHeaders["Content-Type"];
+    const tokenHeaders = driveTokenHeaders();
     const res = await fetch(`/auth/list-patient-files?${q.toString()}`, {
       credentials: "same-origin",
       headers: tokenHeaders,
@@ -365,6 +372,16 @@ async function recallOnePhase(patientKey, phasePlan, existingCache) {
   }
   next.savedAt = Date.now();
   await saveValidationSessionArtifact(next);
+  if (shouldPushLocalRecallToDrive(cache, next)) {
+    const stamp = `${patientKey}:${phase}`;
+    if (!localDrivePushOnce.has(stamp)) {
+      localDrivePushOnce.add(stamp);
+      backupValidationArtifactsToDrive(patientKey, phase, next).catch((err) => {
+        localDrivePushOnce.delete(stamp);
+        console.warn("Drive re-push of local recall failed:", err);
+      });
+    }
+  }
   return next;
 }
 
