@@ -12,6 +12,8 @@ import {
   shouldDeferBootRecallUntilEmailRestore,
   recallPhaseFetchSteps,
   shouldPushLocalRecallToDrive,
+  shouldRetryEmptyBootRecall,
+  waitForRecallPatients,
 } from "./driveSessionRestore";
 
 function patient({ id, name, pre, post, baseline } = {}) {
@@ -190,6 +192,24 @@ describe("driveSessionRestore", () => {
     expect(shouldDeferBootRecallUntilEmailRestore([])).toBe(true);
     expect(shouldDeferBootRecallUntilEmailRestore(null)).toBe(true);
     expect(shouldDeferBootRecallUntilEmailRestore([patient({ id: "101" })])).toBe(false);
+    expect(shouldRetryEmptyBootRecall(null)).toBe(true);
+    expect(shouldRetryEmptyBootRecall({ attempted: false })).toBe(true);
+    expect(shouldRetryEmptyBootRecall({ attempted: true })).toBe(false);
+    expect(shouldRetryEmptyBootRecall({ attempted: false }, { running: true })).toBe(false);
+  });
+
+  test("home screen wait helper pulls patients after the email restore lands", async () => {
+    let t = 0;
+    const pulled = await waitForRecallPatients([], {
+      standalone: true,
+      now: () => t,
+      retryMs: 10,
+      maxWaitMs: 100,
+      sleep: async () => { t += 10; },
+      loadPatients: () => (t >= 20 ? [patient({ id: "122" })] : []),
+      pullRemotePatients: async () => [],
+    });
+    expect(pulled[0].demographics.participantId).toBe("122");
   });
 
   test("recall downloads the original video before overlay JSON", () => {

@@ -108,6 +108,39 @@ export async function coalesceRecallPatients(seed, opts = {}) {
   return remote;
 }
 
+/**
+ * Home Screen wait helper. Do not call this inside the recall mutex — that
+ * would block PATIENTS_SYNC_EVENT from starting the real list. Use at boot.
+ */
+export async function waitForRecallPatients(seed, opts = {}) {
+  const nowFn = typeof opts.now === "function" ? opts.now : Date.now;
+  const started = nowFn();
+  const retryMs = Number(opts.retryMs) > 0 ? Number(opts.retryMs) : 1500;
+  const sleep = typeof opts.sleep === "function"
+    ? opts.sleep
+    : (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const pull = async (list) => coalesceRecallPatients(list, opts);
+  let current = Array.isArray(seed) ? seed : [];
+  let list = await pull(current);
+  while (shouldWaitForPatientsBeforeRecall(list, {
+    standalone: opts.standalone,
+    waitedMs: nowFn() - started,
+    maxWaitMs: opts.maxWaitMs,
+  })) {
+    await sleep(retryMs);
+    current = typeof opts.loadPatients === "function" ? opts.loadPatients() : current;
+    list = await pull(current);
+  }
+  return list;
+}
+
+/** Empty boot recall does not consume the 45s cooldown. */
+export function shouldRetryEmptyBootRecall(lastSummary, { running = false } = {}) {
+  if (running) return false;
+  if (lastSummary?.attempted) return false;
+  return true;
+}
+
 /** Empty boot recall must not block the real list that arrives a few seconds later. */
 export function shouldReuseRecentRecall(lastSummary, lastRecallAt, now = Date.now(), opts = {}) {
   if (opts.force) return false;
