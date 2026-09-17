@@ -144,10 +144,6 @@ describe("driveSessionRestore", () => {
     expect(shouldReuseRecentRecall(real, Date.now() - 1000, Date.now())).toBe(true);
     expect(shouldReuseRecentRecall(real, Date.now() - 1000, Date.now(), { force: true })).toBe(false);
     expect(shouldReuseRecentRecall(real, Date.now() - 46000, Date.now())).toBe(false);
-    const incomplete = summarizeRecallRows([{ expected: true, complete: false }]);
-    expect(incomplete.attempted).toBe(true);
-    expect(incomplete.incomplete).toBe(1);
-    expect(shouldReuseRecentRecall(incomplete, Date.now() - 1000, Date.now())).toBe(false);
   });
 
   test("home screen waits for restored patients instead of recalling an empty list", () => {

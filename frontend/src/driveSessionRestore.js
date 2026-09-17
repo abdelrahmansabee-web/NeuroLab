@@ -70,13 +70,12 @@ export async function coalesceRecallPatients(seed, opts = {}) {
   return remote;
 }
 
-/** Empty or incomplete boot recall must not block the real Drive download. */
+/** Empty boot recall must not block the real list that arrives a few seconds later. */
 export function shouldReuseRecentRecall(lastSummary, lastRecallAt, now = Date.now(), opts = {}) {
   if (opts.force) return false;
   if (!lastSummary) return false;
   if (!Number.isFinite(Number(lastRecallAt)) || now - lastRecallAt >= RECALL_COOLDOWN_MS) return false;
   if (!lastSummary.attempted) return false;
-  if (Number(lastSummary.incomplete || 0) > 0) return false;
   return true;
 }
 

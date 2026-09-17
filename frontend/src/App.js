@@ -60,7 +60,6 @@ import {
 import { canonicalDriveName, clinicReportDriveName } from "./driveDocIdentity";
 import {
   DRIVE_RECALL_EVENT,
-  DRIVE_RECALL_START_EVENT,
   formatRecallToast,
   recallAnalyzedSessionsFromDrive,
   coalesceRecallPatients,
@@ -786,62 +785,61 @@ function emitRecallChipDone(detail = {}) {
   } catch { /* ignore */ }
 }
 
-function startDriveSessionRecall(patients, { showToast, force = false, retryIncomplete = true } = {}) {
+let driveRecallKickoff = false;
+let driveRecallThisVisit = false;
+
+function startDriveSessionRecall(patients, { showToast, force = false, allowRepeat = false } = {}) {
   return (async () => {
+    if (driveRecallKickoff || isDriveRecallRunning()) return null;
+    if (!allowRepeat && driveRecallThisVisit) return null;
+    driveRecallKickoff = true;
     try {
-      window.dispatchEvent(new Event(DRIVE_RECALL_START_EVENT));
-    } catch { /* ignore */ }
-    let list;
-    try {
-      list = await coalesceRecallPatients(patients, {
-        loadPatients,
-        savePatients: (remote) => {
-          const merged = mergePatientLists(loadPatients(), remote);
-          return savePatients(merged);
-        },
-        pullRemotePatients: async () => {
-          const r = await fetchWithTimeout("/api/patients", {}, 45000);
-          if (r.status === 401 || r.status === 403) {
-            const err = new Error("auth");
-            err.code = r.status;
-            throw err;
-          }
-          if (!r.ok) return [];
-          const data = await r.json().catch(() => []);
-          return Array.isArray(data) ? data : [];
+      let list;
+      try {
+        list = await coalesceRecallPatients(patients, {
+          loadPatients,
+          savePatients: (remote) => {
+            const merged = mergePatientLists(loadPatients(), remote);
+            return savePatients(merged);
+          },
+          pullRemotePatients: async () => {
+            const r = await fetchWithTimeout("/api/patients", {}, 45000);
+            if (r.status === 401 || r.status === 403) {
+              const err = new Error("auth");
+              err.code = r.status;
+              throw err;
+            }
+            if (!r.ok) return [];
+            const data = await r.json().catch(() => []);
+            return Array.isArray(data) ? data : [];
+          },
+        });
+      } catch (err) {
+        if (err?.code === 401 || err?.code === 403) {
+          showToast?.("Sign in on this Home Screen icon to recall sessions from Drive", "error");
+        }
+        console.warn("Drive session recall patient pull failed:", err);
+        emitRecallChipDone({ error: "auth" });
+        return null;
+      }
+      if (!list.length) {
+        if (isStandalonePWA()) {
+          showToast?.("No sessions on this icon yet — sign in here, then wait for Recalling", "warning");
+        }
+        emitRecallChipDone();
+        return null;
+      }
+      driveRecallThisVisit = true;
+      return await recallAnalyzedSessionsFromDrive(list, {
+        force,
+        onDone: (summary) => {
+          const msg = formatRecallToast(summary);
+          if (msg) showToast?.(msg, summary.incomplete ? "warning" : "success");
         },
       });
-    } catch (err) {
-      if (err?.code === 401 || err?.code === 403) {
-        showToast?.("Sign in on this Home Screen icon to recall sessions from Drive", "error");
-      }
-      console.warn("Drive session recall patient pull failed:", err);
-      emitRecallChipDone({ error: "auth" });
-      return null;
+    } finally {
+      driveRecallKickoff = false;
     }
-    if (!list.length) {
-      if (isStandalonePWA()) {
-        showToast?.("No sessions on this icon yet — sign in here, then wait for Recalling", "warning");
-      }
-      emitRecallChipDone();
-      return null;
-    }
-    return recallAnalyzedSessionsFromDrive(list, {
-      force,
-      onDone: (summary) => {
-        const msg = formatRecallToast(summary);
-        if (msg) showToast?.(msg, summary.incomplete ? "warning" : "success");
-        if (retryIncomplete && isStandalonePWA() && Number(summary?.incomplete) > 0) {
-          setTimeout(() => {
-            startDriveSessionRecall(loadPatients(), {
-              showToast,
-              force: true,
-              retryIncomplete: false,
-            });
-          }, 8000);
-        }
-      },
-    });
   })().catch((err) => {
     console.warn("Drive session recall failed:", err);
     emitRecallChipDone({ error: "failed" });
@@ -1384,7 +1382,7 @@ async function restorePatientsFromDriveNow({ showToast } = {}) {
     }
     showToast?.(`Restored ${merged.length} patient(s) from Drive${detail}`, "success");
     window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: merged.length } }));
-    startDriveSessionRecall(merged, { showToast, force: true });
+    startDriveSessionRecall(merged, { showToast, force: true, allowRepeat: true });
     return { ok: true, patients: merged, pushed: true };
   } catch (err) {
     console.warn("Restore from Drive failed:", err);
@@ -9105,32 +9103,21 @@ export default function App() {
       if (cancelled || isKinAnalyzeActive()) return;
       startDriveSessionRecall(loadPatients(), {
         showToast,
-        force: justConnected || isStandalonePWA(),
+        force: justConnected,
+        allowRepeat: justConnected,
       });
     };
     const t = setTimeout(run, justConnected ? 600 : isStandalonePWA() ? 400 : 2800);
     const onSynced = (ev) => {
       if (ev?.detail?.skipDriveRecall) return;
       if (cancelled || isKinAnalyzeActive()) return;
-      startDriveSessionRecall(loadPatients(), { showToast, force: isStandalonePWA() });
-    };
-    const onShow = () => {
-      if (cancelled || isKinAnalyzeActive()) return;
-      if (!isStandalonePWA()) return;
       startDriveSessionRecall(loadPatients(), { showToast });
     };
-    const onVis = () => {
-      if (!document.hidden) onShow();
-    };
     window.addEventListener(PATIENTS_SYNC_EVENT, onSynced);
-    window.addEventListener("pageshow", onShow);
-    document.addEventListener("visibilitychange", onVis);
     return () => {
       cancelled = true;
       clearTimeout(t);
       window.removeEventListener(PATIENTS_SYNC_EVENT, onSynced);
-      window.removeEventListener("pageshow", onShow);
-      document.removeEventListener("visibilitychange", onVis);
     };
   }, [showToast]);
 
