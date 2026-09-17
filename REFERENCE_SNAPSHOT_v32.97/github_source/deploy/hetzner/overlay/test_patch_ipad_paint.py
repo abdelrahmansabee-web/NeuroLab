@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from patch_ipad_paint import CSS_NAME, CSS_VER, patch_touch_blur_js, wire_index_html
+
+
+SAMPLE_TOUCH_JS = (
+    'html.nl-touch .sidebar-shell,\\n        html.nl-touch .glass-float,\\n'
+    '        html.nl-touch .content-shell {\\n          '
+    'backdrop-filter: blur(8px) saturate(1.45) !important;\\n          '
+    '-webkit-backdrop-filter: blur(8px) saturate(1.45) !important;\\n        }\\n'
+    '        html.nl-touch .content-shell .glass-float:not(.section-header):not(.app-topbar-glass),\\n'
+    '        html.nl-touch .content-shell .content-panel-glass {\\n          '
+    'backdrop-filter: blur(6px) saturate(1.25) !important;\\n          '
+    '-webkit-backdrop-filter: blur(6px) saturate(1.25) !important;\\n        }\\n'
+    '        .sidebar-shell { backdrop-filter: blur(12px) saturate(2.25) !important; }'
+)
+
+
+class IpadPaintTests(unittest.TestCase):
+    def test_wires_boot_and_css_keeps_glass_query(self) -> None:
+        html = (
+            "<!doctype html><html><head></head><body>"
+            '<script src="/static/js/main.0626212c.js?bg=1"></script>'
+            "</body></html>"
+        )
+        out = wire_index_html(html)
+        self.assertIn(f"{CSS_NAME}?v={CSS_VER}", out)
+        self.assertIn("nl-ipad-paint", out)
+        self.assertIn("MutationObserver(a)", out)
+        self.assertIn("main.0626212c.js?paint=4", out)
+        self.assertNotIn("clinic_smooth", out)
+        self.assertEqual(out.count(CSS_NAME), 1)
+
+    def test_idempotent(self) -> None:
+        html = "<html><head></head></html>"
+        once = wire_index_html(html)
+        twice = wire_index_html(once)
+        self.assertEqual(once.count(CSS_NAME), 1)
+        self.assertEqual(twice.count(CSS_NAME), 1)
+        self.assertEqual(once.count("MutationObserver(a)"), 1)
+        self.assertEqual(twice.count("MutationObserver(a)"), 1)
+
+    def test_refuses_smooth_override(self) -> None:
+        with self.assertRaises(SystemExit):
+            wire_index_html(
+                '<html><head><link rel="stylesheet" href="/clinic_smooth.css?v=6"/></head></html>'
+            )
+
+    def test_css_frost_fills_not_solid_black(self) -> None:
+        import re
+
+        css = Path(__file__).resolve().parent.joinpath(CSS_NAME).read_text(encoding="utf-8")
+        rules = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+        self.assertIn("backdrop-filter: none", css)
+        self.assertIn("html.nl-ipad-paint.nl-touch", css)
+        self.assertIn("background-color: rgba(16, 22, 32, 0.50)", rules)
+        self.assertIn("background-color: rgba(16, 22, 32, 0.42)", rules)
+        self.assertIn("background-color: rgba(18, 24, 36, 0.34)", rules)
+        self.assertNotIn("rgba(24, 34, 48, 0.50)", rules)
+        self.assertNotIn("rgba(24, 34, 48, 0.44)", rules)
+        self.assertIsNone(re.search(r"background(?:-color)?\s*:\s*(#000\b|rgb\(\s*0\s*,\s*0\s*,\s*0)", rules))
+
+    def test_kills_nl_touch_blur_keeps_desktop_glass(self) -> None:
+        out, hits = patch_touch_blur_js(SAMPLE_TOUCH_JS)
+        self.assertGreater(hits, 0)
+        self.assertNotIn("blur(8px) saturate(1.45)", out)
+        self.assertNotIn("blur(6px) saturate(1.25)", out)
+        self.assertIn("blur(12px) saturate(2.25)", out)
+        self.assertIn("html.nl-touch .sidebar-shell", out)
+        again, hits2 = patch_touch_blur_js(out)
+        self.assertEqual(hits2, 0)
+        self.assertEqual(again, out)
+
+    def test_copy_into_build(self) -> None:
+        from patch_ipad_paint import patch_ipad_paint
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            build = root / "frontend" / "build"
+            js_dir = build / "static" / "js"
+            js_dir.mkdir(parents=True)
+            (build / "index.html").write_text(
+                '<html><head></head><body><script src="/static/js/main.0626212c.js"></script></body></html>',
+                encoding="utf-8",
+            )
+            (js_dir / "main.0626212c.js").write_text(SAMPLE_TOUCH_JS, encoding="utf-8")
+            self.assertEqual(patch_ipad_paint(root), 0)
+            self.assertTrue((build / CSS_NAME).is_file())
+            html = (build / "index.html").read_text(encoding="utf-8")
+            self.assertIn(CSS_NAME, html)
+            self.assertIn("nl-ipad-paint", html)
+            js = (js_dir / "main.0626212c.js").read_text(encoding="utf-8")
+            self.assertNotIn("blur(8px) saturate(1.45)", js)
+            self.assertIn("blur(12px) saturate(2.25)", js)
+
+
+if __name__ == "__main__":
+    unittest.main()

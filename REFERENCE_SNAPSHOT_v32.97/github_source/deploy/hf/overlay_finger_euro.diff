@@ -1,0 +1,51 @@
+diff --git a/overlay_data.py b/overlay_data.py
+index 00ee9b2..9b6ee46 100644
+--- a/overlay_data.py
++++ b/overlay_data.py
+@@ -17,9 +17,9 @@ import cv2
+ 
+ from unified_kinematics import _interpolate_small_gaps, _butter_lowpass_filter
+ from table_calibrator import find_video_for_csv
+-from hl_overlay_resample import HL_SMOOTH_ALPHA, MAX_HL_POSE_WRIST, resample_with_max_gap
++from hl_overlay_resample import MAX_HL_POSE_WRIST, one_euro_xy, resample_with_max_gap
+ 
+-OVERLAY_VERSION = 41
++OVERLAY_VERSION = 42
+ 
+ # Shown on validation overlay (reach window + optional ADL transport phase).
+ OVERLAY_JOINT_METRIC_KEYS = (
+@@ -785,7 +785,7 @@ def _direct_hl_joint(
+     *,
+     joint_kind: str = "tip",
+     max_hl_anchor_dist: float = MAX_HL_POSE_WRIST,
+-    ema_alpha: float = HL_SMOOTH_ALPHA,
++    ema_alpha: float = 1.0,
+     max_hold: int = 12,
+ ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+     """HL joints in absolute image space (no pose-wrist re-anchor).
+@@ -826,14 +826,10 @@ def _direct_hl_joint(
+                     geom_ok = False
+                     off_hand = True
+             if geom_ok:
+-                jx, jy = jx_raw, jy_raw
+-                if np.isfinite(prev_x) and np.isfinite(prev_y) and ema_alpha < 1.0:
+-                    jx = ema_alpha * jx + (1.0 - ema_alpha) * prev_x
+-                    jy = ema_alpha * jy + (1.0 - ema_alpha) * prev_y
+-                out_x[i] = jx
+-                out_y[i] = jy
++                out_x[i] = jx_raw
++                out_y[i] = jy_raw
+                 conf[i] = soft_conf
+-                prev_x, prev_y = jx, jy
++                prev_x, prev_y = jx_raw, jy_raw
+                 hold = 0
+                 live = True
+         if off_hand:
+@@ -849,6 +845,7 @@ def _direct_hl_joint(
+             prev_x = np.nan
+             prev_y = np.nan
+             hold = 0
++    out_x, out_y = one_euro_xy(out_x, out_y)
+     return out_x, out_y, conf
+ 
+ 

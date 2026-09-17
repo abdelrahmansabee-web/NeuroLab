@@ -1,0 +1,14 @@
+---
+description: Clinic fix laws — follow on every RA.ED AI / iPad change
+alwaysApply: true
+---
+
+# Clinic laws (do not wait to be told again)
+
+1. **If the clinician did not ask to change it, do not change it.** No extra colors, plates, layers, refactors, or “while I’m here” edits. Do not invent a black fill, a new overlay smoother, or a third layout scheme.
+
+2. **Do not stack fixes.** One symptom = one diff. Do not put a repair on top of a repair, or a layer on top of a layer. If a change you made caused a regression, restore the last good freeze of that surface instead of adding another scheme.
+
+3. **Do not touch what already works.** POST / healthy overlay sync, v44 tracking, 32.72 lerp paint, 32.81 RVFC, compact in-card video, and clinic chrome that is fine stay untouched while fixing something else.
+
+4. PRE skeleton leading the person is a known open symptom on long PRE clips. Do not wait to be asked again. Fix only the overlay **clock** (presented video time vs pose span). Do not add overlay paint layers.
