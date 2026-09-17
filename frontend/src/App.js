@@ -84,7 +84,7 @@ import {
   isPanelTableKey,
 } from "./kinMetrics";
 import { inferWmftFromKinematics, applyWmftInference } from "./wmftInference";
-import { MOVEMENT_PROFILE_FIELDS, MOVEMENT_PROFILE_GROUP_LABELS, MOVEMENT_PROFILE_GROUP_ORDER, resolveProfileMetric, formatProfileValue, getMovementProfile } from "./movementProfile";
+import { formatProfileValue } from "./movementProfile";
 import {
   CLINICAL_MOVEMENT_TASKS,
   CLINICAL_DOMAIN_LABELS,
@@ -5818,65 +5818,6 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                 )}
               </tbody>
             </table>
-          </div>
-        </Glass>
-      )}
-
-      {showResultsTable && activeResultPhases.some((ph) => getMovementProfile(kinematicsResults[ph.k]) || kinematicsResults[ph.k]?.movement_quality_index != null) && (
-        <Glass className="p-4 sm:p-5">
-          <p className="text-sm font-extrabold text-white/80 mb-1">Movement quality &amp; joint specs</p>
-          <p className="text-[11px] text-white/45 mb-4 leading-relaxed">
-            Fine motor (index path, micro-stops, pinch), forearm pronation/supination (3D palm normal or index–pinky 2D), shoulder abduction (both shoulders visible), plus flexion/elbow ? and ?/s. Re-analyze after updates. Side-only camera: abduction/rotation flags may show low reliability ? use oblique/frontal clips for rotation tasks.
-          </p>
-          <div className="space-y-4">
-            {activeResultPhases.map((ph) => {
-              const prof = getMovementProfile(kinematicsResults[ph.k]);
-              if (!prof && kinematicsResults[ph.k]?.movement_quality_index == null) return null;
-              const reliabilityNotes = [];
-              if (prof?.shoulder_abduction_reliable === false) {
-                reliabilityNotes.push("Shoulder abduction: limited (shoulders not well separated in view)");
-              }
-              if (prof?.forearm_rotation_reliable === false) {
-                reliabilityNotes.push("Forearm rotation: limited (need index+pinky / 3D landmarks)");
-              }
-              return (
-                <div key={ph.k} className={`rounded-xl border p-3 sm:p-4 ${phaseValueCls(ph.c)}`}>
-                  <p className={`text-xs font-extrabold uppercase mb-3 ${phaseLabelCls(ph.c)}`}>{ph.l}</p>
-                  {reliabilityNotes.length > 0 && (
-                    <p className="text-[10px] text-amber-200/70 mb-3 leading-snug">{reliabilityNotes.join(" — ")}</p>
-                  )}
-                  <div className="space-y-4">
-                    {MOVEMENT_PROFILE_GROUP_ORDER.map((groupId) => {
-                      const fields = MOVEMENT_PROFILE_FIELDS.filter((f) => f.group === groupId);
-                      const cells = fields
-                        .map((f) => {
-                          const val = resolveProfileMetric(kinematicsResults[ph.k], f.key, overlayData?.[ph.k]);
-                          if (val == null && f.key !== "task_pattern") return null;
-                          return (
-                            <div key={f.key} className="rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-2">
-                              <p className="text-[9px] font-bold text-white/45 leading-tight">{f.label}</p>
-                              <p className="text-sm font-mono font-extrabold text-white/90 mt-0.5">
-                                {formatProfileValue(f.key, val ?? NA)}
-                                {f.unit ? <span className="text-[9px] font-normal text-white/35 ml-0.5">{f.unit}</span> : null}
-                              </p>
-                            </div>
-                          );
-                        })
-                        .filter(Boolean);
-                      if (!cells.length) return null;
-                      return (
-                        <div key={groupId}>
-                          <p className="text-[10px] font-extrabold uppercase tracking-wide text-white/50 mb-2">
-                            {MOVEMENT_PROFILE_GROUP_LABELS[groupId] || groupId}
-                          </p>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">{cells}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </Glass>
       )}
