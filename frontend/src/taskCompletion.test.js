@@ -122,5 +122,60 @@ test("NVP rows recount from the same peak_frames as the overlay", () => {
   expect(enriched.nvp_drink).toBe(2);
   expect(enriched.nvp_return).toBe(1);
   expect(enriched.nvp_total).toBe(5);
-  expect(enriched.nvp_total).toBeGreaterThanOrEqual(enriched.nvp_reach);
+  expect(enriched.nvp_total).toBe(enriched.nvp_reach + enriched.nvp_drink + enriched.nvp_return);
+});
+
+test("nested reach window does not swallow drink and return NVP", () => {
+  const overlay = {
+    fps: 60,
+    frames: Array.from({ length: 40 }, (_, i) => ({ time: i / 60, palm: [0.4, 0.7], speed: 12 })),
+    movement_window: { start_idx: 4, end_idx: 30 },
+    peak_frames: [2, 6, 10, 16, 22, 28],
+  };
+  const result = {
+    nvp_reach: 99,
+    nvp_drink: 99,
+    nvp_return: 99,
+    nvp_total: 1,
+    task_phases: [
+      { id: "reach_grasp", start_frame: 4, end_frame: 30 },
+      { id: "transport_drink", start_frame: 13, end_frame: 22 },
+      { id: "return", start_frame: 23, end_frame: 30 },
+    ],
+  };
+  const fromPeaks = countTaskNvpFromPeaks(result, overlay);
+  expect(fromPeaks.nvp_reach).toBe(2);
+  expect(fromPeaks.nvp_drink).toBe(2);
+  expect(fromPeaks.nvp_return).toBe(1);
+  expect(fromPeaks.nvp_total).toBe(5);
+  const enriched = enrichKinematicCompletion(result, overlay);
+  expect(enriched.nvp_reach).toBe(2);
+  expect(enriched.nvp_drink).toBe(2);
+  expect(enriched.nvp_return).toBe(1);
+  expect(enriched.nvp_total).toBe(5);
+  expect(enriched.nvp_total).toBe(enriched.nvp_reach + enriched.nvp_drink + enriched.nvp_return);
+});
+
+test("missing reach window still partitions leftover peaks after drink/return", () => {
+  const overlay = {
+    fps: 60,
+    frames: Array.from({ length: 40 }, (_, i) => ({ time: i / 60, palm: [0.4, 0.7], speed: 12 })),
+    movement_window: { start_idx: 4, end_idx: 30 },
+    peak_frames: [2, 6, 10, 16, 22, 28],
+  };
+  const result = {
+    nvp_reach: 99,
+    nvp_drink: 99,
+    nvp_return: 99,
+    nvp_total: 1,
+    task_phases: [
+      { id: "transport_drink", start_frame: 13, end_frame: 22 },
+      { id: "return", start_frame: 23, end_frame: 30 },
+    ],
+  };
+  const fromPeaks = countTaskNvpFromPeaks(result, overlay);
+  expect(fromPeaks.nvp_reach).toBe(2);
+  expect(fromPeaks.nvp_drink).toBe(2);
+  expect(fromPeaks.nvp_return).toBe(1);
+  expect(fromPeaks.nvp_total).toBe(5);
 });

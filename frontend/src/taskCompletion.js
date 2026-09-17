@@ -4,7 +4,6 @@
  */
 import { clinicalTaskById } from "./clinicalTasks";
 import {
-  countNvpPeaksInWindow,
   nvpPeakIndicesInWindow,
   overlayMovementWindow,
 } from "./validationPanelMetrics";
@@ -225,21 +224,45 @@ function overlayPeakFrames(result, overlayData) {
   return Array.isArray(peaks) ? peaks : [];
 }
 
-function uniqueNvpCount(peakFrames, windows) {
-  const seen = new Set();
-  (windows || []).forEach((win) => {
-    if (!win) return;
+/**
+ * Assign each velocity peak to one phase: return, then drink/transport, then reach.
+ * Nested reach windows must not also count drink/return peaks.
+ */
+function exclusiveNvpCounts(peakFrames, reachWin, drinkWin, returnWin) {
+  const claimed = new Set();
+  const take = (win) => {
+    if (!win) return null;
+    let n = 0;
     nvpPeakIndicesInWindow(peakFrames, win.startIdx, win.untilIdx).forEach((pi) => {
-      seen.add(Number(pi));
+      const k = Number(pi);
+      if (!Number.isFinite(k) || claimed.has(k)) return;
+      claimed.add(k);
+      n += 1;
     });
-  });
-  return seen.size;
+    return n;
+  };
+  const nvpReturn = take(returnWin);
+  const nvpDrink = take(drinkWin);
+  const nvpReach = take(reachWin);
+  const parts = [nvpReach, nvpDrink, nvpReturn].filter((v) => v != null);
+  const nvpTotal = parts.length ? parts.reduce((a, b) => a + b, 0) : null;
+  return {
+    nvp_reach: nvpReach,
+    nvp_drink: nvpDrink,
+    nvp_return: nvpReturn,
+    nvp_total: nvpTotal,
+  };
 }
 
 /** Recount NVP rows from the same peak_frames + phase windows the overlay uses. */
 export function countTaskNvpFromPeaks(result, overlayData = null) {
   const peaks = overlayPeakFrames(result, overlayData);
-  const reachPhase = findTaskPhase(result, "reach_grasp") || listTaskPhases(result)[0];
+  const reachPhase = findTaskPhase(result, "reach_grasp")
+    || listTaskPhases(result).find((p) => {
+      const id = String(p?.id || "");
+      return id && id !== "return" && !id.startsWith("transport_");
+    })
+    || null;
   const transport = pickTransportPhase(result);
   const ret = findTaskPhase(result, "return");
   const reachWin = phaseFrameWindow(reachPhase);
@@ -251,34 +274,21 @@ export function countTaskNvpFromPeaks(result, overlayData = null) {
     const { startIdx, endIdx } = overlayMovementWindow(src);
     fallbackReachWin = { startIdx, untilIdx: endIdx };
   }
-  const reachCountWin = reachWin || (!drinkWin && !returnWin ? fallbackReachWin : null);
-  const nvpReach = reachCountWin && peaks.length
-    ? countNvpPeaksInWindow(peaks, reachCountWin.startIdx, reachCountWin.untilIdx)
-    : null;
-  const nvpDrink = drinkWin && peaks.length
-    ? countNvpPeaksInWindow(peaks, drinkWin.startIdx, drinkWin.untilIdx)
-    : null;
-  const nvpReturn = returnWin && peaks.length
-    ? countNvpPeaksInWindow(peaks, returnWin.startIdx, returnWin.untilIdx)
-    : null;
-  const unionWins = [reachCountWin, drinkWin, returnWin].filter(Boolean);
-  const nvpTotal = peaks.length && unionWins.length
-    ? uniqueNvpCount(peaks, unionWins)
-    : null;
-  return {
-    nvp_reach: nvpReach,
-    nvp_drink: nvpDrink,
-    nvp_return: nvpReturn,
-    nvp_total: nvpTotal,
-  };
+  // Leftover peaks in the movement window are reach. Exclusive take() already
+  // gives drink/return first, so a nested/missing reach window cannot swallow them.
+  const reachCountWin = reachWin || fallbackReachWin;
+  if (!peaks.length) {
+    return { nvp_reach: null, nvp_drink: null, nvp_return: null, nvp_total: null };
+  }
+  return exclusiveNvpCounts(peaks, reachCountWin, drinkWin, returnWin);
 }
 
 function coalesceNvpTotal(fromPeaksTotal, parts, storedTotal) {
+  const peakTotal = fromPeaksTotal != null && Number.isFinite(Number(fromPeaksTotal)) ? Number(fromPeaksTotal) : null;
+  if (peakTotal != null) return peakTotal;
   const finite = parts.filter((v) => v != null && Number.isFinite(Number(v))).map((v) => Number(v));
   const maxPart = finite.length ? Math.max(...finite) : null;
   const stored = storedTotal != null && Number.isFinite(Number(storedTotal)) ? Number(storedTotal) : null;
-  const peakTotal = fromPeaksTotal != null && Number.isFinite(Number(fromPeaksTotal)) ? Number(fromPeaksTotal) : null;
-  if (peakTotal != null) return Math.max(peakTotal, maxPart ?? peakTotal);
   const candidates = [stored, maxPart].filter((v) => v != null);
   if (!candidates.length) return null;
   return Math.max(...candidates);

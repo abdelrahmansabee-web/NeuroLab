@@ -297,7 +297,6 @@ function panelToOverlayMetrics(panel) {
   if (!panel) return null;
   const out = {};
   assignIfNum(out, "nvp", panel.nvp);
-  assignIfNum(out, "nvp_reach", panel.nvp);
   assignIfNum(out, "straightness", panel.straightness);
   assignIfNum(out, "pause_time_sec", panel.pauseTime);
   assignIfNum(out, "number_of_stops", panel.stops);
