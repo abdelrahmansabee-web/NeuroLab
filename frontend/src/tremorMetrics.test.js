@@ -63,7 +63,7 @@ test("zero-crossing Hz on 10 Hz sine is near 10", () => {
   expect(hz).toBeLessThan(12);
 });
 
-test("camera track band-passes overlay palm + speed_tremor", () => {
+test("camera track band-passes overlay palm chord residual", () => {
   const fs = 60;
   const frames = Array.from({ length: 90 }, (_, i) => ({
     palm: [0.4 + 0.002 * Math.sin((2 * Math.PI * 10 * i) / fs), 0.5],
@@ -109,6 +109,48 @@ test("resolveTremorMetrics zeros backend relative power when rest is below the f
   expect(out.tremor_8_12hz_power).toBe(0);
   expect(out.tremor_peak_freq_hz).toBeNull();
   expect(out.tremor_index).toBe(100);
+});
+
+test("tremor follows the overlay palm path, not speed_tremor", () => {
+  const n = 180;
+  const fps = 60;
+  const frames = Array.from({ length: n }, (_, i) => ({
+    palm: [0.2 + (i / (n - 1)) * 0.5, 0.5],
+    speed_tremor: 80,
+    speed: 20,
+  }));
+  const out = computeTremorFromOverlay({
+    fps,
+    frames,
+    frame_width_px: 1280,
+    frame_height_px: 720,
+    shoulder_width_px: 400,
+    movement_window: { start_idx: 0, end_idx: n - 1 },
+    metrics: { tremor_8_12hz_power: 0.42 },
+  });
+  expect(out.tremor_present).toBe(false);
+  expect(out.tremor_8_12hz_power).toBe(0);
+  const resolved = resolveTremorMetrics({
+    fps,
+    frames,
+    frame_width_px: 1280,
+    frame_height_px: 720,
+    shoulder_width_px: 400,
+    movement_window: { start_idx: 0, end_idx: n - 1 },
+    metrics: { tremor_8_12hz_power: 0.42, tremor_index: 12 },
+  });
+  expect(resolved.tremor_8_12hz_power).toBe(0);
+});
+
+test("10 Hz palm wobble still counts when speed_tremor is zero", () => {
+  const overlay = makeTremorOverlay({ ampPx: 6, hz: 10 });
+  overlay.frames.forEach((f) => {
+    f.speed_tremor = 0;
+    f.speed = 0;
+  });
+  const out = computeTremorFromOverlay(overlay);
+  expect(out.tremor_present).toBe(true);
+  expect(out.tremor_abs_rms_px).toBeGreaterThan(2);
 });
 
 test("peak Hz needs SNR so flat in-band energy has no peak", () => {

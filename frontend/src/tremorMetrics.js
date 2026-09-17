@@ -1,4 +1,10 @@
-/** 8–12 Hz tremor metrics — JS port of R an/motion_invariants.py (validation parity). */
+/** 8–12 Hz tremor metrics on the same overlay palm path as panel straightness. */
+
+import {
+  overlayPalmChordResidual,
+  overlayPalmPathSpeeds,
+  overlayPalmPathStats,
+} from "./overlayPalmPath";
 
 export const TREMOR_BAND_HZ = [8.0, 12.0];
 export const TREMOR_MIN_DURATION_S = 0.75;
@@ -249,15 +255,15 @@ function gradientSpeed(values, fps) {
   return out;
 }
 
-function palmSeries(frames, startIdx, endIdx) {
-  const px = [];
-  const py = [];
-  for (let i = startIdx; i <= endIdx && i < frames.length; i += 1) {
-    const p = frames[i]?.palm;
-    px.push(p && Number.isFinite(Number(p[0])) ? Number(p[0]) : 0);
-    py.push(p && Number.isFinite(Number(p[1])) ? Number(p[1]) : 0);
-  }
-  return { px, py };
+function tremorFromStraightnessPath(frames, startIdx, endIdx, fps) {
+  const stats = overlayPalmPathStats(frames, startIdx, endIdx);
+  const speeds = overlayPalmPathSpeeds(stats.px, stats.py, fps);
+  const { rx, ry } = overlayPalmChordResidual(stats.px, stats.py);
+  return {
+    speeds,
+    rx: fillShortNanGaps(rx),
+    ry: fillShortNanGaps(ry),
+  };
 }
 
 function gatedTremorOut(handPower, peakHz, absRmsPx, shoulderWidthPx) {
@@ -305,11 +311,13 @@ export function computeTremorFromOverlay(overlayData, windowOverride = null) {
   const frameW = Number(overlayData.frame_width_px) || 0;
   const frameH = Number(overlayData.frame_height_px) || 0;
 
-  const handSpeeds = segmentSpeeds(frames, startIdx, endIdx, true).map((v) => v / norm);
+  const { speeds, rx, ry } = tremorFromStraightnessPath(frames, startIdx, endIdx, fps);
+  const hasPalm = speeds.some((v) => v > 0) || rx.some(Number.isFinite);
+  const handSpeeds = (hasPalm ? speeds : segmentSpeeds(frames, startIdx, endIdx, true))
+    .map((v) => v / norm);
   const handPower = tremorBandPower(handSpeeds, fps);
-  const { px, py } = palmSeries(frames, startIdx, endIdx);
-  const peakHz = peakHzFromPalm(px, py, fps);
-  const absRmsPx = tremorBandAbsRmsPx(px, py, fps, frameW, frameH);
+  const peakHz = peakHzFromPalm(rx, ry, fps);
+  const absRmsPx = tremorBandAbsRmsPx(rx, ry, fps, frameW, frameH);
 
   const out = gatedTremorOut(handPower, peakHz, absRmsPx, sw);
 
@@ -327,13 +335,14 @@ export function computeLiveTremorPower(frames, fps, startIdx, currentIdx, should
   if (!frames?.length || currentIdx < startIdx) return null;
   const endIdx = Math.min(currentIdx, frames.length - 1);
   const sw = shoulderWidthPx > 0 ? shoulderWidthPx : 1;
-  const speeds = segmentSpeeds(frames, startIdx, endIdx, true).map((v) => v / sw);
-  const power = tremorBandPower(speeds, fps);
-  const { px, py } = palmSeries(frames, startIdx, endIdx);
-  const peakHz = peakHzFromPalm(px, py, fps);
+  const { speeds, rx, ry } = tremorFromStraightnessPath(frames, startIdx, endIdx, fps);
+  const hasPalm = speeds.some((v) => v > 0) || rx.some(Number.isFinite);
+  const speedSrc = hasPalm ? speeds : segmentSpeeds(frames, startIdx, endIdx, true);
+  const power = tremorBandPower(speedSrc.map((v) => v / sw), fps);
+  const peakHz = peakHzFromPalm(rx, ry, fps);
   const frameW = Number(overlayData?.frame_width_px) || 0;
   const frameH = Number(overlayData?.frame_height_px) || 0;
-  const absRmsPx = tremorBandAbsRmsPx(px, py, fps, frameW, frameH);
+  const absRmsPx = tremorBandAbsRmsPx(rx, ry, fps, frameW, frameH);
   return gatedTremorOut(power, peakHz, absRmsPx, shoulderWidthPx);
 }
 
@@ -346,7 +355,7 @@ export function computeAdlTremorFromOverlay(overlayData) {
   });
 }
 
-/** Prefer backend metric when within tolerance; else client recompute. Always apply the noise floor. */
+/** Prefer overlay palm-path tremor (same path as straightness). Backend fills gaps only. Always apply the noise floor. */
 export function resolveTremorMetrics(overlayData) {
   const backend = overlayData?.metrics || {};
   const computed = computeTremorFromOverlay(overlayData);
@@ -373,10 +382,12 @@ export function resolveTremorMetrics(overlayData) {
     return out[key] ?? null;
   };
 
-  out.tremor_8_12hz_power = pick("tremor_8_12hz_power");
-  out.hand_speed_tremor_8_12hz_power = pick("hand_speed_tremor_8_12hz_power") ?? out.tremor_8_12hz_power;
-  out.tremor_index = pick("tremor_index") ?? tremorIndexFromPower(out.tremor_8_12hz_power);
-  out.tremor_peak_freq_hz = pick("tremor_peak_freq_hz") ?? out.tremor_peak_freq_hz ?? null;
+  out.tremor_8_12hz_power = computed?.tremor_8_12hz_power ?? pick("tremor_8_12hz_power");
+  out.hand_speed_tremor_8_12hz_power = computed?.hand_speed_tremor_8_12hz_power
+    ?? pick("hand_speed_tremor_8_12hz_power")
+    ?? out.tremor_8_12hz_power;
+  out.tremor_index = computed?.tremor_index ?? pick("tremor_index") ?? tremorIndexFromPower(out.tremor_8_12hz_power);
+  out.tremor_peak_freq_hz = computed?.tremor_peak_freq_hz ?? pick("tremor_peak_freq_hz") ?? out.tremor_peak_freq_hz ?? null;
   out.index_tremor_8_12hz_power = pick("index_tremor_8_12hz_power");
   out.elbow_tremor_8_12hz_power = pick("elbow_tremor_8_12hz_power");
 
@@ -486,29 +497,21 @@ export function zeroCrossingHz(y, fs) {
 
 /**
  * Precompute camera 8–12 Hz residuals from overlay frames (no IMU).
- * `bandSpeed` is the same channel the panel FFT uses (`speed_tremor` / speed).
+ * `bandSpeed` is the palm-path speed the panel FFT uses (same samples as straightness).
  */
 export function buildTremorCameraTrack(overlayData) {
   const frames = overlayData?.frames;
   if (!frames?.length || frames.length < 16) return null;
   const fps = overlayData.fps || 60;
   const n = frames.length;
-  const px = new Array(n);
-  const py = new Array(n);
-  const spd = new Array(n);
-  for (let i = 0; i < n; i += 1) {
-    const p = frames[i]?.palm;
-    px[i] = p && Number.isFinite(Number(p[0])) ? Number(p[0]) : 0;
-    py[i] = p && Number.isFinite(Number(p[1])) ? Number(p[1]) : 0;
-    let s = frames[i]?.speed_tremor;
-    if (s == null || Number.isNaN(Number(s))) s = frames[i]?.speed ?? 0;
-    spd[i] = Number(s) || 0;
-  }
+  const stats = overlayPalmPathStats(frames, 0, n - 1);
+  const { rx, ry } = overlayPalmChordResidual(stats.px, stats.py);
+  const spd = overlayPalmPathSpeeds(stats.px, stats.py, fps);
   return {
     fps,
     n,
-    dx: bandpassZeroPhase(px, fps),
-    dy: bandpassZeroPhase(py, fps),
+    dx: bandpassZeroPhase(fillShortNanGaps(rx), fps),
+    dy: bandpassZeroPhase(fillShortNanGaps(ry), fps),
     speed: spd,
     bandSpeed: bandpassZeroPhase(spd, fps),
   };
