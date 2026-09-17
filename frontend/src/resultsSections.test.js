@@ -10,7 +10,6 @@ test("results UI no longer includes the Movement quality & joint specs section",
 });
 
 test("the study results table and later result cards stay in place", () => {
-  expect(appSrc).toContain("Task phases");
+  expect(appSrc).not.toMatch(/Task phases\s*&(?:amp;)?\s*variables/i);
   expect(appSrc).toContain("Combined Velocity Profile");
-  expect(appSrc).toContain("formatProfileValue");
 });

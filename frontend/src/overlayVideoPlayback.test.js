@@ -2,6 +2,8 @@ import {
   OVERLAY_VIDEO_PRELOAD,
   enqueueOverlayVideoAttach,
   getOverlayFrameState,
+  blendOverlayLandmark,
+  overlayLandmarkAt,
   isAppleTouchVideo,
   overlayLivePaintFromCurrentTime,
   overlayNeedsRafUntilFirstVfcPaint,
@@ -123,6 +125,30 @@ test("32.82 backup clock maps video fraction onto overlay span so long PRE canno
   const short = [];
   for (let i = 0; i <= 288; i += 1) short.push({ time: i / 10 });
   expect(getOverlayFrameState(short, 10, 15, 30).idx).toBe(144);
+});
+
+test("centripetal Catmull-Rom hits stored samples and stays between neighbors", () => {
+  const p0 = [0, 0];
+  const p1 = [0, 0];
+  const p2 = [10, 0];
+  const p3 = [10, 0];
+  expect(blendOverlayLandmark(p0, p1, p2, p3, 0)).toEqual(p1);
+  expect(blendOverlayLandmark(p0, p1, p2, p3, 1)).toEqual(p2);
+  const mid = blendOverlayLandmark(p0, p1, p2, p3, 0.5);
+  expect(mid[0]).toBeGreaterThan(4);
+  expect(mid[0]).toBeLessThan(6);
+  expect(mid[1]).toBeCloseTo(0, 8);
+  const frames = [
+    { palm: [0, 0] },
+    { palm: [2, 0] },
+    { palm: [8, 0] },
+    { palm: [10, 0] },
+  ];
+  const atSample = overlayLandmarkAt(frames, 1, 0, "palm");
+  expect(atSample[0]).toBeCloseTo(2, 8);
+  const between = overlayLandmarkAt(frames, 1, 0.5, "palm");
+  expect(between[0]).toBeGreaterThan(2);
+  expect(between[0]).toBeLessThan(8);
 });
 
 test("duration mismatch ignores small iOS drift and flags a baked-clip swap", () => {

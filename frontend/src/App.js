@@ -84,12 +84,9 @@ import {
   isPanelTableKey,
 } from "./kinMetrics";
 import { inferWmftFromKinematics, applyWmftInference } from "./wmftInference";
-import { formatProfileValue } from "./movementProfile";
 import {
   CLINICAL_MOVEMENT_TASKS,
   CLINICAL_DOMAIN_LABELS,
-  TASK_PHASE_METRIC_KEYS,
-  TASK_PHASE_NOTES,
   clinicalTaskById,
   clinicalTaskDomain,
   clinicalTasksForDomain,
@@ -5028,7 +5025,15 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     }
     const val = getMetricValue(phase, key);
     const formatKey = key === "peak_velocity_panel" ? "peak_velocity_cm_s" : key;
-    if (isPanelTableKey(formatKey) || formatKey === "pause_stops_panel") {
+    if (
+      isPanelTableKey(formatKey)
+      || formatKey === "pause_stops_panel"
+      || formatKey === "nvp_reach"
+      || formatKey === "nvp_drink"
+      || formatKey === "nvp_transport"
+      || formatKey === "nvp_return"
+      || formatKey === "nvp_total"
+    ) {
       const raw = val === KIN_EMPTY ? null : val;
       return formatPanelAlignedKinValue(formatKey, raw, om);
     }
@@ -5039,11 +5044,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   const KIN_TIPS = {
     task_complete: "Did the patient finish the expected phases (reach, lift/transport, return)? Higher = completed.",
     task_completion_ratio: "Share of expected task phases detected. Compare this before full-task smoothness.",
-    nvp_reach: "Same as the NVP chip on the validation-video panel (peaks counted up to movement-window end).",
+    nvp_reach: "Velocity peaks on the reach window (onset → reach end). Same peak_frames as the overlay dots, not peaks before onset.",
     nvp_drink: "Velocity peaks while lifting the cup from the table to the highest point achieved.",
     nvp_transport: "Velocity peaks during the transport / drink-lift phase (same as NVP drink for drink task).",
     nvp_return: "Velocity peaks while returning the cup/hand to the table.",
-    nvp_total: "Sum of NVP across reach + drink/transport + return phases.",
+    nvp_total: "Unique velocity peaks across reach + drink/transport + return. Never less than any phase NVP.",
     drink_lift_height_cm: "How high the palm rose during drink (table → peak), in cm using the 85 cm table width scale. Higher = greater lift.",
     lift_height_cm: "Peak vertical lift during transport, in cm (85 cm table scale).",
     drink_lift_height_sw: "Drink lift height in shoulder-width units (secondary / normalized).",
@@ -5055,8 +5060,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     grasp_dwell_sec: "Terminal low-speed time at the end of reach (cup grasp fixation). Functional — not counted as path pause.",
     functional_hold_sec: "Grasp dwell + mouth/face hold during transport. Functional time, not path pause.",
     pause_time_sec_total: "All low-speed time including grasp/mouth dwell (exploratory).",
-    nvp: "NVP on the validation-video panel (peaks up to movement end). Same number as the NVP chip on the overlay.",
-    nvp_reach: "Same as the NVP chip on the validation-video panel (peaks up to movement-window end).",
+    nvp: "NVP on the validation-video panel (peaks from movement onset through the current/window end). Same number as the NVP chip on the overlay.",
+    nvp_reach: "Velocity peaks on the reach window from the same peak_frames as the overlay. Total NVP cannot be lower than this.",
     straightness: "Path straightness from the validation-video panel (same formula and 2 decimals).",
     pause_time_sec: "Pause time from the validation-video panel: every frame below 5% of peak hand speed (no min-run / dwell split).",
     number_of_stops: "Stops from the validation-video panel: speed threshold crossings (same as Pause / stops).",
@@ -5818,65 +5823,6 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                 )}
               </tbody>
             </table>
-          </div>
-        </Glass>
-      )}
-
-      {showResultsTable && activeResultPhases.some((ph) => (kinematicsResults[ph.k]?.task_phases || []).length > 0) && (
-        <Glass className="p-4 sm:p-5">
-          <p className="text-sm font-extrabold text-white/80 mb-1">Task phases &amp; variables</p>
-          <p className="text-[11px] text-white/45 mb-4">
-            Per-phase kinematics from detected movement bouts (reach, transport, return). Study table above still uses the primary reach window for Pre/Post/Healthy comparison.
-          </p>
-          <div className="space-y-5">
-            {activeResultPhases.map((ph) => {
-              const phases = kinematicsResults[ph.k]?.task_phases || [];
-              if (!phases.length) return null;
-              const taskLabel = kinematicsResults[ph.k]?.clinical_task_label || clinicalTaskById(kinematicsResults[ph.k]?.clinical_task).label;
-              return (
-                <div key={ph.k} className={`rounded-xl border p-3 sm:p-4 ${phaseValueCls(ph.c)}`}>
-                  <p className={`text-xs font-extrabold uppercase mb-1 ${phaseLabelCls(ph.c)}`}>{ph.l}</p>
-                  <p className="text-[11px] text-white/55 mb-3">{taskLabel}</p>
-                  {phases.map((tp) => (
-                    <div key={`${ph.k}-${tp.id}`} className="mb-4 last:mb-0">
-                      <p className="text-[11px] font-bold text-white/75 mb-2">
-                        {tp.label}
-                        {tp.duration_sec != null ? (
-                          <span className="text-white/40 font-normal ml-2">{tp.duration_sec}s</span>
-                        ) : null}
-                        {tp.task_window?.rom != null ? (
-                          <span className="text-white/40 font-normal ml-2">ROM {tp.task_window.rom}</span>
-                        ) : null}
-                        {tp.expected_rom_ok === true ? (
-                          <span className="text-emerald-400/80 font-normal ml-2">within expected ROM</span>
-                        ) : null}
-                        {tp.expected_rom_ok === false ? (
-                          <span className="text-amber-300/80 font-normal ml-2">ROM outside expected range</span>
-                        ) : null}
-                      </p>
-                      {TASK_PHASE_NOTES[tp.id] ? (
-                        <p className="text-[10px] text-white/50 mb-2 leading-snug">{TASK_PHASE_NOTES[tp.id]}</p>
-                      ) : null}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                        {TASK_PHASE_METRIC_KEYS.map((mk) => {
-                          const val = tp.metrics?.[mk.key];
-                          if (val == null) return null;
-                          return (
-                            <div key={mk.key} className="rounded-lg border border-white/[0.06] bg-black/20 px-2 py-1.5">
-                              <p className="text-[9px] text-white/45">{mk.label}</p>
-                              <p className="text-xs font-mono font-bold text-white/90">
-                                {formatProfileValue(mk.key, val)}
-                                {mk.unit ? <span className="text-[9px] text-white/35 ml-0.5">{mk.unit}</span> : null}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
           </div>
         </Glass>
       )}
