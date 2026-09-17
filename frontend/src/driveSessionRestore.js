@@ -47,6 +47,20 @@ export function shouldWaitForPatientsBeforeRecall(patients, opts = {}) {
   return Number.isFinite(waited) ? waited < maxWait : true;
 }
 
+export function preferPatientInRecallList(list, preferredKey) {
+  const key = String(preferredKey || "").trim();
+  if (!key) return Array.isArray(list) ? list : [];
+  const rows = Array.isArray(list) ? list : [];
+  const hit = [];
+  const rest = [];
+  rows.forEach((p) => {
+    const k = patientDriveKeyFromDemographics(p?.demographics, p?._id);
+    if (k === key) hit.push(p);
+    else rest.push(p);
+  });
+  return hit.length ? [...hit, ...rest] : rows;
+}
+
 export function recallPoolSize(opts = {}) {
   const standalone = opts.standalone === true || isStandaloneDisplay();
   return standalone ? 1 : 2;

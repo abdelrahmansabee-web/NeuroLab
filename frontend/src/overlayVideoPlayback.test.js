@@ -4,6 +4,7 @@ import {
   getOverlayFrameState,
   isAppleTouchVideo,
   overlayLivePaintFromCurrentTime,
+  overlayNeedsRafUntilFirstVfcPaint,
   overlayPlaybackPaintStalled,
   overlayPlayerMountDelayMs,
   overlaySourceLooksMismatched,
@@ -52,6 +53,27 @@ test("live playback with RVFC does not paint from lagging currentTime", () => {
     useVideoFrameCallback: false,
     rafFallback: false,
   })).toBe(true);
+});
+
+test("first play after recall uses RAF until RVFC paints", () => {
+  expect(overlayNeedsRafUntilFirstVfcPaint({
+    playing: true,
+    useVideoFrameCallback: true,
+    lastPaintMediaTime: -1,
+    currentTime: 0,
+  })).toBe(false);
+  expect(overlayNeedsRafUntilFirstVfcPaint({
+    playing: true,
+    useVideoFrameCallback: true,
+    lastPaintMediaTime: -1,
+    currentTime: 0.2,
+  })).toBe(true);
+  expect(overlayNeedsRafUntilFirstVfcPaint({
+    playing: true,
+    useVideoFrameCallback: true,
+    lastPaintMediaTime: 0.2,
+    currentTime: 0.4,
+  })).toBe(false);
 });
 
 test("iOS currentTime behind mediaTime is not a stalled overlay paint", () => {

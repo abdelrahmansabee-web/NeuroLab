@@ -57,6 +57,7 @@ import {
   isAppleTouchVideo,
   overlayBakeFreeEventName,
   overlayLivePaintFromCurrentTime,
+  overlayNeedsRafUntilFirstVfcPaint,
   overlayPlaybackPaintStalled,
   overlaySourceLooksMismatched,
   overlayVideoLooksStalled,
@@ -2094,6 +2095,7 @@ export function ValidationOverlayPlayer({
     const onVideoFrame = (_now, metadata) => {
       const t = metadata?.mediaTime ?? video.currentTime ?? 0;
       runPaint(t);
+      if (rafActive) stopRafLoop();
       if (!video.paused && useVfc) {
         vfcIdRef.current = video.requestVideoFrameCallback(onVideoFrame);
       }
@@ -2208,6 +2210,15 @@ export function ValidationOverlayPlayer({
 
     const watchdogId = window.setInterval(() => {
       if (video.paused || video.ended) return;
+      if (overlayNeedsRafUntilFirstVfcPaint({
+        playing: true,
+        useVideoFrameCallback: useVfc,
+        lastPaintMediaTime: lastPaintMediaTimeRef.current,
+        currentTime: video.currentTime,
+      })) {
+        startRafLoop(true);
+        return;
+      }
       if (useVfc && vfcIdRef.current && lastPaintMediaTimeRef.current < 0) return;
       if (overlayPlaybackPaintStalled({
         currentTime: video.currentTime,

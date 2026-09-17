@@ -7,6 +7,7 @@ import {
   shouldReuseRecentRecall,
   shouldWaitForPatientsBeforeRecall,
   coalesceRecallPatients,
+  preferPatientInRecallList,
   summarizeRecallRows,
 } from "./driveSessionRestore";
 
@@ -156,6 +157,13 @@ describe("driveSessionRestore", () => {
   test("home screen recalls one patient at a time", () => {
     expect(recallPoolSize({ standalone: true })).toBe(1);
     expect(recallPoolSize({ standalone: false })).toBe(2);
+  });
+
+  test("open patient is recalled before the rest of the list", () => {
+    const rows = [patient({ id: "101" }), patient({ id: "115", name: "Bea" }), patient({ id: "108" })];
+    const ordered = preferPatientInRecallList(rows, "115_Bea");
+    expect(ordered[0].demographics.participantId).toBe("115");
+    expect(ordered.map((p) => p.demographics.participantId)).toEqual(["115", "101", "108"]);
   });
 
   test("empty home-screen recall pulls the server patient list", async () => {

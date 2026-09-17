@@ -64,6 +64,7 @@ import {
   recallAnalyzedSessionsFromDrive,
   coalesceRecallPatients,
   isDriveRecallRunning,
+  preferPatientInRecallList,
 } from "./driveSessionRestore";
 import {
   analysisResultErrorMessage,
@@ -829,6 +830,12 @@ function startDriveSessionRecall(patients, { showToast, force = false, allowRepe
         emitRecallChipDone();
         return null;
       }
+      let prefer = "";
+      try {
+        const fd = JSON.parse(localStorage.getItem("neuro_fd_data") || "{}");
+        prefer = patientDriveKeyFromDemographics(fd?.demographics, fd?._loadedId);
+      } catch { /* ignore */ }
+      list = preferPatientInRecallList(list, prefer);
       driveRecallThisVisit = true;
       return await recallAnalyzedSessionsFromDrive(list, {
         force,
@@ -4357,12 +4364,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         if (!result) continue;
         const hasOverlay = Boolean(overlayData[ph.k]?.frames?.length);
         const hasOriginal = Boolean(originalVideoBlobsRef.current[ph.k]);
-        const hasUnified = Boolean(videoBlobsRef.current[ph.k]);
-        if (hasOverlay && hasOriginal && hasUnified) continue;
+        if (hasOverlay && hasOriginal) continue;
         const merged = await hydrateValidationFromCloud(ph.k, {
           overlay: !hasOverlay,
           original: !hasOriginal,
-          unified: !hasUnified,
+          unified: false,
           kinematics: !result.csv_filename,
         });
         if (cancelled) break;
@@ -4384,7 +4390,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         hydrateValidationFromCloud(ph.k, {
           overlay: true,
           original: true,
-          unified: true,
+          unified: false,
           kinematics: true,
         }).catch(() => {});
       });
