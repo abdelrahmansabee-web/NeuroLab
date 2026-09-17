@@ -57,7 +57,7 @@ test("table snapshot uses panel formulas at movement-window end, not server metr
   expect(panel).not.toBeNull();
   expect(table.nvp).toBe(panel.nvp);
   expect(table.nvp).toBe(2);
-  expect(table.nvp_reach).toBe(2);
+  expect(table.nvp_reach).toBeUndefined();
   expect(table.straightness).toBeCloseTo(panel.straightness, 8);
   expect(table.pause_time_sec).toBeCloseTo(panel.pauseTime, 8);
   expect(table.number_of_stops).toBe(panel.stops);
