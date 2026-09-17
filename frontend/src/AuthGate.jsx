@@ -6,6 +6,7 @@ const BUTTON = "w-full rounded-lg px-4 py-3 text-sm font-medium text-white bg-wh
 const LINK = "text-xs text-white/50 hover:text-white/80 transition";
 
 const AUTH_TOKEN_KEY = "neurolab_token";
+export const RAED_LAST_EMAIL_KEY = "raed_last_email";
 
 export function getAuthToken() {
   try { return localStorage.getItem(AUTH_TOKEN_KEY); } catch { return null; }
@@ -13,6 +14,16 @@ export function getAuthToken() {
 
 export function clearAuthToken() {
   try { localStorage.removeItem(AUTH_TOKEN_KEY); } catch {}
+}
+
+export function rememberLoginEmail(email) {
+  const cleaned = String(email || "").trim().toLowerCase();
+  if (!cleaned) return;
+  try { localStorage.setItem(RAED_LAST_EMAIL_KEY, cleaned); } catch {}
+}
+
+export function readRememberedEmail() {
+  try { return localStorage.getItem(RAED_LAST_EMAIL_KEY) || ""; } catch { return ""; }
 }
 
 export function authHeaders() {
@@ -38,7 +49,7 @@ export default function AuthGate({ children }) {
   const [state, setState] = useState("loading");
   const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => readRememberedEmail());
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -53,6 +64,8 @@ export default function AuthGate({ children }) {
         throw new Error("not authenticated");
       })
       .then((data) => {
+        const remembered = data?.last_login_email || data?.email;
+        if (remembered) rememberLoginEmail(remembered);
         if (data?.token) {
           try { localStorage.setItem(AUTH_TOKEN_KEY, data.token); } catch {}
         }
@@ -116,7 +129,9 @@ export default function AuthGate({ children }) {
         try { localStorage.setItem(AUTH_TOKEN_KEY, data.token); } catch {}
         await plantAuthCookie(data.token);
       }
-      if (mode === "login") {
+      const loginEmail = data?.user?.last_login_email || data?.user?.email || body.email;
+      if (loginEmail && (mode === "login" || (mode === "register" && data.token))) {
+        rememberLoginEmail(loginEmail);
         try { localStorage.setItem("raed_origin_restore_pending", "1"); } catch {}
       }
       if (mode === "reset") {
@@ -264,7 +279,7 @@ export default function AuthGate({ children }) {
         )}
 
         <p className="text-xs text-white/40 mt-4 text-center">
-          Patient data is linked to your account and backed up to your Google Drive automatically.
+          Patient data is linked to this email and backed up to Google Drive automatically.
         </p>
       </form>
     </div>

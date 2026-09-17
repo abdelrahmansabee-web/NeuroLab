@@ -6,6 +6,7 @@
 import { authHeaders } from "./AuthGate";
 import { blobToBase64 } from "./downloadUtils";
 import { driveNameCandidates as identityDriveNameCandidates } from "./driveDocIdentity";
+import { validationDriveUploadPlan } from "./validationDriveProtocol";
 
 const DRIVE_FILE_MAX_BYTES = 32 * 1024 * 1024;
 const LARGE_UPLOAD_BYTES = 28 * 1024 * 1024;
@@ -142,21 +143,22 @@ export async function backupDriveArtifact(patientKey, name, blob, subfolder = "v
 
 export async function backupValidationArtifactsToDrive(patientKey, phase, record = {}) {
   if (!patientKey || !phase) return;
+  const plan = validationDriveUploadPlan(record);
   const tasks = [];
 
-  if (record.overlay?.frames?.length) {
+  if (plan.overlay) {
     const overlayBlob = new Blob([JSON.stringify(record.overlay)], { type: "application/json" });
     tasks.push(backupDriveArtifact(patientKey, validationOverlayDriveName(phase), overlayBlob, "data"));
   }
 
-  if (record.kinematicsSnapshot && typeof record.kinematicsSnapshot === "object") {
+  if (plan.kinematics) {
     const kinBlob = new Blob([JSON.stringify(record.kinematicsSnapshot)], {
       type: "application/json",
     });
     tasks.push(backupDriveArtifact(patientKey, validationKinematicsDriveName(phase), kinBlob, "data"));
   }
 
-  if (record.originalVideoBlob instanceof Blob && record.originalVideoBlob.size > 0) {
+  if (plan.original) {
     tasks.push(
       backupDriveArtifact(
         patientKey,
@@ -167,7 +169,9 @@ export async function backupValidationArtifactsToDrive(patientKey, phase, record
     );
   }
 
-  if (record.unifiedVideoBlob instanceof Blob && record.unifiedVideoBlob.size > 0) {
+  // On-screen validation is original + overlay canvas. Never upload a re-encoded bake
+  // as *_validation.mp4 (webm-named-mp4 cannot play on Safari / Home Screen).
+  if (plan.unified) {
     tasks.push(
       backupDriveArtifact(
         patientKey,

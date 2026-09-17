@@ -72,6 +72,31 @@ describe("validationDriveSync upload protocol", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/auth/backup-file");
     expect(fetchMock.mock.calls[0][1].headers["Content-Type"]).toBe("application/json");
   });
+
+  test("MediaRecorder bake is not uploaded as *_validation.mp4", async () => {
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true }),
+    }));
+    const prevFetch = global.fetch;
+    global.fetch = fetchMock;
+    const original = new Blob([new Uint8Array([1, 2, 3, 4])], { type: "video/mp4" });
+    const bake = new Blob([new Uint8Array([9, 9, 9])], { type: "video/webm" });
+    await backupValidationArtifactsToDrive("101_Ada", "pre", {
+      originalVideoBlob: original,
+      unifiedVideoBlob: bake,
+      overlay: { frames: [{ t: 0 }] },
+    });
+    global.fetch = prevFetch;
+    const names = fetchMock.mock.calls.map((call) => {
+      const body = call[1]?.body;
+      if (body instanceof FormData) return body.get("name");
+      try { return JSON.parse(call[1].body).name; } catch { return ""; }
+    });
+    expect(names).toContain("pre_validation_original.mp4");
+    expect(names).toContain("pre_validation_overlay.json");
+    expect(names).not.toContain("pre_validation.mp4");
+  });
 });
 
 describe("local IDB originals must be copied to Drive", () => {

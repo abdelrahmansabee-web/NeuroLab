@@ -57,17 +57,25 @@ import {
   backupDriveArtifact,
   backupValidationArtifactsToDrive,
   restoreValidationArtifactsFromDrive,
-  validationUnifiedDriveName,
+  validationOriginalDriveName,
 } from "./validationDriveSync";
+import {
+  connectDriveHref,
+  mergeSeenValidationRecord,
+  pickOriginalVideoBlob,
+} from "./validationDriveProtocol";
 import { canonicalDriveName, clinicReportDriveName } from "./driveDocIdentity";
 import {
   DRIVE_RECALL_EVENT,
+  EMPTY_RECALL_WAIT_MS,
   formatRecallToast,
   recallAnalyzedSessionsFromDrive,
   coalesceRecallPatients,
   isDriveRecallRunning,
   preferPatientInRecallList,
+  readLastDriveRecall,
   shouldDeferBootRecallUntilEmailRestore,
+  shouldRetryEmptyBootRecall,
 } from "./driveSessionRestore";
 import {
   analysisResultErrorMessage,
@@ -135,8 +143,21 @@ function isStandalonePWA() {
 const RAED_APP_ORIGIN = "https://abdelrahmansabee-raedai.hf.space";
 
 /** Google OAuth cannot finish inside the huggingface.co Spaces iframe. */
-function openConnectDrive() {
-  const dest = `${RAED_APP_ORIGIN}/connect-drive`;
+async function openConnectDrive() {
+  let dest = `${RAED_APP_ORIGIN}/connect-drive`;
+  try {
+    const r = await fetch("/auth/drive/connect-cookie", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: authHeaders(),
+    });
+    if (r.ok) {
+      const body = await r.json().catch(() => ({}));
+      if (body.connectPath) dest = connectDriveHref(RAED_APP_ORIGIN, body.connectPath);
+    }
+  } catch {
+    /* still open the Connect Drive page */
+  }
   try {
     if (window.top && window.top !== window.self) {
       window.top.location.href = dest;
@@ -147,7 +168,14 @@ function openConnectDrive() {
     window.location.href = dest;
     return;
   }
-  window.location.href = "/connect-drive";
+  try {
+    const u = new URL(dest, window.location.origin);
+    if (u.origin === window.location.origin) {
+      window.location.href = `${u.pathname}${u.search}`;
+      return;
+    }
+  } catch { /* ignore */ }
+  window.location.href = dest;
 }
 
 /** iPad / iPhone / coarse pointer ? lighter glass & no Framer tap springs. */
@@ -3899,16 +3927,29 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     try {
       const existing = await loadValidationSessionArtifact(patientCacheKey, phase);
       const snap = partial.kinematicsSnapshot ?? kinematicsResults[phase];
-      const record = {
-        patientKey: patientCacheKey,
-        phase,
+      const liveFile = data?.[`video_${phase}_file`];
+      const merged = mergeSeenValidationRecord(existing, {
+        ...partial,
         csvFilename: partial.csvFilename ?? existing?.csvFilename ?? snap?.csv_filename,
         videoFilename: partial.videoFilename ?? existing?.videoFilename ?? snap?.video_filename,
-        unifiedVideoFilename:
-          partial.unifiedVideoFilename ?? existing?.unifiedVideoFilename ?? snap?.unified_validation_video,
         overlay: partial.overlay ?? existing?.overlay,
         originalVideoBlob: partial.originalVideoBlob ?? existing?.originalVideoBlob,
         unifiedVideoBlob: partial.unifiedVideoBlob ?? existing?.unifiedVideoBlob,
+        kinematicsSnapshot: snap ? stripKinPhaseForSync(snap) : existing?.kinematicsSnapshot,
+      }, liveFile);
+      const original = pickOriginalVideoBlob(merged.originalVideoBlob);
+      const record = {
+        patientKey: patientCacheKey,
+        phase,
+        csvFilename: merged.csvFilename,
+        videoFilename: merged.videoFilename,
+        unifiedVideoFilename:
+          partial.unifiedVideoFilename ?? existing?.unifiedVideoFilename ?? snap?.unified_validation_video,
+        overlay: merged.overlay,
+        originalVideoBlob: original
+          ? playbackVideoBlob(original, merged.videoFilename || original.name || validationOriginalDriveName(phase))
+          : merged.originalVideoBlob,
+        unifiedVideoBlob: merged.unifiedVideoBlob,
         compositedOverlay:
           partial.compositedOverlay != null
             ? Boolean(partial.compositedOverlay)
@@ -3917,7 +3958,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
           partial.compositedOverlayQuality != null
             ? Number(partial.compositedOverlayQuality)
             : Number(existing?.compositedOverlayQuality || 0),
-        kinematicsSnapshot: snap ? stripKinPhaseForSync(snap) : existing?.kinematicsSnapshot,
+        kinematicsSnapshot: merged.kinematicsSnapshot,
         savedAt: Date.now(),
       };
       await saveValidationSessionArtifact(record);
@@ -3927,7 +3968,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     } catch (err) {
       console.warn("persistValidationPhase failed:", err);
     }
-  }, [patientCacheKey, kinematicsResults]);
+  }, [patientCacheKey, kinematicsResults, data]);
 
   const hydrateValidationFromCloud = useCallback(async (phase, needs = {}) => {
     if (!patientCacheKey) return null;
@@ -4207,7 +4248,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         });
       }
       setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
-      persistValidationPhase(phase, { csvFilename, overlay, kinematicsSnapshot: phaseResult });
+      persistValidationPhase(phase, { csvFilename, overlay, kinematicsSnapshot: phaseResult, originalVideoBlob: data?.[`video_${phase}_file`] });
       return { overlay, metrics };
     } catch (err) {
       let cachedOverlay = null;
@@ -4347,6 +4388,13 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     const fileLower = file?.name?.toLowerCase() || "";
     const fileIsCsv = fileLower.endsWith(".csv");
     const browserNative = isBrowserNativeOverlayVideoName(file?.name);
+    const liveOriginal = file && !fileIsCsv && browserNative ? file : null;
+    if (liveOriginal) {
+      persistValidationPhase(phase, {
+        videoFilename: serverFilename || file.name,
+        originalVideoBlob: liveOriginal,
+      });
+    }
 
     // Keep the live iPad file if it already plays. Force-fetch after Analyze
     // revoked that URL, then IDB/server often left PRE at 0:00/0:00.
@@ -4356,7 +4404,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       if (originalVideoBlobsRef.current[phase]) return true;
     }
     if (originalVideoBlobsRef.current[phase]) return true;
-    if (file && !fileIsCsv && browserNative) {
+    if (liveOriginal) {
       const objectUrl = URL.createObjectURL(file);
       setOriginalVideoBlobs((prev) => {
         if (prev[phase]) {
@@ -4374,7 +4422,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       return Boolean(originalVideoBlobsRef.current[phase]);
     }
     return false;
-  }, [loadOriginalVideoBlob]);
+  }, [loadOriginalVideoBlob, persistValidationPhase]);
 
   // Auto-restore program truth (overlay + original + kinematics) and Drive view-copy from cloud/IDB.
   useEffect(() => {
@@ -4405,6 +4453,15 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     })();
     return () => { cancelled = true; };
   }, [patientCacheKey, kinematicsResults, overlayData, hydrateValidationFromCloud]);
+
+  useEffect(() => {
+    if (!patientCacheKey) return;
+    ["pre", "post", "baseline"].forEach((phase) => {
+      persistValidationPhase(phase, {});
+    });
+    // Flush original+overlay to Drive when ID/name first exist or the folder key changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientCacheKey]);
 
   useEffect(() => {
     if (!patientCacheKey) return undefined;
@@ -4750,13 +4807,6 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
               : new Blob([blob], { type: "video/mp4" });
           await downloadBlob(typed, baseName || "validation.mp4");
           showToast("Validation video downloaded", "success");
-          const patientKey = patientDriveKeyFromDemographics(demographics);
-          const driveName = canonicalDriveName(baseName, patientKey) || validationUnifiedDriveName(phase, typed);
-          scheduleDriveFileBackup(driveName, typed, {
-            patientKey,
-            subfolder: "videos",
-            force: true,
-          });
         } catch (err) {
           console.error("Download from blob error:", err);
           showToast("Failed to download validation video", "error");
@@ -4778,13 +4828,6 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
             : new Blob([blob], { type: "video/mp4" });
         await downloadBlob(typed, baseName || "validation.mp4");
         showToast("Validation video downloaded", "success");
-        const patientKey = patientDriveKeyFromDemographics(demographics);
-        const driveName = canonicalDriveName(baseName, patientKey) || validationUnifiedDriveName(phase, typed);
-        scheduleDriveFileBackup(driveName, typed, {
-          patientKey,
-          subfolder: "videos",
-          force: true,
-        });
       } catch (err) {
         console.error("Download error:", err);
         showToast("Failed to download validation video", "error");
@@ -5497,24 +5540,9 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                         if (!blob || !(blob instanceof Blob) || blob.size < 1000) return;
                         setDriveBakeDone((prev) => ({ ...prev, [ph.k]: true }));
                         persistValidationPhase(ph.k, {
-                          unifiedVideoBlob: blob,
-                          compositedOverlay: true,
-                          compositedOverlayQuality: 2,
                           kinematicsSnapshot: kinematicsResults[ph.k],
                         });
-                        const patientKey = patientDriveKeyFromDemographics(demographics);
-                        if (!patientKey) {
-                          if (!driveBakeToastRef.current[`${ph.k}-nopatient`]) {
-                            driveBakeToastRef.current[`${ph.k}-nopatient`] = true;
-                            showToast("Validation ready — set patient ID/name to auto-save on Drive", "info");
-                          }
-                          return;
-                        }
-                        // persistValidationPhase already uploads original+overlay+kinematics+view-copy (multipart OK).
-                        if (!driveBakeToastRef.current[ph.k]) {
-                          driveBakeToastRef.current[ph.k] = true;
-                          showToast(`${ph.l}: screen recording saved to patient Drive`, "success");
-                        }
+                        // Drive stores original + overlay (what the eye sees). Do not upload this bake.
                       }}
                       onError={(msg) => showToast(msg || `${ph.l} overlay error`, "error")}
                     />
@@ -9030,7 +9058,13 @@ export default function App() {
         allowRepeat: justConnected,
       });
     };
-    const t = setTimeout(run, justConnected ? 600 : isStandalonePWA() ? 400 : 2800);
+    const bootMs = justConnected ? 600 : isStandalonePWA() ? 400 : 2800;
+    const t = setTimeout(run, bootMs);
+    const retry = setTimeout(() => {
+      if (cancelled || isKinAnalyzeActive()) return;
+      if (!shouldRetryEmptyBootRecall(readLastDriveRecall(), { running: isDriveRecallRunning() })) return;
+      startDriveSessionRecall(loadPatients(), { showToast, force: true, allowRepeat: true });
+    }, bootMs + EMPTY_RECALL_WAIT_MS);
     const onSynced = (ev) => {
       if (ev?.detail?.skipDriveRecall) return;
       if (cancelled || isKinAnalyzeActive()) return;
@@ -9040,6 +9074,7 @@ export default function App() {
     return () => {
       cancelled = true;
       clearTimeout(t);
+      clearTimeout(retry);
       window.removeEventListener(PATIENTS_SYNC_EVENT, onSynced);
     };
   }, [showToast]);
