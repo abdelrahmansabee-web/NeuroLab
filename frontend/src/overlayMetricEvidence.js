@@ -13,7 +13,7 @@ export function localTremorEnvelopeAt(overlayData, idx) {
   return Number.isFinite(v) ? Math.max(0, v) : null;
 }
 
-/** Short-window RMS of demeaned speed_tremor (fallback when no envelope). */
+/** Short-window RMS of overlay palm-path speed (same samples as straightness). */
 export function localTremorActivity(frames, idx, fps, shoulderWidthPx = 0) {
   if (!frames?.length || !fps) return null;
   const half = Math.max(4, Math.round(0.12 * fps));
@@ -21,10 +21,11 @@ export function localTremorActivity(frames, idx, fps, shoulderWidthPx = 0) {
   const b = Math.min(frames.length - 1, idx + half);
   const sw = shoulderWidthPx > 0 ? shoulderWidthPx : 1;
   const vals = [];
-  for (let i = a; i <= b; i += 1) {
-    let s = frames[i]?.speed_tremor;
-    if (s == null || Number.isNaN(s)) s = frames[i]?.speed ?? 0;
-    vals.push(Number(s) / sw);
+  for (let i = Math.max(1, a); i <= b; i += 1) {
+    const p = frames[i]?.palm;
+    const q = frames[i - 1]?.palm;
+    if (!p || !q || p[0] == null || q[0] == null) continue;
+    vals.push(Math.hypot(Number(p[0]) - Number(q[0]), Number(p[1]) - Number(q[1])) * fps / sw);
   }
   if (vals.length < 4) return null;
   const mu = vals.reduce((x, y) => x + y, 0) / vals.length;

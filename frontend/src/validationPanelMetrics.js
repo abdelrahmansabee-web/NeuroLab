@@ -8,6 +8,7 @@ import {
   formatTremorPower,
   resolveTremorMetrics,
 } from "./tremorMetrics";
+import { overlayPalmPathStats } from "./overlayPalmPath";
 
 /** Table / report keys that must copy the validation-video panel (not server SPSS fields). */
 export const PANEL_TABLE_KEYS = [
@@ -174,18 +175,7 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
 
   let straightness = 0;
   if (inMovement) {
-    let pathLength = 0;
-    const startP = frames[startIdx]?.palm;
-    for (let i = startIdx + 1; i <= idx && i < frames.length; i += 1) {
-      const prev = frames[i - 1]?.palm;
-      const curr = frames[i]?.palm;
-      if (prev && curr) pathLength += Math.hypot(curr[0] - prev[0], curr[1] - prev[1]);
-    }
-    const endP = frames[idx]?.palm;
-    if (startP && endP && pathLength > 0) {
-      const displacement = Math.hypot(endP[0] - startP[0], endP[1] - startP[1]);
-      straightness = Math.min(1, displacement / pathLength);
-    }
+    straightness = overlayPalmPathStats(frames, startIdx, idx).straightness;
   }
 
   let trunkRatio = 0;
