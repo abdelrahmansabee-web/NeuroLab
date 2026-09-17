@@ -42,6 +42,7 @@ import {
 import { clinicTrialRoleFromPhase, summarizeOverlayClock } from "./analysisPhaseCompare";
 import SessionStatusBar, { revealSessionStatusBar } from "./SessionStatusBar";
 import PtrIosSpinner from "./PtrIosSpinner";
+import { performHardRefresh } from "./hardRefresh";
 import AuthGate, { authHeaders, clearAuthToken, rememberLoginEmail } from "./AuthGate";
 import { downloadBlob as downloadBlobUtil, blobToBase64 } from "./downloadUtils";
 import {
@@ -9197,6 +9198,10 @@ export default function App() {
     syncPatientsWithServer({ silent: true, skipDrive: true });
   }, [showToast]);
 
+  const runHardRefresh = useCallback(() => {
+    performHardRefresh({ version: readNlVersion() });
+  }, []);
+
   const logout = useCallback(() => {
     clearAuthToken();
     fetch("/auth/logout", { method: "POST", credentials: "same-origin" })
@@ -9566,6 +9571,21 @@ export default function App() {
     </motion.button>
   );
 
+  const topBarHardRefreshBtn = (
+    <motion.button
+      type="button"
+      whileHover={{ scale: 1.05 }}
+      whileTap={nlMotionTap(0.95)}
+      onClick={runHardRefresh}
+      className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0"
+      style={GLASS_FIELD}
+      title="Reload app"
+      aria-label="Reload app"
+    >
+      <RefreshCw className="w-4 h-4" />
+    </motion.button>
+  );
+
   function DesktopUnifiedTopBar() {
     const shellRef = useRef(null);
     const rowRef = useRef(null);
@@ -9659,6 +9679,7 @@ export default function App() {
                 restoreBusy={Boolean(originRestoreBanner)}
                 onOpenSession={(record) => handleLoadSession(record, { section: "kinematics" })}
               />
+              {topBarHardRefreshBtn}
 
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -9686,7 +9707,7 @@ export default function App() {
     <DesktopUnifiedTopBar />
   ) : (
     <div
-      className={`app-topbar-glass glass-float relative flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl overflow-visible ${sidebar && !isDesktop ? "" : "pr-[7.5rem]"} ${GLASS_CLS}`}
+      className={`app-topbar-glass glass-float relative flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl overflow-visible ${sidebar && !isDesktop ? "" : "pr-[10.75rem]"} ${GLASS_CLS}`}
       style={{ boxShadow: FLOAT_M }}
     >
       {topBarMenuBtn}
@@ -9706,6 +9727,7 @@ export default function App() {
             restoreBusy={Boolean(originRestoreBanner)}
             onOpenSession={(record) => handleLoadSession(record, { section: "kinematics" })}
           />
+          {topBarHardRefreshBtn}
           <motion.button
             whileHover={{ scale: 1.08 }}
             whileTap={nlMotionTap(0.92)}
@@ -10385,6 +10407,9 @@ export default function App() {
         }
 
         .ptr-inner { position: relative; }
+        [data-nl-app-scroll="1"] {
+          overscroll-behavior-y: contain;
+        }
         .ptr-pull-content {
           transform: translate3d(0, 0, 0);
           backface-visibility: hidden;
@@ -10402,6 +10427,39 @@ export default function App() {
           height: 20px;
           transform: scale(var(--ptr-scale, 1));
           transform-origin: 50% 50%;
+        }
+        .ptr-ios-tick {
+          position: absolute;
+          left: 50%;
+          top: 0;
+          width: 11%;
+          height: 30%;
+          margin-left: -5.5%;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.92);
+          transform-origin: 50% 166.67%;
+          opacity: 0.18;
+        }
+        .ptr-ios-tick:nth-child(1) { transform: rotate(0deg); opacity: 1; }
+        .ptr-ios-tick:nth-child(2) { transform: rotate(45deg); opacity: 0.88; }
+        .ptr-ios-tick:nth-child(3) { transform: rotate(90deg); opacity: 0.74; }
+        .ptr-ios-tick:nth-child(4) { transform: rotate(135deg); opacity: 0.58; }
+        .ptr-ios-tick:nth-child(5) { transform: rotate(180deg); opacity: 0.42; }
+        .ptr-ios-tick:nth-child(6) { transform: rotate(225deg); opacity: 0.3; }
+        .ptr-ios-tick:nth-child(7) { transform: rotate(270deg); opacity: 0.2; }
+        .ptr-ios-tick:nth-child(8) { transform: rotate(315deg); opacity: 0.12; }
+        .ptr-spinning .ptr-ios-tick { animation: ptr-ios-fade 0.8s linear infinite; }
+        .ptr-spinning .ptr-ios-tick:nth-child(1) { animation-delay: -0.7s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(2) { animation-delay: -0.6s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(3) { animation-delay: -0.5s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(4) { animation-delay: -0.4s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(5) { animation-delay: -0.3s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(6) { animation-delay: -0.2s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(7) { animation-delay: -0.1s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(8) { animation-delay: 0s; }
+        @keyframes ptr-ios-fade {
+          0% { opacity: 1; }
+          100% { opacity: 0.12; }
         }
         video { outline: none; background: #000; }
         .grid { min-width: 0; }
