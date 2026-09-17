@@ -1,0 +1,479 @@
+--- PAGE 1 ---
+Tarih:
+İNSAN ARASTIRMALARI ETİK KURULU BASVURU FORMU
+1. PROJENİN ADI:
+İnmeli Bireylerde PETTLEP Temelli Eylem Gözlemi ve Motor İmgelemenin Üst Ekstremite
+Kinematiği Üzerine Anlık Etkileri: Randomize Kontrollü Bir Çalışma
+2. BAŞVURU BİLGİLERİ
+Başvurunun Şekli
+İlk Başvuru
+Düzeltme
+Daha önce onaylanmış bir projenin devamı
+Onaylanmış Başvuruda Değişiklik Bildirimi
+Bu araştırma bir lisans/ lisansüstü ders projesinin aittir.
+Bu araştırmanın sonuçları bilimsel bir dergide yayınlanacaktır.
+Diğer (Lütfen açıklayınız)
+Araştırmanın Niteliği
+Öğretim Üyesi araştırması
+Ön lisans Lisans Yüksek lisans Doktora tez çalışması
+Bireysel araştırma projesi (BAP)
+TÜBİTAK Projesi
+Diğer (Lütfen Açıklayınız)
+3.PROJE DANIŞMANI ÖĞRETİM ÜYESİ
+Unvanı,/Adı Soyadı Kurum/Fakülte/Bölüm Cep Telefonu ve E-posta İmza
+Dr. Öğr. Üyesi Begüm Biruni Üniversitesi / 0535 572 00 21
+Kara Kaya Sağlık Bilimleri bkara@biruni.edu.tr
+Fakültesi / Fizyoterapi
+ve Rehabilitasyon
+Bölümü
+4.SORUMLU ARAŞTIRMACI
+Unvanı,/Adı Soyadı Kurum/Fakülte/Bölüm Cep Telefonu ve E-Posta İmza
+Fzt. Abdelrahman Walid İstinye Üniversitesi / +90 537 960 05 20
+Hamza Mohamed Elsayed Lisansüstü Eğitim abdelrahman.sabee@stu.istinye.edu.tr
+Sabee Enstitüsü / Fizyoterapi
+ve Rehabilitasyon
+Lisans Öğrencisi Öğretim Üyesi
+Yüksek Lisans Öğrencisi Araştırma Görevlisi
+Doktora Öğrencisi Diğer (Tanımlayınız)
+5.YARDIMCI ARAŞTIRMACILAR
+Unvanı,/Adı Soyadı Kurum/Bölüm/Temel Alanı E-posta İmza
+Prof. Dr. Yakup Krespi İstinye Üniversitesi Tıp +90 530 469 81 18
+Fakültesi Nöroloji Anabilim ykrespi@gmail.com
+D alı
+Sayısına göre satır ekleyiniz
+1
+
+--- PAGE 2 ---
+6.ARAŞTIRMANIN GEREKÇESİ, AMACI:VE KAYNAKLARI (Ayrıntılı olarak yazılmalıdır.)
+Çalışma ile ilgili gördüğünüz literatür örnekleri yazılmalıdır.
+İnme, dünya genelinde yetişkin engelliliğinin üçüncü önde gelen nedenidir ve hastaların büyük bir
+kısmında uzun vadeli motor, kas tonusu ve üst ekstremite fonksiyon kontrolü ve koordinasyon bozukluğu
+görülmektedir (1). Bu eksiklikler, büyük ölçüde kortikal ve subkortikal motor sistemlerdeki hasara bağlı
+olarak etkili motor komutların üretimindeki bozulmadan kaynaklanmaktadır. Sonuç olarak, sarsıntılı
+yörüngelerle (hareket pürüzsüzlüğünün kaybı) karakterize patolojik hareket modelleri inme sonrasında
+oldukça tipiktir ve hastalar zayıflığın üstesinden gelmek için gövdeyi hareket ettirme veya omzu yukarı
+kaldırma (omuz kuşağı elevasyonu) gibi uyumsuz (maladaptif) stratejilerle telafi ederler (2,3).
+Dolayısıyla, mevcut rehabilitasyon yalnızca fonksiyonu geri kazanmaya değil, aynı zamanda fonksiyonel
+performansın kalitesini artırmaya ve ikincil komplikasyonları azaltmaya yöneliktir.
+Geleneksel tedavilerde vurgu görev pratiği üzerinedir; ancak inme geçirenlerin büyük bir kısmı, özellikle
+şiddetli hemiplejisi olanlar, bu tür eğitimlere katılmak için gereken istemli motor çıktıyı üretemezler (4).
+Bu grupta, fiziksel çıktı olmaksızın motor komutların bilişsel simülasyonu olan Motor İmgeleme (Mİ)
+önemli bir alternatif sunar. Mİ, fiziksel icra için kullandığımızla aynı nöral substratı kullanır ve bu
+nedenle hareketin "içsel modelini" geliştirmek için bir teknik olarak kabul edilebilir (4, 5). Yeni kanıtlar,
+Mİ'nin Eylem Gözlemi (AO) ve duyusal hazırlama ile birleştirilmesinin (AOMI protokolü), motor plan
+için tek başına Mİ'den daha fazla destek sağladığını öne sürmektedir. Akıcı bir hareketi izleyip ardından
+zihinsel olarak prova etmek, hastanın yörünge planlamasıyla bağlantılı nöral devreleri aktive etmesini
+sağlar; bu da daha akıcı ve başarılı bir performansla sonuçlanabilir (6).
+Ancak Mİ'deki zihinsel simülasyonun kalitesi ve titizliği, onun ne kadar güçlü olacağını belirleyecektir.
+İcra edilen ve hayal edilen eylemler arasındaki nöral substrat benzerliğini artırmak için, "fonksiyonel
+eşdeğerlik" hipoteziyle uyumlu uygulamalı bir model olarak PETTLEP (Physical, Environment, Task,
+Timing, Learning, Emotion, Perspective) modeli tanıtılmıştır (7). AOMI'nin PETTLEP ilkeleri
+aracılığıyla sunulması, protokol stimülasyon üretiminin katılımcı odaklı olmasını ve sadece katılımcı
+tarafından gerçekleştirilen bilişsel bir görev değil, hareketliliği geri kazanmada rol oynayan motor yolları
+aktive edecek pragmatik bir destek olmasını sağlayacaktır.
+Bu amaçla, 3 boyutlu kinematik ölçümlerin hassas klinik nicelleştirmesi için yapay zekadan yararlanan
+yeni bir işaretsiz hareket yakalama sistemi olan OpenCap'in entegrasyonu önerilmektedir (8). Bu nedenle,
+hareket pürüzsüzlüğü, gövde yer değiştirmesi ve Omuz Kuşağı Elevasyonu (Shoulder Girdle Elevation)
+gibi hareket parametrelerini objektif olarak ölçerek, merkezi nöral planlama ile periferik motor icra
+arasında önemli bir aracı olan hareketin "nasıllığını" tanımlayabiliriz (8). Ayrıca, bu kinematik analizin
+Kutu ve Blok Testi (BBT) ile kombinasyonu, hareket kalitesinin günlük yaşamdaki fonksiyonel el
+becerisi ile ilişkilendirilmesine olanak tanır (9).
+Dolayısıyla, bu çalışmanın beklentisi nöro-rehabilitasyon literatüründeki kritik bir boşluğu doldurmaktır.
+OpenCap teknolojisi kullanılarak, özelleştirilmiş bir PETTLEP tabanlı AOMI protokolü ile kombinasyon
+halinde, bu çalışma; spesifik zihinsel pratiğin inme sonrası bireylerde hareket pürüzsüzlüğü, telafi edici
+stratejiler ve fonksiyonel el becerisinde ölçülebilir kısa vadeli değişikliklere yol açıp açmadığını
+araştırmayı amaçlamaktadır.
+Anahtar Kelimeler: Motor imgeleme, eylem gözlemi, inme, OpenCap, kinematik, üst ekstremite
+rehabilitasyonu.
+Araştırma Sorus :
+Tek seanslık PETTLEP tabanlı AOMI; bilişsel ve somatik kontrol grubuna kıyasla, inme geçiren
+bireylerde etkilenen üst ekstremitenin hareket pürüzsüzlüğü, gövde kompanzasyonu, Omuz Kuşağı
+Elevasyonu ve kaba el becerisinde anlık iyileşmelere yol açar mı?
+2
+
+--- PAGE 3 ---
+Hipotezler :
+1. H₀: Tek seanslık PETTLEP tabanlı AOMI, kontrol grubuna kıyasla inme sonrası bireylerde
+paretik üst ekstremitenin kinematik parametrelerinde (hareket pürüzsüzlüğü, Gövde Yer
+Değiştirmesi, Omuz Kuşağı Elevasyonu) veya kaba el becerisinde (Kutu ve Blok Testi) anlamlı
+değişikliklere yol açmayacaktır.
+2. H₁: Tek seanslık PETTLEP tabanlı AOMI, kontrol grubuna kıyasla inme sonrası bireylerde
+paretik üst ekstremitenin kinematik parametrelerinde (hareket pürüzsüzlüğü, Gövde Yer
+Değiştirmesi, Omuz Kuşağı Elevasyonu) veya kaba el becerisinde (Kutu ve Blok Testi) anlamlı
+değişikliklere yol açar.
+KAYNAKLAR:
+1. World Stroke Organization (WSO). Global Stroke Fact Sheet 2022. Geneva: World Stroke
+Organization; 2022.
+2. Facciorusso S, Guanziroli E, Brambilla C, Spina S, Giraud M, Molinari Tosatti L, et al. Muscle
+synergies in upper limb stroke rehabilitation: a scoping review. Eur J Phys Rehabil Med. 2024
+Oct;60(5):767-792.
+3. Schwarz A, Bhagubai MMC, Nies SHG, Held JPO, Veltink PH, Buurke JH, Luft AR.
+Characterization of stroke-related upper limb motor impairments across various upper limb activities
+by use of kinematic core set measures. J Neuroeng Rehabil. 2022 Jan 12;19(1):2.
+4. Guerra ZF, Lucchetti AL, Lucchetti G. Motor Imagery Training After Stroke: A Systematic
+Review. J Neurol Phys Ther. 2017;41(4):205-214.
+5. Lakshminarayanan K, Shahbazi M, Janouch C, Ladda AM. Editorial: Recent advancements in
+motor imagery. Front Neurol. 2023;14:1248023.
+6. Kim JH, Lee BH. The Effect of Action Observation Combined with Motor Imagery Training on
+Upper Extremity Function and Corticospinal Excitability in Stroke Patients: A Randomized
+Controlled Trial. Int J Environ Res Public Health. 2022;19(19):12048.
+7. Holmes PS, Collins DJ. The PETTLEP Approach to Motor Imagery: A Functional Equivalence
+Model for Sport Psychologists. J Appl Sport Psychol. 2001;13(1):60–83.
+8. Uhlrich SD, Falisse A, Kidziński Ł, Muccini J, Ko M, Chaudhari AS, et al. OpenCap: 3D human
+movement dynamics from smartphone videos. PLOS Comput Biol. 2023;19(10):e1011462.
+9. Mathiowetz V, Volland G, Kashman N, Weber K. Adult norms for the Box and Block Test of
+manual dexterity. Am J Occup Ther. 1985;39(6):318-326.
+10. Caires TA, Fernandes LFRM, Patrizzi LJ, de Almeida Oliveira R, de Souza LAPS. Immediate
+effect of mental practice with and without mirror therapy on muscle activation in hemiparetic stroke
+patients. J Bodyw Mov Ther. 2017;21(4):1024-1027.
+11. Bijur PE, Silver W, Gallagher EJ. Reliability of the visual analog scale for measurement of acute
+pain. Acad Emerg Med. 2001;8(12):1153–1157.
+12. Williams SE, Cumming J, Ntoumanis N, Nordin-Bates SM, Ramsey R, Hall C. Further validation
+and development of the Movement Imagery Questionnaire-3 (MIQ-3). Psychol Sport Exerc.
+2012;13(3):307–314.
+13. Uğur Y, Coşkun H, Şenyurt AY. The Movement Imagery Questionnaire-3: Reliability and Validity
+Study on Turkish Sample. Spormetre Beden Eğitimi ve Spor Bilimleri Dergisi. 2021;19(4):145-156.
+3
+
+--- PAGE 4 ---
+6. GÖNÜLLÜLERİN NİTELİĞİ
+Arşiv niteliği taşıyan geriye dönük çalışmalarda ilgili bölüm doldurulmamalıdır.
+Çalışmaya Alınacak Minimum Gönüllü Sayısı Toplam Yaş Aralığı Araştırma süresi
+Sağlıklı bir yıl Etik Kurul
+Hasta (İnme): 28 40-80 Onayından Sonra
+Çocuk
+Diğer (Lütfen belirtiniz)
+ARAŞTIRMANIN YAPILACAĞI YER
+Kurum ve Kuruluşları adını belirtiniz/ İzin belgesi Ekleyiniz
+Hastane Saha
+Poliklinik Diğer (lütfen belirtiniz)
+Sağlık Ocağı
+İstinye Üniversitesi Liv Bahçeşehir Hastanesi
+7. VERİ TOPLAMA YÖNTEMİ VE ÖRNEĞİ
+Başvuru dosyasında yer alan dilekçe tarafınızca hazırlandıysa bu durum belirtilmelidir. Ayrıca uygulanacak
+anket ve ölçeklerin anonim olup olmadığı açıkça ifade edilmelidir. Eğer anonim değilse, ilgili izin belgelerinin
+dosya içerisine eklenmesi gerekmektedir.
+Anket Ölçek Test
+Mülakat Gözlem Bilgisayar ortamında uygulamak
+Görüntü kaydı Ses kaydı Telefon kaydı
+Diğer (Lütfen belirtiniz) Yapay Zeka Tabanlı Hareket Analizi (OpenCap.ai)
+*Uygulanacak anket ve ölçekler anonim midir ? anonim değil ise izin belgesi veya tarafınızca hazırlandıysa
+‘veri toplama aidiyet dilekçesi’ ile belirtilmelidir.
+Yöntem ve Değerlendirme Araçları
+Materyal ve Metot:
+Çalışma Tasarımı
+Bu çalışmada, iki koşulun (deneysel koşul: PETTLEP modeli tabanlı AOMI ve kontrol koşulu: bilişsel ve
+somatik kontrol) yürütüleceği tek kör, ön test-son test müdahaleli prospektif randomize kontrollü bir
+çalışma (RCT) tasarımı kullanılacaktır. Tasarım: Denemenin tasarımı, iki kollu (deneysel grup: PETTLEP
+modeli tabanlı AOMI ve kontrol grubu: bilişsel ve somatik kontrol) tek kör, ön test-son test müdahaleli
+prospektif randomize kontrollü bir çalışmadır (RCT). Bu çalışmada, işaretsiz hareket yakalama
+kullanılarak tek seanslık PETTLEP tabanlı bir AOMI görevinin inme bireylerinde etkilenen üst
+ekstremitenin kinematiği ve fonksiyonel performansı üzerindeki etkisini öncül olarak araştırmaktayız.
+Çalışma, İstinye Üniversitesi kurumsal etik kurulunun onayından sonra başlatılacak ve deneklerden
+bilgilendirilmiş onam alınacaktır. Çalışmanın toplam süresi, deneklerin kaydedilmesi, verilerin
+toplanması ve verilerin analizi için Şubat 2026'dan Şubat 2027'ye kadar 12 ay olarak önerilmektedir.
+Örneklem Büyüklüğü ve Randomizasyon
+2 (Grup: Motor İmgeleme vs. Kontrol) × 2 (Zaman: Ön vs. Son) tekrarlı ölçümler ANOVA için G*Power
+3.1.9.2 kullanılarak a priori güç analizi yapılmıştır. Benzer bir akut motor imgeleme çalışmasının
+sonuçlarına göre f = 0.40 (Cohen’s d ≈ 1.2) etki büyüklüğü referans olarak kullanılmıştır. Ancak, "mevcut
+çalışmanın akut, tek seanslık tasarımı göz önüne alındığında, etki büyüklüğü üzerindeki bu varsayım
+oldukça iyimserdir." Yeterli gücü (1 − β = 0.95) α = 0.05 düzeyinde korumak için, çalışma başlamadan
+4
+
+--- PAGE 5 ---
+önce anlamlı bir grup × zaman etkileşim etkisi elde etmek üzere toplam N = 24 (grup başına 12 denek)
+örneklem büyüklüğü gerekmektedir. Olası bir terk ve/veya normal olmayan veri dağılımını telafi etmek
+için, istenen örneklem büyüklüğü %15 oranında artırılarak 28 katılımcılık (grup başına 14) bir alım hedefi
+belirlenmiştir [10].
+Katılımcılar, gizlilikle tabakalandırılmış permütasyonlu blok randomizasyonu kullanılarak 1:1 temelinde
+motor imgeleme veya kontrol grubuna randomize edilecektir. Tabakalandırma kriterleri şunları içerir: (i)
+cinsiyet = erkek veya kadın ve (ii) Modifiye Ashworth Skalası (MAS) ile değerlendirildiği üzere
+etkilenen üst ekstremite spastisite şiddeti; hafif (MAS 0–1+) ve orta (MAS 2–3) olmak üzere iki grup.
+Bağımsız bir araştırmacı, dengeyi ve öngörülemezliği korumak için bilgisayarlı bir randomizasyon aracı
+kullanarak her tabaka için 4 ila 6 değişken blok büyüklüğünde bir randomizasyon listesi oluşturacaktır.
+Tahsisat, alıma doğrudan dahil olmayan biri tarafından hazırlanan sıralı numaralandırılmış, opak, kapalı
+zarflarda gizlenecektir. Bir tabaka içinde bir bloğu tamamlamak için yeterli katılımcı yoksa, o tabakadaki
+son katılımcı(lar), uygulanabilirliği sürdürmek ve dengesizliği en aza indirmek için bloğu tamamlamak
+üzere rastgele tahsis edilecektir.
+Değerlendirmeler
+Güvenilirlik ve tutarlılığı sağlamak amacıyla, çevresel koşullar tüm değerlendirmeler için standardize
+edilecek ve değerlendirmeler İstinye Üniversitesi Liv Bahçeşehir Hastanesi Nörorehabilitasyon ünitesinde
+gerçekleştirilecektir. Her katılımcı, müdahale seansının hemen öncesinde ve hemen sonrasında olmak
+üzere iki kez değerlendirilecektir. Bu ön test–son test protokolü, motor imgeleme veya kontrol görevi
+sonrası (hareket pürüzsüzlüğü, Gövde Yer Değiştirmesi, Omuz Kuşağı Elevasyonu) parametrelerindeki
+geçici değişikliklerin tespit edilmesini sağlar. Değerlendiriciler arası değişkenliği önlemek amacıyla
+testler her merkezde tek bir fizyoterapist tarafından yürütülecektir.
+ Deneysel Koşulların Standardizasyonu:
+Bu çalışmadaki katılımcılara, düzenli eğitim kıyafetlerinin bir parçası olan uzun kollu, koyu mor
+bir tişört giydirilecektir. Örgüler/at kuyrukları, boyun ve omuz işaretleyicilerinin kamera(lar)
+tarafından engellenmeden görülmesini sağlayacak şekilde sabitlenmelidir. Deneysel koşullar
+(sandalye ve masa yüksekliği ile katılımcı ve hedef arasındaki mesafe) tek tip olacak ve her bir
+katılımcı için ön ve son test prosedürleri arasında değişmeden kalacaktır. Eğitimin diğer anlık
+etkilerini önlemek amacıyla, katılımcılardan test seansının yapıldığı gün başka bir üst ekstremite
+rehabilitasyon tedavisine katılmamaları istenecektir.
+ Görevin Yürütülmesi:
+Uzan-Kavra (Reach-to-Grasp) görevi için sözlü talimat, dikkatte yanlılığı önlemek amacıyla aynı
+standart metinden verilecektir. Katılımcıların her değerlendirme zaman noktasında (önce ve sonra)
+kaydedilmek üzere üç deneme tamamlamaları gerekmektedir. Yerleşik hareket davranışlarını
+yakalamak için "hızlı" veya "yavaş" gitmeleri yönünde açık bir talimat verilmeksizin, nesneye
+kendileri için doğal olan bir hızda (rahat hareket hızı) uzanmaları söylenecektir.
+ Veri Toplama Kurulumu:
+Anlık kinematik değişiklikleri değerlendirmek amacıyla, tek eğitim seansının öncesinde ve hemen
+sonrasında kayıtlar alınacaktır. Sensör tutarlılığını sağlamak için tüm katılımcılarda (iPhone 14
+Pro Max ve iPhone XS Max) kullanılacaktır. Kameralar, sabit bir yüksekliğe monte edilen
+tripodlara yerleştirilecek ve katılımcıya göre 45° açılarla (biri ön-yan ve biri arka-yan) ve 1.5 m ila
+2.0 m standart mesafede konumlandırılacaktır. Kameralar, 1080p çözünürlükte ve saniyede 60
+kare (fps) kayıt yapacak şekilde yapılandırılacaktır. Yapay zeka takibini engelleyebilecek arkadan
+aydınlatma veya gölgeleri önlemek için kayıtlar tutarlı, dağınık aydınlatmaya sahip bir odada
+5
+
+--- PAGE 6 ---
+gerçekleştirilecektir. Veri karşılaştırılabilirliğini sağlamak için tüm katılımcı analizlerinde aynı
+OpenCap modeli ve işleme parametreleri kullanılacaktır. Video verileri, 3 boyutlu OpenSim kas-
+iskelet modelleri elde etmek üzere OpenCap bulut platformuna yüklenerek işlenecektir.
+Fonksiyonel önemlerine göre aşağıdaki spesifik kinematik ölçümler hesaplanacaktır (8).
+Birincil Sonuç
+ Çalışmanın birincil sonucu, OpenCap Sistemi ile ölçülen, etkilenen üst ekstremitenin hareket
+pürüzsüzlüğündeki değişimdir. Klasik işaretleyici (marker) tabanlı hareket yakalama sistemlerinin
+aksine OpenCap, akıllı telefonlarla çekilen videolardan 3 boyutlu insan hareket dinamiğini türetir.
+Video, 3 boyutlu OpenSim kas-iskelet modelleri oluşturmak için OpenCap bulut platformuna
+gönderilerek işlenecektir. Fonksiyonel anlamları nedeniyle, eğrilerden aşağıdaki spesifik
+kinematik parametreler türetilecektir (8).
+ Hareket Pürüzsüzlüğü (Hız Pik Sayısı - NVP): El işaretleyicisinin (3. Metakarp başı) hız
+profilinden hesaplanır. Bir pürüzsüz hareket genellikle bir hızlanma ve bir yavaşlama fazından
+oluşur. Hız piklerindeki artış, motor kontrol kaybına bağlı olarak hareketin segmentasyonunu
+(yani hareketin daha sarsıntılı hale geldiğini) ifade eder. NVP'deki azalma, artan hareket
+pürüzsüzlüğü olarak yorumlanacaktır.
+İkincil Sonuçlar
+ Omuz Kuşağı Elevasyonu (Telafi Edici Strateji):
+o Amaç: Bir telafi stratejisi olarak ölçmek; işaretsiz yakalama sistemi yüzey işaretlerini
+takip eder.
+o Ölçüm Yöntemi: Hareket sırasında Omuz işaretleyicisinin Boyun işaretleyicisine göre
+göreceli dikey (Y ekseni) yer değiştirmesinin ölçülmesiyle hesaplanır.
+ Gövde Yer Değiştirmesi (Telafi Edici Strateji):
+o Amaç: Hastanın azalmış kol uzunluğunu telafi etmek için "gövde eğilmesine" ne derece
+başvurduğunu nicelleştirmek. Amaç, hastanın gerçekten üst ekstremiteyi mi hareket
+ettirdiğini yoksa gövdeyi kullanarak mı telafi ettiğini belirlemektir. Bu, biyomekanik
+fonksiyonun mutlak bir değeri olarak değil, telafi edici strateji kullanım kalitesinin bir
+göstergesi olarak ifade edilir.
+o Ölçüm Yöntemi: Uzanma fazında OpenSim kinematik modelinden elde edilen Lumbar
+Extension (Bel Uzatma) açısının sagittal düzlemdeki değişiminin ölçülmesiyle hesaplanır
+OpenCap sistemi, geliştiricileri (Stanford Üniversitesi) tarafından bilimsel araştırmalarda
+kullanılmak üzere açık kaynaklı (open-source) ve web tabanlı bir platform olarak tüm
+araştırmacıların erişimine sunulmuştur; bu nedenle kullanımı için özel bir yazar izni
+gerekmemektedir [8].
+ Kaba El Becerisi — Kutu ve Blok Testi (BBT):
+o Amaç: Kinematikteki iyileşmelerin günlük yaşam aktivitelerinde (GYA) gerçek
+fonksiyonel faydalara yol açıp açmadığını değerlendirmek.
+o Ölçüm Yöntemi:
+ Hasta, içinde 150 ahşap blok (2.5 cm) bulunan iki bölmeli ahşap bir kutunun
+önünde oturur.
+ Etkilenen ellerini kullanarak 60 saniye içinde mümkün olduğunca çok bloğu bir
+taraftan diğer tarafa taşımaları istenir.
+ Skor, başarıyla taşınan blok sayısıdır (9).
+6
+
+--- PAGE 7 ---
+Rehabilitasyon literatüründe el becerisini değerlendirmek için evrensel olarak kullanılan standart
+bir klinik araçtır. Telif hakkı sahibinin iznine tabi özel bir ölçek olmayıp, genel kullanıma açık
+olduğu için yazar iznine ihtiyaç duyulmamaktadır.
+ Ağrı — Görsel Analog Skalası (VAS):
+o Amaç: Etkilenen üst ekstremitedeki ağrı şiddetini değerlendirmek ve müdahalenin
+güvenliğini izlemek için kısa vadede ağrı algısındaki değişiklikleri değerlendirmek.
+o Ölçüm Yöntemi: Katılımcılar ağrı şiddetini 10 cm'lik yatay bir çizgi üzerine işaret
+koyarak belirtirler. Sol taraf "ağrı yok" (0) ve sağ taraf "hayal edilebilecek en kötü ağrı"
+olarak etiketlenmiştir (11).
+Ağrı değerlendirmesinde kullanılan temel ve standart bir klinik ölçüm yöntemidir. Genel klinik
+pratiğin bir parçası (public domain) olarak kabul edildiğinden, kullanımı için herhangi bir yazar
+veya telif izni gerekmemektedir.
+ Hareket İmgeleme Yeteneği — Hareket İmgeleme Anketi-3 (MIQ-3):
+o Amaç: Katılımcının hareket imgeleme kapasitesini üç alt ölçekte değerlendirmek:
+Kinestetik, İçsel Görsel ve Dışsal Görsel.
+o Ölçüm Yöntemi: Dilsel doğruluğu korumak ve yerel kültür için validasyon sürecini
+sağlamak amacıyla MIQ-3'ün valide edilmiş Türkçe uyarlaması uygulanacaktır. Hasta, bir
+dizi temel hareketi yapmaya veya izlemeye yönlendirilir ve ardından bunları zihinsel
+olarak canlandırması istenir. Daha sonra, bu imgelemenin canlılığını bir Likert ölçeğinde
+(daha yüksek puanlar daha fazla canlılığı ifade eder) değerlendirirler (12,13).
+Çalışmada kullanılan MIQ-3'ün Türkçe geçerlilik ve güvenilirlik çalışmasını yapan yazardan
+gerekli yazılı kullanım izni alınmıştır.
+Müdahale (Intervention): Müdahale protokolü, Eylem Gözlemi (AO) ve Fiziksel Uygulama (AOMI) ile
+birlikte PETTLEP tabanlı Motor İmgeleme (Mİ) protokolüne dayalı olarak geliştirilmiştir. Çalışma
+prosedürü birbirini izleyen üç aşamayı içerir: ön değerlendirme, tedavi ve son değerlendirme. Müdahale
+aşaması 25 dakika sürer.
+1. Temel Değerlendirme: Sistem kalibrasyonundan sonra, her denek tarafından rutin Uzan-Kavra
+görevinin 3 aktif tekrarı gerçekleştirilecektir. Hareket kinematikleri, yakalamak üzere OpenCap
+sistemi kullanılarak kaydedilecektir (müdahale öncesi hareket kalitesi: Hareket Pürüzsüzlüğü ve
+Gövde Yer Değiştirmesi).
+2. Müdahale Aşaması: Katılımcılar rastgele Deneysel ve Kontrol kollarına ayrılır. Her iki grup da
+aralarında kısa dinlenme molaları olan 3 Blok (blok başına yaklaşık 7 dakika) gerçekleştirir.
+A. Deneysel Grup (Aralıklı AOMI): Katılımcılar, yorgunluk olmadan öğrenmek için en iyi yaklaşım
+olan 1:3 Oranında (Fiziksel-Zihinsel) "İskele Kurma" (Scaffolded) protokolünü izleyeceklerdir. Her blok
+içinde aşağıdaki döngü tekrarlanır:
+ Duyusal Hazırlama: Katılımcılar, duyusal bilgi (doku/ağırlık) açısından kodlanması için nesneyi
+tutarlar.
+ Eylem Gözlemi: Görevin akıcı bir şekilde yürütülmesinin 1. şahıs video temsilinin görsel
+gözlemi.
+ Motor İmgeleme (Seçici ve Kısıtlama-İndüklü): Denek gözlerini kapatır ve iki özel kısıtlama ile
+hareketi gerçekleştirdiğini hayal eder:
+o Pürüzsüzlük Kısıtlaması: "Fincanın ağzına kadar suyla dolu olduğunu hayal et. O kadar
+pürüzsüz hareket et ki bir damla bile dökme."
+7
+
+--- PAGE 8 ---
+o Gövde Kontrol Ayarı: "Sırtının ağır olduğunu ve sandalyeye yapıştığını hayal et. Sadece
+kolunla uzan, omurganı sabit tut." (telafi edici gövde hareketinin inhibisyonunu hedefler).
+o Omuz Stabilite Kısıtlaması: "Omzunun gevşemiş ve ağır olduğunu hayal et. Uzanırken onu
+kulağından uzakta, aşağıda tut." (Bu, "Omuz Kuşağı Elevasyonu inhibisyonu" içindir).
+ Fiziksel İcra: Katılımcılar, her 3 zihinsel deneme için 1 fiziksel deneme yaptıktan sonra, gerçek
+geri bildirime dayanarak içsel modellerini geliştirirler.
+Müdahale Uyumu:
+PETTLEP modeline bağlılığı sağlamak için tüm imgeleme ipuçları standart sözlü metinler aracılığıyla
+sunulacaktır. Zihinsel Kronometri seans boyunca yakından izlenecektir; hayal edilen hareket süresi
+fiziksel süreye ±%25 oranında karşılık gelmelidir. Bir deneme bu aralığın dışındaysa tekrarlanmalıdır.
+Fiziksel-zihinsel uygulamanın 1:3 oranı, müdahalenin belirli dozajını korumak için gözetmen
+fizyoterapist tarafından sıkı bir şekilde uygulanacaktır.
+B. Kontrol Grubu (Bilişsel ve Somatik Kontrol):
+Katılımcılar, motor olmayan bilişsel sistemi uyararak motor ağların katılımını azaltmayı amaçlayan,
+zamanında ve dikkat sürelerinin dolmasına eşleştirilmiş bir protokolü takip edeceklerdir. Denekler
+tarafından 3 Blok içerisinde iki farklı görev yürütülür:
+ Vücut Tarama (Somatik Dikkat): Katılımcılara bir vücut taraması yapmaları ve dikkatlerini
+nefese ve vücuttaki bir dizi konuma (ayaklardan başa kadar) getirmeleri, hareket etmeme veya
+hareket etmeyi hayal etmeme talimatıyla sıcaklık veya koltuk hissi gibi duyumları not etmeleri
+söylenir.
+ Uzaysal Navigasyon (Görsel-Uzaysal Kontrol): Katılımcılar zihinsel bir "Ev Turu"
+gerçekleştirirler. Sanki evlerinde dolaşıyorlarmış gibi mobilyaların yerleşimini görüntülerler. Bu,
+motor korteksi aktive etmeden görsel-uzaysal ağı aktive eder.
+PETTLEP Çerçevesinin Uygulanması
+Mİ seansı, görselleştirilen aktivitelerin ekolojik geçerliliğini artıran PETTLEP modeline (Fiziksel, Çevre,
+Görev, Zamanlama, Öğrenme, Duygu ve Perspektif) dayanmaktadır:
+ P – Fiziksel (Dinamik ve Duyusal Hazırlama): İmgeleme görevleri sırasında katılımcılar
+tamamen pasif değildir. Vücut şemasını yeniden oluşturmayı kolaylaştırmak için hedef nesneyi
+(duyusal hazırlama) ellerinde tutuyor olacaklardır.
+ E – Çevre (Bağlamsal Sadakat): Tedavi, değerlendirmede kullanılan aynı masa, sandalye ve
+hedef nesneyi (fincan) kullanarak bir hastane odasında gerçekleşir ve hafıza hatırlamayı
+kolaylaştıran bağlamsal ipuçlarını sağlar.
+ T – Görev (Fonksiyonel ve Seçici Kısıtlamalar): Görev "telafi olmadan uzanma"dır. İki özel
+yöntem tanıtılmıştır:
+o Pürüzsüzlük: Fincanın suyla dolu olduğunu hayal et (beyni hız yerine hassasiyete/akışa
+öncelik vermeye teşvik etmek için).
+o Ayrışma: "Sırtının sandalyeye bağlı olduğunu hayal et" (Sanki kol hareketini gövde
+hareketinden zihinsel olarak ayırmak için).
+ T – Zaman (Zamansallık): Katılımcılardan o anda hareket ettiklerini hayal etmeleri istenir.
+Zihinsel Kronometri, hayal edilen sürenin fiziksel sürenin %75'i (±%25) içinde olup olmadığı
+kontrol edilir, bu da "hızlı ileri sarma" gibi zihinsel hataları engeller.
+8
+
+--- PAGE 9 ---
+ L – Öğrenme (Hata Tabanlı Kalibrasyon): Protokol tekrarlayıcı değil, reaktiftir. 1. şahıs video
+gözlemi (usta model) ile fiziksel denemeler (gerçek performans) arasında gidip gelerek,
+uygulayıcı "tahmini" "çıktı" ile tekrar tekrar test eder, bu da motor öğrenmeyi etkiler.
+ E – Duygu (Güven ve Rahatlama): Sözlü talimatlar, performans kaygısını hafifletmek ve
+sıklıkla kaygıdan kaynaklanan spastisitenin artmasını önlemek için "hareket kolaylığı", "akış" ve
+"hafiflik" vurgusu yapar.
+ P – Perspektif (İçsel / Kinestetik): Deneklere ayrıca, Dışsal Perspektif (yani, kendini bir film
+ekranında izliyormuş hissi) yerine İçsel Perspektif (yani, kendi gözlerinden bakıyormuş hissi)
+benimsemeleri açıkça talimat verilir, çünkü içsel imgelemenin kortikospinal uyarılabilirliği
+artırmada daha güçlü olduğu bulunmuştur.
+Hedeflenen Görevin Fonksiyonel Uygunluğu: Uzan-Kavra Bu çalışma, tekil kas kasılmalarına
+odaklanmak yerine, "içmek için bir fincana uzanma" olarak modellenen Uzan- hareketi ile ilgilidir.
+Aşağıdaki üç neden, bu hareketin temel hareket olarak seçilmesini haklı çıkarmaktadır:
+ Ekolojik Geçerlilik: (Uygulamanın doğal ortamları) RTG, esas olarak kendi kendine beslenme ve
+su içme ile ilgili Günlük Yaşam Aktivitelerinde (GYA) bağımsızlığın temel hareket ettiricisidir.
+Bir şeye uzanıp onu alma yeteneği, bir inme sağkalımının yaşam kalitesi için bir grup izole kas
+gücünden çok daha fazlasını ifade eder.
+ Taşıma Fazı (Uzanma ve Gövde): Omuz fleksiyonu ve dirsek ekstansiyonu mesafe bileşenine
+katkıda bulunur. Gövde Kompanzasyonu (öne eğilme) ve Omuz Kuşağı Elevasyonu, inme sonrası
+hastaların bu aşamasında gerçekten çok sık görülen telafi edici davranışlardır. Bu aşamayı ele
+almak için, telafi edici hareketi değil gerçek uzuv hareket açıklığını (ROM) geri kazanmaya
+çalıştığı için "Yapışık Sırt" kısıtlaması getirilmiştir; bu, OpenCap içinde nicel bir ölçüm ('Gövde
+Yer Değiştirmesi' ve 'Omuz Kuşağı Elevasyonu' değişkenleri) aracılığıyla sayısal olarak temsil
+edilebilen bir hareket modelidir.
+ Manipülasyon Fazı (Kavrama ve Pürüzsüzlük): Kavrama, nesnenin boyutuna ve şekline uymak
+için koordineli bir şekilde yürütülmesi gereken bilek ekstansiyonu ve el açıklığını içerir. 'Dolu
+Fincan' kısıtlamasının (sıvı varmış gibi yapma) eklenmesi, hareket pürüzsüzlüğü ve doğruluğu
+üzerinde önemli bir gereklilik dayatır. Bu, sinir sisteminin "hız piklerini" (keskinliği)
+yavaşlatmasını sağlayarak ham baskı yerine hassas motor kontrolü ve koordinasyonu eğitmek
+içindi.
+BAP Destek Talebi: Yok
+8. ARAŞTIRMAYA DAHİL OLMA, HARİÇ TUTULMA VE ARAŞTIRMADAN ÇIKARTILMA
+KRİTERLERİ
+Dahil edilme kriterlerini karşılayan toplam 28 inme hastası (her grupta 14 kişi) çalışmaya dahil edilecek
+ve randomize yöntemle iki gruba ayrılacaktır.
+Çalışma popülasyonu, İstanbul, Türkiye'deki İstinye Üniversitesi Liv Bahçeşehir Hastanesi inme merkezi
+başvuran veya takipli olan inme hastalarından oluşmaktadır. Katılımcılar, uygunluğu belirlemek için bir
+nörolog ve fizyoterapist tarafından yapılan taramanın ardından gönüllü katılım yoluyla çalışmaya
+alınacaktır. Çalışma deneklere tam olarak açıklanacak ve kayıttan önce bir onam formu imzalamaları
+istenecektir. Hasta alımı etik kurul onayından sonra başlayacak ve gerekli örneklem büyüklüğü elde
+edilene kadar devam edecektir :
+9
+
+--- PAGE 10 ---
+a: Araştırmaya Dahil Olma Kriterleri:
+ Tek taraflı iskemik veya hemorajik inme tanısı almış, 40-80 yaş aralığındaki kadın ve erkek
+yetişkinler.
+ Etkilenen üst ekstremitede kalıntı istemli motor aktivite varlığı.
+ Hafif ila orta düzeyde spastisite (Modifiye Ashworth Skalası ≤ 3).
+ Sözlü talimatları anlayabilecek ve takip edebilecek yeterli bilişsel fonksiyon (MMSE ≥ 21).
+ Akut veya kontrolsüz sistemik hastalığı bulunmayan, tıbbi açıdan stabil durum.
+ Desteksiz en az 30 dakika oturabilme ve kısa süreli bilişsel-motor görevleri tolere edebilme
+yeteneği.
+b: Araştırmaya Hariç Olma Kriterleri:
+ Diğer merkezi sinir sistemi patolojilerinin varlığı (örn. Parkinson hastalığı, multipl skleroz,
+travmatik beyin yaralanması).
+ Üst ekstremite hareketini kısıtlayan kas-iskelet sistemi veya ortopedik durumlar (örn. sabit
+kontraktürler, ciddi eklem deformiteleri, omuz subluksasyonu).
+ Görev uygulamasını veya motor imgeleme katılımını etkileyen şiddetli duyusal kayıp, görsel
+ihmal (neglect) veya dikkat eksikliği.
+ Kontrolsüz epilepsi, şiddetli kardiyovasküler instabilite veya imgelemeye engel teşkil edecek
+herhangi bir kontrendikasyon.
+9. UYGULANACAK YAKLAŞIM VE İSTATİSTİKSEL YÖNTEM
+Araştırmanın Tasarımı, örnekleme yöntemi açıkça belirtilmelidir
+İstatistiksel Analiz:
+Tüm analizler IBM SPSS Statistics for Mac, sürüm 24.0 (IBM Corp., Armok, New York, ABD) ile
+yapılacaktır. Tanımlayıcı istatistikler: Katılımcı örneklemini ve sonuç değişkenlerini tanımlamak için
+tanımlayıcı istatistikler raporlanacaktır: normal dağılım gösteren sürekli değişkenler için ortalamalar ve
+(SS); normal dağılım göstermeyen veya ordinal değişkenler için medyanlar ve çeyrekler arası aralıklar
+(IQR). Her sürekli değişken için dağılımın normalliği Shapiro-Wilk testi ile değerlendirilecektir.
+Birincil ve İkincil Sonuç Analizi:
+ Parametrik Analiz: Normallik varsayımını karşılayan sürekli değişkenler (Kinematik
+parametreler ve BBT gibi) için tedavi etkilerinin araştırılması, 2 x 2 Karma Model Varyans
+Analizi (ANOVA) ile gerçekleştirilecektir. Model, "Zaman" (Müdahale Öncesi vs. Müdahale
+Sonrası) grup içi faktörünü ve "Grup" (Deneysel vs. Kontrol) gruplar arası faktörünü içerir.
+Birincil analizler, deneysel grupta kontrol grubuna kıyasla anlamlı derecede daha büyük bir
+iyileşme olup olmadığını belirlemek için Grup × Zaman etkileşim etkisine odaklanacaktır.
+ Parametrik Olmayan Analiz: Sürekli verilerin anlamlı derecede normal olmadığı ve
+dönüştürülemediği durumlarda veya ordinal veriler (örneğin, ağrı için VAS ve MIQ-3) için
+parametrik olmayan yöntemler uygulanacaktır. Gruplar arası farklar Mann-Whitney U Testi ile
+test edilirken, grup içi değişiklikler Wilcoxon İşaretli Sıralar Testi ile değerlendirilecektir.
+Korelasyonlar: Daha yüksek imgeleme yeteneğinin daha iyi motor performans sonucunu öngörüp
+öngörmediğini doğrulamak için, denek tarafından derecelendirilen imgeleme canlılığı (MIQ-3 skorları) ve
+kinematik iyileşmenin büyüklüğü (Hareket Pürüzsüzlüğü ve Gövde Yer Değiştirmesi Δ skorları), normal
+10
+
+--- PAGE 11 ---
+dağılım için Pearson korelasyonu (r) veya normal olmayan dağılım için Spearman rho (ρ) kullanılarak
+araştırılacaktır.
+Etki Büyüklüğü: Müdahalenin etkisinin büyüklüğünü nicelleştirmek için etki büyüklükleri
+hesaplanacaktır: ANOVA sonuçları için kısmi eta kare (ηp²) ve ikili karşılaştırmalar için Cohen’s d veya
+rank-biserial korelasyon (r = Z / √N). Tüm analizler için istatistiksel anlamlılık düzeyi p < 0.05 olarak
+belirlenecektir.
+Eksik Verilerin Ele Alınması: Randomizasyonu korumak ve etki tahminindeki yanlılığı azaltmak için,
+titiz bir ITT (Intention-to-Treat) analizi yapılacaktır. Hiçbir veri silinmeyecek (ikili silme yok), bunun
+yerine randomize edilen tüm deneklerin nihai analizde yer alması için istatistiksel atama (imputation)
+(örneğin Son Gözlemin İleri Taşınması [LOCF] veya Doğrusal Karma Modeller) ile işlenecektir.
+10. DESTEK BİLGİSİ
+Bu araştırma bir kuruluş tarafından destekleniyor mu? (TUBİTAK /BAP vs.)
+Destek veren kurum/kuruluş
+Evet
+Hayır
+11.ARAŞTIRMA BÜTÇESİ:
+Gider Kalemleri belirtilerek toplam bütçe yazılmalıdır
+Giderlerin Türü Tl
+Baskı maliyeti 1000
+Genel Toplam 1000
+Sorumlu araştırmacı tarafından karşılanacaktır
+Başvuru Sahibi Proje Danışmanı Öğretim Üyesi
+El yazısıyla adı soyadı: El yazısıyla adı soyadı:
+Tarih (gün/ay/yıl olarak): …/…/…. Tarih (gün/ay/yıl olarak): …/…/….
+İmza: İmza:
+11

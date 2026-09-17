@@ -1,0 +1,37 @@
+17 dk contexts:
+  ), Imagine’da iç (1. kişi) perspektif. | Deneysel müdahale (PETTLEP-AOMI; toplam ~17 dk; müdahale sırasında fiziksel uygulama YOK): | • 2 dk kalibrasyon (notice–name–tra
+  est 60 sn. | • Fiziksel Reach & Wipe yalnızca pre/post değerlendirmede. | Kontrol: ~17 dk eşleştirilmiş; 2 dk giriş gevşemesi + 5 blok × 3 dk Beden Taraması / Mekânsal N
+22 dk contexts:
+  (none)
+45/75/60 sn:
+  k kalibrasyon (notice–name–transfer; etkilenmemiş uzuv). | • 5 blok × 3 dk: Watch 45 sn (ayna videolu eylem gözlemi) + Imagine 75 sn (gerçek zamanlı kinestetik MI, kul
+  emiş uzuv). | • 5 blok × 3 dk: Watch 45 sn (ayna videolu eylem gözlemi) + Imagine 75 sn (gerçek zamanlı kinestetik MI, kulaklık script) + Rest 60 sn. | • Fiziksel Reach 
+  gözlemi) + Imagine 75 sn (gerçek zamanlı kinestetik MI, kulaklık script) + Rest 60 sn. | • Fiziksel Reach & Wipe yalnızca pre/post değerlendirmede. | Kontrol: ~17 dk eşl
+MAS/MMSE:
+  imsel bir dergide yayınlanacaktır. | Araştırmanın Niteliği |  Öğretim Üyesi Araştırması |  Yüksek Lisans   Doktora Tez Çalışması |  Bu Araştırmanın Sonuçları Bilimsel 
+  rmanın Niteliği |  Öğretim Üyesi Araştırması |  Yüksek Lisans   Doktora Tez Çalışması |  Bu Araştırmanın Sonuçları Bilimsel Bir Dergide Yayınlanacaktır |  Diğer (Lütf
+  a hemorajik inme tanısı | • Etkilenen üst ekstremitede artık gönüllü hareket bulunması | • Hafif-orta spastisite (Modified Ashworth Skalası ≤ 2) | • Basit talimatları an
+  rta spastisite (Modified Ashworth Skalası ≤ 2) | • Basit talimatları anlayabilme (MMSE ≥ 21) | • Tıbbi olarak stabil olma | • En az 30 dk desteksiz oturabilme ve kısa bil
+n=28 / 28:
+  ul Onayı Sonrası | Sağlıklı | 12 ay (Şubat 2026 – Şubat 2027) | Hasta (İnme / Stroke) | 28 | 40–80 | Çocuk  | Toplam | 28 | ARAŞTIRMANIN YAPILACAĞI YER | Kurum/Kuruluş Adı ve Adresi:
+  lı | 12 ay (Şubat 2026 – Şubat 2027) | Hasta (İnme / Stroke) | 28 | 40–80 | Çocuk  | Toplam | 28 | ARAŞTIRMANIN YAPILACAĞI YER | Kurum/Kuruluş Adı ve Adresi: | 1) İstinye Üniversites
+  ilitasyon Kliniği + Biruni Üniversitesi Hastanesi FTR Polikliniği). | Örneklem: n=28 (grup başına 14); G*Power ile planlanmış; permütasyon blok randomizasyon (1:1);
+WMFT:
+   oranı, omuz dikey yer değiştirmesi, tepe el hızı ve üst ekstremite fonksiyonu (WMFT-4) üzerindeki anlık etkilerini, zaman eşleştirilmiş bilişsel ve somatik kontrol
+  l_duration_s, total_trunk_palm_ratio, shoulder_vert_norm, total_peak_velocity); WMFT-4, KVIQ-10, VAMS-4, IPAQ, MDRS, VAS. | İstatistik: 2 (Grup) × 2 (Zaman) karma ANO
+COLOR RUNS:
+Paragraph 54: color=255 text='Doç. Dr. Çiğdem Çınar\r\x07'
+Paragraph 55: color=255 text='Biruni Üniversitesi Hastanesi, Fiziksel Tıp ve Rehabilitasyon Anabilim Dalı\r\x07'
+Paragraph 56: color=255 text='0507 783464 / ccinar@biruni.edu.tr\r\x07'
+Paragraph 68: color=255 text='REVİZYON (onaylanmış protokolde değişiklik): Çalışma çok merkezli hale getirilmiş; Biruni Üniversitesi Hastanesi ikinci '
+Paragraph 109: color=255 text='2) Biruni Üniversitesi Hastanesi, Fiziksel Tıp ve Rehabilitasyon Polikliniği, İstanbul (çok merkezli veri toplama merkez'
+Paragraph 113: color=8421504 text='(İzin Yazısı Alınmalıdır)'
+Paragraph 114: color=8421504 text='(İzin Yazısı Alınmalıdır)'
+Paragraph 115: color=8421504 text='(İzin Yazısı Alınmalıdır)'
+Paragraph 186: color=8421504 text='Kurum veya kuruluş bilgisi eklenmelidir.\r\x07'
+RED-LIKE:
+Paragraph 54: color=255 text='Doç. Dr. Çiğdem Çınar\r\x07'
+Paragraph 55: color=255 text='Biruni Üniversitesi Hastanesi, Fiziksel Tıp ve Rehabilitasyon Anabilim Dalı\r\x07'
+Paragraph 56: color=255 text='0507 783464 / ccinar@biruni.edu.tr\r\x07'
+Paragraph 68: color=255 text='REVİZYON (onaylanmış protokolde değişiklik): Çalışma çok merkezli hale getirilmiş; Biruni Üniversitesi Hastanesi ikinci '
+Paragraph 109: color=255 text='2) Biruni Üniversitesi Hastanesi, Fiziksel Tıp ve Rehabilitasyon Polikliniği, İstanbul (çok merkezli veri toplama merkez'

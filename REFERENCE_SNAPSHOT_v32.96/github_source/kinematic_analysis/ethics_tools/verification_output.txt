@@ -1,0 +1,70 @@
+
+=== MediaPipe Pose Landmarker ===
+Bu çalışmada, PETTLEP temelli AOMI uygulamasının üst ekstremite hareket kalitesi üzerindeki kısa dönemli etkileri, MediaPipe Pose Landmarker tabanlı işaretsiz hareket analizi sistemi ve Phyphox akıllı telefon akselerometrisi kullanılarak değerlendirilecektir. Hareket pürüzsüzlüğü (SPARC), hareket süresi ve tepe hız gibi zamana/ivmeye bağlı kinematik parametreler Phyphox ile; gövde kompanzasyonu (trunk ratio), omuz kuşağı elevasyonu (shoulder elevation) ve dirsek açısı gibi uzamsal/açısal parametreler MediaPipe ile objektif olarak ölçülecektir (8,19,20). Ayrıca Wolf Motor Function Test kısa for
+RUNS: [FF0000]Bu çalışmada, PETTLEP temelli  | [default] Ayrıca Wolf Motor Function Te
+
+=== Phyphox ===
+Bu çalışmada, PETTLEP temelli AOMI uygulamasının üst ekstremite hareket kalitesi üzerindeki kısa dönemli etkileri, MediaPipe Pose Landmarker tabanlı işaretsiz hareket analizi sistemi ve Phyphox akıllı telefon akselerometrisi kullanılarak değerlendirilecektir. Hareket pürüzsüzlüğü (SPARC), hareket süresi ve tepe hız gibi zamana/ivmeye bağlı kinematik parametreler Phyphox ile; gövde kompanzasyonu (trunk ratio), omuz kuşağı elevasyonu (shoulder elevation) ve dirsek açısı gibi uzamsal/açısal parametreler MediaPipe ile objektif olarak ölçülecektir (8,19,20). Ayrıca Wolf Motor Function Test kısa for
+RUNS: [FF0000]Bu çalışmada, PETTLEP temelli  | [default] Ayrıca Wolf Motor Function Te
+
+=== Birincil sonuç ölçütü ===
+Birincil sonuç ölçütü olarak hareket pürüzsüzlüğünü değerlendiren Spectral Arc Length (SPARC) parametresi Phyphox akselerometre kaydı üzerinden belirlenmiştir. İkincil sonuç ölçütleri arasında; MediaPipe ile ölçülen gövde kompanzasyonu (trunk_ratio), omuz kuşağı elevasyonu (shoulder_vert_norm; ZoeDepth tabanlı metrik ölçekleme ile) ve dirsek açısı (elbow_angle_mean) ile Phyphox ile ölçülen hareket süresi (movement_time_sec) ve tepe hız (peak_velocity_px_s) yer almaktadır.
+RUNS: [FF0000]Birincil sonuç ölçütü olarak h
+
+=== Kinematik parametreler ===
+Kinematik parametreler, iki farklı sistemle eşzamanlı olarak toplanacaktır: Uzamsal ve açısal parametreler (gövde kompanzasyonu, omuz kuşağı elevasyonu, dirsek açısı) MediaPipe Pose Landmarker (33 landmark) kullanılarak video kayıtlarından otomatik olarak çıkarılacaktır; zamana bağlı parametreler (SPARC, hareket süresi, tepe hız) ise etkilenen taraf bileğine sabitlenen akıllı telefonun Phyphox uygulaması ile kaydedilen akselerometri verisinden hesaplanacaktır. MediaPipe tabanlı işaretsiz hareket analizinin inme sonrası bireylerde üst ekstremite ulaşma kinematiğini izlemede geçerliliği daha önc
+RUNS: [FF0000]Kinematik parametreler, iki fa
+
+=== Ulaşma–Dönüş görevi ===
+Ulaşma–Dönüş görevi için sözlü talimat, dikkatte yanlılığı önlemek amacıyla aynı standart metinden verilecektir. Katılımcıların her değerlendirme zaman noktasında (önce ve sonra) kaydedilmek üzere üç deneme tamamlamaları gerekmektedir; analiz için üç denemenin ortalaması kullanılacaktır. Her deneme sırasında etkilenen taraf bileğine Phyphox uygulaması yüklü akıllı telefon sabitlenerek video kaydıyla eşzamanlı akselerometri verisi toplanacaktır. Yerleşik hareket davranışlarını yakalamak için "hızlı" veya "yavaş" gitmeleri yönünde açık bir talimat verilmeksizin, görevi kendileri için doğal olan 
+RUNS: [FF0000]Ulaşma–Dönüş görevi için sözlü
+
+=== Çalışmanın birincil sonucu ===
+Çalışmanın birincil sonucu, etkilenen üst ekstremitenin hareket pürüzsüzlüğündeki değişimdir (SPARC). SPARC, Phyphox akıllı telefon akselerometresi ile etkilenen taraf bileğinden kaydedilen üç eksenli ivme verisinden hesaplanacaktır. Phyphox yaklaşık 100 Hz örnekleme frekansıyla millisaniye hassasiyetinde zaman damgası sunar ve tepe hız ile hareket süresinin güvenilir hesaplanmasını destekler (19). SPARC (Spectral Arc Length — Spektral Ark Uzunluğu): Bilek akselerometrisi mutlak hız profili [√(x²+y²+z²)] üzerinden teğetsel hız hesaplanır; hız sinyali normalize edilir ve hızlı Fourier dönüşümü 
+RUNS: [FF0000]Çalışmanın birincil sonucu, et
+
+=== Anlık kinematik değişiklikleri ===
+Anlık kinematik değişiklikleri değerlendirmek amacıyla, tek eğitim seansının öncesinde ve hemen sonrasında kayıtlar alınacaktır. Video kayıtları için aynı akıllı telefon veya web kamerası modeli kullanılacaktır. Kamera, sabit bir yüksekliğe monte edilen tripod üzerine yerleştirilecek ve katılımcıya göre yan görünümde (90°) yaklaşık 1,5–2,0 m standart mesafede konumlandırılacaktır. Kayıtlar 1080p çözünürlükte ve saniyede 60 kare (fps) yapılacaktır. Yapay zeka takibini engelleyebilecek arkadan aydınlatma veya gölgeleri önlemek için kayıtlar tutarlı, dağınık aydınlatmaya sahip bir odada gerçekleş
+RUNS: [FF0000]Anlık kinematik değişiklikleri
+
+=== Birincil Sonuç Ölçütü ===
+
+Birincil Sonuç Ölçütü:
+RUNS: [FF0000]
+ | [FF0000]Birincil Sonuç Ölçütü:
+
+=== SPARC hesaplamasında ===
+SPARC hesaplamasında, bilek akselerometrisi mutlak hız profili [√(x²+y²+z²)] üzerinden teğetsel hız profili oluşturulacaktır. Hız sinyali normalize edildikten sonra hızlı Fourier dönüşümü (Fast Fourier Transform, FFT) uygulanarak frekans spektrumu elde edilecek ve 10 Hz'e kadar olan frekans bileşenleri analiz edilecektir. Ardından spektral eğrinin ark uzunluğu hesaplanarak SPARC değeri belirlenecektir (Balasubramanian ve ark., 2012; 2015).
+RUNS: [FF0000]SPARC hesaplamasında, bilek ak
+
+=== Gövde kompanzasyonu ===
+Ölçüm Yöntemi: Gövde kompanzasyonu, MediaPipe ile belirlenen gövde ve el hareketlerinin göreceli katkısını yansıtan Trunk Ratio parametresi kullanılarak hesaplanacaktır. Daha yüksek değerler, görevin gerçekleştirilmesi sırasında gövde kompanzasyonunun daha fazla kullanıldığını gösterecektir.
+RUNS: [FF0000]Ölçüm Yöntemi: Gövde kompanzas
+
+=== Omuz elevasyonu ===
+Ölçüm Yöntemi: Omuz elevasyonu, MediaPipe ile belirlenen etkilenen omuz landmark’ının dikey (Y ekseni) yer değiştirmesinin omuz genişliğine normalize edilmesiyle hesaplanacaktır (shoulder_vert_norm). Omuz genişliği için metrik ölçek, ZoeDepth monoküler derinlik ağı kullanılarak elde edilecektir. Daha yüksek değerler daha fazla telafi edici omuz elevasyonunu gösterecektir.
+RUNS: [FF0000]Ölçüm Yöntemi: Omuz elevasyonu
+
+=== Dirsek açısı ===
+Ölçüm Yöntemi: Dirsek açısı, MediaPipe ile belirlenen omuz–dirsek–el bileği noktaları arasında oluşturulan vektörler arasındaki açının hareket süresince her karede hesaplanması ve ortalama değerinin alınmasıyla belirlenecektir. Ölçüm özellikle sagittal düzlemden elde edilen görüntülerde yüksek doğruluk sağlamaktadır.
+RUNS: [FF0000]Ölçüm Yöntemi: Dirsek açısı, M
+
+=== Hareket süresi ===
+Ölçüm Yöntemi: Hareket süresi, Phyphox ile kaydedilen bilek akselerometrisi mutlak hız profilinin önceden belirlenen eşik değerin üzerinde kaldığı zaman aralığı (başlangıç–bitiş) olarak tanımlanacak ve milisaniye (ms) hassasiyetinde hesaplanacaktır. Daha kısa süreler daha hızlı hareket performansını gösterecektir.
+RUNS: [FF0000]Ölçüm Yöntemi: Hareket süresi,
+
+=== Tepe hız ===
+Ölçüm Yöntemi: Tepe hız, Phyphox ile kaydedilen bilek akselerometrisi mutlak hız profilinin hareket penceresi içerisinde ulaştığı en yüksek değer olarak hesaplanacak ve metre/saniye (m/s) cinsinden raporlanacaktır. Daha yüksek değerler daha hızlı hareket üretimini yansıtmaktadır.
+RUNS: [FF0000]Ölçüm Yöntemi: Tepe hız, Phyph
+
+=== Veri Toplama Yöntemleri ===
+Veri Toplama Yöntemleri
+RUNS: [FF0000]Veri Toplama Yöntemleri
+
+=== Sistem kalibrasyonunun ardından ===
+Sistem kalibrasyonunun ardından katılımcılardan Reach & Return görevini üç kez gerçekleştirmeleri istenecektir. Hareketler, MediaPipe tabanlı işaretsiz hareket yakalama sistemi ile video olarak kaydedilecek ve gövde kompanzasyonu (trunk ratio), omuz kuşağı elevasyonu ile dirsek açısı analiz edilecektir. Aynı denemeler sırasında etkilenen taraf bileğine sabitlenen Phyphox ile akselerometri verisi kaydedilerek SPARC, hareket süresi ve tepe hız hesaplanacaktır.
+RUNS: [FF0000]Sistem kalibrasyonunun ardında
+
+=== 19. Staacks ===
+19. Staacks S, Hütz S, Heinke H, Stampfer C. Advanced tools for smartphone-based experiments: phyphox. Phys Teach. 2021;59(3):214-215.
+RUNS: [FF0000]19. Staacks S, Hütz S, Heinke 

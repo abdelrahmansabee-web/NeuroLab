@@ -1,0 +1,47 @@
+{
+  "snapshot_id": "REFERENCE_SNAPSHOT_v32.96",
+  "created_at": "2026-09-17T10:26:15Z",
+  "purpose": "Full restore point of clinic UI 32.96: Task phases removed, NVP recounted from overlay peak_frames so total cannot be below a phase, clock-locked centripetal Catmull-Rom skeleton, MQ joint-specs gone, Drive originals as multipart.",
+  "nl_version": "32.96",
+  "clinician_verified": [
+    "Requested a new full program backup after 32.96 went live"
+  ],
+  "hf_space": {
+    "url": "https://huggingface.co/spaces/AbdelrahmanSabee/raedai",
+    "app_url": "https://abdelrahmansabee-raedai.hf.space/",
+    "git_url": "https://huggingface.co/spaces/AbdelrahmanSabee/raedai.git",
+    "commit": "40fe7f1cdea950f396bc5eed672588148ae1e089",
+    "commit_title": "32.96: Recount NVP from overlay peaks; Catmull-Rom skeleton; drop Task phases",
+    "frontend_nl_version": "32.96",
+    "js": "main.f4b78822.js",
+    "css": "main.21e1d84a.css",
+    "sdk": "docker",
+    "app_port": 7860
+  },
+  "github": {
+    "url": "https://github.com/abdelrahmansabee-web/NeuroLab",
+    "ref": "cursor/backup-full-v3296-f95a",
+    "source_commit": "a6baf01c57c7b2631e65c1dd6d911ca1094e8a3c",
+    "frontend_nl_version": "32.96",
+    "note": "github_source is GitHub HEAD 32.96 (NVP recount + Catmull-Rom + Task phases removed). Dirty CRA stubs were not copied."
+  },
+  "bytes": {
+    "github_source": 36377161,
+    "hf_space": 6776545,
+    "total": 43258219
+  },
+  "file_count": 812,
+  "excluded": [
+    ".git",
+    "venv/",
+    "node_modules/",
+    "uploads/ outputs/ data/ (patient runtime data)",
+    "backend/results and kinematic_analysis/videos (kept on the git tag, too large to duplicate here)",
+    "*.task MediaPipe models (Dockerfile downloads at build)",
+    "*.js.map source maps",
+    "stale HF main.<hash>.js bundles other than the live 32.96 files",
+    "HF Space secrets (JWT_SECRET, MFA_ENCRYPTION_KEY, Google Drive credentials)",
+    "nested REFERENCE_SNAPSHOT_v28.81 / v32.52 / v32.72 / v32.82 / v32.84 and backups/",
+    "dirty CRA stubs AuthGate.jsx analysisPlan.js index.js patientImport.js thesisDocs.js"
+  ]
+}
