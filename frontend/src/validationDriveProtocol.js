@@ -40,7 +40,10 @@ export function isReencodedValidationBake(blob, name) {
   const type = blobType(blob);
   const n = String(name || blobName(blob) || "").toLowerCase();
   if (n.includes("_validation_original")) return false;
-  if (type.includes("webm") && (n.endsWith(".mp4") || n.includes("_validation") && !n.includes("_original"))) {
+  if (
+    type.includes("webm")
+    && (n.endsWith(".mp4") || (n.includes("_validation") && !n.includes("_original")))
+  ) {
     return true;
   }
   if (n.endsWith(".webm") && n.includes("_validation") && !n.includes("_original")) return true;
