@@ -5,10 +5,25 @@
 
 import { authHeaders } from "./AuthGate";
 import { blobToBase64 } from "./downloadUtils";
-import { canonicalDriveName, driveNameCandidates as identityDriveNameCandidates } from "./driveDocIdentity";
+import { driveNameCandidates as identityDriveNameCandidates } from "./driveDocIdentity";
 
 const DRIVE_FILE_MAX_BYTES = 32 * 1024 * 1024;
 const LARGE_UPLOAD_BYTES = 28 * 1024 * 1024;
+
+export function driveTokenHeaders({ json = false } = {}) {
+  const headers = { ...authHeaders() };
+  if (!json) delete headers["Content-Type"];
+  return headers;
+}
+
+/** Videos must be multipart; JSON Content-Type on FormData drops the boundary and Drive never stores the file. */
+export function shouldMultipartDriveUpload(name, blob) {
+  if (!(blob instanceof Blob) || blob.size <= 0) return false;
+  if (blob.size > LARGE_UPLOAD_BYTES) return true;
+  const n = String(name || "").toLowerCase();
+  if (/\.(mp4|mov|m4v|webm)$/i.test(n)) return true;
+  return String(blob.type || "").toLowerCase().startsWith("video/");
+}
 
 export function validationOriginalDriveName(phase) {
   const p = phase === "baseline" ? "healthy" : phase;
@@ -53,7 +68,7 @@ export async function fetchDriveFile(patientKey, name, subfolder = "videos", opt
       });
       const res = await fetch(`/auth/restore-file?${q.toString()}`, {
         credentials: "same-origin",
-        headers: authHeaders(),
+        headers: driveTokenHeaders(),
         signal: ctrl?.signal,
       });
       if (res.status === 404 || !res.ok) continue;
@@ -68,21 +83,7 @@ export async function fetchDriveFile(patientKey, name, subfolder = "videos", opt
   return null;
 }
 
-async function backupBlobBase64(patientKey, name, blob, subfolder) {
-  const contentBase64 = await blobToBase64(blob);
-  const res = await fetch("/auth/backup-file", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name,
-      contentBase64,
-      mimeType: blob.type || "application/octet-stream",
-      patientKey,
-      subfolder,
-      scope: "team",
-    }),
-  });
+async function parseBackupResponse(res, name) {
   if (!res.ok) return false;
   try {
     const body = await res.json();
@@ -96,6 +97,24 @@ async function backupBlobBase64(patientKey, name, blob, subfolder) {
   return true;
 }
 
+async function backupBlobBase64(patientKey, name, blob, subfolder) {
+  const contentBase64 = await blobToBase64(blob);
+  const res = await fetch("/auth/backup-file", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: driveTokenHeaders({ json: true }),
+    body: JSON.stringify({
+      name,
+      contentBase64,
+      mimeType: blob.type || "application/octet-stream",
+      patientKey,
+      subfolder,
+      scope: "team",
+    }),
+  });
+  return parseBackupResponse(res, name);
+}
+
 async function backupBlobMultipart(patientKey, name, blob, subfolder) {
   const fd = new FormData();
   fd.append("file", blob, name);
@@ -106,20 +125,19 @@ async function backupBlobMultipart(patientKey, name, blob, subfolder) {
   const res = await fetch("/auth/backup-file-upload", {
     method: "POST",
     credentials: "same-origin",
-    headers: authHeaders(),
+    headers: driveTokenHeaders(),
     body: fd,
   });
-  if (!res.ok) return false;
-  try {
-    const body = await res.json();
-    if (body?.skipped) {
-      console.warn("Drive backup skipped:", name, body.reason);
-      return false;
-    }
-  } catch {
-    /* ignore */
+  return parseBackupResponse(res, name);
+}
+
+export async function backupDriveArtifact(patientKey, name, blob, subfolder = "videos") {
+  if (!patientKey || !name || !(blob instanceof Blob) || blob.size <= 0) return false;
+  if (shouldMultipartDriveUpload(name, blob)) {
+    return backupBlobMultipart(patientKey, name, blob, subfolder);
   }
-  return true;
+  if (blob.size > DRIVE_FILE_MAX_BYTES) return false;
+  return backupBlobBase64(patientKey, name, blob, subfolder);
 }
 
 export async function backupValidationArtifactsToDrive(patientKey, phase, record = {}) {
@@ -128,45 +146,40 @@ export async function backupValidationArtifactsToDrive(patientKey, phase, record
 
   if (record.overlay?.frames?.length) {
     const overlayBlob = new Blob([JSON.stringify(record.overlay)], { type: "application/json" });
-    if (overlayBlob.size <= DRIVE_FILE_MAX_BYTES) {
-      tasks.push(
-        backupBlobBase64(patientKey, validationOverlayDriveName(phase), overlayBlob, "data"),
-      );
-    }
+    tasks.push(backupDriveArtifact(patientKey, validationOverlayDriveName(phase), overlayBlob, "data"));
   }
 
   if (record.kinematicsSnapshot && typeof record.kinematicsSnapshot === "object") {
     const kinBlob = new Blob([JSON.stringify(record.kinematicsSnapshot)], {
       type: "application/json",
     });
-    if (kinBlob.size <= DRIVE_FILE_MAX_BYTES) {
-      tasks.push(
-        backupBlobBase64(patientKey, validationKinematicsDriveName(phase), kinBlob, "data"),
-      );
-    }
+    tasks.push(backupDriveArtifact(patientKey, validationKinematicsDriveName(phase), kinBlob, "data"));
   }
 
   if (record.originalVideoBlob instanceof Blob && record.originalVideoBlob.size > 0) {
-    const name = validationOriginalDriveName(phase);
-    const blob = record.originalVideoBlob;
-    if (blob.size > LARGE_UPLOAD_BYTES) {
-      tasks.push(backupBlobMultipart(patientKey, name, blob, "videos"));
-    } else if (blob.size <= DRIVE_FILE_MAX_BYTES) {
-      tasks.push(backupBlobBase64(patientKey, name, blob, "videos"));
-    }
+    tasks.push(
+      backupDriveArtifact(
+        patientKey,
+        validationOriginalDriveName(phase),
+        record.originalVideoBlob,
+        "videos",
+      ),
+    );
   }
 
   if (record.unifiedVideoBlob instanceof Blob && record.unifiedVideoBlob.size > 0) {
-    const name = validationUnifiedDriveName(phase, record.unifiedVideoBlob);
-    const blob = record.unifiedVideoBlob;
-    if (blob.size > LARGE_UPLOAD_BYTES) {
-      tasks.push(backupBlobMultipart(patientKey, name, blob, "videos"));
-    } else if (blob.size <= DRIVE_FILE_MAX_BYTES) {
-      tasks.push(backupBlobBase64(patientKey, name, blob, "videos"));
-    }
+    tasks.push(
+      backupDriveArtifact(
+        patientKey,
+        validationUnifiedDriveName(phase, record.unifiedVideoBlob),
+        record.unifiedVideoBlob,
+        "videos",
+      ),
+    );
   }
 
-  await Promise.allSettled(tasks);
+  const results = await Promise.allSettled(tasks);
+  return results.some((r) => r.status === "fulfilled" && r.value === true);
 }
 
 /**
@@ -179,6 +192,11 @@ export async function restoreValidationArtifactsFromDrive(patientKey, phase, nee
   const wantOriginal = needs.original !== false;
   const wantUnified = needs.unified !== false;
   const wantKinematics = needs.kinematics === true;
+
+  if (wantOriginal) {
+    const blob = await fetchDriveFile(patientKey, validationOriginalDriveName(phase), "videos");
+    if (blob) out.originalVideoBlob = blob;
+  }
 
   if (wantOverlay) {
     const blob = await fetchDriveFile(patientKey, validationOverlayDriveName(phase), "data");
@@ -204,11 +222,6 @@ export async function restoreValidationArtifactsFromDrive(patientKey, phase, nee
         console.warn("kinematics JSON parse failed:", err);
       }
     }
-  }
-
-  if (wantOriginal) {
-    const blob = await fetchDriveFile(patientKey, validationOriginalDriveName(phase), "videos");
-    if (blob) out.originalVideoBlob = blob;
   }
 
   if (wantUnified) {

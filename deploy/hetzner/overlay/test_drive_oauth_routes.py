@@ -16,6 +16,8 @@ class DriveOauthRoutesTests(unittest.TestCase):
         self.assertIn("huggingface.co", html)
         self.assertIn("/auth/drive/folder-status", html)
         self.assertIn("Folder", html)
+        self.assertIn("tap Connect Drive", html)
+        self.assertNotIn("open this page again", html)
         self.assertNotIn("الفولدر", html)
 
     def test_route_decorators_in_source(self) -> None:

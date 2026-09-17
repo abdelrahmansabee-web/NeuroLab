@@ -2,13 +2,14 @@
  * Recall analyzed sessions from Google Drive into IndexedDB on program open.
  * Hugging Face has no lasting video disk; Drive is the copy that must be fetched again.
  */
-import { authHeaders } from "./AuthGate";
 import { clinicReportDriveName, documentKind, patientDriveKeyFromDemographics } from "./driveDocIdentity";
 import {
   loadValidationSessionArtifact,
   saveValidationSessionArtifact,
 } from "./validationSessionCache";
 import {
+  backupValidationArtifactsToDrive,
+  driveTokenHeaders,
   fetchDriveFile,
   validationKinematicsDriveName,
   validationOriginalDriveName,
@@ -21,6 +22,91 @@ export const DRIVE_RECALL_START_EVENT = "neurolab-drive-recall-start";
 export const DRIVE_RECALL_LS = "nl_drive_recall_v1";
 export const PATIENTS_SYNC_EVENT = "neurolab-patients-synced";
 export const RECALL_COOLDOWN_MS = 45000;
+export const EMPTY_RECALL_WAIT_MS = 28000;
+
+export function isStandaloneDisplay() {
+  try {
+    return (typeof window !== "undefined")
+      && (
+        (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+        || window.navigator.standalone === true
+      );
+  } catch {
+    return false;
+  }
+}
+
+/** Home Screen storage is empty; wait for server restore before a no-op recall. */
+export function shouldWaitForPatientsBeforeRecall(patients, opts = {}) {
+  const list = Array.isArray(patients) ? patients : [];
+  if (list.length) return false;
+  if (opts.standalone === false) return false;
+  const standalone = opts.standalone === true || isStandaloneDisplay();
+  if (!standalone) return false;
+  const waited = Number(opts.waitedMs);
+  const maxWait = Number(opts.maxWaitMs) > 0 ? Number(opts.maxWaitMs) : EMPTY_RECALL_WAIT_MS;
+  return Number.isFinite(waited) ? waited < maxWait : true;
+}
+
+export function preferPatientInRecallList(list, preferredKey) {
+  const key = String(preferredKey || "").trim();
+  if (!key) return Array.isArray(list) ? list : [];
+  const rows = Array.isArray(list) ? list : [];
+  const hit = [];
+  const rest = [];
+  rows.forEach((p) => {
+    const k = patientDriveKeyFromDemographics(p?.demographics, p?._id);
+    if (k === key) hit.push(p);
+    else rest.push(p);
+  });
+  return hit.length ? [...hit, ...rest] : rows;
+}
+
+export function recallPoolSize(opts = {}) {
+  const standalone = opts.standalone === true || isStandaloneDisplay();
+  return standalone ? 1 : 2;
+}
+
+/** Blank Home Screen / new icon: wait for the signed-in email restore, do not race an empty recall. */
+export function shouldDeferBootRecallUntilEmailRestore(patients) {
+  return !Array.isArray(patients) || patients.length === 0;
+}
+
+const localDrivePushOnce = new Set();
+
+/** Safari / an icon that already has the original must copy it to Drive for every other icon. */
+export function shouldPushLocalRecallToDrive(existingCache, recalled) {
+  return blobOk(existingCache?.originalVideoBlob) && blobOk(recalled?.originalVideoBlob);
+}
+
+/** PRE original first so a new icon can play the analyzed clip before overlay JSON finishes. */
+export function recallPhaseFetchSteps(phasePlan, existingCache) {
+  const cache = existingCache || {};
+  const steps = [];
+  if (phasePlan?.wantOriginal && !blobOk(cache.originalVideoBlob)) steps.push("original");
+  if (phasePlan?.wantOverlay && !overlayOk(cache.overlay)) steps.push("overlay");
+  if (phasePlan?.wantKin && !kinNumbersOk(cache.kinematicsSnapshot)) steps.push("kin");
+  if (phasePlan?.wantUnified && !blobOk(cache.unifiedVideoBlob)) steps.push("unified");
+  return steps;
+}
+
+/** Home Screen storage starts empty — pull the server list before giving up. */
+export async function coalesceRecallPatients(seed, opts = {}) {
+  const clean = (list) => (Array.isArray(list) ? list : []).filter((p) => p && typeof p === "object" && !p._archived);
+  const fromSeed = clean(seed);
+  if (fromSeed.length) return fromSeed;
+  const fromLoaded = clean(typeof opts.loadPatients === "function" ? opts.loadPatients() : []);
+  if (fromLoaded.length) return fromLoaded;
+  if (typeof opts.pullRemotePatients !== "function") return [];
+  const remote = clean(await opts.pullRemotePatients());
+  if (!remote.length) return [];
+  if (typeof opts.savePatients === "function") {
+    const saved = opts.savePatients(remote);
+    const fromSaved = clean(saved);
+    return fromSaved.length ? fromSaved : remote;
+  }
+  return remote;
+}
 
 /** Empty boot recall must not block the real list that arrives a few seconds later. */
 export function shouldReuseRecentRecall(lastSummary, lastRecallAt, now = Date.now(), opts = {}) {
@@ -29,6 +115,14 @@ export function shouldReuseRecentRecall(lastSummary, lastRecallAt, now = Date.no
   if (!Number.isFinite(Number(lastRecallAt)) || now - lastRecallAt >= RECALL_COOLDOWN_MS) return false;
   if (!lastSummary.attempted) return false;
   return true;
+}
+
+function applyStandaloneRecallPlan(plan) {
+  if (!plan || !isStandaloneDisplay()) return plan;
+  return {
+    ...plan,
+    phases: (plan.phases || []).map((ph) => ({ ...ph, wantUnified: false })),
+  };
 }
 
 export const RECALL_PHASES = [
@@ -199,9 +293,10 @@ async function listPatientDriveFiles(patientKey) {
   if (!patientKey) return [];
   try {
     const q = new URLSearchParams({ patientKey, scope: "auto" });
+    const tokenHeaders = driveTokenHeaders();
     const res = await fetch(`/auth/list-patient-files?${q.toString()}`, {
       credentials: "same-origin",
-      headers: authHeaders(),
+      headers: tokenHeaders,
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -241,36 +336,52 @@ function mergeKinIntoPatient(patient, phase, snap) {
   };
 }
 
+async function pullDriveBlob(patientKey, name, subfolder, timeoutMs, retries = 0) {
+  let blob = await fetchDriveFile(patientKey, name, subfolder, { timeoutMs });
+  if (blobOk(blob) || retries < 1) return blob;
+  return fetchDriveFile(patientKey, name, subfolder, { timeoutMs });
+}
+
 async function recallOnePhase(patientKey, phasePlan, existingCache) {
   const phase = phasePlan.phase;
   const cache = existingCache || { patientKey, phase };
   const next = { ...cache, patientKey, phase };
-  const needs = {
-    original: phasePlan.wantOriginal && !blobOk(next.originalVideoBlob),
-    overlay: phasePlan.wantOverlay && !overlayOk(next.overlay),
-    kin: phasePlan.wantKin && !kinNumbersOk(next.kinematicsSnapshot),
-    unified: phasePlan.wantUnified && !blobOk(next.unifiedVideoBlob),
-  };
-  if (needs.overlay) {
-    const blob = await fetchDriveFile(patientKey, validationOverlayDriveName(phase), "data");
-    const parsed = await parseJsonBlob(blob);
-    if (overlayOk(parsed)) next.overlay = parsed;
-  }
-  if (needs.kin) {
-    const blob = await fetchDriveFile(patientKey, validationKinematicsDriveName(phase), "data");
-    const parsed = await parseJsonBlob(blob);
-    if (parsed) next.kinematicsSnapshot = parsed;
-  }
-  if (needs.original) {
-    const blob = await fetchDriveFile(patientKey, validationOriginalDriveName(phase), "videos");
-    if (blobOk(blob)) next.originalVideoBlob = blob;
-  }
-  if (needs.unified) {
-    const blob = await fetchDriveFile(patientKey, validationUnifiedDriveName(phase), "videos");
-    if (blobOk(blob)) next.unifiedVideoBlob = blob;
+  const timeoutMs = isStandaloneDisplay() ? 90000 : 180000;
+  for (const step of recallPhaseFetchSteps(phasePlan, next)) {
+    if (step === "original") {
+      const blob = await pullDriveBlob(patientKey, validationOriginalDriveName(phase), "videos", timeoutMs, 1);
+      if (blobOk(blob)) next.originalVideoBlob = blob;
+      continue;
+    }
+    if (step === "overlay") {
+      const blob = await pullDriveBlob(patientKey, validationOverlayDriveName(phase), "data", timeoutMs, 1);
+      const parsed = await parseJsonBlob(blob);
+      if (overlayOk(parsed)) next.overlay = parsed;
+      continue;
+    }
+    if (step === "kin") {
+      const blob = await pullDriveBlob(patientKey, validationKinematicsDriveName(phase), "data", timeoutMs, 1);
+      const parsed = await parseJsonBlob(blob);
+      if (parsed) next.kinematicsSnapshot = parsed;
+      continue;
+    }
+    if (step === "unified") {
+      const blob = await pullDriveBlob(patientKey, validationUnifiedDriveName(phase), "videos", timeoutMs, 0);
+      if (blobOk(blob)) next.unifiedVideoBlob = blob;
+    }
   }
   next.savedAt = Date.now();
   await saveValidationSessionArtifact(next);
+  if (shouldPushLocalRecallToDrive(cache, next)) {
+    const stamp = `${patientKey}:${phase}`;
+    if (!localDrivePushOnce.has(stamp)) {
+      localDrivePushOnce.add(stamp);
+      backupValidationArtifactsToDrive(patientKey, phase, next).catch((err) => {
+        localDrivePushOnce.delete(stamp);
+        console.warn("Drive re-push of local recall failed:", err);
+      });
+    }
+  }
   return next;
 }
 
@@ -280,7 +391,7 @@ async function recallOnePatient(patient) {
     return evaluateRecallPieces(planPatientRecall(patient, []), {});
   }
   const driveNames = await listPatientDriveFiles(patientKey);
-  const plan = planPatientRecall(patient, driveNames);
+  const plan = applyStandaloneRecallPlan(planPatientRecall(patient, driveNames));
   const kinds = driveKindsFromNames(driveNames);
   let pdfOk = kinds.has("clinic_report");
   if (plan.wantPdf && !pdfOk) {
@@ -416,11 +527,24 @@ export async function recallAnalyzedSessionsFromDrive(patients, opts = {}) {
     try {
       window.dispatchEvent(new Event(DRIVE_RECALL_START_EVENT));
     } catch { /* ignore */ }
-    const rows = await mapPool(list, 2, (patient) => recallOnePatient(patient));
-    const summary = summarizeRecallRows(rows);
+    let summary;
+    try {
+      const rows = await mapPool(list, recallPoolSize(), async (patient) => {
+        try {
+          return await recallOnePatient(patient);
+        } catch (err) {
+          console.warn("drive recall patient failed:", err);
+          return evaluateRecallPieces(planPatientRecall(patient, []), {});
+        }
+      });
+      summary = summarizeRecallRows(rows);
+      saveMergedPatients(rows);
+    } catch (err) {
+      console.warn("drive recall failed:", err);
+      summary = summarizeRecallRows([]);
+    }
     lastRecallAt = Date.now();
     lastSummary = summary;
-    saveMergedPatients(rows);
     persistRecallSummary(summary);
     const waiters = recallWaiters.splice(0);
     waiters.forEach((fn) => {

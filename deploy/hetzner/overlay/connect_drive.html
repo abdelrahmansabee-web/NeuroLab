@@ -150,20 +150,19 @@
           setupEl.hidden = false;
           return;
         }
-        if (!token) {
-          statusEl.className = "warn";
-          statusEl.textContent = "Sign in to RA.ED AI from the Home Screen icon first, then open this page again.";
-          return;
-        }
-        statusEl.className = "warn";
         if (d.ready && (d.staleTokenHint || !d.email)) {
+          statusEl.className = "warn";
           statusEl.textContent =
             "Drive token looks incomplete after a Space restart. Tap Reconnect and sign in again with the clinic Gmail.";
           bindConnect("Reconnect Drive");
           return;
         }
+        statusEl.className = "warn";
         statusEl.textContent = "Drive is not connected. Tap the button and sign in with the Gmail that has the clinic Drive.";
         bindConnect("Connect Drive");
+        if (!token) {
+          statusEl.textContent = "Sign in to RA.ED AI from the Home Screen icon first, then tap Connect Drive.";
+        }
       })
       .catch(() => {
         statusEl.className = "warn";

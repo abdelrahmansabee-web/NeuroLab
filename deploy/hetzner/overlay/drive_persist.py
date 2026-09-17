@@ -20,36 +20,68 @@ ALLOWED_VALIDATION_VIDEOS = {
     "pre_validation.mp4",
     "post_validation.mp4",
     "healthy_validation.mp4",
+    "pre_validation_original.mp4",
+    "post_validation_original.mp4",
+    "healthy_validation_original.mp4",
 }
 
 
+def _normalize_phase_stem(stem: str) -> Optional[str]:
+    s = (stem or "").lower().strip()
+    if not s:
+        return None
+    if s in ("baseline", "healthy", "healthy_side"):
+        return "healthy"
+    if s in ("pre", "post"):
+        return s
+    return None
+
+
 def clinic_drive_filename(name: str, patient_key: str = "") -> Optional[str]:
-    """Keep only the patient PDF and pre / post / healthy-side overlay mp4s."""
+    """Keep PDF, original clips, overlay/kinematics JSON, and baked validation mp4s."""
     raw = (name or "").strip()
     if not raw:
         return None
-    lower = raw.lower()
-    if lower.endswith(".pdf"):
+    try:
         from drive_doc_identity import canonicalize_upload_name
 
         mapped = canonicalize_upload_name(name, patient_key=patient_key)
         if mapped:
             return mapped
-        stem = _sanitize(Path(raw).stem) or "report"
-        return f"{stem}.pdf"
+    except Exception:
+        pass
+    lower = raw.lower()
+    stem = Path(raw).stem.lower()
+    if lower.endswith(".pdf"):
+        pdf_stem = _sanitize(Path(raw).stem) or "report"
+        return f"{pdf_stem}.pdf"
+    if lower.endswith(".json"):
+        if stem.endswith("_validation_overlay"):
+            phase = _normalize_phase_stem(stem[: -len("_validation_overlay")])
+            return f"{phase}_validation_overlay.json" if phase else None
+        if stem.endswith("_kinematics"):
+            phase = _normalize_phase_stem(stem[: -len("_kinematics")])
+            return f"{phase}_kinematics.json" if phase else None
+        return None
     if lower.endswith((".mp4", ".mov", ".m4v", ".webm")):
-        stem = Path(raw).stem.lower()
-        stem = (
+        if stem.endswith("_validation_original") or (
+            stem.endswith("_original") and not stem.endswith("_validation_original")
+        ):
+            base = (
+                stem[: -len("_validation_original")]
+                if stem.endswith("_validation_original")
+                else stem[: -len("_original")]
+            )
+            phase = _normalize_phase_stem(base)
+            return f"{phase}_validation_original.mp4" if phase else None
+        cleaned = (
             stem.replace("_validation_unified", "")
             .replace("_unified_validation", "")
             .replace("_validation", "")
         )
-        if stem in ("baseline", "healthy", "healthy_side"):
-            return "healthy_validation.mp4"
-        if stem == "pre":
-            return "pre_validation.mp4"
-        if stem == "post":
-            return "post_validation.mp4"
+        phase = _normalize_phase_stem(cleaned)
+        if phase:
+            return f"{phase}_validation.mp4"
         mapped = _sanitize(Path(raw).stem) + ".mp4"
         if mapped.lower() in ALLOWED_VALIDATION_VIDEOS:
             return mapped.lower()

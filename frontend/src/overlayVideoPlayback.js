@@ -32,6 +32,22 @@ export function overlayLivePaintFromCurrentTime({
 }
 
 /**
+ * First play after a Drive recall often never fires RVFC on iPad.
+ * The watchdog used to wait forever for that first mediaTime paint.
+ */
+export function overlayNeedsRafUntilFirstVfcPaint({
+  playing,
+  useVideoFrameCallback,
+  lastPaintMediaTime,
+  currentTime,
+} = {}) {
+  if (!playing) return false;
+  if (!useVideoFrameCallback) return false;
+  if (Number(lastPaintMediaTime) >= 0) return false;
+  return Number(currentTime) >= 0.08;
+}
+
+/**
  * Playback moved forward without a paint. currentTime behind last mediaTime is
  * iOS clock lag, not a stalled callback — do not use Math.abs.
  */

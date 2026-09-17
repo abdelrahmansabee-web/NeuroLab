@@ -3,8 +3,15 @@ import {
   evaluateRecallPieces,
   formatRecallToast,
   planPatientRecall,
+  recallPoolSize,
   shouldReuseRecentRecall,
+  shouldWaitForPatientsBeforeRecall,
+  coalesceRecallPatients,
+  preferPatientInRecallList,
   summarizeRecallRows,
+  shouldDeferBootRecallUntilEmailRestore,
+  recallPhaseFetchSteps,
+  shouldPushLocalRecallToDrive,
 } from "./driveSessionRestore";
 
 function patient({ id, name, pre, post, baseline } = {}) {
@@ -141,5 +148,71 @@ describe("driveSessionRestore", () => {
     expect(shouldReuseRecentRecall(real, Date.now() - 1000, Date.now())).toBe(true);
     expect(shouldReuseRecentRecall(real, Date.now() - 1000, Date.now(), { force: true })).toBe(false);
     expect(shouldReuseRecentRecall(real, Date.now() - 46000, Date.now())).toBe(false);
+  });
+
+  test("home screen waits for restored patients instead of recalling an empty list", () => {
+    expect(shouldWaitForPatientsBeforeRecall([], { standalone: true, waitedMs: 0 })).toBe(true);
+    expect(shouldWaitForPatientsBeforeRecall([], { standalone: true, waitedMs: 30000 })).toBe(false);
+    expect(shouldWaitForPatientsBeforeRecall([patient()], { standalone: true, waitedMs: 0 })).toBe(false);
+    expect(shouldWaitForPatientsBeforeRecall([], { standalone: false, waitedMs: 0 })).toBe(false);
+  });
+
+  test("home screen recalls one patient at a time", () => {
+    expect(recallPoolSize({ standalone: true })).toBe(1);
+    expect(recallPoolSize({ standalone: false })).toBe(2);
+  });
+
+  test("open patient is recalled before the rest of the list", () => {
+    const rows = [patient({ id: "101" }), patient({ id: "115", name: "Bea" }), patient({ id: "108" })];
+    const ordered = preferPatientInRecallList(rows, "115_Bea");
+    expect(ordered[0].demographics.participantId).toBe("115");
+    expect(ordered.map((p) => p.demographics.participantId)).toEqual(["115", "101", "108"]);
+  });
+
+  test("empty home-screen recall pulls the server patient list", async () => {
+    const remote = [patient({ id: "122" })];
+    const pulled = await coalesceRecallPatients([], {
+      loadPatients: () => [],
+      pullRemotePatients: async () => remote,
+    });
+    expect(pulled).toHaveLength(1);
+    expect(pulled[0].demographics.participantId).toBe("122");
+    const local = await coalesceRecallPatients([], {
+      loadPatients: () => [patient({ id: "101" })],
+      pullRemotePatients: async () => {
+        throw new Error("should not pull");
+      },
+    });
+    expect(local[0].demographics.participantId).toBe("101");
+  });
+
+  test("a blank icon waits for the signed-in email restore instead of racing an empty recall", () => {
+    expect(shouldDeferBootRecallUntilEmailRestore([])).toBe(true);
+    expect(shouldDeferBootRecallUntilEmailRestore(null)).toBe(true);
+    expect(shouldDeferBootRecallUntilEmailRestore([patient({ id: "101" })])).toBe(false);
+  });
+
+  test("recall downloads the original video before overlay JSON", () => {
+    const cachedOriginal = new Blob([new Uint8Array([1, 2, 3])], { type: "video/mp4" });
+    const steps = recallPhaseFetchSteps({
+      wantOriginal: true,
+      wantOverlay: true,
+      wantKin: true,
+      wantUnified: true,
+    }, {});
+    expect(steps[0]).toBe("original");
+    expect(steps).toEqual(["original", "overlay", "kin", "unified"]);
+    expect(recallPhaseFetchSteps({
+      wantOriginal: true,
+      wantOverlay: true,
+      wantKin: false,
+      wantUnified: false,
+    }, { originalVideoBlob: cachedOriginal })).toEqual(["overlay"]);
+  });
+
+  test("an icon that already has the original must copy it to Drive for other icons", () => {
+    const original = new Blob([new Uint8Array([1])], { type: "video/mp4" });
+    expect(shouldPushLocalRecallToDrive({ originalVideoBlob: original }, { originalVideoBlob: original })).toBe(true);
+    expect(shouldPushLocalRecallToDrive({}, { originalVideoBlob: original })).toBe(false);
   });
 });

@@ -42,6 +42,7 @@ import {
 import { clinicTrialRoleFromPhase, summarizeOverlayClock } from "./analysisPhaseCompare";
 import SessionStatusBar, { revealSessionStatusBar } from "./SessionStatusBar";
 import PtrIosSpinner from "./PtrIosSpinner";
+import { performHardRefresh } from "./hardRefresh";
 import AuthGate, { authHeaders, clearAuthToken, rememberLoginEmail } from "./AuthGate";
 import { downloadBlob as downloadBlobUtil, blobToBase64 } from "./downloadUtils";
 import {
@@ -50,8 +51,10 @@ import {
   shouldHydrateMediaBlobIntoState,
   shouldHydrateOverlayIntoState,
   validationCacheMatchesResult,
+  requestClinicPersistentStorage,
 } from "./validationSessionCache";
 import {
+  backupDriveArtifact,
   backupValidationArtifactsToDrive,
   restoreValidationArtifactsFromDrive,
   validationUnifiedDriveName,
@@ -61,6 +64,10 @@ import {
   DRIVE_RECALL_EVENT,
   formatRecallToast,
   recallAnalyzedSessionsFromDrive,
+  coalesceRecallPatients,
+  isDriveRecallRunning,
+  preferPatientInRecallList,
+  shouldDeferBootRecallUntilEmailRestore,
 } from "./driveSessionRestore";
 import {
   analysisResultErrorMessage,
@@ -633,7 +640,8 @@ function pumpDriveFileBackupQueue() {
       }
       const job = driveFileBackupQueue.shift();
       try {
-        await backupFileToDrive(job.name, job.blob, job.opts);
+        const ok = await backupFileToDrive(job.name, job.blob, job.opts);
+        if (!ok) driveFileBackupDone.delete(job.key);
       } catch {
         driveFileBackupDone.delete(job.key);
       }
@@ -648,9 +656,14 @@ function pumpDriveFileBackupQueue() {
   }
 }
 
+function isDriveVideoBackup(name, blob) {
+  if (/\.(mp4|mov|m4v|webm)$/i.test(String(name || ""))) return true;
+  return String(blob?.type || "").toLowerCase().startsWith("video/");
+}
+
 function scheduleDriveFileBackup(name, blob, opts = {}) {
   if (!blob || !(blob instanceof Blob)) return;
-  if (blob.size > DRIVE_FILE_MAX_BYTES) {
+  if (!isDriveVideoBackup(name, blob) && blob.size > DRIVE_FILE_MAX_BYTES) {
     console.warn("Drive backup skipped (file too large):", name, blob.size);
     return;
   }
@@ -699,8 +712,11 @@ function backupSessionKinematicsVideosToDrive(kinematicsData, demographics) {
 
 async function backupFileToDrive(name, blob, opts = {}) {
   try {
-    const contentBase64 = await blobToBase64(blob);
     const { patientKey, subfolder, scope } = opts;
+    if (patientKey) {
+      return backupDriveArtifact(patientKey, name, blob, subfolder || "videos");
+    }
+    const contentBase64 = await blobToBase64(blob);
     const r = await fetch("/auth/backup-file", {
       method: "POST",
       credentials: "same-origin",
@@ -714,7 +730,17 @@ async function backupFileToDrive(name, blob, opts = {}) {
         scope: scope || undefined,
       }),
     });
-    return r.ok;
+    if (!r.ok) return false;
+    try {
+      const body = await r.json();
+      if (body?.skipped) {
+        console.warn("Drive backup skipped:", name, body.reason);
+        return false;
+      }
+    } catch {
+      /* ignore non-JSON */
+    }
+    return true;
   } catch (e) {
     console.warn("Drive file backup failed:", e);
     return false;
@@ -767,17 +793,85 @@ async function restoreFromDrive() {
   }
 }
 
-function startDriveSessionRecall(patients, { showToast, force = false } = {}) {
-  const list = Array.isArray(patients) && patients.length ? patients : loadPatients();
-  if (!list.length) return Promise.resolve(null);
-  return recallAnalyzedSessionsFromDrive(list, {
-    force,
-    onDone: (summary) => {
-      const msg = formatRecallToast(summary);
-      if (msg) showToast?.(msg, summary.incomplete ? "warning" : "success");
-    },
-  }).catch((err) => {
+function emitRecallChipDone(detail = {}) {
+  if (isDriveRecallRunning()) return;
+  try {
+    window.dispatchEvent(new CustomEvent(DRIVE_RECALL_EVENT, {
+      detail: {
+        attempted: false,
+        complete: 0,
+        incomplete: 0,
+        rows: [],
+        ...detail,
+      },
+    }));
+  } catch { /* ignore */ }
+}
+
+let driveRecallKickoff = false;
+let driveRecallThisVisit = false;
+
+function startDriveSessionRecall(patients, { showToast, force = false, allowRepeat = false } = {}) {
+  return (async () => {
+    if (driveRecallKickoff || isDriveRecallRunning()) return null;
+    if (!allowRepeat && !force && driveRecallThisVisit) return null;
+    driveRecallKickoff = true;
+    try {
+      let list;
+      try {
+        list = await coalesceRecallPatients(patients, {
+          loadPatients,
+          savePatients: (remote) => {
+            const merged = mergePatientLists(loadPatients(), remote);
+            return savePatients(merged);
+          },
+          pullRemotePatients: async () => {
+            const r = await fetchWithTimeout("/api/patients", {}, 45000);
+            if (r.status === 401 || r.status === 403) {
+              const err = new Error("auth");
+              err.code = r.status;
+              throw err;
+            }
+            if (!r.ok) return [];
+            const data = await r.json().catch(() => []);
+            return Array.isArray(data) ? data : [];
+          },
+        });
+      } catch (err) {
+        if (err?.code === 401 || err?.code === 403) {
+          showToast?.("Sign in on this Home Screen icon to recall sessions from Drive", "error");
+        }
+        console.warn("Drive session recall patient pull failed:", err);
+        emitRecallChipDone({ error: "auth" });
+        return null;
+      }
+      if (!list.length) {
+        if (isStandalonePWA()) {
+          showToast?.("No sessions on this icon yet — sign in here, then wait for Recalling", "warning");
+        }
+        emitRecallChipDone();
+        return null;
+      }
+      let prefer = "";
+      try {
+        const fd = JSON.parse(localStorage.getItem("neuro_fd_data") || "{}");
+        prefer = patientDriveKeyFromDemographics(fd?.demographics, fd?._loadedId);
+      } catch { /* ignore */ }
+      list = preferPatientInRecallList(list, prefer);
+      driveRecallThisVisit = true;
+      return await recallAnalyzedSessionsFromDrive(list, {
+        force,
+        onDone: (summary) => {
+          const msg = formatRecallToast(summary);
+          if (msg) showToast?.(msg, summary.incomplete ? "warning" : "success");
+        },
+      });
+    } finally {
+      driveRecallKickoff = false;
+    }
+  })().catch((err) => {
     console.warn("Drive session recall failed:", err);
+    emitRecallChipDone({ error: "failed" });
     return null;
   });
 }
@@ -1077,11 +1171,12 @@ async function syncPatientsWithServerInner({ showToast, silent = false, skipDriv
   try {
     const now = Date.now();
     const localEmpty = !Array.isArray(localPts) || localPts.length === 0;
-    // Silent boot skips Drive for speed ? EXCEPT when this origin has no patients
-    // (Space rename / new Home Screen): then Drive folder+PDF restore is required.
+    // skipDrive must win even when this Home Screen icon has no local patients.
+    // Waiting on /auth/restore (up to 240s) blocked /api/patients from saving,
+    // so Recalling never started while Safari's already-synced list sat on the server.
     const skipDriveRestore =
-      !localEmpty &&
-      (skipDrive || silent || now - lastSilentDriveRestoreAt < SILENT_DRIVE_RESTORE_MS);
+      skipDrive ||
+      (!localEmpty && (silent || now - lastSilentDriveRestoreAt < SILENT_DRIVE_RESTORE_MS));
     const driveRestoreP = skipDriveRestore
       ? Promise.resolve([])
       : restoreFromDrive().then((pts) => {
@@ -1187,7 +1282,8 @@ async function syncPatientsWithServerInner({ showToast, silent = false, skipDriv
       );
     }
     console.warn("Patient sync error:", err);
-    return { ok: false, patients: localPts, pushed: false, timedOut };
+    const kept = loadPatients();
+    return { ok: false, patients: kept.length ? kept : localPts, pushed: false, timedOut };
   }
 }
 
@@ -1260,10 +1356,13 @@ async function applyIpadLocalStorageBackup() {
 /** One-time strong restore after Space rename / empty new-origin PWA. */
 async function restoreStudyDataFromServer({ showToast } = {}) {
   await applyIpadLocalStorageBackup();
-  // Prefer server + Drive merge; empty local must not wipe server records.
-  const result = await syncPatientsWithServer({ showToast, silent: false, skipDrive: false });
+  // Pull the server list first. Drive folder/PDF rebuild runs only if that list is empty.
+  let result = await syncPatientsWithServer({ showToast, silent: true, skipDrive: true });
+  if (!result?.patients?.length) {
+    result = await syncPatientsWithServer({ showToast, silent: true, skipDrive: false });
+  }
   if (result?.patients?.length) {
-    startDriveSessionRecall(result.patients, { force: true });
+    startDriveSessionRecall(result.patients, { showToast, force: true, allowRepeat: true });
   }
   return result;
 }
@@ -1312,7 +1411,7 @@ async function restorePatientsFromDriveNow({ showToast } = {}) {
     }
     showToast?.(`Restored ${merged.length} patient(s) from Drive${detail}`, "success");
     window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: merged.length } }));
-    startDriveSessionRecall(merged, { showToast, force: true });
+    startDriveSessionRecall(merged, { showToast, force: true, allowRepeat: true });
     return { ok: true, patients: merged, pushed: true };
   } catch (err) {
     console.warn("Restore from Drive failed:", err);
@@ -4287,12 +4386,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         if (!result) continue;
         const hasOverlay = Boolean(overlayData[ph.k]?.frames?.length);
         const hasOriginal = Boolean(originalVideoBlobsRef.current[ph.k]);
-        const hasUnified = Boolean(videoBlobsRef.current[ph.k]);
-        if (hasOverlay && hasOriginal && hasUnified) continue;
+        if (hasOverlay && hasOriginal) continue;
         const merged = await hydrateValidationFromCloud(ph.k, {
           overlay: !hasOverlay,
           original: !hasOriginal,
-          unified: !hasUnified,
+          unified: false,
           kinematics: !result.csv_filename,
         });
         if (cancelled) break;
@@ -4314,7 +4412,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         hydrateValidationFromCloud(ph.k, {
           overlay: true,
           original: true,
-          unified: true,
+          unified: false,
           kinematics: true,
         }).catch(() => {});
       });
@@ -9018,6 +9116,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    requestClinicPersistentStorage();
     let cancelled = false;
     const params = new URLSearchParams(window.location.search);
     const justConnected = params.get("drive") === "connected";
@@ -9030,9 +9129,14 @@ export default function App() {
     }
     const run = () => {
       if (cancelled || isKinAnalyzeActive()) return;
-      startDriveSessionRecall(loadPatients(), { showToast, force: justConnected });
+      if (!justConnected && shouldDeferBootRecallUntilEmailRestore(loadPatients())) return;
+      startDriveSessionRecall(loadPatients(), {
+        showToast,
+        force: justConnected,
+        allowRepeat: justConnected,
+      });
     };
-    const t = setTimeout(run, justConnected ? 600 : 2800);
+    const t = setTimeout(run, justConnected ? 600 : isStandalonePWA() ? 400 : 2800);
     const onSynced = (ev) => {
       if (ev?.detail?.skipDriveRecall) return;
       if (cancelled || isKinAnalyzeActive()) return;
@@ -9115,6 +9219,10 @@ export default function App() {
     }
     syncPatientsWithServer({ silent: true, skipDrive: true });
   }, [showToast]);
+
+  const runHardRefresh = useCallback(() => {
+    performHardRefresh({ version: readNlVersion() });
+  }, []);
 
   const logout = useCallback(() => {
     clearAuthToken();
@@ -9485,6 +9593,21 @@ export default function App() {
     </motion.button>
   );
 
+  const topBarHardRefreshBtn = (
+    <motion.button
+      type="button"
+      whileHover={{ scale: 1.05 }}
+      whileTap={nlMotionTap(0.95)}
+      onClick={runHardRefresh}
+      className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0"
+      style={GLASS_FIELD}
+      title="Reload app"
+      aria-label="Reload app"
+    >
+      <RefreshCw className="w-4 h-4" />
+    </motion.button>
+  );
+
   function DesktopUnifiedTopBar() {
     const shellRef = useRef(null);
     const rowRef = useRef(null);
@@ -9578,6 +9701,7 @@ export default function App() {
                 restoreBusy={Boolean(originRestoreBanner)}
                 onOpenSession={(record) => handleLoadSession(record, { section: "kinematics" })}
               />
+              {topBarHardRefreshBtn}
 
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -9605,7 +9729,7 @@ export default function App() {
     <DesktopUnifiedTopBar />
   ) : (
     <div
-      className={`app-topbar-glass glass-float relative flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl overflow-visible ${sidebar && !isDesktop ? "" : "pr-[7.5rem]"} ${GLASS_CLS}`}
+      className={`app-topbar-glass glass-float relative flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl overflow-visible ${sidebar && !isDesktop ? "" : "pr-[10.75rem]"} ${GLASS_CLS}`}
       style={{ boxShadow: FLOAT_M }}
     >
       {topBarMenuBtn}
@@ -9625,6 +9749,7 @@ export default function App() {
             restoreBusy={Boolean(originRestoreBanner)}
             onOpenSession={(record) => handleLoadSession(record, { section: "kinematics" })}
           />
+          {topBarHardRefreshBtn}
           <motion.button
             whileHover={{ scale: 1.08 }}
             whileTap={nlMotionTap(0.92)}
@@ -10304,6 +10429,9 @@ export default function App() {
         }
 
         .ptr-inner { position: relative; }
+        [data-nl-app-scroll="1"] {
+          overscroll-behavior-y: contain;
+        }
         .ptr-pull-content {
           transform: translate3d(0, 0, 0);
           backface-visibility: hidden;
@@ -10321,6 +10449,39 @@ export default function App() {
           height: 20px;
           transform: scale(var(--ptr-scale, 1));
           transform-origin: 50% 50%;
+        }
+        .ptr-ios-tick {
+          position: absolute;
+          left: 50%;
+          top: 0;
+          width: 11%;
+          height: 30%;
+          margin-left: -5.5%;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.92);
+          transform-origin: 50% 166.67%;
+          opacity: 0.18;
+        }
+        .ptr-ios-tick:nth-child(1) { transform: rotate(0deg); opacity: 1; }
+        .ptr-ios-tick:nth-child(2) { transform: rotate(45deg); opacity: 0.88; }
+        .ptr-ios-tick:nth-child(3) { transform: rotate(90deg); opacity: 0.74; }
+        .ptr-ios-tick:nth-child(4) { transform: rotate(135deg); opacity: 0.58; }
+        .ptr-ios-tick:nth-child(5) { transform: rotate(180deg); opacity: 0.42; }
+        .ptr-ios-tick:nth-child(6) { transform: rotate(225deg); opacity: 0.3; }
+        .ptr-ios-tick:nth-child(7) { transform: rotate(270deg); opacity: 0.2; }
+        .ptr-ios-tick:nth-child(8) { transform: rotate(315deg); opacity: 0.12; }
+        .ptr-spinning .ptr-ios-tick { animation: ptr-ios-fade 0.8s linear infinite; }
+        .ptr-spinning .ptr-ios-tick:nth-child(1) { animation-delay: -0.7s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(2) { animation-delay: -0.6s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(3) { animation-delay: -0.5s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(4) { animation-delay: -0.4s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(5) { animation-delay: -0.3s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(6) { animation-delay: -0.2s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(7) { animation-delay: -0.1s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(8) { animation-delay: 0s; }
+        @keyframes ptr-ios-fade {
+          0% { opacity: 1; }
+          100% { opacity: 0.12; }
         }
         video { outline: none; background: #000; }
         .grid { min-width: 0; }
