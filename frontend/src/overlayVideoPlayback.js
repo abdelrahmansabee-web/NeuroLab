@@ -79,63 +79,178 @@ function asLandmark(p) {
   return [x, y];
 }
 
-function centripetalCatmullRom(p0, p1, p2, p3, t) {
-  const alpha = 0.5;
-  const chord = (a, b) => {
-    const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    return Math.pow(Math.max(d, 1e-9), alpha);
-  };
-  const t0 = 0;
-  const t1 = t0 + chord(p0, p1);
-  const t2 = t1 + chord(p1, p2);
-  const t3 = t2 + chord(p2, p3);
-  const tVal = t1 + (t2 - t1) * Math.max(0, Math.min(1, t));
-  const lerp = (a, b, ta, tb, tq) => {
-    const span = tb - ta;
-    if (Math.abs(span) < 1e-12) return [a[0], a[1]];
-    const u = (tq - ta) / span;
-    return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
-  };
-  const A1 = lerp(p0, p1, t0, t1, tVal);
-  const A2 = lerp(p1, p2, t1, t2, tVal);
-  const A3 = lerp(p2, p3, t2, t3, tVal);
-  const B1 = lerp(A1, A2, t0, t2, tVal);
-  const B2 = lerp(A2, A3, t1, t3, tVal);
-  return lerp(B1, B2, t1, t2, tVal);
+/** Same centered Gaussian the recorded-clip HL path already uses. */
+export const OVERLAY_BODY_ZP_RADIUS = 3;
+export const OVERLAY_BODY_ZP_SIGMA = 1.2;
+export const OVERLAY_BODY_ZP_MAX_JUMP = 0.07;
+
+const OVERLAY_BODY_ZP_KEYS = new Set([
+  "shoulder", "elbow", "wrist", "palm", "trunk",
+  "lshoulder", "rshoulder", "lelbow", "relbow", "lwrist", "rwrist",
+  "lhip", "rhip", "lknee", "rknee", "lankle", "rankle",
+  "nose", "lear", "rear",
+  "leye", "reye", "leye_inner", "leye_outer", "reye_inner", "reye_outer",
+  "mouth_l", "mouth_r",
+]);
+
+const bodyZpCache = typeof WeakMap === "function" ? new WeakMap() : null;
+let bodyZpFallbackFrames = null;
+let bodyZpFallbackStore = null;
+
+function gaussianKernel(radius, sigma) {
+  const r = Math.max(0, Number(radius) || 0);
+  const s = Math.max(Number(sigma) || 0, 1e-6);
+  const k = [];
+  let sum = 0;
+  for (let i = -r; i <= r; i += 1) {
+    const v = Math.exp(-0.5 * (i / s) ** 2);
+    k.push(v);
+    sum += v;
+  }
+  return sum > 0 ? k.map((v) => v / sum) : k;
+}
+
+function reflectIndex(i, n) {
+  if (n <= 1) return 0;
+  const period = 2 * (n - 1);
+  let x = i % period;
+  if (x < 0) x += period;
+  return x < n ? x : period - x;
+}
+
+function smooth1dRun(vals, kernel) {
+  const r = (kernel.length - 1) >> 1;
+  const n = vals.length;
+  if (n === 0) return [];
+  if (n === 1 || r <= 0) return vals.slice();
+  const out = new Array(n);
+  for (let i = 0; i < n; i += 1) {
+    let acc = 0;
+    for (let k = 0; k < kernel.length; k += 1) {
+      acc += vals[reflectIndex(i + k - r, n)] * kernel[k];
+    }
+    out[i] = acc;
+  }
+  return out;
 }
 
 /**
- * Clock-locked centripetal Catmull-Rom between stored samples.
- * Interpolates the pose (hits every sample, no EMA lag). Maximum smoothness
- * that still stays on the analyzed overlay clock.
+ * Centered Gaussian per contiguous run. Splits on NaN or a teleport.
+ * Causal filters trail the limb; this clip is already recorded.
  */
-export function blendOverlayLandmark(prev, a, b, next, alpha) {
+export function smoothXyZeroPhase(xs, ys, {
+  radius = OVERLAY_BODY_ZP_RADIUS,
+  sigma = OVERLAY_BODY_ZP_SIGMA,
+  maxJump = OVERLAY_BODY_ZP_MAX_JUMP,
+} = {}) {
+  const n = Math.min(xs.length, ys.length);
+  const outX = new Array(n).fill(NaN);
+  const outY = new Array(n).fill(NaN);
+  const kernel = gaussianKernel(radius, sigma);
+  const jump = Number(maxJump);
+  let i = 0;
+  while (i < n) {
+    if (!Number.isFinite(xs[i]) || !Number.isFinite(ys[i])) {
+      i += 1;
+      continue;
+    }
+    let j = i + 1;
+    while (j < n && Number.isFinite(xs[j]) && Number.isFinite(ys[j])) {
+      if (Math.hypot(xs[j] - xs[j - 1], ys[j] - ys[j - 1]) > jump) break;
+      j += 1;
+    }
+    const runX = smooth1dRun(xs.slice(i, j), kernel);
+    const runY = smooth1dRun(ys.slice(i, j), kernel);
+    for (let k = 0; k < runX.length; k += 1) {
+      outX[i + k] = runX[k];
+      outY[i + k] = runY[k];
+    }
+    i = j;
+  }
+  return { x: outX, y: outY };
+}
+
+function overlayUsesHandLandmarker(frames) {
+  for (let i = 0; i < frames.length; i += 1) {
+    if (frames[i]?.hand_hl) return true;
+  }
+  return false;
+}
+
+export function shouldSmoothOverlayBodyKey(key, frames) {
+  if (typeof key !== "string" || !OVERLAY_BODY_ZP_KEYS.has(key)) return false;
+  if (key === "palm" && overlayUsesHandLandmarker(frames)) return false;
+  return true;
+}
+
+function bodyZpStore(frames) {
+  if (bodyZpCache) {
+    let store = bodyZpCache.get(frames);
+    if (!store) {
+      store = Object.create(null);
+      bodyZpCache.set(frames, store);
+    }
+    return store;
+  }
+  if (bodyZpFallbackFrames !== frames) {
+    bodyZpFallbackFrames = frames;
+    bodyZpFallbackStore = Object.create(null);
+  }
+  return bodyZpFallbackStore;
+}
+
+function smoothedBodyPairs(frames, key) {
+  const store = bodyZpStore(frames);
+  if (store[key]) return store[key];
+  const xs = new Array(frames.length);
+  const ys = new Array(frames.length);
+  for (let i = 0; i < frames.length; i += 1) {
+    const p = asLandmark(frames[i]?.[key]);
+    xs[i] = p ? p[0] : NaN;
+    ys[i] = p ? p[1] : NaN;
+  }
+  const sm = smoothXyZeroPhase(xs, ys);
+  const pairs = sm.x.map((x, i) => (
+    Number.isFinite(x) && Number.isFinite(sm.y[i]) ? [x, sm.y[i]] : null
+  ));
+  store[key] = pairs;
+  return pairs;
+}
+
+/**
+ * Clock-locked linear blend between stored samples (32.72 freeze).
+ * Hits every sample; does not overshoot detector noise the way Catmull-Rom did.
+ */
+export function blendOverlayLandmark(_prev, a, b, _next, alpha) {
   const p1 = asLandmark(a);
   const p2 = asLandmark(b);
   if (!p1 && !p2) return null;
   if (!p1) return p2;
   if (!p2 || !(alpha > 0)) return p1;
   if (alpha >= 1) return p2;
-  const p0 = asLandmark(prev) || p1;
-  const p3 = asLandmark(next) || p2;
-  return centripetalCatmullRom(p0, p1, p2, p3, alpha);
+  return [
+    p1[0] + (p2[0] - p1[0]) * alpha,
+    p1[1] + (p2[1] - p1[1]) * alpha,
+  ];
 }
 
-/** Sample a landmark at getOverlayFrameState idx/alpha using 4 neighboring frames. */
+/** Sample a landmark at getOverlayFrameState idx/alpha. Body bones use display-only zero-phase. */
 export function overlayLandmarkAt(frames, idx, alpha, getter) {
   if (!frames?.length) return null;
   const i1 = Math.max(0, Math.min(frames.length - 1, Number(idx) || 0));
-  const i0 = Math.max(0, i1 - 1);
   const i2 = Math.min(frames.length - 1, i1 + 1);
-  const i3 = Math.min(frames.length - 1, i2 + 1);
+  if (typeof getter === "string" && shouldSmoothOverlayBodyKey(getter, frames)) {
+    const pairs = smoothedBodyPairs(frames, getter);
+    return blendOverlayLandmark(null, pairs[i1], pairs[i2], null, alpha);
+  }
   const pick = typeof getter === "function"
     ? getter
     : (frame) => frame?.[getter];
   return blendOverlayLandmark(
-    pick(frames[i0]),
+    null,
     pick(frames[i1]),
     pick(frames[i2]),
-    pick(frames[i3]),
+    null,
     alpha,
   );
 }
