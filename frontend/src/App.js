@@ -76,6 +76,7 @@ import {
   readLastDriveRecall,
   shouldDeferBootRecallUntilEmailRestore,
   shouldRetryEmptyBootRecall,
+  waitForRecallPatients,
 } from "./driveSessionRestore";
 import {
   analysisResultErrorMessage,
@@ -3979,7 +3980,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       : null;
     const wantOverlay = needs.overlay !== false && !existingValid?.overlay?.frames?.length;
     const wantOriginal = needs.original !== false && !(existingValid?.originalVideoBlob?.size > 0);
-    const wantUnified = needs.unified !== false && !(existingValid?.unifiedVideoBlob?.size > 0);
+    const wantUnified = needs.unified === true && !(existingValid?.unifiedVideoBlob?.size > 0);
     const wantKinematics = needs.kinematics === true && !existingValid?.kinematicsSnapshot;
     if (!wantOverlay && !wantOriginal && !wantUnified && !wantKinematics) {
       if (existingValid) applyValidationCacheToState(phase, existingValid);
@@ -4888,8 +4889,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       const res = await fetch(url);
       if (res.status === 404) {
         if (await applyCachedUnified()) return;
-        const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
-        if (validationCacheMatchesResult(cloud, phaseResult, { relaxCsvMatch: true }) && cloud?.unifiedVideoBlob?.size) return;
+        const cloud = await hydrateValidationFromCloud(phase, { overlay: true, original: true, unified: false });
+        if (validationCacheMatchesResult(cloud, phaseResult, { relaxCsvMatch: true }) && cloud?.originalVideoBlob?.size) return;
         if (!silent) showToast("Validation video expired on server — please re-analyze", "error");
         setVideoBlobs((prev) => {
           if (prev[phase]) URL.revokeObjectURL(prev[phase]);
@@ -4913,8 +4914,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     } catch (err) {
       console.error("Failed to cache validation video:", err);
       if (await applyCachedUnified()) return;
-      const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
-      if (validationCacheMatchesResult(cloud, phaseResult, { relaxCsvMatch: true }) && cloud?.unifiedVideoBlob?.size) return;
+      const cloud = await hydrateValidationFromCloud(phase, { overlay: true, original: true, unified: false });
+      if (validationCacheMatchesResult(cloud, phaseResult, { relaxCsvMatch: true }) && cloud?.originalVideoBlob?.size) return;
       if (!silent) showToast("Validation video could not be loaded — try expanding it", "error");
       setVideoBlobs((prev) => {
         if (prev[phase]) URL.revokeObjectURL(prev[phase]);
@@ -9049,10 +9050,36 @@ export default function App() {
         window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
       } catch { /* ignore */ }
     }
-    const run = () => {
+    const pullRemotePatients = async () => {
+      const r = await fetchWithTimeout("/api/patients", {}, 45000);
+      if (r.status === 401 || r.status === 403) {
+        const err = new Error("auth");
+        err.code = r.status;
+        throw err;
+      }
+      if (!r.ok) return [];
+      const data = await r.json().catch(() => []);
+      return Array.isArray(data) ? data : [];
+    };
+    const run = async () => {
       if (cancelled || isKinAnalyzeActive()) return;
-      if (!justConnected && shouldDeferBootRecallUntilEmailRestore(loadPatients())) return;
-      startDriveSessionRecall(loadPatients(), {
+      let seed = loadPatients();
+      if (!justConnected && shouldDeferBootRecallUntilEmailRestore(seed)) {
+        seed = await waitForRecallPatients(seed, {
+          waitForEmailRestore: true,
+          standalone: isStandalonePWA(),
+          maxWaitMs: EMPTY_RECALL_WAIT_MS,
+          retryMs: 1500,
+          loadPatients,
+          savePatients: (remote) => {
+            const merged = mergePatientLists(loadPatients(), remote);
+            return savePatients(merged);
+          },
+          pullRemotePatients,
+        });
+        if (cancelled || isKinAnalyzeActive()) return;
+      }
+      startDriveSessionRecall(seed, {
         showToast,
         force: justConnected,
         allowRepeat: justConnected,

@@ -212,6 +212,63 @@ describe("driveSessionRestore", () => {
     expect(pulled[0].demographics.participantId).toBe("122");
   });
 
+  test("boot wait also runs on Safari tabs, not only Home Screen icons", async () => {
+    let t = 0;
+    const pulled = await waitForRecallPatients([], {
+      waitForEmailRestore: true,
+      standalone: false,
+      now: () => t,
+      retryMs: 10,
+      maxWaitMs: 100,
+      sleep: async () => { t += 10; },
+      loadPatients: () => (t >= 20 ? [patient({ id: "108" })] : []),
+      pullRemotePatients: async () => [],
+    });
+    expect(pulled[0].demographics.participantId).toBe("108");
+  });
+
+  test("boot wait keeps polling when /api/patients is still 401 during email restore", async () => {
+    let t = 0;
+    let pulls = 0;
+    const pulled = await waitForRecallPatients([], {
+      waitForEmailRestore: true,
+      now: () => t,
+      retryMs: 10,
+      maxWaitMs: 100,
+      sleep: async () => { t += 10; },
+      loadPatients: () => [],
+      pullRemotePatients: async () => {
+        pulls += 1;
+        if (pulls < 3) {
+          const err = new Error("auth");
+          err.code = 401;
+          throw err;
+        }
+        return [patient({ id: "115" })];
+      },
+    });
+    expect(pulled[0].demographics.participantId).toBe("115");
+    expect(pulls).toBeGreaterThanOrEqual(3);
+  });
+
+  test("recall never treats a Drive bake as the on-screen validation picture", () => {
+    const plan = planPatientRecall(
+      patient({
+        id: "101",
+        pre: {
+          csv_filename: "a.csv",
+          video_filename: "a.mp4",
+          unified_validation_video: "pre_validation.mp4",
+          movement_time_sec: 1,
+        },
+      }),
+      ["pre_validation_original.mp4", "pre_validation_overlay.json", "pre_validation.mp4"],
+    );
+    expect(plan.phases[0].wantOriginal).toBe(true);
+    expect(plan.phases[0].wantOverlay).toBe(true);
+    expect(plan.phases[0].wantUnified).toBe(false);
+  });
+
   test("recall downloads the original video before overlay JSON", () => {
     const cachedOriginal = new Blob([new Uint8Array([1, 2, 3])], { type: "video/mp4" });
     const steps = recallPhaseFetchSteps({

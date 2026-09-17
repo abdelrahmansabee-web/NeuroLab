@@ -98,7 +98,13 @@ export async function coalesceRecallPatients(seed, opts = {}) {
   const fromLoaded = clean(typeof opts.loadPatients === "function" ? opts.loadPatients() : []);
   if (fromLoaded.length) return fromLoaded;
   if (typeof opts.pullRemotePatients !== "function") return [];
-  const remote = clean(await opts.pullRemotePatients());
+  let remote = [];
+  try {
+    remote = clean(await opts.pullRemotePatients());
+  } catch {
+    // Email / cookie restore may still be in flight (401). Keep waiting.
+    return [];
+  }
   if (!remote.length) return [];
   if (typeof opts.savePatients === "function") {
     const saved = opts.savePatients(remote);
@@ -119,14 +125,28 @@ export async function waitForRecallPatients(seed, opts = {}) {
   const sleep = typeof opts.sleep === "function"
     ? opts.sleep
     : (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  const pull = async (list) => coalesceRecallPatients(list, opts);
+  const stillWaiting = (list, waitedMs) => {
+    if (opts.waitForEmailRestore) {
+      if (!shouldDeferBootRecallUntilEmailRestore(list)) return false;
+      const maxWait = Number(opts.maxWaitMs) > 0 ? Number(opts.maxWaitMs) : EMPTY_RECALL_WAIT_MS;
+      return waitedMs < maxWait;
+    }
+    return shouldWaitForPatientsBeforeRecall(list, {
+      standalone: opts.standalone,
+      waitedMs,
+      maxWaitMs: opts.maxWaitMs,
+    });
+  };
+  const pull = async (list) => {
+    try {
+      return await coalesceRecallPatients(list, opts);
+    } catch {
+      return Array.isArray(list) ? list.filter((p) => p && typeof p === "object" && !p._archived) : [];
+    }
+  };
   let current = Array.isArray(seed) ? seed : [];
   let list = await pull(current);
-  while (shouldWaitForPatientsBeforeRecall(list, {
-    standalone: opts.standalone,
-    waitedMs: nowFn() - started,
-    maxWaitMs: opts.maxWaitMs,
-  })) {
+  while (stillWaiting(list, nowFn() - started)) {
     await sleep(retryMs);
     current = typeof opts.loadPatients === "function" ? opts.loadPatients() : current;
     list = await pull(current);
@@ -226,7 +246,8 @@ export function planPatientRecall(patient, driveNames = []) {
       wantOriginal: expected,
       wantOverlay: expected,
       wantKin: expected,
-      wantUnified: !!(jsonUnifiedName || onDrive.unified),
+      // Seen validation is original + overlay canvas. Never recall a bake as the picture.
+      wantUnified: false,
       jsonKin,
     };
   });

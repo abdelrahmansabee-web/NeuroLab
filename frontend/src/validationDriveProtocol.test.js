@@ -39,6 +39,18 @@ describe("Drive seen-validation protocol", () => {
     );
     expect(merged.originalVideoBlob).toBe(live);
     expect(validationDriveUploadPlan(merged).original).toBe(true);
+    expect(validationDriveUploadPlan(merged).overlay).toBe(true);
+  });
+
+  test("overlay JSON is not a Drive upload until the original clip is attached", () => {
+    const overlayOnly = mergeSeenValidationRecord(
+      null,
+      { overlay: { frames: [{ t: 1 }] } },
+      null,
+    );
+    const plan = validationDriveUploadPlan(overlayOnly);
+    expect(plan.overlay).toBe(false);
+    expect(plan.original).toBe(false);
   });
 
   test("CSV analysis is not uploaded as the original clip", () => {

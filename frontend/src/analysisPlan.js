@@ -754,3 +754,62 @@ export function sigStars(p) {
   if (p < 0.05) return "*";
   return "ns";
 }
+
+/** SPSS-ready demographic columns (numeric codes aligned with app GSelect values). */
+export const DEMO_SPSS_KEYS = [
+  "ID",
+  "Group",
+  "Age",
+  "Sex",
+  "TimeSinceStroke",
+  "StrokeType",
+  "AffectedSide",
+  "DominantHand",
+  "Hemisphere",
+  "DiseaseStage",
+  "MAS",
+  "MRC",
+];
+
+const MAS_UI_TO_SPSS = { "0": 0, "1": 1, "1+": 2, "2": 3, "3": 4, "4": 5 };
+const DOMINANT_HAND_TO_SPSS = { right: 1, left: 2, both: 3 };
+const HEMISPHERE_TO_SPSS = { left: 1, right: 2, bilateral: 3 };
+const DISEASE_STAGE_TO_SPSS = { acute: 1, subacute: 2, chronic: 3 };
+
+function spssNumericOrBlank(v) {
+  if (v === "" || v === null || v === undefined) return "";
+  const n = Number(v);
+  return Number.isFinite(n) ? n : "";
+}
+
+function mapUiToSpss(map, raw) {
+  if (raw === "" || raw === null || raw === undefined) return "";
+  const key = String(raw).trim().toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(map, key)) return map[key];
+  if (Object.prototype.hasOwnProperty.call(map, String(raw).trim())) return map[String(raw).trim()];
+  return "";
+}
+
+export function exportDemographicsForSpss(d = {}) {
+  const masRaw = d.mas ?? "";
+  let masSpss = "";
+  if (masRaw !== "" && masRaw != null) {
+    const k = String(masRaw).trim();
+    if (Object.prototype.hasOwnProperty.call(MAS_UI_TO_SPSS, k)) masSpss = MAS_UI_TO_SPSS[k];
+  }
+
+  return {
+    ID: d.participantId != null && d.participantId !== "" ? String(d.participantId) : "",
+    Group: spssNumericOrBlank(d.group),
+    Age: spssNumericOrBlank(d.age),
+    Sex: spssNumericOrBlank(d.sex),
+    TimeSinceStroke: spssNumericOrBlank(d.timeSinceStroke),
+    StrokeType: spssNumericOrBlank(d.strokeType),
+    AffectedSide: spssNumericOrBlank(d.side),
+    DominantHand: mapUiToSpss(DOMINANT_HAND_TO_SPSS, d.dominantHand),
+    Hemisphere: mapUiToSpss(HEMISPHERE_TO_SPSS, d.hemisphere),
+    DiseaseStage: mapUiToSpss(DISEASE_STAGE_TO_SPSS, d.diseaseStage),
+    MAS: masSpss,
+    MRC: spssNumericOrBlank(d.mrc),
+  };
+}

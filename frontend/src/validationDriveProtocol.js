@@ -85,10 +85,12 @@ export function mergeSeenValidationRecord(existing, partial = {}, liveOriginal) 
 }
 
 export function validationDriveUploadPlan(record = {}) {
+  const original = isVideoOriginalBlob(record.originalVideoBlob);
   return {
-    overlay: overlayOk(record.overlay),
+    // Overlay JSON without the original clip cannot rebuild what the eye sees.
+    overlay: overlayOk(record.overlay) && original,
     kinematics: !!(record.kinematicsSnapshot && typeof record.kinematicsSnapshot === "object"),
-    original: isVideoOriginalBlob(record.originalVideoBlob),
+    original,
     unified: shouldUploadUnifiedValidationToDrive(record.unifiedVideoBlob, record.unifiedVideoFilename),
   };
 }

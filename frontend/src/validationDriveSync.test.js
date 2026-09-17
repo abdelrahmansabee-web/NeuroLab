@@ -65,12 +65,29 @@ describe("validationDriveSync upload protocol", () => {
     }));
     const prevFetch = global.fetch;
     global.fetch = fetchMock;
+    const original = new Blob([new Uint8Array([1, 2, 3, 4])], { type: "video/mp4" });
+    await backupValidationArtifactsToDrive("101_Ada", "pre", {
+      overlay: { frames: [{ t: 0 }] },
+      originalVideoBlob: original,
+    });
+    global.fetch = prevFetch;
+    const jsonCall = fetchMock.mock.calls.find((call) => call[0] === "/auth/backup-file");
+    expect(jsonCall).toBeTruthy();
+    expect(jsonCall[1].headers["Content-Type"]).toBe("application/json");
+  });
+
+  test("overlay JSON is not uploaded without the original clip", async () => {
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true }),
+    }));
+    const prevFetch = global.fetch;
+    global.fetch = fetchMock;
     await backupValidationArtifactsToDrive("101_Ada", "pre", {
       overlay: { frames: [{ t: 0 }] },
     });
     global.fetch = prevFetch;
-    expect(fetchMock.mock.calls[0][0]).toBe("/auth/backup-file");
-    expect(fetchMock.mock.calls[0][1].headers["Content-Type"]).toBe("application/json");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test("MediaRecorder bake is not uploaded as *_validation.mp4", async () => {
