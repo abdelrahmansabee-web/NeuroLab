@@ -9,6 +9,8 @@ import {
   coalesceRecallPatients,
   preferPatientInRecallList,
   summarizeRecallRows,
+  shouldDeferBootRecallUntilEmailRestore,
+  recallPhaseFetchSteps,
 } from "./driveSessionRestore";
 
 function patient({ id, name, pre, post, baseline } = {}) {
@@ -181,5 +183,29 @@ describe("driveSessionRestore", () => {
       },
     });
     expect(local[0].demographics.participantId).toBe("101");
+  });
+
+  test("a blank icon waits for the signed-in email restore instead of racing an empty recall", () => {
+    expect(shouldDeferBootRecallUntilEmailRestore([])).toBe(true);
+    expect(shouldDeferBootRecallUntilEmailRestore(null)).toBe(true);
+    expect(shouldDeferBootRecallUntilEmailRestore([patient({ id: "101" })])).toBe(false);
+  });
+
+  test("recall downloads the original video before overlay JSON", () => {
+    const cachedOriginal = new Blob([new Uint8Array([1, 2, 3])], { type: "video/mp4" });
+    const steps = recallPhaseFetchSteps({
+      wantOriginal: true,
+      wantOverlay: true,
+      wantKin: true,
+      wantUnified: true,
+    }, {});
+    expect(steps[0]).toBe("original");
+    expect(steps).toEqual(["original", "overlay", "kin", "unified"]);
+    expect(recallPhaseFetchSteps({
+      wantOriginal: true,
+      wantOverlay: true,
+      wantKin: false,
+      wantUnified: false,
+    }, { originalVideoBlob: cachedOriginal })).toEqual(["overlay"]);
   });
 });

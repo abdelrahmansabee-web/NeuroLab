@@ -66,6 +66,22 @@ export function recallPoolSize(opts = {}) {
   return standalone ? 1 : 2;
 }
 
+/** Blank Home Screen / new icon: wait for the signed-in email restore, do not race an empty recall. */
+export function shouldDeferBootRecallUntilEmailRestore(patients) {
+  return !Array.isArray(patients) || patients.length === 0;
+}
+
+/** PRE original first so a new icon can play the analyzed clip before overlay JSON finishes. */
+export function recallPhaseFetchSteps(phasePlan, existingCache) {
+  const cache = existingCache || {};
+  const steps = [];
+  if (phasePlan?.wantOriginal && !blobOk(cache.originalVideoBlob)) steps.push("original");
+  if (phasePlan?.wantOverlay && !overlayOk(cache.overlay)) steps.push("overlay");
+  if (phasePlan?.wantKin && !kinNumbersOk(cache.kinematicsSnapshot)) steps.push("kin");
+  if (phasePlan?.wantUnified && !blobOk(cache.unifiedVideoBlob)) steps.push("unified");
+  return steps;
+}
+
 /** Home Screen storage starts empty — pull the server list before giving up. */
 export async function coalesceRecallPatients(seed, opts = {}) {
   const clean = (list) => (Array.isArray(list) ? list : []).filter((p) => p && typeof p === "object" && !p._archived);
@@ -324,29 +340,28 @@ async function recallOnePhase(patientKey, phasePlan, existingCache) {
   const cache = existingCache || { patientKey, phase };
   const next = { ...cache, patientKey, phase };
   const timeoutMs = isStandaloneDisplay() ? 90000 : 180000;
-  const needs = {
-    original: phasePlan.wantOriginal && !blobOk(next.originalVideoBlob),
-    overlay: phasePlan.wantOverlay && !overlayOk(next.overlay),
-    kin: phasePlan.wantKin && !kinNumbersOk(next.kinematicsSnapshot),
-    unified: phasePlan.wantUnified && !blobOk(next.unifiedVideoBlob),
-  };
-  if (needs.overlay) {
-    const blob = await pullDriveBlob(patientKey, validationOverlayDriveName(phase), "data", timeoutMs, 1);
-    const parsed = await parseJsonBlob(blob);
-    if (overlayOk(parsed)) next.overlay = parsed;
-  }
-  if (needs.kin) {
-    const blob = await pullDriveBlob(patientKey, validationKinematicsDriveName(phase), "data", timeoutMs, 1);
-    const parsed = await parseJsonBlob(blob);
-    if (parsed) next.kinematicsSnapshot = parsed;
-  }
-  if (needs.original) {
-    const blob = await pullDriveBlob(patientKey, validationOriginalDriveName(phase), "videos", timeoutMs, 1);
-    if (blobOk(blob)) next.originalVideoBlob = blob;
-  }
-  if (needs.unified) {
-    const blob = await pullDriveBlob(patientKey, validationUnifiedDriveName(phase), "videos", timeoutMs, 0);
-    if (blobOk(blob)) next.unifiedVideoBlob = blob;
+  for (const step of recallPhaseFetchSteps(phasePlan, next)) {
+    if (step === "original") {
+      const blob = await pullDriveBlob(patientKey, validationOriginalDriveName(phase), "videos", timeoutMs, 1);
+      if (blobOk(blob)) next.originalVideoBlob = blob;
+      continue;
+    }
+    if (step === "overlay") {
+      const blob = await pullDriveBlob(patientKey, validationOverlayDriveName(phase), "data", timeoutMs, 1);
+      const parsed = await parseJsonBlob(blob);
+      if (overlayOk(parsed)) next.overlay = parsed;
+      continue;
+    }
+    if (step === "kin") {
+      const blob = await pullDriveBlob(patientKey, validationKinematicsDriveName(phase), "data", timeoutMs, 1);
+      const parsed = await parseJsonBlob(blob);
+      if (parsed) next.kinematicsSnapshot = parsed;
+      continue;
+    }
+    if (step === "unified") {
+      const blob = await pullDriveBlob(patientKey, validationUnifiedDriveName(phase), "videos", timeoutMs, 0);
+      if (blobOk(blob)) next.unifiedVideoBlob = blob;
+    }
   }
   next.savedAt = Date.now();
   await saveValidationSessionArtifact(next);

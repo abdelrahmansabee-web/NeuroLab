@@ -66,6 +66,7 @@ import {
   coalesceRecallPatients,
   isDriveRecallRunning,
   preferPatientInRecallList,
+  shouldDeferBootRecallUntilEmailRestore,
 } from "./driveSessionRestore";
 import {
   analysisResultErrorMessage,
@@ -793,7 +794,7 @@ let driveRecallThisVisit = false;
 function startDriveSessionRecall(patients, { showToast, force = false, allowRepeat = false } = {}) {
   return (async () => {
     if (driveRecallKickoff || isDriveRecallRunning()) return null;
-    if (!allowRepeat && driveRecallThisVisit) return null;
+    if (!allowRepeat && !force && driveRecallThisVisit) return null;
     driveRecallKickoff = true;
     try {
       let list;
@@ -1341,7 +1342,7 @@ async function restoreStudyDataFromServer({ showToast } = {}) {
     result = await syncPatientsWithServer({ showToast, silent: true, skipDrive: false });
   }
   if (result?.patients?.length) {
-    startDriveSessionRecall(result.patients, { showToast, force: true });
+    startDriveSessionRecall(result.patients, { showToast, force: true, allowRepeat: true });
   }
   return result;
 }
@@ -9108,6 +9109,7 @@ export default function App() {
     }
     const run = () => {
       if (cancelled || isKinAnalyzeActive()) return;
+      if (!justConnected && shouldDeferBootRecallUntilEmailRestore(loadPatients())) return;
       startDriveSessionRecall(loadPatients(), {
         showToast,
         force: justConnected,

@@ -182,6 +182,11 @@ export async function restoreValidationArtifactsFromDrive(patientKey, phase, nee
   const wantUnified = needs.unified !== false;
   const wantKinematics = needs.kinematics === true;
 
+  if (wantOriginal) {
+    const blob = await fetchDriveFile(patientKey, validationOriginalDriveName(phase), "videos");
+    if (blob) out.originalVideoBlob = blob;
+  }
+
   if (wantOverlay) {
     const blob = await fetchDriveFile(patientKey, validationOverlayDriveName(phase), "data");
     if (blob) {
@@ -206,11 +211,6 @@ export async function restoreValidationArtifactsFromDrive(patientKey, phase, nee
         console.warn("kinematics JSON parse failed:", err);
       }
     }
-  }
-
-  if (wantOriginal) {
-    const blob = await fetchDriveFile(patientKey, validationOriginalDriveName(phase), "videos");
-    if (blob) out.originalVideoBlob = blob;
   }
 
   if (wantUnified) {
