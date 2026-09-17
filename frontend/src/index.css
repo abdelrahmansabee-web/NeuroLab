@@ -8,7 +8,9 @@
 }
 
 .glass-slider-fill {
-  transition: width 0.1s cubic-bezier(0.22, 1, 0.36, 1);
+  width: 100%;
+  transform-origin: left center;
+  transition: transform 0.1s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .glass-slider-track.is-dragging .glass-slider-fill {
@@ -83,7 +85,8 @@ input[type="range"]::-webkit-slider-runnable-track {
   background: rgba(0, 0, 0, 0.28);
 }
 
-.validation-player-home[data-expanded="1"] {
+.validation-player-home[data-expanded="1"],
+.validation-player-home[data-flipping="1"] {
   overflow: visible;
 }
 
@@ -533,6 +536,33 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   overflow: visible;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+}
+
+.section-nav-motion {
+  animation: nl-section-enter 0.22s cubic-bezier(0.33, 1, 0.68, 1) both;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+@keyframes nl-section-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-nav-motion {
+    animation: none !important;
+  }
+}
+
+.section-transition-animating .section-pane,
+.section-transition-animating .section-nav-motion {
   transform: translateZ(0);
 }
 

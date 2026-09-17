@@ -50,6 +50,13 @@ const CONTAINING_BLOCK_PROPS = [
   "-webkit-clip-path",
 ];
 
+/** Clinic glass / layer classes that create a containing block for position:fixed. */
+const CONTAINING_BLOCK_CLASS_RE =
+  /(?:^|\s)(?:glass-float|content-shell|content-panel-glass|sidebar-shell|section-pane|section-header|app-topbar-glass|gselect-trigger-shell|gselect-menu-portal|section-nav-motion)(?:\s|$)/;
+
+export const OVERLAY_FLIP_MS = 180;
+export const OVERLAY_FLIP_EASE = "cubic-bezier(0.33, 1, 0.68, 1)";
+
 export function overlaySlotAspect(overlayData, videoAspect) {
   const live = Number(videoAspect);
   if (Number.isFinite(live) && live > 0.05) return live;
@@ -129,11 +136,89 @@ function propValue(prop) {
   return prop === "will-change" ? "auto" : "none";
 }
 
+function computedCreatesContainingBlock(value, prop) {
+  const v = String(value || "").trim().toLowerCase();
+  if (!v) return false;
+  if (v === "none") return false;
+  if (prop === "will-change" && (v === "auto" || v === "scroll-position")) return false;
+  if (prop === "contain" && (v === "none" || v === "strict" || v === "content")) {
+    return v === "strict" || v === "content" || /\b(?:layout|paint|size)\b/.test(v);
+  }
+  return true;
+}
+
+/** Skip empty wrappers / html / body so expand does not restyle the whole clinic. */
+export function ancestorNeedsContainingBlockUnlock(node) {
+  if (!node || node === document.documentElement || node === document.body) return false;
+  const className = typeof node.className === "string" ? node.className : "";
+  if (CONTAINING_BLOCK_CLASS_RE.test(className)) return true;
+  if (node.style) {
+    for (let i = 0; i < CONTAINING_BLOCK_PROPS.length; i += 1) {
+      const prop = CONTAINING_BLOCK_PROPS[i];
+      if (computedCreatesContainingBlock(node.style.getPropertyValue(prop), prop)) return true;
+    }
+  }
+  if (typeof window === "undefined" || typeof window.getComputedStyle !== "function") return false;
+  const cs = window.getComputedStyle(node);
+  for (let i = 0; i < CONTAINING_BLOCK_PROPS.length; i += 1) {
+    const prop = CONTAINING_BLOCK_PROPS[i];
+    if (computedCreatesContainingBlock(cs.getPropertyValue(prop), prop)) return true;
+  }
+  return false;
+}
+
+export function overlayFlipEnabled() {
+  if (typeof window === "undefined") return false;
+  return !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+}
+
+export function overlayFlipInvert(fromBox, toBox) {
+  if (!fromBox || !toBox) return null;
+  if (!(fromBox.width >= 2) || !(fromBox.height >= 2)) return null;
+  if (!(toBox.width >= 2) || !(toBox.height >= 2)) return null;
+  const dx = fromBox.left - toBox.left;
+  const dy = fromBox.top - toBox.top;
+  const sx = fromBox.width / toBox.width;
+  const sy = fromBox.height / toBox.height;
+  if (
+    Math.abs(dx) < 1 &&
+    Math.abs(dy) < 1 &&
+    Math.abs(sx - 1) < 0.02 &&
+    Math.abs(sy - 1) < 0.02
+  ) {
+    return null;
+  }
+  return { dx, dy, sx, sy };
+}
+
+export function applyOverlayFlipInvert(el, invert) {
+  if (!el || !el.style || !invert) return;
+  el.style.transition = "none";
+  el.style.willChange = "transform";
+  el.style.transformOrigin = "top left";
+  el.style.transform = `translate3d(${invert.dx}px, ${invert.dy}px, 0) scale(${invert.sx}, ${invert.sy})`;
+}
+
+export function playOverlayFlip(el) {
+  if (!el || !el.style) return;
+  el.style.transition = `transform ${OVERLAY_FLIP_MS}ms ${OVERLAY_FLIP_EASE}`;
+  el.style.transform = "none";
+}
+
+export function clearOverlayFlip(el) {
+  if (!el || !el.style) return;
+  el.style.transition = "";
+  el.style.transform = "";
+  el.style.transformOrigin = "";
+  el.style.willChange = "";
+}
+
 /**
  * Clear filter/transform containing blocks on the ancestor path.
  * Uses inline !important so clinic glass `backdrop-filter: … !important` cannot keep
  * position:fixed trapped (video on the right, results table painted on top).
  * Never changes overflow — that froze the iPad scroller.
+ * Skips ancestors that are not containing blocks so expand does not restyle the page.
  */
 export function captureContainingBlockStyles(fromEl) {
   const saved = [];
@@ -141,6 +226,8 @@ export function captureContainingBlockStyles(fromEl) {
   let node = fromEl.parentElement;
   while (node && node !== document.documentElement) {
     const target = node;
+    node = node.parentElement;
+    if (!ancestorNeedsContainingBlockUnlock(target)) continue;
     const inline = {};
     const priority = {};
     for (let i = 0; i < CONTAINING_BLOCK_PROPS.length; i += 1) {
@@ -152,7 +239,6 @@ export function captureContainingBlockStyles(fromEl) {
     const addedClass = !target.classList.contains(OVERLAY_ESCAPE_CLASS);
     if (addedClass) target.classList.add(OVERLAY_ESCAPE_CLASS);
     saved.push({ node: target, inline, priority, addedClass });
-    node = node.parentElement;
   }
   return saved;
 }
