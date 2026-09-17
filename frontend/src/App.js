@@ -172,9 +172,10 @@ function nlMotionHover(scale = 1.02) {
 const SIDEBAR_W = 255;
 const SIDEBAR_X_HIDDEN = -280;
 const MOBILE_SIDEBAR_W = "75%";
-/** Sidebar aside slide (transform); main/top bar use width + inset for centered content. */
+/** Sidebar aside slide (transform). Do not animate main left/width — that
+ *  recomposites clinic glass every frame and resizes overlay videos for 320ms. */
 const SIDEBAR_SHELL_TRANSITION = "transform 320ms cubic-bezier(0.32, 0.72, 0, 1)";
-const SIDEBAR_LAYOUT_TRANSITION = "left 320ms cubic-bezier(0.32, 0.72, 0, 1), width 320ms cubic-bezier(0.32, 0.72, 0, 1), margin-left 320ms cubic-bezier(0.32, 0.72, 0, 1)";
+const SIDEBAR_LAYOUT_TRANSITION = "none";
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
   if (window.matchMedia("(min-width: 768px)").matches) return SIDEBAR_W;
@@ -2025,7 +2026,8 @@ const ThickSlider = ({ value, min = 0, max = 10, step = 0.5, color = "sky", onCh
   }, [value, min, max, step]);
 
   const paint = useCallback((v) => {
-    if (fillRef.current) fillRef.current.style.width = `${toPct(v)}%`;
+    if (!fillRef.current) return;
+    fillRef.current.style.transform = `scaleX(${toPct(v) / 100})`;
   }, [min, max]);
 
   useEffect(() => {
@@ -2120,7 +2122,9 @@ const ThickSlider = ({ value, min = 0, max = 10, step = 0.5, color = "sky", onCh
           ref={fillRef}
           className="glass-slider-fill absolute inset-y-0 left-0 rounded-full"
           style={{
-            width: `${pct}%`,
+            width: "100%",
+            transform: `scaleX(${Math.max(0, Math.min(1, pct / 100))})`,
+            transformOrigin: "left center",
             background: `linear-gradient(90deg, ${gradFrom}, ${gradTo})`,
             boxShadow: "inset 0 1px 0 rgba(255,255,255,0.28)",
           }}
@@ -2592,7 +2596,7 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
           })}
         </div>
         {(data.comorbidities || []).includes("other") && (
-          <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }} className="mt-3">
+          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: [0.33, 1, 0.68, 1] }} className="mt-3">
             <GI en="Specify other" tr="Specify other" value={data.otherComorbidity} onChange={(e) => s("otherComorbidity", e.target.value)} placeholder="Other conditions?" />
           </motion.div>
         )}
@@ -5416,11 +5420,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                         <AnimatePresence>
                           {expandedResults[ph.k] && (
                             <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: "auto", opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.25 }}
-                              className="overflow-hidden"
+                              initial={{ opacity: 0, y: -8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -8 }}
+                              transition={{ duration: 0.2, ease: [0.33, 1, 0.68, 1] }}
                             >
                               <div className="rounded-xl border border-white/[0.08] bg-black/30 overflow-hidden">
                                 <div
@@ -5849,7 +5852,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[99998] flex flex-col bg-black/95 backdrop-blur-sm"
+            className="fixed inset-0 z-[99998] flex flex-col bg-black/95"
             onClick={() => setMediaPreview(null)}
           >
             <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 gap-2" onClick={(e) => e.stopPropagation()}>
@@ -8611,8 +8614,12 @@ function SectionTransition({
       }${animating ? " section-transition-animating" : ""}`}
       aria-busy={animating}
     >
-      <div ref={contentRef} className="section-pane section-content-root">
+      <div
+        ref={contentRef}
+        className="section-pane section-content-root"
+      >
         <div
+          key={sectionId}
           onAnimationEnd={handleAnimEnd}
           className={`section-nav-motion${paneAnimClass}`}
         >
@@ -10497,7 +10504,7 @@ export default function App() {
               <motion.button
                 type="button"
                 aria-label="Close menu"
-                className="absolute inset-0 bg-black/50 backdrop-blur-[3px]"
+                className="absolute inset-0 bg-black/50"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}

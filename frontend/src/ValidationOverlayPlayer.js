@@ -79,6 +79,13 @@ import {
   restoreContainingBlockStyles,
   lockOverlayAppScroller,
   unlockOverlayAppScroller,
+  readSlotBox,
+  overlayFlipEnabled,
+  overlayFlipInvert,
+  applyOverlayFlipInvert,
+  playOverlayFlip,
+  clearOverlayFlip,
+  OVERLAY_FLIP_MS,
 } from "./overlayExpandLayout";
 import {
   drawClinicalSkeleton,
@@ -725,6 +732,9 @@ export function ValidationOverlayPlayer({
   isExpandedRef.current = isExpanded;
   const [isTouchUi, setIsTouchUi] = useState(false);
   const homeRef = useRef(null);
+  const flipFromBoxRef = useRef(null);
+  const savedContainingRef = useRef(null);
+  const drawOverlayRef = useRef(() => {});
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const rafRef = useRef(null);
@@ -1788,6 +1798,7 @@ export function ValidationOverlayPlayer({
     }
 
   }, [frames, fps, win, peakV, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, tremorCameraTrack, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, overlayStyle, showKinematicMarks]);
+  drawOverlayRef.current = drawOverlay;
 
   const drawRecordingFrame = useCallback(() => {
     const video = videoRef.current;
@@ -2426,9 +2437,15 @@ export function ValidationOverlayPlayer({
     return () => mq.removeEventListener?.("change", syncTouch);
   }, []);
 
-  const exitExpanded = useCallback(() => {
-    setIsExpanded(false);
+  const captureFlipFromBox = useCallback(() => {
+    flipFromBoxRef.current =
+      readSlotBox(containerRef.current) || readSlotBox(homeRef.current);
   }, []);
+
+  const exitExpanded = useCallback(() => {
+    captureFlipFromBox();
+    setIsExpanded(false);
+  }, [captureFlipFromBox]);
 
   const requestFullscreen = () => {
     if (isExpanded) {
@@ -2440,6 +2457,7 @@ export function ValidationOverlayPlayer({
       savedTimeRef.current = video.currentTime;
       wasPlayingRef.current = !video.paused;
     }
+    captureFlipFromBox();
     setIsExpanded(true);
   };
 
@@ -2574,27 +2592,101 @@ export function ValidationOverlayPlayer({
   useLayoutEffect(() => {
     const html = document.documentElement;
     const player = containerRef.current;
-    if (!isExpanded) {
-      html.classList.remove("nl-overlay-expanded");
-      return undefined;
-    }
-    html.classList.add("nl-overlay-expanded");
-    const saved = captureContainingBlockStyles(player);
-    return () => {
-      html.classList.remove("nl-overlay-expanded");
-      restoreContainingBlockStyles(saved);
+    const home = homeRef.current;
+    if (!player) return undefined;
+
+    let raf = 0;
+    let timer = 0;
+    let finished = false;
+
+    const finishFlip = (after) => (evt) => {
+      if (finished) return;
+      if (evt && evt.target && evt.target !== player) return;
+      if (evt && evt.propertyName && evt.propertyName !== "transform") return;
+      finished = true;
+      clearOverlayFlip(player);
+      if (home) home.removeAttribute("data-flipping");
+      after?.();
     };
+
+    const restoreEscape = () => {
+      if (savedContainingRef.current) {
+        html.classList.remove("nl-overlay-expanded");
+        restoreContainingBlockStyles(savedContainingRef.current);
+        savedContainingRef.current = null;
+      }
+      clearOverlayFlip(player);
+      if (home) home.removeAttribute("data-flipping");
+    };
+
+    if (isExpanded) {
+      html.classList.add("nl-overlay-expanded");
+      savedContainingRef.current = captureContainingBlockStyles(player);
+      const invert = overlayFlipInvert(flipFromBoxRef.current, readSlotBox(player));
+      const skipFlip = !overlayFlipEnabled() || !invert;
+      if (!skipFlip) {
+        if (home) home.setAttribute("data-flipping", "1");
+        applyOverlayFlipInvert(player, invert);
+        raf = requestAnimationFrame(() => playOverlayFlip(player));
+        const done = finishFlip(() => {
+          lastPaintMediaTimeRef.current = -1;
+          drawOverlayRef.current();
+        });
+        player.addEventListener("transitionend", done);
+        timer = window.setTimeout(done, OVERLAY_FLIP_MS + 80);
+        return () => {
+          cancelAnimationFrame(raf);
+          window.clearTimeout(timer);
+          player.removeEventListener("transitionend", done);
+          clearOverlayFlip(player);
+        };
+      }
+      lastPaintMediaTimeRef.current = -1;
+      raf = requestAnimationFrame(() => {
+        lastPaintMediaTimeRef.current = -1;
+        drawOverlayRef.current();
+      });
+      return () => {
+        cancelAnimationFrame(raf);
+        clearOverlayFlip(player);
+      };
+    }
+
+    const invert = overlayFlipInvert(flipFromBoxRef.current, readSlotBox(player));
+    const skipFlip = !overlayFlipEnabled() || !invert || !savedContainingRef.current;
+    if (!skipFlip) {
+      if (home) home.setAttribute("data-flipping", "1");
+      applyOverlayFlipInvert(player, invert);
+      raf = requestAnimationFrame(() => playOverlayFlip(player));
+      const done = finishFlip(() => {
+        restoreEscape();
+        lastPaintMediaTimeRef.current = -1;
+        drawOverlayRef.current();
+      });
+      player.addEventListener("transitionend", done);
+      timer = window.setTimeout(done, OVERLAY_FLIP_MS + 80);
+      return () => {
+        cancelAnimationFrame(raf);
+        window.clearTimeout(timer);
+        player.removeEventListener("transitionend", done);
+        restoreEscape();
+      };
+    }
+    restoreEscape();
+    return undefined;
   }, [isExpanded]);
 
-  useLayoutEffect(() => {
-    if (!isExpanded) return undefined;
-    lastPaintMediaTimeRef.current = -1;
-    const id = requestAnimationFrame(() => {
-      lastPaintMediaTimeRef.current = -1;
-      drawOverlay();
-    });
-    return () => cancelAnimationFrame(id);
-  }, [isExpanded, drawOverlay]);
+  useLayoutEffect(() => () => {
+    if (!savedContainingRef.current) {
+      clearOverlayFlip(containerRef.current);
+      return;
+    }
+    document.documentElement.classList.remove("nl-overlay-expanded");
+    restoreContainingBlockStyles(savedContainingRef.current);
+    savedContainingRef.current = null;
+    clearOverlayFlip(containerRef.current);
+    homeRef.current?.removeAttribute("data-flipping");
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;

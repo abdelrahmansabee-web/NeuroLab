@@ -9,9 +9,14 @@ import {
   restoreContainingBlockStyles,
   lockOverlayAppScroller,
   unlockOverlayAppScroller,
+  overlayFlipInvert,
+  applyOverlayFlipInvert,
+  playOverlayFlip,
+  clearOverlayFlip,
   OVERLAY_PORTAL_Z_COMPACT,
   OVERLAY_PORTAL_Z_EXPANDED,
   OVERLAY_APP_SCROLL_EXPANDED_Z,
+  OVERLAY_FLIP_MS,
 } from "./overlayExpandLayout";
 
 test("expanded chrome covers the viewport without using the card slot", () => {
@@ -117,17 +122,24 @@ test("containing-block unlock beats stylesheet !important without touching overf
   parent.style.overflow = "hidden";
   const child = document.createElement("div");
   parent.appendChild(child);
-  scroller.appendChild(parent);
+  const wrap = document.createElement("div");
+  wrap.appendChild(parent);
+  scroller.appendChild(wrap);
   document.body.appendChild(scroller);
 
   const saved = captureContainingBlockStyles(child);
   expect(parent.style.overflow).toBe("hidden");
   expect(scroller.style.overflow).toBe("auto");
   expect(scroller.style.overflowY).toBe("auto");
+  expect(saved.some((entry) => entry.node === parent)).toBe(true);
+  expect(saved.some((entry) => entry.node === wrap)).toBe(false);
+  expect(saved.some((entry) => entry.node === scroller)).toBe(false);
   expect(parent.style.getPropertyPriority("transform")).toBe("important");
   expect(parent.style.getPropertyValue("transform")).toBe("none");
   expect(parent.style.getPropertyValue("filter")).toBe("none");
   expect(parent.classList.contains("nl-overlay-escape")).toBe(true);
+  expect(wrap.classList.contains("nl-overlay-escape")).toBe(false);
+  expect(scroller.style.getPropertyValue("transform")).toBe("");
 
   restoreContainingBlockStyles(saved);
   expect(parent.style.overflow).toBe("hidden");
@@ -147,4 +159,34 @@ test("compact overlay tools wrap instead of painting labels over icons", () => {
   expect(css).toMatch(/@container overlay-controls/);
   expect(css).toMatch(/\.validation-control-icon\.is-active/);
   expect(css).toMatch(/\.validation-control-icon\.is-table-place/);
+  expect(css).toMatch(/data-flipping="1"/);
+  expect(css).toMatch(
+    /\.glass-slider-fill \{\s*width: 100%;\s*transform-origin: left center;\s*transition:\s*transform/,
+  );
+  expect(css).toMatch(/@keyframes nl-section-enter/);
+  expect(css).not.toMatch(/\.section-pane\s*\{[^}]*transform:\s*translateZ\(0\)/s);
+});
+
+test("overlay FLIP invert maps the compact card onto the fullscreen box", () => {
+  const invert = overlayFlipInvert(
+    { left: 40, top: 80, width: 320, height: 180 },
+    { left: 0, top: 0, width: 1280, height: 720 },
+  );
+  expect(invert).toEqual({ dx: 40, dy: 80, sx: 0.25, sy: 0.25 });
+  expect(overlayFlipInvert(
+    { left: 0, top: 0, width: 400, height: 200 },
+    { left: 0, top: 0, width: 400, height: 200 },
+  )).toBe(null);
+  expect(OVERLAY_FLIP_MS).toBe(180);
+
+  const el = document.createElement("div");
+  applyOverlayFlipInvert(el, invert);
+  expect(el.style.transformOrigin).toBe("top left");
+  expect(el.style.transform).toContain("translate3d(40px, 80px, 0)");
+  playOverlayFlip(el);
+  expect(el.style.transition).toContain("transform");
+  expect(el.style.transform).toBe("none");
+  clearOverlayFlip(el);
+  expect(el.style.transform).toBe("");
+  expect(el.style.transition).toBe("");
 });

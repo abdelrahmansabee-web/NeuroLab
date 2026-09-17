@@ -56,8 +56,7 @@ export const NL_TWEEN_SECTION_EXIT = {
 export const NL_TRANSFORM_TRANSITION =
   "transform 0.26s cubic-bezier(0.33, 1, 0.68, 1)";
 
-export const NL_LAYOUT_TRANSITION =
-  "left 0.26s cubic-bezier(0.33, 1, 0.68, 1), width 0.26s cubic-bezier(0.33, 1, 0.68, 1)";
+export const NL_LAYOUT_TRANSITION = "none";
 
 export const NL_GPU_LAYER = {
   willChange: "transform, opacity",
