@@ -1,6 +1,7 @@
 import {
   deriveTaskCompletion,
   inferPalmTaskShape,
+  inferPalmPhaseWindows,
   motionConfirmsAdlComplete,
   enrichKinematicCompletion,
   countTaskNvpFromPeaks,
@@ -178,4 +179,39 @@ test("missing reach window still partitions leftover peaks after drink/return", 
   expect(fromPeaks.nvp_drink).toBe(2);
   expect(fromPeaks.nvp_return).toBe(1);
   expect(fromPeaks.nvp_total).toBe(5);
+});
+
+test("without phase frames, overlay palm split still partitions drink/return into total", () => {
+  const frames = drinkFrames();
+  const overlay = {
+    fps: 30,
+    frames,
+    movement_window: { start_idx: 0, end_idx: frames.length - 1 },
+    peak_frames: [3, 8, 14, 18, 25, 32],
+  };
+  const wins = inferPalmPhaseWindows(overlay);
+  expect(wins).not.toBeNull();
+  expect(wins.drink.startIdx).toBeGreaterThan(wins.reach.startIdx);
+  expect(wins.return.startIdx).toBeGreaterThan(wins.drink.startIdx);
+  const result = {
+    clinical_task: "reach_grasp_drink_return",
+    nvp_reach: 12,
+    nvp_drink: 4,
+    nvp_return: 1,
+    nvp_total: 7,
+  };
+  const fromPeaks = countTaskNvpFromPeaks(result, overlay);
+  expect(fromPeaks.nvp_drink).toBeGreaterThan(0);
+  expect(fromPeaks.nvp_return).toBeGreaterThan(0);
+  expect(fromPeaks.nvp_total).toBe(
+    (fromPeaks.nvp_reach || 0) + (fromPeaks.nvp_drink || 0) + (fromPeaks.nvp_return || 0),
+  );
+  expect(fromPeaks.nvp_total).toBe(6);
+  const enriched = enrichKinematicCompletion(result, overlay);
+  expect(enriched.nvp_reach).toBe(fromPeaks.nvp_reach);
+  expect(enriched.nvp_drink).toBe(fromPeaks.nvp_drink);
+  expect(enriched.nvp_return).toBe(fromPeaks.nvp_return);
+  expect(enriched.nvp_total).toBe(fromPeaks.nvp_total);
+  expect(enriched.nvp_drink).not.toBe(4);
+  expect(enriched.nvp_total).not.toBe(12);
 });

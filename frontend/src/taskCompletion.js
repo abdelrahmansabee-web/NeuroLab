@@ -68,8 +68,7 @@ function finiteMedian(values) {
   return v[Math.floor(v.length / 2)];
 }
 
-/** Reach → lift (cup to mouth) → return from overlay palm path. Image y grows downward. */
-export function inferPalmTaskShape(overlayData) {
+function overlayPalmFill(overlayData) {
   const frames = overlayData?.frames;
   if (!Array.isArray(frames) || frames.length < 8) return null;
   const xs = [];
@@ -79,9 +78,7 @@ export function inferPalmTaskShape(overlayData) {
     xs.push(Array.isArray(p) && Number.isFinite(Number(p[0])) ? Number(p[0]) : null);
     ys.push(Array.isArray(p) && Number.isFinite(Number(p[1])) ? Number(p[1]) : null);
   });
-  const valid = ys.filter((v) => v != null).length;
-  if (valid < 8) return null;
-
+  if (ys.filter((v) => v != null).length < 8) return null;
   let lastY = finiteMedian(ys) ?? 0.7;
   let lastX = finiteMedian(xs) ?? 0.5;
   const filledY = ys.map((v) => {
@@ -92,7 +89,14 @@ export function inferPalmTaskShape(overlayData) {
     if (v != null) lastX = v;
     return lastX;
   });
+  return { filledX, filledY };
+}
 
+/** Reach → lift (cup to mouth) → return from overlay palm path. Image y grows downward. */
+export function inferPalmTaskShape(overlayData) {
+  const series = overlayPalmFill(overlayData);
+  if (!series) return null;
+  const { filledX, filledY } = series;
   const n = filledY.length;
   const head = filledY.slice(0, Math.max(3, Math.floor(n / 8)));
   const base = finiteMedian(head);
@@ -131,6 +135,71 @@ export function inferPalmTaskShape(overlayData) {
     reach: reachPath >= 0.035 || minI >= 4,
     liftOk: lift >= 0.045,
     returnOk: lift >= 0.045 && recovery >= 0.32 * lift,
+  };
+}
+
+/**
+ * Overlay-index reach / drink / return windows from the palm height split.
+ * Used when analysis task_phases have no start_frame (overlay JSON does not carry them).
+ */
+export function inferPalmPhaseWindows(overlayData) {
+  const series = overlayPalmFill(overlayData);
+  if (!series) return null;
+  const { filledY } = series;
+  const { startIdx, endIdx } = overlayMovementWindow(overlayData);
+  const start = Math.max(0, startIdx);
+  const end = Math.max(start, Math.min(filledY.length - 1, endIdx));
+  if (end - start < 8) return null;
+  const ys = filledY.slice(start, end + 1);
+  const headN = Math.max(3, Math.floor(ys.length / 8));
+  const base = finiteMedian(ys.slice(0, headN));
+  if (base == null) return null;
+  let peakRel = 0;
+  let peakY = ys[0];
+  for (let i = 0; i < ys.length; i += 1) {
+    if (ys[i] < peakY) {
+      peakY = ys[i];
+      peakRel = i;
+    }
+  }
+  const lift = base - peakY;
+  if (!(lift >= 0.045)) return null;
+  const tail = ys.slice(peakRel);
+  const restN = Math.max(3, Math.floor(tail.length / 6));
+  const restVals = tail.slice(-restN).filter((v) => Number.isFinite(v));
+  const rest = restVals.length ? Math.max(...restVals) : null;
+  if (rest == null || (rest - peakY) < 0.32 * lift) return null;
+
+  const dropThr = base - 0.28 * lift;
+  const recThr = peakY + 0.28 * lift;
+  let t0 = peakRel;
+  while (t0 > 0 && ys[t0] <= dropThr) t0 -= 1;
+  let t1 = peakRel;
+  while (t1 < ys.length - 1 && ys[t1] <= recThr) t1 += 1;
+
+  let a0 = start;
+  let a1 = start + t0;
+  let b0 = start + t0;
+  let b1 = start + t1;
+  let c0 = start + t1;
+  let c1 = end;
+  const minF = 4;
+  if (a1 - a0 < minF) {
+    a1 = Math.min(end, a0 + minF);
+    b0 = a1;
+  }
+  if (b1 - b0 < minF) {
+    b1 = Math.min(end, b0 + minF);
+    c0 = b1;
+  }
+  if (c1 - c0 < minF) {
+    c0 = Math.max(b1, end - minF);
+  }
+  if (!(a0 < a1 && b0 < b1 && c0 < c1)) return null;
+  return {
+    reach: { startIdx: a0, untilIdx: a1 },
+    drink: { startIdx: b0, untilIdx: b1 },
+    return: { startIdx: c0, untilIdx: c1 },
   };
 }
 
@@ -224,6 +293,26 @@ function overlayPeakFrames(result, overlayData) {
   return Array.isArray(peaks) ? peaks : [];
 }
 
+function phasesForNvp(result, overlayData) {
+  const fromResult = listTaskPhases(result);
+  if (fromResult.some((p) => phaseFrameWindow(p))) return fromResult;
+  const fromOverlay = listTaskPhases(overlayData);
+  if (fromOverlay.some((p) => phaseFrameWindow(p))) return fromOverlay;
+  return fromResult;
+}
+
+function pickPhaseFromList(phases, phaseId) {
+  return (phases || []).find((p) => p && p.id === phaseId) || null;
+}
+
+function clampWin(win, last) {
+  if (!win) return null;
+  const s = Math.max(0, Math.min(last, Number(win.startIdx)));
+  const e = Math.max(0, Math.min(last, Number(win.untilIdx)));
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
+  return { startIdx: Math.min(s, e), untilIdx: Math.max(s, e) };
+}
+
 /**
  * Assign each velocity peak to one phase: return, then drink/transport, then reach.
  * Nested reach windows must not also count drink/return peaks.
@@ -257,25 +346,44 @@ function exclusiveNvpCounts(peakFrames, reachWin, drinkWin, returnWin) {
 /** Recount NVP rows from the same peak_frames + phase windows the overlay uses. */
 export function countTaskNvpFromPeaks(result, overlayData = null) {
   const peaks = overlayPeakFrames(result, overlayData);
-  const reachPhase = findTaskPhase(result, "reach_grasp")
-    || listTaskPhases(result).find((p) => {
+  const src = overlaySource(result, overlayData);
+  const phases = phasesForNvp(result, overlayData);
+  const reachPhase = pickPhaseFromList(phases, "reach_grasp")
+    || phases.find((p) => {
       const id = String(p?.id || "");
       return id && id !== "return" && !id.startsWith("transport_");
     })
     || null;
-  const transport = pickTransportPhase(result);
-  const ret = findTaskPhase(result, "return");
-  const reachWin = phaseFrameWindow(reachPhase);
-  const drinkWin = phaseFrameWindow(transport);
-  const returnWin = phaseFrameWindow(ret);
+  const transport = pickPhaseFromList(phases, "transport_drink")
+    || pickPhaseFromList(phases, "transport_brush")
+    || phases.find((p) => String(p?.id || "").startsWith("transport_"))
+    || null;
+  const ret = pickPhaseFromList(phases, "return");
+  let reachWin = phaseFrameWindow(reachPhase);
+  let drinkWin = phaseFrameWindow(transport);
+  let returnWin = phaseFrameWindow(ret);
   let fallbackReachWin = null;
-  const src = overlaySource(result, overlayData);
   if (src?.frames?.length) {
     const { startIdx, endIdx } = overlayMovementWindow(src);
     fallbackReachWin = { startIdx, untilIdx: endIdx };
   }
-  // Leftover peaks in the movement window are reach. Exclusive take() already
-  // gives drink/return first, so a nested/missing reach window cannot swallow them.
+  // Overlay JSON does not carry task_phases. Without drink/return frames,
+  // exclusive assignment never runs and stored drink is mixed onto full-window reach.
+  if (!drinkWin || !returnWin) {
+    const inferred = inferPalmPhaseWindows(src);
+    if (inferred) {
+      drinkWin = drinkWin || inferred.drink;
+      returnWin = returnWin || inferred.return;
+      reachWin = reachWin || inferred.reach;
+    }
+  }
+  const last = src?.frames?.length ? src.frames.length - 1 : null;
+  if (last != null) {
+    reachWin = clampWin(reachWin, last);
+    drinkWin = clampWin(drinkWin, last);
+    returnWin = clampWin(returnWin, last);
+    fallbackReachWin = clampWin(fallbackReachWin, last);
+  }
   const reachCountWin = reachWin || fallbackReachWin;
   if (!peaks.length) {
     return { nvp_reach: null, nvp_drink: null, nvp_return: null, nvp_total: null };
@@ -370,19 +478,24 @@ export function enrichKinematicCompletion(result, overlayData = null) {
   const pauseTotal = num(result?.pause_time_sec_total);
   const transport = pickTransportPhase(result);
   const fromPeaks = countTaskNvpFromPeaks(result, overlayData);
-  const nvpReach = fromPeaks.nvp_reach
-    ?? num(result?.nvp_reach)
-    ?? pickReachPhaseMetric(result, "nvp");
-  const nvpTransport =
-    fromPeaks.nvp_drink
-    ?? num(result?.nvp_transport)
-    ?? num(result?.nvp_drink)
-    ?? num(transport?.metrics?.nvp);
-  const nvpReturn = fromPeaks.nvp_return
-    ?? num(result?.nvp_return)
-    ?? pickPhaseMetric(result, "return", "nvp");
+  const usedOverlayPeaks = overlayPeakFrames(result, overlayData).length > 0
+    && fromPeaks.nvp_total != null;
+  const nvpReach = usedOverlayPeaks
+    ? fromPeaks.nvp_reach
+    : (fromPeaks.nvp_reach ?? num(result?.nvp_reach) ?? pickReachPhaseMetric(result, "nvp"));
+  const nvpTransport = usedOverlayPeaks
+    ? fromPeaks.nvp_drink
+    : (
+      fromPeaks.nvp_drink
+      ?? num(result?.nvp_transport)
+      ?? num(result?.nvp_drink)
+      ?? num(transport?.metrics?.nvp)
+    );
+  const nvpReturn = usedOverlayPeaks
+    ? fromPeaks.nvp_return
+    : (fromPeaks.nvp_return ?? num(result?.nvp_return) ?? pickPhaseMetric(result, "return", "nvp"));
   const parts = [nvpReach, nvpTransport, nvpReturn].filter((v) => v != null);
-  const nvpTotal = coalesceNvpTotal(fromPeaks.nvp_total, parts, num(result?.nvp_total));
+  const nvpTotal = coalesceNvpTotal(fromPeaks.nvp_total, parts, usedOverlayPeaks ? null : num(result?.nvp_total));
   const liftCm =
     num(result?.drink_lift_height_cm)
     ?? num(result?.lift_height_cm)
@@ -395,7 +508,9 @@ export function enrichKinematicCompletion(result, overlayData = null) {
     task_complete: c.taskComplete == null ? null : (c.taskComplete ? 1 : 0),
     task_completion_ratio: c.taskCompletionRatio == null ? null : Number(c.taskCompletionRatio),
     nvp_reach: nvpReach,
-    nvp_drink: fromPeaks.nvp_drink ?? num(result?.nvp_drink) ?? nvpTransport,
+    nvp_drink: usedOverlayPeaks
+      ? fromPeaks.nvp_drink
+      : (fromPeaks.nvp_drink ?? num(result?.nvp_drink) ?? nvpTransport),
     nvp_transport: nvpTransport,
     nvp_return: nvpReturn,
     nvp_total: nvpTotal,
