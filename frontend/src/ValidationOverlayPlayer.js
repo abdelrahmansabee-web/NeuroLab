@@ -15,9 +15,7 @@ import {
 } from "lucide-react";
 import { downloadBlob } from "./downloadUtils";
 import {
-  buildTremorCameraTrack,
   formatTremorAmplitude,
-  formatTremorPower,
   resolveTremorMetrics,
 } from "./tremorMetrics";
 import {
@@ -29,11 +27,7 @@ import {
 } from "./validationPanelMetrics";
 import {
   buildPinchEvidenceLines,
-  buildTremorEvidenceLines,
   drawEvidenceCard,
-  drawTremorCameraEvidence,
-  localTremorActivity,
-  localTremorEnvelopeAt,
   pinchApertureFromFrame,
   pinchApertureWindowStats,
 } from "./overlayMetricEvidence";
@@ -794,7 +788,6 @@ export function ValidationOverlayPlayer({
   const win = overlayData?.movement_window || { start_idx: 0, end_idx: frames.length - 1 };
   const velocityProfile = overlayData?.velocity_profile;
   const peakFrames = overlayData?.peak_frames || [];
-  const tremorCameraTrack = useMemo(() => buildTremorCameraTrack(overlayData), [overlayData]);
 
   const getElbowAngVel = useCallback((idx) => elbowAngVelAt(frames, fps, idx), [frames, fps]);
 
@@ -1448,84 +1441,11 @@ export function ValidationOverlayPlayer({
       });
     }
 
-    // --- Tremor: backup pulsing halo on the hand + 8–12 Hz camera sparkline ---
-    const tremorAnchor = palm || pt("wrist") || pt("hl_wrist");
-    const swPxTremor = Number(overlayData?.shoulder_width_px) || 0;
-    const tremorEnv = tremorAnchor ? localTremorEnvelopeAt(overlayData, idx) : null;
-    const tremorAct = tremorAnchor ? localTremorActivity(frames, idx, fps, swPxTremor) : null;
-    const tremorIntensity = tremorEnv != null ? Math.min(1, tremorEnv * 4) : tremorAct != null ? Math.min(1, tremorAct * 12) : 0;
-    const tremorLivePow =
-      idx >= win.end_idx
-        ? resolvedTremor?.tremor_8_12hz_power
-        : tremorLive?.tremor_8_12hz_power ?? resolvedTremor?.tremor_8_12hz_power;
-    const tremorPeakHz =
-      idx >= win.end_idx
-        ? resolvedTremor?.tremor_peak_freq_hz
-        : tremorLive?.tremor_peak_freq_hz ?? resolvedTremor?.tremor_peak_freq_hz;
-
-    if (tremorAnchor && idx >= win.start_idx && idx <= win.end_idx && tremorCameraTrack) {
-      drawTremorCameraEvidence(ctx, {
-        anchor: tremorAnchor,
-        idx,
-        track: tremorCameraTrack,
-        cw,
-        ch,
-        dpr,
-        livePow: tremorLivePow,
-        peakHz: tremorPeakHz,
-        intensity: tremorIntensity,
-      });
-    }
-
     // --- Pinch aperture on skeleton (explains grasp quality) ---
     if (!touchPerf) {
       const fwPx = Number(overlayData?.frame_width_px) || cw;
       const fhPx = Number(overlayData?.frame_height_px) || ch;
-      const swPx = swPxTremor;
-
-      // Tremor halo from backup (REFERENCE_SNAPSHOT / v32.52): pulsing ring on the palm.
-      if (tremorAnchor && idx >= win.start_idx && idx <= win.end_idx) {
-        if (tremorIntensity > 0.02 || tremorLivePow != null) {
-          const r = 14 + tremorIntensity * 42;
-          const alphaHalo = 0.12 + tremorIntensity * 0.55;
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(tremorAnchor[0], tremorAnchor[1], r, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(251,113,133,${Math.min(0.95, alphaHalo).toFixed(2)})`;
-          ctx.lineWidth = 2.5 + tremorIntensity * 3;
-          ctx.shadowColor = "rgba(251,113,133,0.65)";
-          ctx.shadowBlur = 12 + tremorIntensity * 18;
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(tremorAnchor[0], tremorAnchor[1], Math.max(6, r * 0.45), 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(251,113,133,${(0.08 + tremorIntensity * 0.28).toFixed(2)})`;
-          ctx.fill();
-          ctx.restore();
-          drawSimpleLabel(
-            `Tr ${formatTremorPower(tremorLivePow)}${tremorPeakHz != null ? ` · ${Number(tremorPeakHz).toFixed(1)}Hz` : ""}`,
-            tremorAnchor,
-            tremorAnchor[0] > cx ? -150 : 20,
-            -52,
-            { color: "#fda4af", border: "rgba(251,113,133,0.55)", bg: "rgba(40,10,18,0.85)" },
-          );
-          if (showExtendedKin || tremorLivePow != null) {
-            drawEvidenceCard(
-              ctx,
-              buildTremorEvidenceLines(overlayData, tremorLivePow, tremorPeakHz),
-              tremorAnchor,
-              {
-                cw,
-                ch,
-                dpr,
-                offsetX: tremorAnchor[0] > cx ? -210 : 18,
-                offsetY: -118,
-                border: "rgba(251,113,133,0.4)",
-                titleColor: "#fecdd3",
-              },
-            );
-          }
-        }
-      }
+      const swPx = Number(overlayData?.shoulder_width_px) || 0;
 
       const thumbTip = jointDots.find((d) => d.fid === "thumb" && d.jname === "tip")?.cpt || pt("thumb");
       const indexTipEv = jointDots.find((d) => d.fid === "index" && d.jname === "tip")?.cpt || pt("index");
@@ -1802,7 +1722,7 @@ export function ValidationOverlayPlayer({
     ctx.fillText(`Speed ${Math.round(speed)} °/s`, gx, gy - 4);
     }
 
-  }, [frames, fps, win, peakV, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, tremorCameraTrack, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, overlayStyle, showKinematicMarks]);
+  }, [frames, fps, win, peakV, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, overlayStyle, showKinematicMarks]);
 
   const drawRecordingFrame = useCallback(() => {
     const video = videoRef.current;
