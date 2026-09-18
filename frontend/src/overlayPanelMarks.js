@@ -1,6 +1,6 @@
 /**
  * Sparse on-video marks that prove the UE clinic panel numbers.
- * Paint only — NVP dots, palm trail, trunk Δx, shoulder-to-table column.
+ * Paint only — NVP dots with +1, palm trail, trunk Δx, shoulder-to-table column.
  */
 import {
   nvpPeakIndicesInWindow,
@@ -498,7 +498,7 @@ export function drawPanelKinematicMarks(ctx, {
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
 
-  // NVP: one small dot per peak_frame up to now on the path.
+  // NVP: one small dot per peak_frame up to now, with +1 as each peak appears.
   const peaks = nvpPeakIndicesOnPath(peakFrames || overlayData?.peak_frames, startIdx, untilIdx);
   for (let n = 0; n < peaks.length; n += 1) {
     const p = toCanvas(frames[peaks[n]]?.palm, cw, ch);
@@ -510,6 +510,16 @@ export function drawPanelKinematicMarks(ctx, {
     ctx.strokeStyle = NVP_STROKE;
     ctx.lineWidth = 1.2;
     ctx.stroke();
+    ctx.save();
+    ctx.font = "bold 13px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = NVP_STROKE;
+    ctx.fillStyle = NVP_FILL;
+    ctx.strokeText("+1", p[0] + 6, p[1] - 4);
+    ctx.fillText("+1", p[0] + 6, p[1] - 4);
+    ctx.restore();
   }
 
   // Current palm tick (path end).

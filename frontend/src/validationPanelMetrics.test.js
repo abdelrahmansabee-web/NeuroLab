@@ -113,6 +113,30 @@ test("fills missing clinic summaries from overlay frames without changing panel 
   expect(table.shoulder_abduction_mean_deg).toBeGreaterThan(0);
 });
 
+test("clinic panel numbers accumulate from movement onset to the current frame", () => {
+  const overlay = makeOverlay();
+  overlay.cm_per_px = 0.1;
+  overlay.shoulder_width_px = 200;
+  overlay.frames.forEach((f, i) => {
+    f.trunk_displacement_norm = (i - 4) * 0.02;
+    f.shoulder_flexion_deg = 40 + i;
+    f.shoulder_abduction_deg = 10 + i;
+  });
+  const before = computeValidationPanelLive(overlay, 3);
+  const early = computeValidationPanelLive(overlay, 6);
+  const late = computeValidationPanelLive(overlay, 14);
+  expect(before.liveAverageHandVelocityCmS).toBeUndefined();
+  expect(early.nvp).toBe(1);
+  expect(late.nvp).toBe(2);
+  expect(early.movementTime).toBeLessThan(late.movementTime);
+  expect(early.liveAverageHandVelocityCmS).toBeGreaterThan(0);
+  expect(late.liveTrunkForwardDisplacementCm).toBeGreaterThan(early.liveTrunkForwardDisplacementCm);
+  expect(late.liveShoulderElevationCm).toBeGreaterThan(early.liveShoulderElevationCm);
+  expect(late.liveElbowAngleMeanDeg).toBeGreaterThan(early.liveElbowAngleMeanDeg);
+  expect(late.liveShoulderFlexionMeanDeg).toBeGreaterThan(early.liveShoulderFlexionMeanDeg);
+  expect(late.liveShoulderAbductionMeanDeg).toBeGreaterThan(early.liveShoulderAbductionMeanDeg);
+});
+
 test("does not overwrite backend shoulder abduction / flexion when already present", () => {
   const overlay = makeOverlay();
   overlay.metrics.shoulder_abduction_mean_deg = 33.3;

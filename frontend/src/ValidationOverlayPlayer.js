@@ -598,12 +598,12 @@ function getValidationPanelRowDefs(overlayData, clinicalTask) {
 /** Upper-extremity validation panel — the eight clinic SPSS variables (Total NVP is the header chip). */
 export const UE_VALIDATION_PANEL_ROWS = [
   { id: "sh_elev", label: "Shoulder elevation", kind: "shoulderElev" },
-  { id: "trunk_fwd", label: "Trunk forward displacement", kind: "metric", metricKeys: ["trunk_forward_displacement_cm"], suffix: " cm", decimals: 1 },
+  { id: "trunk_fwd", label: "Trunk forward displacement", kind: "live", key: "liveTrunkForwardDisplacementCm", suffix: " cm", decimals: 1 },
   { id: "mov_time", label: "Movement time", kind: "live", key: "movementTime", suffix: " s", decimals: 2 },
-  { id: "avg_vel", label: "Average hand velocity", kind: "metric", metricKeys: ["average_hand_velocity_cm_s"], suffix: " cm/s", decimals: 1 },
-  { id: "elbow_mean", label: "Elbow extension angle", kind: "metric", metricKeys: ["elbow_angle_mean_deg", "elbow_angle_mean"], suffix: "°", decimals: 1 },
-  { id: "sh_flex", label: "Shoulder flexion angle", kind: "metric", metricKeys: ["shoulder_flexion_mean_deg", "shoulder_flexion_mean"], suffix: "°", decimals: 1 },
-  { id: "sh_abd", label: "Shoulder abduction angle", kind: "metric", metricKeys: ["shoulder_abduction_mean_deg", "shoulder_abduction_mean"], suffix: "°", decimals: 1 },
+  { id: "avg_vel", label: "Average hand velocity", kind: "live", key: "liveAverageHandVelocityCmS", suffix: " cm/s", decimals: 1 },
+  { id: "elbow_mean", label: "Elbow extension angle", kind: "live", key: "liveElbowAngleMeanDeg", suffix: "°", decimals: 1 },
+  { id: "sh_flex", label: "Shoulder flexion angle", kind: "live", key: "liveShoulderFlexionMeanDeg", suffix: "°", decimals: 1 },
+  { id: "sh_abd", label: "Shoulder abduction angle", kind: "live", key: "liveShoulderAbductionMeanDeg", suffix: "°", decimals: 1 },
 ];
 
 function pickPanelMetric(overlayData, keys) {
@@ -639,8 +639,8 @@ function formatPanelRowValue(row, live, overlayData, formatValue) {
     return "—";
   }
   if (row.kind === "shoulderElev") {
-    const cm = pickOverlayMetric(overlayData, ["shoulder_elevation_cm"]);
-    if (cm != null && Number(cm) > 0) return `${formatValue(Number(cm), 1)} cm`;
+    const liveCm = live.liveShoulderElevationCm;
+    if (liveCm != null && Number(liveCm) > 0) return `${formatValue(Number(liveCm), 1)} cm`;
     const v = live.shoulderElevationPalm || live.shoulderElevationTable || live.shoulderElevation;
     if (v > 0) return formatValue(v, 3);
     return "—";
@@ -1552,6 +1552,12 @@ export function ValidationOverlayPlayer({
         shoulderElevationPalm: currentShoulderElevationPalm,
         shoulderAbduction: currentShoulderAbduction,
         fingerQuality: currentFingerQuality,
+        liveShoulderElevationCm: panelLive?.liveShoulderElevationCm,
+        liveTrunkForwardDisplacementCm: panelLive?.liveTrunkForwardDisplacementCm,
+        liveAverageHandVelocityCmS: panelLive?.liveAverageHandVelocityCmS,
+        liveElbowAngleMeanDeg: panelLive?.liveElbowAngleMeanDeg,
+        liveShoulderFlexionMeanDeg: panelLive?.liveShoulderFlexionMeanDeg,
+        liveShoulderAbductionMeanDeg: panelLive?.liveShoulderAbductionMeanDeg,
         tremor_8_12hz_power: panelLive?.tremor_8_12hz_power
           ?? tremorLive?.tremor_8_12hz_power
           ?? resolvedTremor?.tremor_8_12hz_power,
@@ -1661,6 +1667,12 @@ export function ValidationOverlayPlayer({
       shoulderElevationPalm: currentShoulderElevationPalm,
       shoulderAbduction: currentShoulderAbduction,
       fingerQuality: currentFingerQuality,
+      liveShoulderElevationCm: panelLive?.liveShoulderElevationCm,
+      liveTrunkForwardDisplacementCm: panelLive?.liveTrunkForwardDisplacementCm,
+      liveAverageHandVelocityCmS: panelLive?.liveAverageHandVelocityCmS,
+      liveElbowAngleMeanDeg: panelLive?.liveElbowAngleMeanDeg,
+      liveShoulderFlexionMeanDeg: panelLive?.liveShoulderFlexionMeanDeg,
+      liveShoulderAbductionMeanDeg: panelLive?.liveShoulderAbductionMeanDeg,
     };
 
     let cy = py + headerH + headerGap;

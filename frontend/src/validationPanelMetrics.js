@@ -300,6 +300,7 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
       ?? tremorLive?.tremor_8_12hz_power
       ?? resolvedTremor?.tremor_8_12hz_power,
     shoulder_width_px: Number(overlayData?.shoulder_width_px) || 0,
+    ...computeClinicPanelLive(overlayData, idx),
   };
 }
 
@@ -394,6 +395,48 @@ function computeExploratoryExtras(overlayData) {
   })();
   if (movementTime > 0) extras.relative_time_to_peak_pct = (timeToPeak / movementTime) * 100;
   return extras;
+}
+
+/** Running clinic SPSS numbers from movement onset through untilIdx (live panel). */
+function computeClinicPanelLive(overlayData, untilIdx) {
+  const frames = overlayData?.frames || [];
+  if (!frames.length) return {};
+  const { startIdx, endIdx } = overlayMovementWindow(overlayData);
+  const idx = untilIdx == null || Number.isNaN(Number(untilIdx))
+    ? endIdx
+    : clampFrameIdx(frames, Number(untilIdx));
+  if (idx < startIdx) return {};
+  const until = Math.max(startIdx, Math.min(idx, endIdx));
+  const cm = overlayCmPerPx(overlayData);
+  const sw = Number(overlayData?.shoulder_width_px) || Number(overlayData?.metrics?.shoulder_width_px) || 0;
+  const out = {};
+
+  if (cm != null) {
+    const speed = windowSeriesStats(frames, startIdx, until, "speed");
+    if (speed.mean != null) out.liveAverageHandVelocityCmS = speed.mean * cm;
+    const trunk = windowSeriesStats(frames, startIdx, until, "trunk_displacement_norm");
+    if (trunk.max != null && sw > 0) {
+      out.liveTrunkForwardDisplacementCm = trunk.max * sw * cm;
+    } else {
+      const a = frames[startIdx]?.trunk;
+      const b = frames[until]?.trunk;
+      if (a && b && a[0] != null && b[0] != null && sw > 0) {
+        out.liveTrunkForwardDisplacementCm = Math.abs(b[0] - a[0]) * sw * cm;
+      }
+    }
+    const elev = windowSeriesStats(frames, startIdx, until, "shoulder_elevation_norm");
+    if (elev.max != null && sw > 0) {
+      out.liveShoulderElevationCm = elev.max * sw * cm;
+    }
+  }
+
+  const elbow = windowSeriesStats(frames, startIdx, until, "elbow_angle", { skipNonPositive: true });
+  if (elbow.mean != null) out.liveElbowAngleMeanDeg = elbow.mean;
+  const flex = windowSeriesStats(frames, startIdx, until, "shoulder_flexion_deg", { skipNonPositive: true });
+  if (flex.mean != null) out.liveShoulderFlexionMeanDeg = flex.mean;
+  const abd = windowSeriesStats(frames, startIdx, until, "shoulder_abduction_deg", { skipNonPositive: true });
+  if (abd.mean != null) out.liveShoulderAbductionMeanDeg = abd.mean;
+  return out;
 }
 
 function windowSeriesStats(frames, startIdx, endIdx, key, { skipNonPositive = false } = {}) {

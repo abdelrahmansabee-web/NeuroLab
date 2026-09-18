@@ -34,6 +34,11 @@ test("skeleton marks keep NVP, trunk, and shoulder and drop leftover chord/pause
   expect(playerSrc).not.toMatch(/Ha \$\{Math\.round\(speed\)\}/);
 });
 
+test("NVP peaks paint +1 with the skeleton path", () => {
+  expect(marksSrc).toContain('"+1"');
+  expect(marksSrc).toContain("nvpPeakIndicesOnPath");
+});
+
 test("validation overlay does not paint a tremor halo, Tr label, or camera sparkline", () => {
   expect(playerSrc).not.toContain("drawTremorCameraEvidence");
   expect(playerSrc).not.toContain("localTremorEnvelopeAt");
