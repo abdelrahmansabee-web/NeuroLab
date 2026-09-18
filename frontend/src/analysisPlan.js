@@ -1,5 +1,5 @@
 import { enrichKinematicCompletion, FULL_TASK_SMOOTHNESS_KEYS, REACH_WINDOW_SMOOTHNESS_KEYS, fullTaskSmoothnessComparable } from "./taskCompletion";
-import { coreMetricKeysForTask, isLeClinicalTaskId } from "./clinicalTasks";
+import { CLINIC_UE_SPSS_KEYS, coreMetricKeysForTask, isClinicUeSpssTaskId } from "./clinicalTasks";
 
 /**
  * PETTLEP AOMI RCT — Analysis plan, master dataset, SPSS syntax, preliminary stats.
@@ -106,29 +106,8 @@ export const KINEMATIC_VARS = [
   { key: "lr_loading_symmetry", label: "Loading symmetry", unit: "0–1", dir: "higher", tier: "secondary", core: true },
 ];
 
-/** Default UE results-table order — movement quality core. */
-export const KINEMATIC_CORE_DISPLAY_ORDER = [
-  "task_complete",
-  "nvp_reach",
-  "nvp_drink",
-  "nvp_return",
-  "nvp_total",
-  "drink_lift_height_cm",
-  "straightness",
-  "pause_time_sec",
-  "number_of_stops",
-  "trunk_ratio",
-  "shoulder_elevation_cm",
-  "peak_velocity_cm_s",
-  "movement_time_sec",
-  "trunk_forward_displacement_cm",
-  "average_hand_velocity_cm_s",
-  "elbow_angle_mean_deg",
-  "shoulder_flexion_mean_deg",
-  "shoulder_abduction_mean_deg",
-  "tremor_8_12hz_power",
-  "fine_motor_quality_index",
-];
+/** Default UE results-table order — clinic SPSS set. */
+export const KINEMATIC_CORE_DISPLAY_ORDER = [...CLINIC_UE_SPSS_KEYS];
 
 /** Full order when user expands "Show all metrics". */
 export const KINEMATIC_DISPLAY_ORDER = [
@@ -246,33 +225,17 @@ export function orderedKinematicResultsTableVars({
     || kinematicsResults?.baseline?.clinical_task
     || null;
   const taskId = String(resultTask || "study_reach_grasp").toLowerCase();
-  const taskCore = coreMetricKeysForTask(taskId);
-  const order = includeExtended
-    ? [...taskCore, ...KINEMATIC_DISPLAY_ORDER.filter((k) => !taskCore.includes(k))]
-    : taskCore;
-  const coreKeys = new Set(order);
-  const core = orderedKinematicVars(order).map((v) => ({
+  void includeExtended;
+  const taskCore = isClinicUeSpssTaskId(taskId)
+    ? CLINIC_UE_SPSS_KEYS
+    : (coreMetricKeysForTask(taskId) || CLINIC_UE_SPSS_KEYS);
+  return orderedKinematicVars(taskCore).map((v) => ({
     group: kinematicTierGroup(v.tier),
     name: v.label,
     key: v.key,
     unit: v.unit || "—",
     direction: kinematicDirToDirection(v.dir),
   }));
-  if (!includeExtended) return core;
-  // LE tasks: skip UE-only validation extras in the extended table.
-  const extras = isLeClinicalTaskId(taskId)
-    ? []
-    : VALIDATION_PANEL_TABLE_EXTRAS.filter(
-      (e) => (e.synthetic || e.panelAlias || !coreKeys.has(e.key)) && e.key !== "peak_velocity_panel" && e.key !== "pause_stops_panel",
-    );
-  const validation = extras.map((e) => ({
-    group: "Validation video",
-    name: e.label,
-    key: e.key,
-    unit: e.unit || "—",
-    direction: kinematicDirToDirection(e.dir),
-  }));
-  return [...core, ...validation];
 }
 
 export const CLINICAL_VARS = [
@@ -599,28 +562,7 @@ export function kinCrossPhaseDeltaStatus(kinematicsResults, metricKey, armForPha
 }
 
 /** Key metrics for per-patient recovery summary. */
-export const RECOVERY_SUMMARY_KEYS = [
-  "task_complete",
-  "nvp_reach",
-  "nvp_drink",
-  "nvp_return",
-  "nvp_total",
-  "drink_lift_height_cm",
-  "straightness",
-  "pause_time_sec",
-  "number_of_stops",
-  "trunk_ratio",
-  "shoulder_elevation_cm",
-  "peak_velocity_cm_s",
-  "movement_time_sec",
-  "trunk_forward_displacement_cm",
-  "average_hand_velocity_cm_s",
-  "elbow_angle_mean_deg",
-  "shoulder_flexion_mean_deg",
-  "shoulder_abduction_mean_deg",
-  "tremor_8_12hz_power",
-  "fine_motor_quality_index",
-];
+export const RECOVERY_SUMMARY_KEYS = [...CLINIC_UE_SPSS_KEYS];
 
 /** Read pre/post/healthy side kinematics from patient record. */
 export function getPatientKinPhase(patient, phase) {

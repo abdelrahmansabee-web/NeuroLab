@@ -3,6 +3,7 @@ import {
   deriveRequestedClinicKinematics,
   formatKinValue,
   normalizeKinematicResult,
+  orderedKinematicResultsTableVars,
   pickKinField,
 } from "./analysisPlan";
 import { kinematicKeysForTask } from "./clinicExcelExport";
@@ -61,7 +62,7 @@ test("normalizeKinematicResult keeps existing nvp_total and fills missing cm key
   expect(n.elbow_angle_mean_deg).toBe(140.2);
 });
 
-test("reach / drink / brush SPSS cores include the requested variables", () => {
+test("reach / drink / brush SPSS cores are only the requested variables", () => {
   const needed = [
     "nvp_total",
     "shoulder_elevation_cm",
@@ -75,11 +76,27 @@ test("reach / drink / brush SPSS cores include the requested variables", () => {
   ["study_reach_grasp", "reach_grasp_drink_return", "reach_grasp_brush_return"].forEach((taskId) => {
     const excel = kinematicKeysForTask(taskId);
     const core = coreMetricKeysForTask(taskId);
-    needed.forEach((key) => {
-      expect(core).toContain(key);
-      expect(excel).toContain(key);
-    });
+    expect(core).toEqual(needed);
+    expect(excel).toEqual(needed);
   });
+});
+
+test("results table for reach does not keep leftover kinematic rows", () => {
+  const rows = orderedKinematicResultsTableVars({
+    includeExtended: true,
+    clinicalTask: "study_reach_grasp",
+  });
+  expect(rows.map((r) => r.key)).toEqual([
+    "nvp_total",
+    "shoulder_elevation_cm",
+    "trunk_forward_displacement_cm",
+    "movement_time_sec",
+    "average_hand_velocity_cm_s",
+    "elbow_angle_mean_deg",
+    "shoulder_flexion_mean_deg",
+    "shoulder_abduction_mean_deg",
+  ]);
+  expect(rows.some((r) => r.key === "straightness" || r.key === "task_complete" || r.key === "tremor_8_12hz_power")).toBe(false);
 });
 
 test("formatKinValue keeps existing NVP / elevation formatting", () => {

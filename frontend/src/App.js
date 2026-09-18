@@ -87,6 +87,7 @@ import { inferWmftFromKinematics, applyWmftInference } from "./wmftInference";
 import {
   CLINICAL_MOVEMENT_TASKS,
   CLINICAL_DOMAIN_LABELS,
+  CLINIC_UE_SPSS_KEYS,
   clinicalTaskById,
   clinicalTaskDomain,
   clinicalTasksForDomain,
@@ -3822,7 +3823,6 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     try { return JSON.parse(localStorage.getItem(KIN_LS_EXP_KEY)) || {}; } catch { return {}; }
   });
   const [kinResultsTab, setKinResultsTab] = useState("compare");
-  const [showAllKinMetrics, setShowAllKinMetrics] = useState(false);
   const [mediaPreview, setMediaPreview] = useState(null);
   const [analysisStatus, setAnalysisStatus] = useState({});
   const [analysisProgress, setAnalysisProgress] = useState({});
@@ -5101,10 +5101,9 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     pause_stops_panel: "Same Pause / stops row as the validation-video panel.",
   };
 
-  const CARD_PREVIEW_KEYS = ["task_complete", "nvp_reach", "nvp_drink", "nvp_total", "drink_lift_height_cm"];
+  const CARD_PREVIEW_KEYS = CLINIC_UE_SPSS_KEYS;
 
   const variables = orderedKinematicResultsTableVars({
-    includeExtended: showAllKinMetrics,
     clinicalTask: clinicalMovementTask,
     kinematicsResults,
   }).map((v) => ({
@@ -5591,22 +5590,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
             <div className="min-w-0">
               <p className="text-sm font-extrabold text-white/80">Kinematic Results</p>
               <p className="text-[10px] text-white/40 mt-0.5">
-                {showAllKinMetrics ? "All stored metrics" : "Core movement quality (15)"}
+                Clinic SPSS variables ({CLINIC_UE_SPSS_KEYS.length})
               </p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowAllKinMetrics((v) => !v)}
-                className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all ${
-                  showAllKinMetrics
-                    ? "bg-white/12 border-white/25 text-white"
-                    : "bg-white/[0.04] border-white/[0.1] text-white/60 hover:text-white/85"
-                }`}
-                title={showAllKinMetrics ? "Show core quality metrics only" : "Show every stored metric"}
-              >
-                {showAllKinMetrics ? "Core only" : "Show all"}
-              </button>
               <GBtn variant="danger" onClick={clearAllKin} className="text-[10px] py-1.5 px-3" title="Remove all results">
                 <X className="w-3 h-3 mr-1" />
                 Clear All
@@ -8290,14 +8277,18 @@ const AnalysisDashboard = () => {
             <p className="text-sm text-white/70 leading-relaxed mb-4">{STUDY_DESIGN.design} — Primary: <strong className="text-violet-300">{STUDY_DESIGN.primaryOutcome}</strong> — α={STUDY_DESIGN.alpha}</p>
             <div className="grid md:grid-cols-2 gap-4 text-xs">
               <div>
-                <p className="font-bold text-teal-300 mb-2">Kinematic ({KINEMATIC_VARS.length} vars — manuscript tiers)</p>
+                <p className="font-bold text-teal-300 mb-2">Kinematic ({CLINIC_UE_SPSS_KEYS.length} clinic SPSS vars)</p>
                 <ul className="space-y-1 text-white/60">
-                  {KINEMATIC_VARS.map((k) => (
+                  {CLINIC_UE_SPSS_KEYS.map((key) => {
+                    const k = KINEMATIC_VARS.find((v) => v.key === key);
+                    if (!k) return null;
+                    return (
                     <li key={k.key}>
                       • {k.label} ({k.key}) — {k.tier}
                       {k.dir === "lower" ? " ↓" : k.dir === "higher" ? " ↑" : ""}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </div>
               <div>
@@ -8422,7 +8413,7 @@ const AnalysisDashboard = () => {
         </Glass>
           {backendReport?.holm_secondary_kinematic && (
         <Glass className="p-5">
-              <p className="text-xs font-extrabold text-amber-300 uppercase tracking-widest mb-4">Holm–Bonferroni (secondary kinematic, k={KINEMATIC_VARS.filter((k) => k.tier === "secondary").length})</p>
+              <p className="text-xs font-extrabold text-amber-300 uppercase tracking-widest mb-4">Holm–Bonferroni (clinic SPSS kinematic, k={CLINIC_UE_SPSS_KEYS.length})</p>
               <div className="overflow-x-auto rounded-xl border border-amber-500/20">
             <table className="w-full text-xs">
               <thead>

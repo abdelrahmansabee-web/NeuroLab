@@ -109,27 +109,31 @@ export const TASK_PHASE_NOTES = {
   balance: "Quiet stance — COM sway path/area, sway velocity, loading symmetry.",
 };
 
+/** Clinic table + SPSS Excel keys for reach / drink / brush. Overlay still computes the rest. */
+export const CLINIC_UE_SPSS_KEYS = [
+  "nvp_total",
+  "shoulder_elevation_cm",
+  "trunk_forward_displacement_cm",
+  "movement_time_sec",
+  "average_hand_velocity_cm_s",
+  "elbow_angle_mean_deg",
+  "shoulder_flexion_mean_deg",
+  "shoulder_abduction_mean_deg",
+];
+
+const CLINIC_UE_TASK_IDS = [
+  "study_reach_grasp",
+  "reach_grasp_drink_return",
+  "reach_grasp_brush_return",
+];
+
+export function isClinicUeSpssTaskId(taskId) {
+  return CLINIC_UE_TASK_IDS.includes(String(taskId || "").toLowerCase());
+}
+
 /** Default core result keys per task (results table). */
 export const TASK_CORE_METRIC_KEYS = {
-  study_reach_grasp: [
-    "task_complete",
-    "nvp_reach",
-    "nvp_total",
-    "straightness",
-    "pause_time_sec",
-    "number_of_stops",
-    "trunk_ratio",
-    "shoulder_elevation_cm",
-    "trunk_forward_displacement_cm",
-    "peak_velocity_cm_s",
-    "average_hand_velocity_cm_s",
-    "movement_time_sec",
-    "elbow_angle_mean_deg",
-    "shoulder_flexion_mean_deg",
-    "shoulder_abduction_mean_deg",
-    "tremor_8_12hz_power",
-    "fine_motor_quality_index",
-  ],
+  study_reach_grasp: [...CLINIC_UE_SPSS_KEYS],
   forearm_pronation_supination: [
     "task_complete",
     "forearm_pronation_supination_rom_deg",
@@ -159,50 +163,8 @@ export const TASK_CORE_METRIC_KEYS = {
     "movement_time_sec",
     "movement_quality_index",
   ],
-  reach_grasp_drink_return: [
-    "task_complete",
-    "nvp_reach",
-    "nvp_drink",
-    "nvp_return",
-    "nvp_total",
-    "drink_lift_height_cm",
-    "straightness",
-    "pause_time_sec",
-    "number_of_stops",
-    "trunk_ratio",
-    "shoulder_elevation_cm",
-    "trunk_forward_displacement_cm",
-    "peak_velocity_cm_s",
-    "average_hand_velocity_cm_s",
-    "movement_time_sec",
-    "elbow_angle_mean_deg",
-    "shoulder_flexion_mean_deg",
-    "shoulder_abduction_mean_deg",
-    "tremor_8_12hz_power",
-    "fine_motor_quality_index",
-  ],
-  reach_grasp_brush_return: [
-    "task_complete",
-    "nvp_reach",
-    "nvp_return",
-    "nvp_total",
-    "straightness",
-    "pause_time_sec",
-    "number_of_stops",
-    "trunk_ratio",
-    "shoulder_elevation_cm",
-    "trunk_forward_displacement_cm",
-    "shoulder_abduction_rom_deg",
-    "shoulder_abduction_mean_deg",
-    "forearm_pronation_supination_rom_deg",
-    "peak_velocity_cm_s",
-    "average_hand_velocity_cm_s",
-    "movement_time_sec",
-    "elbow_angle_mean_deg",
-    "shoulder_flexion_mean_deg",
-    "tremor_8_12hz_power",
-    "fine_motor_quality_index",
-  ],
+  reach_grasp_drink_return: [...CLINIC_UE_SPSS_KEYS],
+  reach_grasp_brush_return: [...CLINIC_UE_SPSS_KEYS],
   sts_stand: [
     "movement_quality_index",
     "sts_time_sec",
