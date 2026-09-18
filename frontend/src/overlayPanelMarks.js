@@ -3,9 +3,11 @@
  * Paint only — NVP dots with +1, palm trail, trunk Δx, shoulder-to-table column.
  */
 import {
+  nvpPeakIndicesFromRest,
   nvpPeakIndicesInWindow,
   overlayMovementWindow,
   overlayPauseSpeedThreshold,
+  restPathStartIdx,
 } from "./validationPanelMetrics";
 import { addCupToSpan, tableYFromCup } from "./overlayCupTable";
 import { isSeatedTableY } from "./overlayCreamTable";
@@ -464,10 +466,11 @@ export function drawPanelKinematicMarks(ctx, {
 } = {}) {
   if (!ctx || !frames?.length || cw < 8 || ch < 8) return;
   const { startIdx, endIdx } = overlayMovementWindow(overlayData);
-  if (idx < startIdx) return;
-  const untilIdx = Math.max(startIdx, Math.min(idx, endIdx));
+  const restIdx = restPathStartIdx(overlayData);
+  if (idx < restIdx) return;
+  const untilIdx = Math.max(restIdx, Math.min(idx, endIdx));
   const thresh = overlayPauseSpeedThreshold(frames);
-  const pathPts = classifyPalmPath(frames, startIdx, untilIdx, thresh);
+  const pathPts = classifyPalmPath(frames, restIdx, untilIdx, thresh);
 
   ctx.save();
   ctx.lineJoin = "round";
@@ -499,7 +502,7 @@ export function drawPanelKinematicMarks(ctx, {
   ctx.globalAlpha = 1;
 
   // NVP: one small dot per peak_frame up to now, with +1 as each peak appears.
-  const peaks = nvpPeakIndicesOnPath(peakFrames || overlayData?.peak_frames, startIdx, untilIdx);
+  const peaks = nvpPeakIndicesFromRest(overlayData, untilIdx);
   for (let n = 0; n < peaks.length; n += 1) {
     const p = toCanvas(frames[peaks[n]]?.palm, cw, ch);
     if (!p) continue;

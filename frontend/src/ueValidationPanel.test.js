@@ -23,12 +23,13 @@ test("UE validation panel lists the eight clinic SPSS variables", () => {
 });
 
 test("skeleton marks keep NVP, trunk, and shoulder and drop leftover chord/pause/Ha", () => {
-  expect(marksSrc).toContain("nvpPeakIndicesOnPath");
+  expect(marksSrc).toContain("nvpPeakIndicesFromRest");
   expect(marksSrc).toContain("trunkHorizontalDispNorm");
   expect(marksSrc).toContain("tableLineUnderShoulder");
   expect(marksSrc).not.toContain("Straightness chord");
   expect(marksSrc).not.toContain("PATH_PAUSE");
   expect(playerSrc).toContain("shoulderFlexionGoniometerDeg");
+  expect(playerSrc).toContain("nvpPeakIndicesFromRest");
   expect(playerSrc).toContain("Flex ${currentShoulderFlexion");
   expect(playerSrc).toContain("Abd ${currentShoulderAbduction");
   expect(playerSrc).toContain("El ${currentElbowAngle");
@@ -37,7 +38,7 @@ test("skeleton marks keep NVP, trunk, and shoulder and drop leftover chord/pause
 
 test("NVP peaks paint +1 with the skeleton path", () => {
   expect(marksSrc).toContain('"+1"');
-  expect(marksSrc).toContain("nvpPeakIndicesOnPath");
+  expect(marksSrc).toContain("nvpPeakIndicesFromRest");
 });
 
 test("validation overlay does not paint a tremor halo, Tr label, or camera sparkline", () => {

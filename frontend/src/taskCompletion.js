@@ -4,9 +4,11 @@
  */
 import { clinicalTaskById } from "./clinicalTasks";
 import {
+  countNvpPeaksFromRest,
   countNvpPeaksInWindow,
   nvpPeakIndicesInWindow,
   overlayMovementWindow,
+  restPathStartIdx,
 } from "./validationPanelMetrics";
 
 export const FULL_TASK_SMOOTHNESS_KEYS = ["nvp_full_task"];
@@ -249,11 +251,18 @@ export function countTaskNvpFromPeaks(result, overlayData = null) {
   const src = overlaySource(result, overlayData);
   if (src?.frames?.length) {
     const { startIdx, endIdx } = overlayMovementWindow(src);
-    fallbackReachWin = { startIdx, untilIdx: endIdx };
+    const restIdx = restPathStartIdx(src);
+    fallbackReachWin = { startIdx: Math.min(startIdx, restIdx), untilIdx: endIdx };
   }
-  const reachCountWin = reachWin || (!drinkWin && !returnWin ? fallbackReachWin : null);
-  const nvpReach = reachCountWin && peaks.length
-    ? countNvpPeaksInWindow(peaks, reachCountWin.startIdx, reachCountWin.untilIdx)
+  let reachCountWin = reachWin || (!drinkWin && !returnWin ? fallbackReachWin : null);
+  if (reachCountWin && src?.frames?.length) {
+    const restIdx = restPathStartIdx(src);
+    reachCountWin = { ...reachCountWin, startIdx: Math.min(reachCountWin.startIdx, restIdx) };
+  }
+  const nvpReach = reachCountWin
+    ? (src?.frames?.length
+      ? countNvpPeaksFromRest(src, reachCountWin.untilIdx)
+      : (peaks.length ? countNvpPeaksInWindow(peaks, reachCountWin.startIdx, reachCountWin.untilIdx) : null))
     : null;
   const nvpDrink = drinkWin && peaks.length
     ? countNvpPeaksInWindow(peaks, drinkWin.startIdx, drinkWin.untilIdx)

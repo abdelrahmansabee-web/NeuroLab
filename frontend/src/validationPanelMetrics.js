@@ -64,6 +64,166 @@ function xyPair(pt) {
   return [x, y];
 }
 
+function medianNum(vals) {
+  const a = vals.filter((v) => Number.isFinite(v)).sort((x, y) => x - y);
+  if (!a.length) return null;
+  const m = Math.floor(a.length / 2);
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+
+/**
+ * Rest palm landmark: where the hand sits before the reach, not the velocity-onset palm.
+ * Prefers overlay.rest_palm, else the early-frame median, else start_palm.
+ */
+export function restLandmarkPalm(overlayData) {
+  const stored = xyPair(overlayData?.rest_palm);
+  if (stored) return stored;
+  const frames = overlayData?.frames || [];
+  if (!frames.length) return xyPair(overlayData?.start_palm);
+  const { startIdx } = overlayMovementWindow(overlayData);
+  const fps = Number(overlayData?.fps) || 60;
+  const earlyN = Math.max(1, Math.round(fps * 0.2));
+  const hi = Math.max(0, Math.min(frames.length - 1, startIdx > 0 ? Math.min(startIdx, earlyN) : 0));
+  const xs = [];
+  const ys = [];
+  for (let i = 0; i <= hi; i += 1) {
+    const p = xyPair(frames[i]?.palm);
+    if (p) {
+      xs.push(p[0]);
+      ys.push(p[1]);
+    }
+  }
+  const mx = medianNum(xs);
+  const my = medianNum(ys);
+  if (mx != null && my != null) return [mx, my];
+  return xyPair(overlayData?.start_palm) || xyPair(frames[startIdx]?.palm);
+}
+
+function restLeaveEps(overlayData, restPalm) {
+  const frames = overlayData?.frames || [];
+  const { endIdx } = overlayMovementWindow(overlayData);
+  const endP = xyPair(frames[endIdx]?.palm);
+  if (restPalm && endP) {
+    const reach = Math.hypot(endP[0] - restPalm[0], endP[1] - restPalm[1]);
+    if (reach > 1e-6) return Math.max(reach * 0.05, 1e-4);
+  }
+  return 0.02;
+}
+
+/** Frame of the rest landmark — last palm still at rest before the hand leaves it. */
+export function restPathStartIdx(overlayData) {
+  const frames = overlayData?.frames || [];
+  const { startIdx } = overlayMovementWindow(overlayData);
+  if (!frames.length) return 0;
+  if (Number.isFinite(Number(overlayData?.rest_idx))) {
+    return Math.max(0, Math.min(frames.length - 1, Number(overlayData.rest_idx)));
+  }
+  const rest = restLandmarkPalm(overlayData);
+  if (!rest) return startIdx;
+  const eps = restLeaveEps(overlayData, rest);
+  const last = Math.min(startIdx, frames.length - 1);
+  let firstLeave = null;
+  for (let i = 0; i <= last; i += 1) {
+    const p = xyPair(frames[i]?.palm);
+    if (!p) continue;
+    if (Math.hypot(p[0] - rest[0], p[1] - rest[1]) > eps) {
+      firstLeave = i;
+      break;
+    }
+  }
+  if (firstLeave == null) return startIdx;
+  return Math.max(0, firstLeave - 1);
+}
+
+function palmDeltaSpeed(frames, fps, i) {
+  if (i <= 0) return 0;
+  const a = xyPair(frames[i - 1]?.palm);
+  const b = xyPair(frames[i]?.palm);
+  if (!a || !b) return 0;
+  return Math.hypot(b[0] - a[0], b[1] - a[1]) * fps;
+}
+
+function sampleHandSpeed(frames, fps, i) {
+  const baked = Number(frames[i]?.speed);
+  if (Number.isFinite(baked) && baked > 0) return baked;
+  return palmDeltaSpeed(frames, fps, i);
+}
+
+function localMaxima(values, prominence) {
+  const out = [];
+  for (let i = 1; i < values.length - 1; i += 1) {
+    const v = values[i];
+    if (v > values[i - 1] && v >= values[i + 1] && v >= prominence) out.push(i);
+  }
+  return out;
+}
+
+/**
+ * Overlay peak_frames miss rest→onset (bake zeros speed there). Fill that gap
+ * from the visible rest-palm path so NVP starts at the rest landmark.
+ */
+export function nvpPeakIndicesFromRest(overlayData, untilIdx) {
+  const frames = overlayData?.frames || [];
+  const { startIdx, endIdx } = overlayMovementWindow(overlayData);
+  const restIdx = restPathStartIdx(overlayData);
+  const hi = Math.min(
+    frames.length - 1,
+    Number.isFinite(Number(untilIdx)) ? Number(untilIdx) : endIdx,
+    endIdx,
+  );
+  const baked = nvpPeakIndicesInWindow(overlayData?.peak_frames, restIdx, hi);
+  if (restIdx >= startIdx) return baked;
+  const fps = Number(overlayData?.fps) || 60;
+  const speeds = [];
+  for (let i = restIdx; i <= hi; i += 1) speeds.push(sampleHandSpeed(frames, fps, i));
+  const mean = speeds.length ? speeds.reduce((s, v) => s + v, 0) / speeds.length : 0;
+  const varr = speeds.length
+    ? speeds.reduce((s, v) => s + (v - mean) ** 2, 0) / speeds.length
+    : 0;
+  const std = Math.sqrt(varr);
+  const peak = speeds.length ? Math.max(...speeds) : 0;
+  const prominence = std > 0 ? std * 0.30 : peak * 0.05;
+  const early = new Set(baked);
+  localMaxima(speeds, prominence).forEach((local) => {
+    const gi = restIdx + local;
+    if (gi >= restIdx && gi < startIdx && gi <= hi) early.add(gi);
+  });
+  return [...early].sort((a, b) => a - b);
+}
+
+export function countNvpPeaksFromRest(overlayData, untilIdx) {
+  return nvpPeakIndicesFromRest(overlayData, untilIdx).length;
+}
+
+export function straightnessFromRest(overlayData, untilIdx) {
+  const frames = overlayData?.frames || [];
+  if (!frames.length) return 0;
+  const restPalm = restLandmarkPalm(overlayData);
+  const restIdx = restPathStartIdx(overlayData);
+  const { endIdx } = overlayMovementWindow(overlayData);
+  const hi = Math.min(
+    frames.length - 1,
+    Number.isFinite(Number(untilIdx)) ? Number(untilIdx) : endIdx,
+    endIdx,
+  );
+  if (hi < restIdx || !restPalm) return 0;
+  let pathLength = 0;
+  let prev = restPalm;
+  for (let i = restIdx; i <= hi; i += 1) {
+    const curr = xyPair(frames[i]?.palm);
+    if (!prev || !curr) {
+      if (curr) prev = curr;
+      continue;
+    }
+    pathLength += Math.hypot(curr[0] - prev[0], curr[1] - prev[1]);
+    prev = curr;
+  }
+  const endP = xyPair(frames[hi]?.palm);
+  if (!endP || pathLength <= 0) return 0;
+  const displacement = Math.hypot(endP[0] - restPalm[0], endP[1] - restPalm[1]);
+  return Math.min(1, displacement / pathLength);
+}
+
 function angleBetweenDeg(v1, v2) {
   const n1 = Math.hypot(v1[0], v1[1]);
   const n2 = Math.hypot(v2[0], v2[1]);
@@ -200,14 +360,15 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
   const idx = untilIdx == null || Number.isNaN(Number(untilIdx))
     ? endIdx
     : clampFrameIdx(frames, Number(untilIdx));
-  const peakFrames = overlayData.peak_frames || [];
   const f = frames[idx] || {};
 
   const speedThreshold = overlayPauseSpeedThreshold(frames);
   const inMovement = idx >= startIdx && idx <= endIdx;
   const t0 = startIdx < frames.length ? (frames[startIdx].time || startIdx / fps) : 0;
 
-  const nvp = countNvpPeaksInWindow(peakFrames, startIdx, Math.min(idx, endIdx));
+  const restIdx = restPathStartIdx(overlayData);
+  const restPalm = restLandmarkPalm(overlayData);
+  const nvp = countNvpPeaksFromRest(overlayData, Math.min(idx, endIdx));
 
   let peakElbowAngVel = 0;
   for (let i = 1; i <= idx && i < frames.length; i += 1) {
@@ -231,21 +392,7 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
     }
   }
 
-  let straightness = 0;
-  if (inMovement) {
-    let pathLength = 0;
-    const startP = frames[startIdx]?.palm;
-    for (let i = startIdx + 1; i <= idx && i < frames.length; i += 1) {
-      const prev = frames[i - 1]?.palm;
-      const curr = frames[i]?.palm;
-      if (prev && curr) pathLength += Math.hypot(curr[0] - prev[0], curr[1] - prev[1]);
-    }
-    const endP = frames[idx]?.palm;
-    if (startP && endP && pathLength > 0) {
-      const displacement = Math.hypot(endP[0] - startP[0], endP[1] - startP[1]);
-      straightness = Math.min(1, displacement / pathLength);
-    }
-  }
+  const straightness = idx >= restIdx ? straightnessFromRest(overlayData, Math.min(idx, endIdx)) : 0;
 
   let trunkRatio = 0;
   if (inMovement) {
@@ -313,6 +460,8 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
     startIdx,
     endIdx,
     nvp,
+    restIdx,
+    restPalm,
     movementTime,
     straightness,
     peakElbowAngVel,

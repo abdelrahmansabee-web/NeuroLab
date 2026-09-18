@@ -22,7 +22,7 @@ import {
   computeOverlayMetrics,
   computeValidationPanelLive,
   elbowAngVelAt,
-  nvpPeakIndicesInWindow,
+  nvpPeakIndicesFromRest,
   pickOverlayMetric,
   shoulderFlexionGoniometerDeg,
 } from "./validationPanelMetrics";
@@ -1131,7 +1131,7 @@ export function ValidationOverlayPlayer({
     });
     const handRoot = skel.palmPt || skel.forearmEnd || pt("wrist");
 
-    const currentNVP = nvpPeakIndicesInWindow(peakFrames, win.start_idx || 0, idx).length;
+    const currentNVP = nvpPeakIndicesFromRest(overlayData, idx).length;
 
     let panelLive = liveMetricsCacheRef.current?.panelLive;
     if (updatePanelMetrics) {

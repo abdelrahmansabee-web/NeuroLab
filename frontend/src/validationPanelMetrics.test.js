@@ -2,7 +2,10 @@ import {
   computeOverlayMetrics,
   computeValidationPanelLive,
   formatPanelAlignedKinValue,
+  restLandmarkPalm,
+  restPathStartIdx,
   shoulderFlexionGoniometerDeg,
+  straightnessFromRest,
 } from "./validationPanelMetrics";
 import { resolveKinMetricValue } from "./kinMetrics";
 
@@ -57,8 +60,8 @@ test("table snapshot uses panel formulas at movement-window end, not server metr
 
   expect(panel).not.toBeNull();
   expect(table.nvp).toBe(panel.nvp);
-  expect(table.nvp).toBe(2);
-  expect(table.nvp_reach).toBe(2);
+  expect(table.nvp).toBe(3);
+  expect(table.nvp_reach).toBe(3);
   expect(table.straightness).toBeCloseTo(panel.straightness, 8);
   expect(table.pause_time_sec).toBeCloseTo(panel.pauseTime, 8);
   expect(table.number_of_stops).toBe(panel.stops);
@@ -85,15 +88,15 @@ test("resolveKinMetricValue prefers panel NVP over backend nvp_reach", () => {
     nvp: 7,
     overlay_metrics: { nvp: 2, nvp_reach: 2 },
   };
-  expect(resolveKinMetricValue(phaseResult, "nvp_reach", overlay)).toBe(2);
-  expect(resolveKinMetricValue(phaseResult, "nvp", overlay)).toBe(2);
+  expect(resolveKinMetricValue(phaseResult, "nvp_reach", overlay)).toBe(3);
+  expect(resolveKinMetricValue(phaseResult, "nvp", overlay)).toBe(3);
   expect(resolveKinMetricValue(phaseResult, "pause_time_sec", overlay)).toBeCloseTo(1 / 60, 8);
 });
 
-test("panel NVP ignores peaks before movement onset", () => {
+test("panel NVP counts peaks from the rest landmark, including before velocity onset", () => {
   const overlay = makeOverlay();
   const panel = computeValidationPanelLive(overlay, 14);
-  expect(panel.nvp).toBe(2);
+  expect(panel.nvp).toBe(3);
   expect(overlay.peak_frames).toEqual([2, 6, 10, 18]);
 });
 
@@ -107,7 +110,7 @@ test("fills missing clinic summaries from overlay frames without changing panel 
     f.shoulder_abduction_deg = 20 + i;
   });
   const table = computeOverlayMetrics(overlay);
-  expect(table.nvp).toBe(2);
+  expect(table.nvp).toBe(3);
   expect(table.average_hand_velocity_cm_s).toBeGreaterThan(0);
   expect(table.trunk_forward_displacement_cm).toBeCloseTo(0.2 * 200 * 0.1, 6);
   expect(table.shoulder_flexion_mean_deg).toBeGreaterThan(0);
@@ -127,8 +130,8 @@ test("clinic panel numbers accumulate from movement onset to the current frame",
   const early = computeValidationPanelLive(overlay, 6);
   const late = computeValidationPanelLive(overlay, 14);
   expect(before.liveAverageHandVelocityCmS).toBeUndefined();
-  expect(early.nvp).toBe(1);
-  expect(late.nvp).toBe(2);
+  expect(early.nvp).toBe(2);
+  expect(late.nvp).toBe(3);
   expect(early.movementTime).toBeLessThan(late.movementTime);
   expect(early.liveAverageHandVelocityCmS).toBeGreaterThan(0);
   expect(late.liveTrunkForwardDisplacementCm).toBeGreaterThan(early.liveTrunkForwardDisplacementCm);
@@ -181,6 +184,34 @@ test("goniometer flexion overwrites baked overlay metrics when hip landmarks exi
   });
   const table = computeOverlayMetrics(overlay);
   expect(table.shoulder_flexion_mean_deg).toBeCloseTo(0, 5);
+});
+
+test("NVP and straightness start at the rest palm landmark, not velocity onset", () => {
+  const fps = 60;
+  const frames = [];
+  for (let i = 0; i < 40; i += 1) {
+    const leftRest = i >= 8;
+    frames.push({
+      time: i / fps,
+      palm: leftRest ? [0.20 + (i - 8) * 0.02, 0.70] : [0.20, 0.70],
+      speed: leftRest ? 18 : 0,
+      trunk: [0.25, 0.32],
+      elbow_angle: 90,
+    });
+  }
+  const overlay = {
+    fps,
+    frames,
+    movement_window: { start_idx: 20, end_idx: 35 },
+    peak_frames: [12, 24, 30],
+  };
+  expect(restLandmarkPalm(overlay)[0]).toBeCloseTo(0.20, 5);
+  expect(restPathStartIdx(overlay)).toBeLessThan(20);
+  const panel = computeValidationPanelLive(overlay, 35);
+  expect(panel.nvp).toBe(3);
+  expect(straightnessFromRest(overlay, 35)).toBeGreaterThan(0);
+  expect(straightnessFromRest(overlay, 35)).toBeLessThanOrEqual(1);
+  expect(frames[20].palm[0]).toBeGreaterThan(restLandmarkPalm(overlay)[0]);
 });
 
 test("panel-aligned format matches video panel decimals (ratio, not percent)", () => {
