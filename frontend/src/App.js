@@ -5076,7 +5076,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     shoulder_elevation_cm: "How much the affected shoulder rose (rest → peak), in cm using the 85 cm table scale. Lower = less shoulder hike.",
     shoulder_elevation_palm_ratio: "Shoulder elevation as a unitless palm-anchor ratio (exploratory).",
     elbow_angle_mean_deg: "Mean elbow extension angle (interior shoulder–elbow–wrist) during the movement window.",
-    shoulder_flexion_mean_deg: "Mean shoulder flexion angle (trunk–shoulder–elbow) during the movement window.",
+    shoulder_flexion_mean_deg: "Mean shoulder flexion like a goniometer: midaxillary line (shoulder to same-side hip) vs humerus (shoulder to elbow). 0° = arm alongside the trunk.",
     shoulder_abduction_mean_deg: "Mean shoulder abduction angle during the movement window. Higher = worse compensatory lift.",
     trunk_forward_displacement_cm: "Peak trunk displacement toward the target, in cm using the 85 cm table scale. Lower = less trunk compensation.",
     average_hand_velocity_cm_s: "Mean hand speed during the movement window (cm/s, 85 cm table scale).",

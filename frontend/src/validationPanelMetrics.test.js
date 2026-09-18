@@ -2,6 +2,7 @@ import {
   computeOverlayMetrics,
   computeValidationPanelLive,
   formatPanelAlignedKinValue,
+  shoulderFlexionGoniometerDeg,
 } from "./validationPanelMetrics";
 import { resolveKinMetricValue } from "./kinMetrics";
 
@@ -148,6 +149,38 @@ test("does not overwrite backend shoulder abduction / flexion when already prese
   const table = computeOverlayMetrics(overlay);
   expect(table.shoulder_abduction_mean_deg).toBe(33.3);
   expect(table.shoulder_flexion_mean_deg).toBe(44.4);
+});
+
+test("goniometer shoulder flexion is 0 when the humerus lies on the midaxillary line", () => {
+  const hanging = {
+    shoulder: [0.4, 0.3],
+    elbow: [0.4, 0.55],
+    rhip: [0.4, 0.75],
+  };
+  expect(shoulderFlexionGoniometerDeg(hanging, "right")).toBeCloseTo(0, 5);
+});
+
+test("goniometer shoulder flexion is 90 when the humerus is perpendicular to the trunk", () => {
+  const fwd = {
+    shoulder: [0.4, 0.3],
+    elbow: [0.7, 0.3],
+    rhip: [0.4, 0.75],
+  };
+  expect(shoulderFlexionGoniometerDeg(fwd, "right")).toBeCloseTo(90, 5);
+});
+
+test("goniometer flexion overwrites baked overlay metrics when hip landmarks exist", () => {
+  const overlay = makeOverlay();
+  overlay.affected_side = "right";
+  overlay.metrics.shoulder_flexion_mean_deg = 44.4;
+  overlay.frames.forEach((f) => {
+    f.shoulder = [0.4, 0.3];
+    f.elbow = [0.4, 0.55];
+    f.rhip = [0.4, 0.75];
+    f.shoulder_flexion_deg = 88;
+  });
+  const table = computeOverlayMetrics(overlay);
+  expect(table.shoulder_flexion_mean_deg).toBeCloseTo(0, 5);
 });
 
 test("panel-aligned format matches video panel decimals (ratio, not percent)", () => {

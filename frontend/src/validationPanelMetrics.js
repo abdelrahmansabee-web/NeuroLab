@@ -56,6 +56,65 @@ export function overlayMovementWindow(overlayData) {
   return { startIdx, endIdx };
 }
 
+function xyPair(pt) {
+  if (!pt || pt[0] == null || pt[1] == null) return null;
+  const x = Number(pt[0]);
+  const y = Number(pt[1]);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return [x, y];
+}
+
+function angleBetweenDeg(v1, v2) {
+  const n1 = Math.hypot(v1[0], v1[1]);
+  const n2 = Math.hypot(v2[0], v2[1]);
+  if (n1 < 1e-6 || n2 < 1e-6) return null;
+  const cos = Math.max(-1, Math.min(1, (v1[0] * v2[0] + v1[1] * v2[1]) / (n1 * n2)));
+  return (Math.acos(cos) * 180) / Math.PI;
+}
+
+function sameSideHip(frame, affectedSide) {
+  const side = String(affectedSide || "").toLowerCase();
+  const left = side.startsWith("l");
+  const primary = xyPair(left ? frame?.lhip : frame?.rhip);
+  if (primary) return primary;
+  const secondary = xyPair(left ? frame?.rhip : frame?.lhip);
+  if (secondary) return secondary;
+  const lh = xyPair(frame?.lhip);
+  const rh = xyPair(frame?.rhip);
+  if (lh && rh) return [(lh[0] + rh[0]) / 2, (lh[1] + rh[1]) / 2];
+  return null;
+}
+
+/**
+ * Clinical goniometer shoulder flexion in the image plane:
+ * stationary arm = midaxillary line (shoulder → same-side hip),
+ * moving arm = humerus (shoulder → elbow / lateral epicondyle).
+ * 0° = arm alongside the trunk.
+ */
+export function shoulderFlexionGoniometerDeg(frame, affectedSide) {
+  const sh = xyPair(frame?.shoulder);
+  const el = xyPair(frame?.elbow);
+  if (!sh || !el) return null;
+  const hip = sameSideHip(frame, affectedSide);
+  let stat = hip ? [hip[0] - sh[0], hip[1] - sh[1]] : null;
+  if (!stat || Math.hypot(stat[0], stat[1]) < 1e-4) {
+    stat = [0, 1];
+  }
+  return angleBetweenDeg(stat, [el[0] - sh[0], el[1] - sh[1]]);
+}
+
+export function meanShoulderFlexionGoniometer(frames, startIdx, endIdx, affectedSide) {
+  const vals = [];
+  const last = Math.min(endIdx, (frames?.length || 1) - 1);
+  const lo = Math.max(0, startIdx);
+  for (let i = lo; i <= last; i += 1) {
+    const a = shoulderFlexionGoniometerDeg(frames[i], affectedSide);
+    if (a != null && Number.isFinite(a)) vals.push(a);
+  }
+  if (!vals.length) return null;
+  return vals.reduce((s, v) => s + v, 0) / vals.length;
+}
+
 /** Peaks on the path from onset through untilIdx — same gate as overlay NVP dots. */
 export function nvpPeakIndicesInWindow(peakFrames, startIdx, untilIdx) {
   const lo = Number(startIdx);
@@ -432,8 +491,13 @@ function computeClinicPanelLive(overlayData, untilIdx) {
 
   const elbow = windowSeriesStats(frames, startIdx, until, "elbow_angle", { skipNonPositive: true });
   if (elbow.mean != null) out.liveElbowAngleMeanDeg = elbow.mean;
-  const flex = windowSeriesStats(frames, startIdx, until, "shoulder_flexion_deg", { skipNonPositive: true });
-  if (flex.mean != null) out.liveShoulderFlexionMeanDeg = flex.mean;
+  const gonio = meanShoulderFlexionGoniometer(frames, startIdx, until, overlayData?.affected_side);
+  if (gonio != null) {
+    out.liveShoulderFlexionMeanDeg = gonio;
+  } else {
+    const flex = windowSeriesStats(frames, startIdx, until, "shoulder_flexion_deg", { skipNonPositive: true });
+    if (flex.mean != null) out.liveShoulderFlexionMeanDeg = flex.mean;
+  }
   const abd = windowSeriesStats(frames, startIdx, until, "shoulder_abduction_deg", { skipNonPositive: true });
   if (abd.mean != null) out.liveShoulderAbductionMeanDeg = abd.mean;
   return out;
@@ -488,7 +552,10 @@ export function fillMissingClinicOverlaySummaries(overlayData, out = {}) {
       out.trunk_forward_displacement_cm = trunk.max * sw * cm;
     }
   }
-  if (out.shoulder_flexion_mean_deg == null) {
+  const gonio = meanShoulderFlexionGoniometer(frames, startIdx, endIdx, overlayData?.affected_side);
+  if (gonio != null) {
+    out.shoulder_flexion_mean_deg = gonio;
+  } else if (out.shoulder_flexion_mean_deg == null) {
     const flex = windowSeriesStats(frames, startIdx, endIdx, "shoulder_flexion_deg", { skipNonPositive: true });
     if (flex.mean != null) out.shoulder_flexion_mean_deg = flex.mean;
   }

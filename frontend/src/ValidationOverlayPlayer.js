@@ -24,6 +24,7 @@ import {
   elbowAngVelAt,
   nvpPeakIndicesInWindow,
   pickOverlayMetric,
+  shoulderFlexionGoniometerDeg,
 } from "./validationPanelMetrics";
 import {
   buildPinchEvidenceLines,
@@ -1189,8 +1190,8 @@ export function ValidationOverlayPlayer({
     if (f && typeof f.shoulder_abduction_deg === "number" && f.shoulder_abduction_deg > 0) {
       currentShoulderAbduction = f.shoulder_abduction_deg;
     }
-    let currentShoulderFlexion = 0;
-    if (f && typeof f.shoulder_flexion_deg === "number" && f.shoulder_flexion_deg > 0) {
+    let currentShoulderFlexion = shoulderFlexionGoniometerDeg(f, overlayData?.affected_side);
+    if (currentShoulderFlexion == null && f && typeof f.shoulder_flexion_deg === "number" && f.shoulder_flexion_deg > 0) {
       currentShoulderFlexion = f.shoulder_flexion_deg;
     }
     let currentFingerQuality = panelLive?.fingerQuality ?? cachedLive.fingerQuality ?? 0;
@@ -1246,7 +1247,7 @@ export function ValidationOverlayPlayer({
 
     const cx = cw / 2;
     if (!touchPerf && showKinematicMarks) {
-      if (shoulder && currentShoulderFlexion > 0) {
+      if (shoulder && currentShoulderFlexion != null && Number.isFinite(currentShoulderFlexion)) {
         drawSimpleLabel(`Flex ${currentShoulderFlexion.toFixed(0)}°`, shoulder, shoulder[0] > cx ? -118 : 14, -22, {
           color: color.text,
           border: color.glow,

@@ -28,6 +28,7 @@ test("skeleton marks keep NVP, trunk, and shoulder and drop leftover chord/pause
   expect(marksSrc).toContain("tableLineUnderShoulder");
   expect(marksSrc).not.toContain("Straightness chord");
   expect(marksSrc).not.toContain("PATH_PAUSE");
+  expect(playerSrc).toContain("shoulderFlexionGoniometerDeg");
   expect(playerSrc).toContain("Flex ${currentShoulderFlexion");
   expect(playerSrc).toContain("Abd ${currentShoulderAbduction");
   expect(playerSrc).toContain("El ${currentElbowAngle");
