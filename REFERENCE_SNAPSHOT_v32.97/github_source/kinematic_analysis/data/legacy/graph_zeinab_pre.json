@@ -1,0 +1,69 @@
+{
+  "healthy": {
+    "video": "D:\\Thesis app\\participants\\mediapipe\\movs\\zeyneb\\baseline_20260603_165330_baseline.csv",
+    "side": "right",
+    "sparc": -2.227,
+    "path_straightness_index": 0.924,
+    "normalized_jerk_cost": 1169889.67,
+    "cv_speed": 0.5829,
+    "reach_amplitude_sw": 1.308,
+    "movement_time_sec": 1.131,
+    "peak_velocity_px_s": 1071.52,
+    "reach_window_onset_s": 0.067,
+    "reach_window_offset_s": 1.167,
+    "trunk_ratio": 0.0849,
+    "trunk_cheat_ratio": 1.06,
+    "hand_displacement_cm": 46.67,
+    "shoulder_elevation_cm": 2.41,
+    "elbow_angle_deg": 163.8,
+    "peak_velocity_pct": 100.0
+  },
+  "pre": {
+    "video": "D:\\Thesis app\\participants\\mediapipe\\movs\\zeyneb\\pre_20260603_165439_pre.csv",
+    "side": "left",
+    "sparc": -4.593,
+    "path_straightness_index": 0.6429,
+    "normalized_jerk_cost": 661399010.48,
+    "cv_speed": 0.6959,
+    "reach_amplitude_sw": 0.948,
+    "movement_time_sec": 3.467,
+    "peak_velocity_px_s": 659.67,
+    "reach_window_onset_s": 3.367,
+    "reach_window_offset_s": 6.8,
+    "trunk_ratio": 0.2553,
+    "trunk_cheat_ratio": 1.191,
+    "hand_displacement_cm": 31.51,
+    "shoulder_elevation_cm": 1.48,
+    "elbow_angle_deg": 145.8,
+    "peak_velocity_pct": 61.6
+  },
+  "relative_to_healthy_percent": {
+    "sparc": 206.2,
+    "path_straightness_index": 69.6,
+    "normalized_jerk_cost": 56535.2,
+    "cv_speed": 119.4,
+    "reach_amplitude_sw": 72.5,
+    "movement_time_sec": 306.5,
+    "peak_velocity_pct": 61.6,
+    "trunk_ratio": 300.7,
+    "trunk_cheat_ratio": 112.4,
+    "shoulder_elevation_cm": 61.4,
+    "hand_displacement_cm": 67.5,
+    "elbow_angle_deg": 89.0
+  },
+  "clinical_notes": {
+    "trunk_ratio_lower_is_better": true,
+    "shoulder_elevation_lower_is_better": true,
+    "trunk_cheat_ratio_lower_is_better": true,
+    "hand_displacement_higher_is_better": true
+  },
+  "clinical_summary": {
+    "notes": [
+      "trunk compensation is higher than healthy reference (300.7%), indicating compensation.",
+      "shoulder hiking is lower than healthy reference (61.4%).",
+      "trunk cheat is higher than healthy reference (112.4%), indicating compensation.",
+      "independent reach distance is below healthy reference (67.5%).",
+      "SPARC is more negative than healthy reference: the selected reach window contains more speed-segmentation / deceleration corrections. When compensation metrics improved simultaneously, this often reflects more independent arm control rather than worse recovery."
+    ]
+  }
+}
