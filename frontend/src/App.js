@@ -3870,7 +3870,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   const [driveBakeDone, setDriveBakeDone] = useState({});
   /** Phases whose loaded clip does not match the overlay analysis (baked composite). */
   const [overlaySourceBad, setOverlaySourceBad] = useState({});
+  const [overlayLoadError, setOverlayLoadError] = useState({});
   const overlaySourceRetryRef = useRef({});
+  const overlayFetchStampRef = useRef({});
+  const overlayServerBusyRef = useRef({});
   const driveBakeToastRef = useRef({});
   const videoBlobsRef = useRef(videoBlobs);
   const videoLoadingRef = useRef(videoLoading);
@@ -4084,7 +4087,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       setOverlayMountReady({});
       setDriveBakeDone({});
       setOverlaySourceBad({});
+      setOverlayLoadError({});
+      setAnalysisProgress({});
       overlaySourceRetryRef.current = {};
+      overlayFetchStampRef.current = {};
+      overlayServerBusyRef.current = {};
     }
     if (resetMedia && !next) {
       setKinematicsResults({});
@@ -4352,22 +4359,37 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         return { overlay: cachedOverlay, metrics };
       }
       console.error(`Overlay data error for ${phase}:`, err);
-      showToast(`Overlay data failed for ${phase}`, "error");
       return null;
     }
-  }, [showToast, onChange, data, kinematicsResults, patientCacheKey, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud]);
+  }, [onChange, data, kinematicsResults, patientCacheKey, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud]);
 
   const fetchOverlayDataWithRetry = useCallback(async (phase, csvFilename, opts = {}, maxAttempts = 5) => {
+    overlayServerBusyRef.current[phase] = true;
     const started = kinIdentityRef.current;
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      if (!kinWorkStillHere(started)) return null;
-      const prefetched = await fetchOverlayData(phase, csvFilename, opts);
-      if (prefetched?.overlay?.frames?.length) return prefetched;
-      if (attempt < maxAttempts - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+    try {
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        if (!kinWorkStillHere(started)) return null;
+        const prefetched = await fetchOverlayData(phase, csvFilename, opts);
+        if (prefetched?.overlay?.frames?.length) {
+          setOverlayLoadError((prev) => {
+            if (!prev[phase]) return prev;
+            const next = { ...prev };
+            delete next[phase];
+            return next;
+          });
+          return prefetched;
+        }
+        if (attempt < maxAttempts - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+        }
       }
+      if (kinWorkStillHere(started)) {
+        setOverlayLoadError((prev) => ({ ...prev, [phase]: "Overlay could not be loaded" }));
+      }
+      return null;
+    } finally {
+      overlayServerBusyRef.current[phase] = false;
     }
-    return null;
   }, [fetchOverlayData]);
 
   const loadOriginalVideoBlob = useCallback(async (phase, filename, options = {}) => {
@@ -4843,8 +4865,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
       if (!isCsv && result.csv_filename) {
         setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Loading validation overlay…" } }));
-        fetchOverlayDataWithRetry(phase, result.csv_filename, { syncResults: true }, 8).catch(() => {
-          showToast("Validation overlay could not be loaded", "error");
+        fetchOverlayDataWithRetry(phase, result.csv_filename, { syncResults: true }, 8).then((got) => {
+          if (!got?.overlay?.frames?.length && kinWorkStillHere(started)) {
+            showToast("Validation overlay could not be loaded", "error");
+          }
+        }).catch(() => {
+          if (kinWorkStillHere(started)) showToast("Validation overlay could not be loaded", "error");
         });
       }
     } catch (err) {
@@ -5148,20 +5174,68 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     setShowResultsTable(!anyPending);
   }, [kinematicsResults, uvErrors, overlayData]);
 
-  // Re-fetch overlay data for persisted sessions (page reload, saved report, etc.)
-  // where the in-memory overlay state was lost but the backend CSV still exists.
+  // Restore overlay from IDB/Drive first (HF disk is empty after a Space rebuild).
+  // Hit /overlay-data only if that restore has no frames — and only once per record+csv.
   useEffect(() => {
     phases.forEach((ph) => {
       const result = kinematicsResults[ph.k];
-      if (!result || overlayData[ph.k] || uvErrors[ph.k]) return;
-      if (result.csv_filename) {
-        fetchOverlayData(ph.k, result.csv_filename);
-      }
+      if (!result || overlayData[ph.k]?.frames?.length) return;
+      const csv = result.csv_filename || "";
+      const stamp = `${String(sessionKey || "")}|${ph.k}|${csv}`;
+      if (overlayFetchStampRef.current[ph.k] === stamp) return;
+      overlayFetchStampRef.current[ph.k] = stamp;
+      const started = kinIdentityRef.current;
+      (async () => {
+        const hydrated = await hydrateValidationFromCloud(ph.k, {
+          overlay: true,
+          original: true,
+          unified: false,
+        });
+        if (!kinWorkStillHere(started)) return;
+        if (hydrated?.overlay?.frames?.length) {
+          setOverlayLoadError((prev) => {
+            if (!prev[ph.k]) return prev;
+            const next = { ...prev };
+            delete next[ph.k];
+            return next;
+          });
+          return;
+        }
+        if (csv) {
+          const got = await fetchOverlayData(ph.k, csv);
+          if (!kinWorkStillHere(started)) return;
+          if (got?.overlay?.frames?.length) {
+            setOverlayLoadError((prev) => {
+              if (!prev[ph.k]) return prev;
+              const next = { ...prev };
+              delete next[ph.k];
+              return next;
+            });
+            return;
+          }
+        }
+        if (!kinWorkStillHere(started)) return;
+        if (overlayServerBusyRef.current[ph.k]) return;
+        setOverlayLoadError((prev) => (
+          prev[ph.k] ? prev : { ...prev, [ph.k]: "Overlay could not be restored" }
+        ));
+        showToast(`Overlay data failed for ${ph.k}`, "error");
+      })();
     });
-  }, [kinematicsResults, fetchOverlayData, overlayData, uvErrors]);
+  }, [kinematicsResults, overlayData, overlayLoadError, sessionKey, fetchOverlayData, hydrateValidationFromCloud, showToast]);
 
   const toggleResult = (phase) => {
     setExpandedResults((prev) => ({ ...prev, [phase]: !prev[phase] }));
+  };
+
+  const retryOverlayLoad = (phase) => {
+    delete overlayFetchStampRef.current[phase];
+    setOverlayLoadError((prev) => {
+      if (!prev[phase]) return prev;
+      const next = { ...prev };
+      delete next[phase];
+      return next;
+    });
   };
 
   const KIN_EMPTY = "\u2014";
@@ -5680,6 +5754,25 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                       <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
                     </div>
                   )
+                ) : originalVideoBlobs[ph.k] ? (
+                  <div className="space-y-2">
+                    <InlineValidationVideo
+                      src={originalVideoBlobs[ph.k]}
+                      phaseLabel={ph.l}
+                      autoPlay={false}
+                    />
+                    {overlayLoadError[ph.k] ? (
+                      <button
+                        type="button"
+                        onClick={() => retryOverlayLoad(ph.k)}
+                        className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
+                      >
+                        Retry overlay
+                      </button>
+                    ) : (
+                      <p className="text-[10px] text-white/45">Loading overlay onto this clip…</p>
+                    )}
+                  </div>
                 ) : kinematicsResults[ph.k]?.unified_validation_video ? (
                   videoBlobs[ph.k] ? (
                     <InlineValidationVideo
@@ -5719,6 +5812,17 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                       className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors disabled:opacity-50"
                     >
                       Retry
+                    </button>
+                  </div>
+                ) : overlayLoadError[ph.k] ? (
+                  <div className="aspect-video rounded-lg bg-black/50 flex flex-col items-center justify-center text-center p-3 gap-2">
+                    <p className="text-[11px] text-rose-300/90 max-w-[90%]">Overlay could not be restored for {ph.l}.</p>
+                    <button
+                      type="button"
+                      onClick={() => retryOverlayLoad(ph.k)}
+                      className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
+                    >
+                      Retry overlay
                     </button>
                   </div>
                 ) : (
