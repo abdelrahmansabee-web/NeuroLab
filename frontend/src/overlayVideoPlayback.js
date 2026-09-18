@@ -260,21 +260,17 @@ export function overlayLandmarkAt(frames, idx, alpha, getter) {
  * Blend between stored landmark frames (32.72 freeze) so the skeleton follows
  * playback time between samples instead of snapping to the nearer pose.
  *
- * Restored from backup/2026-09-16-full-v32.82: always map the video fraction
- * onto the overlay span. Do not 1:1 lookup on a truncated PRE analysis clock.
+ * Overlay JSON already stores canonical video time (frame index / fps).
+ * Look that up 1:1 against the presented frame. Do not stretch onto
+ * <video>.duration — that desyncs the skeleton from the person.
  */
-export function getOverlayFrameState(frames, fps, playbackTime, videoDuration) {
+export function getOverlayFrameState(frames, fps, playbackTime, _videoDuration) {
   if (!frames?.length) return { idx: 0, alpha: 0 };
   const rate = Number(fps) > 0 ? Number(fps) : 30;
   const t0 = frames[0].time ?? 0;
   const tN = frames[frames.length - 1].time ?? t0 + (frames.length - 1) / rate;
-  const overlaySpan = tN - t0;
-  let targetTime = playbackTime;
-  if (videoDuration > 0 && overlaySpan > 1e-6) {
-    targetTime = t0 + (playbackTime / videoDuration) * overlaySpan;
-  } else {
-    targetTime = t0 + playbackTime;
-  }
+  let targetTime = Number(playbackTime);
+  if (!Number.isFinite(targetTime)) targetTime = 0;
   targetTime = Math.max(t0, Math.min(tN, targetTime));
 
   if (frames.length === 1) return { idx: 0, alpha: 0 };

@@ -117,16 +117,20 @@ test("overlay pose blends between stored frames for the presented video time", (
   expect(getOverlayFrameState(frames, 10, 0.2, 0.2)).toEqual({ idx: 1, alpha: 1 });
 });
 
-test("32.82 backup clock maps video fraction onto overlay span so long PRE cannot finish first", () => {
-  const videoDuration = 9 * 60 + 18;
-  const playbackTime = 8 * 60 + 4;
+test("overlay clock is 1:1 with presented time and ignores Safari duration stretch", () => {
   const frames = [];
-  for (let i = 0; i <= 5357; i += 1) frames.push({ time: i / 10 });
-  const st = getOverlayFrameState(frames, 10, playbackTime, videoDuration);
-  expect(st.idx / 5357).toBeCloseTo(playbackTime / videoDuration, 2);
+  for (let i = 0; i <= 100; i += 1) frames.push({ time: i / 10 });
+  const atFive = getOverlayFrameState(frames, 10, 5, 10);
+  expect(atFive.idx).toBe(50);
+  expect(atFive.alpha).toBeCloseTo(0, 10);
+  expect(getOverlayFrameState(frames, 10, 5, 20)).toEqual(atFive);
+  expect(getOverlayFrameState(frames, 10, 5, 12.08)).toEqual(atFive);
+
   const short = [];
   for (let i = 0; i <= 288; i += 1) short.push({ time: i / 10 });
-  expect(getOverlayFrameState(short, 10, 15, 30).idx).toBe(144);
+  const mid = getOverlayFrameState(short, 10, 15, 30);
+  expect(mid.idx).toBe(150);
+  expect(mid.alpha).toBeCloseTo(0, 10);
 });
 
 test("32.72 lerp hits stored samples and does not overshoot a spike", () => {
