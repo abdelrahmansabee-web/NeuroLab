@@ -396,6 +396,70 @@ function computeExploratoryExtras(overlayData) {
   return extras;
 }
 
+function windowSeriesStats(frames, startIdx, endIdx, key, { skipNonPositive = false } = {}) {
+  const vals = [];
+  let max = -Infinity;
+  const last = Math.min(endIdx, (frames?.length || 1) - 1);
+  for (let i = startIdx; i <= last; i += 1) {
+    const v = Number(frames[i]?.[key]);
+    if (!Number.isFinite(v)) continue;
+    if (skipNonPositive && !(v > 0)) continue;
+    vals.push(v);
+    if (v > max) max = v;
+  }
+  if (!vals.length) return { mean: null, max: null };
+  return {
+    mean: vals.reduce((a, b) => a + b, 0) / vals.length,
+    max: max === -Infinity ? null : max,
+  };
+}
+
+function overlayCmPerPx(overlayData) {
+  const candidates = [
+    overlayData?.cm_per_px,
+    overlayData?.metrics?.cm_per_px,
+    overlayData?.table_scale?.cm_per_px,
+  ];
+  for (const c of candidates) {
+    const n = Number(c);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+/** Fill requested clinic keys from existing overlay frames when the backend left them blank. */
+export function fillMissingClinicOverlaySummaries(overlayData, out = {}) {
+  if (!overlayData?.frames?.length) return out;
+  const frames = overlayData.frames;
+  const { startIdx, endIdx } = overlayMovementWindow(overlayData);
+  const cm = overlayCmPerPx(overlayData);
+  const sw = Number(overlayData?.shoulder_width_px) || Number(overlayData?.metrics?.shoulder_width_px) || 0;
+
+  if (out.average_hand_velocity_cm_s == null && cm != null) {
+    const speed = windowSeriesStats(frames, startIdx, endIdx, "speed");
+    if (speed.mean != null) out.average_hand_velocity_cm_s = speed.mean * cm;
+  }
+  if (out.trunk_forward_displacement_cm == null && cm != null) {
+    const trunk = windowSeriesStats(frames, startIdx, endIdx, "trunk_displacement_norm");
+    if (trunk.max != null && sw > 0) {
+      out.trunk_forward_displacement_cm = trunk.max * sw * cm;
+    }
+  }
+  if (out.shoulder_flexion_mean_deg == null) {
+    const flex = windowSeriesStats(frames, startIdx, endIdx, "shoulder_flexion_deg", { skipNonPositive: true });
+    if (flex.mean != null) out.shoulder_flexion_mean_deg = flex.mean;
+  }
+  if (out.shoulder_abduction_mean_deg == null) {
+    const abd = windowSeriesStats(frames, startIdx, endIdx, "shoulder_abduction_deg", { skipNonPositive: true });
+    if (abd.mean != null) out.shoulder_abduction_mean_deg = abd.mean;
+  }
+  if (out.elbow_angle_mean_deg == null) {
+    const elbow = windowSeriesStats(frames, startIdx, endIdx, "elbow_angle", { skipNonPositive: true });
+    if (elbow.mean != null) out.elbow_angle_mean_deg = elbow.mean;
+  }
+  return out;
+}
+
 const overlayMetricsCache = new WeakMap();
 
 /**
@@ -429,11 +493,19 @@ export function computeOverlayMetrics(overlayData) {
       "head_flexion_increase_deg",
       "shoulder_abduction_mean_deg",
       "shoulder_abduction_rom_deg",
+      "shoulder_flexion_mean_deg",
+      "average_hand_velocity_cm_s",
+      "trunk_forward_displacement_cm",
+      "mean_hand_speed_px_s",
+      "nvp_total",
+      "cm_per_px",
     ];
     for (const k of passthrough) {
       if (backend[k] != null && backend[k] !== "") out[k] = backend[k];
     }
   }
+
+  fillMissingClinicOverlaySummaries(overlayData, out);
 
   overlayMetricsCache.set(overlayData, out);
   return out;

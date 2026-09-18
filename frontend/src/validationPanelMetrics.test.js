@@ -96,6 +96,36 @@ test("panel NVP ignores peaks before movement onset", () => {
   expect(overlay.peak_frames).toEqual([2, 6, 10, 18]);
 });
 
+test("fills missing clinic summaries from overlay frames without changing panel NVP", () => {
+  const overlay = makeOverlay();
+  overlay.cm_per_px = 0.1;
+  overlay.shoulder_width_px = 200;
+  overlay.frames.forEach((f, i) => {
+    f.trunk_displacement_norm = i === 14 ? 0.2 : 0.05;
+    f.shoulder_flexion_deg = 40 + i;
+    f.shoulder_abduction_deg = 20 + i;
+  });
+  const table = computeOverlayMetrics(overlay);
+  expect(table.nvp).toBe(2);
+  expect(table.average_hand_velocity_cm_s).toBeGreaterThan(0);
+  expect(table.trunk_forward_displacement_cm).toBeCloseTo(0.2 * 200 * 0.1, 6);
+  expect(table.shoulder_flexion_mean_deg).toBeGreaterThan(0);
+  expect(table.shoulder_abduction_mean_deg).toBeGreaterThan(0);
+});
+
+test("does not overwrite backend shoulder abduction / flexion when already present", () => {
+  const overlay = makeOverlay();
+  overlay.metrics.shoulder_abduction_mean_deg = 33.3;
+  overlay.metrics.shoulder_flexion_mean_deg = 44.4;
+  overlay.frames.forEach((f) => {
+    f.shoulder_flexion_deg = 10;
+    f.shoulder_abduction_deg = 10;
+  });
+  const table = computeOverlayMetrics(overlay);
+  expect(table.shoulder_abduction_mean_deg).toBe(33.3);
+  expect(table.shoulder_flexion_mean_deg).toBe(44.4);
+});
+
 test("panel-aligned format matches video panel decimals (ratio, not percent)", () => {
   expect(formatPanelAlignedKinValue("straightness", 0.87654)).toBe("0.88");
   expect(formatPanelAlignedKinValue("trunk_ratio", 0.321)).toBe("0.32");
