@@ -1,6 +1,6 @@
 /**
- * Sparse on-video marks that prove the UE panel numbers.
- * Paint only — uses the same palm / peak_frames / pause threshold as the panel.
+ * Sparse on-video marks that prove the UE clinic panel numbers.
+ * Paint only — NVP dots, palm trail, trunk Δx, shoulder-to-table column.
  */
 import {
   nvpPeakIndicesInWindow,
@@ -12,8 +12,6 @@ import { isSeatedTableY } from "./overlayCreamTable";
 import { clampTableUserMark } from "./overlayTableUserMark";
 
 const PATH_MOVE = "rgba(248,250,252,0.78)";
-const PATH_PAUSE = "rgba(248,250,252,0.28)";
-const CHORD = "rgba(34,211,238,0.82)";
 const NVP_FILL = "#e0e7ff";
 const NVP_STROKE = "rgba(129,140,248,0.95)";
 const TRUNK = "rgba(250,204,21,0.92)";
@@ -450,8 +448,7 @@ function drawHArrow(ctx, x0, x1, y, color) {
 }
 
 /**
- * Draw NVP dots, pause-styled palm path, straightness chord,
- * trunk dx arrow, and shoulder-to-table column. No extra text.
+ * Draw NVP dots, palm trail, trunk dx arrow, and shoulder-to-table column. No extra text.
  */
 export function drawPanelKinematicMarks(ctx, {
   overlayData,
@@ -480,44 +477,28 @@ export function drawPanelKinematicMarks(ctx, {
     ctx.shadowColor = "transparent";
   }
 
-  // 1. Straightness chord (behind the path).
-  const chord = straightnessEndpoints(frames, startIdx, untilIdx);
-  if (chord) {
-    const a = toCanvas(chord.start, cw, ch);
-    const b = toCanvas(chord.end, cw, ch);
-    if (a && b && Math.hypot(b[0] - a[0], b[1] - a[1]) > 6) {
-      ctx.strokeStyle = CHORD;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([7, 5]);
-      ctx.globalAlpha = 0.9;
-      ctx.beginPath();
-      ctx.moveTo(a[0], a[1]);
-      ctx.lineTo(b[0], b[1]);
-      ctx.stroke();
-      ctx.setLineDash([]);
+  // Palm trail (average-velocity path) — one style, no pause encoding.
+  ctx.globalAlpha = 0.82;
+  ctx.lineWidth = 2.1;
+  ctx.strokeStyle = PATH_MOVE;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  let started = false;
+  for (let k = 0; k < pathPts.length; k += 1) {
+    const p = toCanvas(pathPts[k].palm, cw, ch);
+    if (!p) continue;
+    if (!started) {
+      ctx.moveTo(p[0], p[1]);
+      started = true;
+    } else {
+      ctx.lineTo(p[0], p[1]);
     }
   }
-
-  // 2. Palm path: solid while moving, dashed+dim while paused.
-  ctx.globalAlpha = 1;
-  ctx.lineWidth = 2.1;
-  for (let k = 1; k < pathPts.length; k += 1) {
-    const a = toCanvas(pathPts[k - 1].palm, cw, ch);
-    const b = toCanvas(pathPts[k].palm, cw, ch);
-    if (!a || !b) continue;
-    const paused = pathPts[k].paused;
-    ctx.strokeStyle = paused ? PATH_PAUSE : PATH_MOVE;
-    ctx.globalAlpha = paused ? 0.55 : 0.82;
-    ctx.setLineDash(paused ? [3.5, 4.5] : []);
-    ctx.beginPath();
-    ctx.moveTo(a[0], a[1]);
-    ctx.lineTo(b[0], b[1]);
-    ctx.stroke();
-  }
+  if (started) ctx.stroke();
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
 
-  // 3. NVP: one small dot per peak_frame up to now on the path.
+  // NVP: one small dot per peak_frame up to now on the path.
   const peaks = nvpPeakIndicesOnPath(peakFrames || overlayData?.peak_frames, startIdx, untilIdx);
   for (let n = 0; n < peaks.length; n += 1) {
     const p = toCanvas(frames[peaks[n]]?.palm, cw, ch);
@@ -531,33 +512,15 @@ export function drawPanelKinematicMarks(ctx, {
     ctx.stroke();
   }
 
-  // Tiny unlabeled start / current palm ticks (chord ends).
-  if (chord) {
-    const a = toCanvas(chord.start, cw, ch);
-    const b = toCanvas(chord.end, cw, ch);
-    if (a) {
-      ctx.beginPath();
-      ctx.arc(a[0], a[1], 3.4, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(250,204,21,0.9)";
-      ctx.fill();
-    }
-    if (b) {
-      ctx.beginPath();
-      ctx.arc(b[0], b[1], 3.4, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,255,255,0.92)";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(34,211,238,0.85)";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-    }
-  } else if (palm) {
+  // Current palm tick (path end).
+  if (palm) {
     ctx.beginPath();
     ctx.arc(palm[0], palm[1], 3, 0, Math.PI * 2);
     ctx.fillStyle = "#fff";
     ctx.fill();
   }
 
-  // 4. Trunk: short horizontal arrow = |Δx| at the trunk (away from the palm path).
+  // Trunk: short horizontal arrow = |Δx| at the trunk (away from the palm path).
   const trunkDisp = trunkHorizontalDispNorm(frames, startIdx, untilIdx);
   if (trunkDisp && Math.abs(trunkDisp.dx) * cw >= 3) {
     const ty = (trunk ? trunk[1] : trunkDisp.y * ch) + 12;
@@ -567,7 +530,7 @@ export function drawPanelKinematicMarks(ctx, {
     drawHArrow(ctx, x0, x1, y, TRUNK);
   }
 
-  // 5. Shoulder: column glued to the live skeleton shoulder landmark,
+  // Shoulder: column glued to the live skeleton shoulder landmark,
   // down to the frozen table plane (gold mark Y).
   const tableLine = tableLineUnderShoulder(overlayData, {
     shoulder,

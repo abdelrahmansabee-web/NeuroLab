@@ -21,6 +21,7 @@ import {
   resolveTremorMetrics,
 } from "./tremorMetrics";
 import {
+  computeOverlayMetrics,
   computeValidationPanelLive,
   elbowAngVelAt,
   nvpPeakIndicesInWindow,
@@ -600,21 +601,28 @@ function getValidationPanelRowDefs(overlayData, clinicalTask) {
   return UE_VALIDATION_PANEL_ROWS;
 }
 
-/** Upper-extremity validation panel — matches kinematics table core + validation extras. */
-const UE_VALIDATION_PANEL_ROWS = [
-  { id: "mov_time", label: "Movement time", kind: "live", key: "movementTime", suffix: " s", decimals: 2 },
-  { id: "mov_quality", label: "Movement quality", kind: "metric", metricKeys: ["movement_quality_index"], accent: true },
-  { id: "straightness", label: "Straightness", kind: "live", key: "straightness", decimals: 2 },
-  { id: "peak_vel", label: "Peak velocity", kind: "peakVelCm", accent: true },
-  { id: "pause", label: "Pause / stops", kind: "pause" },
-  { id: "trunk", label: "Trunk ratio", kind: "live", key: "trunkRatio", decimals: 2 },
+/** Upper-extremity validation panel — the eight clinic SPSS variables (Total NVP is the header chip). */
+export const UE_VALIDATION_PANEL_ROWS = [
   { id: "sh_elev", label: "Shoulder elevation", kind: "shoulderElev" },
-  { id: "elbow_mean", label: "Elbow angle mean", kind: "metric", metricKeys: ["elbow_angle_mean_deg", "elbow_angle_mean"], suffix: "°", decimals: 1 },
-  { id: "tremor", label: "Tremor 8–12 Hz", kind: "tremor", tremorKey: "tremor_8_12hz_power" },
-  { id: "tremor_hz", label: "Tremor peak freq", kind: "tremorFreq", tremorKey: "tremor_peak_freq_hz" },
-  { id: "kin_abd", label: "Shoulder abduction", kind: "live", key: "shoulderAbduction", suffix: "°", decimals: 0 },
-  { id: "kin_finger", label: "Finger quality", kind: "live", key: "fingerQuality", decimals: 0 },
+  { id: "trunk_fwd", label: "Trunk forward displacement", kind: "metric", metricKeys: ["trunk_forward_displacement_cm"], suffix: " cm", decimals: 1 },
+  { id: "mov_time", label: "Movement time", kind: "live", key: "movementTime", suffix: " s", decimals: 2 },
+  { id: "avg_vel", label: "Average hand velocity", kind: "metric", metricKeys: ["average_hand_velocity_cm_s"], suffix: " cm/s", decimals: 1 },
+  { id: "elbow_mean", label: "Elbow extension angle", kind: "metric", metricKeys: ["elbow_angle_mean_deg", "elbow_angle_mean"], suffix: "°", decimals: 1 },
+  { id: "sh_flex", label: "Shoulder flexion angle", kind: "metric", metricKeys: ["shoulder_flexion_mean_deg", "shoulder_flexion_mean"], suffix: "°", decimals: 1 },
+  { id: "sh_abd", label: "Shoulder abduction angle", kind: "metric", metricKeys: ["shoulder_abduction_mean_deg", "shoulder_abduction_mean"], suffix: "°", decimals: 1 },
 ];
+
+function pickPanelMetric(overlayData, keys) {
+  const direct = pickOverlayMetric(overlayData, keys);
+  if (direct != null) return direct;
+  const filled = computeOverlayMetrics(overlayData);
+  if (!filled) return null;
+  for (const k of keys || []) {
+    const v = filled[k];
+    if (v != null && v !== "" && !Number.isNaN(Number(v))) return Number(v);
+  }
+  return null;
+}
 
 function formatPanelRowValue(row, live, overlayData, formatValue) {
   if (row.kind === "live") {
@@ -661,7 +669,7 @@ function formatPanelRowValue(row, live, overlayData, formatValue) {
     return `${Number(v).toFixed(1)} Hz`;
   }
   if (row.kind === "metric" && row.metricKeys) {
-    const v = pickOverlayMetric(overlayData, row.metricKeys);
+    const v = pickPanelMetric(overlayData, row.metricKeys);
     if (v == null) return "—";
     const decimals = row.decimals != null ? row.decimals : 2;
     const formatted = formatValue(v, decimals);
@@ -1188,12 +1196,16 @@ export function ValidationOverlayPlayer({
     if (f && typeof f.shoulder_abduction_deg === "number" && f.shoulder_abduction_deg > 0) {
       currentShoulderAbduction = f.shoulder_abduction_deg;
     }
+    let currentShoulderFlexion = 0;
+    if (f && typeof f.shoulder_flexion_deg === "number" && f.shoulder_flexion_deg > 0) {
+      currentShoulderFlexion = f.shoulder_flexion_deg;
+    }
     let currentFingerQuality = panelLive?.fingerQuality ?? cachedLive.fingerQuality ?? 0;
     let tremorLive = tremorLiveCacheRef.current?.data;
     let adlTremorLive = tremorLiveCacheRef.current?.adlData;
     const resolvedTremor = resolveTremorMetrics(overlayData);
 
-    const showExtendedKin = false; // UE abduction/finger overlays disabled
+    const showExtendedKin = false; // finger / HL extras stay off
 
     const dpr = overlayCanvasDpr();
     const labelSize = `${Math.round(10 * dpr)}px`;
@@ -1240,18 +1252,21 @@ export function ValidationOverlayPlayer({
     }
 
     const cx = cw / 2;
-    if (!touchPerf) {
-      if (shoulder && showExtendedKin && currentShoulderAbduction > 0) {
+    if (!touchPerf && showKinematicMarks) {
+      if (shoulder && currentShoulderFlexion > 0) {
+        drawSimpleLabel(`Flex ${currentShoulderFlexion.toFixed(0)}°`, shoulder, shoulder[0] > cx ? -118 : 14, -22, {
+          color: color.text,
+          border: color.glow,
+        });
+      }
+      if (shoulder && currentShoulderAbduction > 0) {
         drawSimpleLabel(`Abd ${currentShoulderAbduction.toFixed(0)}°`, shoulder, shoulder[0] > cx ? -118 : 14, 6, {
           color: "#93c5fd",
           border: "rgba(59,130,246,0.55)",
         });
       }
-      if (elbow) {
+      if (elbow && currentElbowAngle > 0) {
         drawSimpleLabel(`El ${currentElbowAngle.toFixed(0)}°`, elbow, elbow[0] > cx ? -80 : 14, -22, { color: color.text, border: color.glow });
-      }
-      if (palm) {
-        drawSimpleLabel(`Ha ${Math.round(speed)} °/s`, palm, palm[0] > cx ? -100 : 18, -24, { color: "#fde047", border: "rgba(250,204,21,0.6)" });
       }
     }
 
@@ -1677,7 +1692,8 @@ export function ValidationOverlayPlayer({
     const unscaledRowH = 14 * dpr;
     const unscaledHeaderH = 26 * dpr;
     const unscaledHeaderGap = 22 * dpr;
-    const unscaledPanelH = unscaledHeaderH + unscaledHeaderGap + unscaledRowH * 13 + unscaledChartH * 3 + unscaledPad * 2 + 20;
+    const rowDefsInline = getValidationPanelRowDefs(overlayData, clinicalTask);
+    const unscaledPanelH = unscaledHeaderH + unscaledHeaderGap + unscaledRowH * (rowDefsInline.length + 1) + unscaledChartH * 3 + unscaledPad * 2 + 20;
     const maxPanelH = ch - unscaledPad * 2;
     const panelScale = unscaledPanelH > maxPanelH ? Math.max(0.65, maxPanelH / unscaledPanelH) : 1;
     const pad = unscaledPad * panelScale;
@@ -1726,7 +1742,6 @@ export function ValidationOverlayPlayer({
       shoulderAbduction: currentShoulderAbduction,
       fingerQuality: currentFingerQuality,
     };
-    const rowDefsInline = getValidationPanelRowDefs(overlayData, clinicalTask);
 
     let cy = py + headerH + headerGap;
     rowDefsInline.forEach((row) => {
