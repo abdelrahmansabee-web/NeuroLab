@@ -10,6 +10,7 @@ import {
   NL_SPRING_TOAST,
   NL_TWEEN_MENU,
 } from "./motionPresets";
+import { isGhostClick } from "./uiGhostClick";
 import {
   User, Activity, Sliders, TrendingUp, Heart, Timer, Cpu, FileText,
   Menu, X, ChevronRight, Play, Square, RotateCcw, Copy, Check,
@@ -184,7 +185,8 @@ const SIDEBAR_X_HIDDEN = -280;
 const MOBILE_SIDEBAR_W = "75%";
 /** Sidebar aside slide (transform); main/top bar use width + inset for centered content. */
 const SIDEBAR_SHELL_TRANSITION = "transform 320ms cubic-bezier(0.32, 0.72, 0, 1)";
-const SIDEBAR_LAYOUT_TRANSITION = "left 320ms cubic-bezier(0.32, 0.72, 0, 1), width 320ms cubic-bezier(0.32, 0.72, 0, 1), margin-left 320ms cubic-bezier(0.32, 0.72, 0, 1)";
+/** Do not animate left/width/margin — that layout fight cuts every chrome motion. */
+const SIDEBAR_LAYOUT_TRANSITION = "none";
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
   if (window.matchMedia("(min-width: 768px)").matches) return SIDEBAR_W;
@@ -5990,7 +5992,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[99998] flex flex-col bg-black/95 backdrop-blur-sm"
+            className="fixed inset-0 z-[99998] flex flex-col bg-black/95"
             onClick={() => setMediaPreview(null)}
           >
             <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 gap-2" onClick={(e) => e.stopPropagation()}>
@@ -9726,7 +9728,10 @@ export default function App() {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={nlMotionTap(0.95)}
-                onClick={() => setMobileTopMenuOpen((p) => !p)}
+                onClick={() => {
+                  if (isGhostClick()) return;
+                  setMobileTopMenuOpen((p) => !p);
+                }}
                 className={`w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
                 style={GLASS_FIELD}
                 title="More actions"
@@ -9773,7 +9778,10 @@ export default function App() {
           <motion.button
             whileHover={{ scale: 1.08 }}
             whileTap={nlMotionTap(0.92)}
-            onClick={() => setMobileTopMenuOpen((p) => !p)}
+            onClick={() => {
+              if (isGhostClick()) return;
+              setMobileTopMenuOpen((p) => !p);
+            }}
             className="w-9 h-9 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
             style={GLASS_FIELD}
             title="Menu"
@@ -10630,7 +10638,7 @@ export default function App() {
               <motion.button
                 type="button"
                 aria-label="Close menu"
-                className="absolute inset-0 bg-black/50 backdrop-blur-[3px]"
+                className="absolute inset-0 bg-black/50"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
