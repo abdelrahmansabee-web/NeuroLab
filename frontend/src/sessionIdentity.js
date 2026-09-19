@@ -25,3 +25,17 @@ export function findPatientForOpenSession(patients, fd) {
   );
   return hits.length === 1 ? hits[0] : null;
 }
+
+/**
+ * Space `/video/<filename>` is last-writer for the whole Space.
+ * Only the file this open session just uploaded may use that path.
+ */
+export function shouldUseEphemeralSpaceVideo(filename, localUploadNames) {
+  const name = String(filename || "").trim();
+  if (!name) return false;
+  if (localUploadNames instanceof Set) return localUploadNames.has(name);
+  if (Array.isArray(localUploadNames)) {
+    return localUploadNames.some((item) => String(item || "").trim() === name);
+  }
+  return false;
+}

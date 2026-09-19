@@ -54,7 +54,7 @@ import {
   validationCacheMatchesResult,
   requestClinicPersistentStorage,
 } from "./validationSessionCache";
-import { findPatientForOpenSession, kinematicsResultsForOpenSession } from "./sessionIdentity";
+import { findPatientForOpenSession, kinematicsResultsForOpenSession, shouldUseEphemeralSpaceVideo } from "./sessionIdentity";
 import {
   backupDriveArtifact,
   backupValidationArtifactsToDrive,
@@ -3843,6 +3843,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   /** Phases whose loaded clip does not match the overlay analysis (baked composite). */
   const [overlaySourceBad, setOverlaySourceBad] = useState({});
   const overlaySourceRetryRef = useRef({});
+  const localUploadNamesRef = useRef(new Set());
   const driveBakeToastRef = useRef({});
   const videoBlobsRef = useRef(videoBlobs);
   const videoLoadingRef = useRef(videoLoading);
@@ -4038,6 +4039,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       return {};
     });
     overlayVideoSyncedRef.current = {};
+    localUploadNamesRef.current = new Set();
     const fromFd = kinematicsResultsForOpenSession(data?.analysisResults);
     if (Object.keys(fromFd).length > 0) {
       setKinematicsResults(fromFd);
@@ -4094,6 +4096,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
   const handleFile = (phase, file) => {
     if (!file) return;
+    if (file.name) localUploadNamesRef.current.add(file.name);
     const isVideo = !file.name.toLowerCase().endsWith(".csv");
     let upd;
     if (isVideo) {
@@ -4336,6 +4339,13 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
     try {
       if (shouldApplyCachedOriginalVideo({ force }) && await applyCachedOriginal()) return;
+      const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
+      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.originalVideoBlob?.size) return;
+      if (await applyCachedOriginal()) return;
+      if (!shouldUseEphemeralSpaceVideo(filename, localUploadNamesRef.current)) {
+        showToast("Original video expired on server — please re-upload", "error");
+        return;
+      }
 
       const candidates = [];
       const add = (name) => {
@@ -4360,9 +4370,6 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         break;
       }
       if (!loaded) {
-        if (await applyCachedOriginal()) return;
-        const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
-        if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.originalVideoBlob?.size) return;
         showToast("Original video expired on server — please re-upload", "error");
         return;
       }
@@ -4525,6 +4532,24 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       return;
     }
     overlaySourceRetryRef.current[phase] = tries + 1;
+    const phaseResult = kinematicsResults[phase];
+    try {
+      const cached = patientCacheKey
+        ? await loadValidationSessionArtifact(patientCacheKey, phase)
+        : null;
+      if (validationCacheMatchesResult(cached, phaseResult, cacheMatchOpts) && cached?.originalVideoBlob?.size) {
+        applyValidationCacheToState(phase, { originalVideoBlob: cached.originalVideoBlob });
+        return;
+      }
+      const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
+      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.originalVideoBlob?.size) return;
+    } catch (err) {
+      console.warn("overlay source patient restore failed:", err);
+    }
+    if (!shouldUseEphemeralSpaceVideo(name, localUploadNamesRef.current)) {
+      giveUp();
+      return;
+    }
     // Fetch before swapping: a failed refetch must not drop the clip we already play.
     let fresh = null;
     try {
@@ -4556,7 +4581,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       originalVideoBlob: fresh,
       kinematicsSnapshot: kinematicsResults[phase],
     });
-  }, [overlayData, kinematicsResults, persistValidationPhase, showToast]);
+  }, [overlayData, kinematicsResults, persistValidationPhase, showToast, patientCacheKey, cacheMatchOpts, applyValidationCacheToState, hydrateValidationFromCloud]);
 
   // A freshly loaded clip gets a new verdict from the player.
   useEffect(() => {
@@ -4579,6 +4604,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
     const { unified_validation_video_b64: _, ...resultWithoutB64 } = result;
     const videoFilename = result.video_filename || file?.name;
+    if (file?.name) localUploadNamesRef.current.add(file.name);
+    if (videoFilename) localUploadNamesRef.current.add(videoFilename);
 
     if (videoFilename && !(file?.name || "").toLowerCase().endsWith(".csv")) {
       await ensureOriginalVideoBlob(phase, file, videoFilename);
@@ -4989,12 +5016,20 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     };
 
     try {
+      if (await applyCachedUnified()) return;
+      const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
+      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.unifiedVideoBlob?.size) return;
+      if (!shouldUseEphemeralSpaceVideo(filename, localUploadNamesRef.current)) {
+        if (!silent) showToast("Validation video expired on server — please re-analyze", "error");
+        setVideoBlobs((prev) => {
+          if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+          return { ...prev, [phase]: null };
+        });
+        return;
+      }
       const url = `${API_BASE}/video/${encodeURIComponent(filename)}`;
       const res = await fetch(url);
       if (res.status === 404) {
-        if (await applyCachedUnified()) return;
-        const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
-        if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.unifiedVideoBlob?.size) return;
         if (!silent) showToast("Validation video expired on server — please re-analyze", "error");
         setVideoBlobs((prev) => {
           if (prev[phase]) URL.revokeObjectURL(prev[phase]);
