@@ -64,6 +64,14 @@ function xyPair(pt) {
   return [x, y];
 }
 
+/**
+ * Hand path for NVP / straightness: rest wrist landmark, never the overlay
+ * display palm (that field is the index tip).
+ */
+export function pathLandmarkXY(frame) {
+  return xyPair(frame?.wrist) || xyPair(frame?.hl_wrist) || xyPair(frame?.palm);
+}
+
 function medianNum(vals) {
   const a = vals.filter((v) => Number.isFinite(v)).sort((x, y) => x - y);
   if (!a.length) return null;
@@ -72,14 +80,16 @@ function medianNum(vals) {
 }
 
 /**
- * Rest palm landmark: where the hand sits before the reach, not the velocity-onset palm.
- * Prefers overlay.rest_palm, else the early-frame median, else start_palm.
+ * Rest hand landmark: wrist on the table before the reach.
+ * Never the overlay `palm` field first — that is the index tip used only to draw fingers.
  */
 export function restLandmarkPalm(overlayData) {
-  const stored = xyPair(overlayData?.rest_palm);
+  const stored = xyPair(overlayData?.rest_wrist);
   if (stored) return stored;
   const frames = overlayData?.frames || [];
-  if (!frames.length) return xyPair(overlayData?.start_palm);
+  if (!frames.length) {
+    return xyPair(overlayData?.start_wrist) || xyPair(overlayData?.start_palm);
+  }
   const { startIdx } = overlayMovementWindow(overlayData);
   const fps = Number(overlayData?.fps) || 60;
   const earlyN = Math.max(1, Math.round(fps * 0.2));
@@ -87,7 +97,7 @@ export function restLandmarkPalm(overlayData) {
   const xs = [];
   const ys = [];
   for (let i = 0; i <= hi; i += 1) {
-    const p = xyPair(frames[i]?.palm);
+    const p = pathLandmarkXY(frames[i]);
     if (p) {
       xs.push(p[0]);
       ys.push(p[1]);
@@ -96,13 +106,17 @@ export function restLandmarkPalm(overlayData) {
   const mx = medianNum(xs);
   const my = medianNum(ys);
   if (mx != null && my != null) return [mx, my];
-  return xyPair(overlayData?.start_palm) || xyPair(frames[startIdx]?.palm);
+  return (
+    xyPair(overlayData?.start_wrist)
+    || pathLandmarkXY(frames[startIdx])
+    || xyPair(overlayData?.start_palm)
+  );
 }
 
 function restLeaveEps(overlayData, restPalm) {
   const frames = overlayData?.frames || [];
   const { endIdx } = overlayMovementWindow(overlayData);
-  const endP = xyPair(frames[endIdx]?.palm);
+  const endP = pathLandmarkXY(frames[endIdx]);
   if (restPalm && endP) {
     const reach = Math.hypot(endP[0] - restPalm[0], endP[1] - restPalm[1]);
     if (reach > 1e-6) return Math.max(reach * 0.05, 1e-4);
@@ -124,7 +138,7 @@ export function restPathStartIdx(overlayData) {
   const last = Math.min(startIdx, frames.length - 1);
   let firstLeave = null;
   for (let i = 0; i <= last; i += 1) {
-    const p = xyPair(frames[i]?.palm);
+    const p = pathLandmarkXY(frames[i]);
     if (!p) continue;
     if (Math.hypot(p[0] - rest[0], p[1] - rest[1]) > eps) {
       firstLeave = i;
@@ -137,8 +151,8 @@ export function restPathStartIdx(overlayData) {
 
 function palmDeltaSpeed(frames, fps, i) {
   if (i <= 0) return 0;
-  const a = xyPair(frames[i - 1]?.palm);
-  const b = xyPair(frames[i]?.palm);
+  const a = pathLandmarkXY(frames[i - 1]);
+  const b = pathLandmarkXY(frames[i]);
   if (!a || !b) return 0;
   return Math.hypot(b[0] - a[0], b[1] - a[1]) * fps;
 }
@@ -210,7 +224,7 @@ export function straightnessFromRest(overlayData, untilIdx) {
   let pathLength = 0;
   let prev = restPalm;
   for (let i = restIdx; i <= hi; i += 1) {
-    const curr = xyPair(frames[i]?.palm);
+    const curr = pathLandmarkXY(frames[i]);
     if (!prev || !curr) {
       if (curr) prev = curr;
       continue;
@@ -218,7 +232,7 @@ export function straightnessFromRest(overlayData, untilIdx) {
     pathLength += Math.hypot(curr[0] - prev[0], curr[1] - prev[1]);
     prev = curr;
   }
-  const endP = xyPair(frames[hi]?.palm);
+  const endP = pathLandmarkXY(frames[hi]);
   if (!endP || pathLength <= 0) return 0;
   const displacement = Math.hypot(endP[0] - restPalm[0], endP[1] - restPalm[1]);
   return Math.min(1, displacement / pathLength);

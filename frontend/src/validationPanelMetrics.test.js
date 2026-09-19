@@ -2,6 +2,7 @@ import {
   computeOverlayMetrics,
   computeValidationPanelLive,
   formatPanelAlignedKinValue,
+  pathLandmarkXY,
   restLandmarkPalm,
   restPathStartIdx,
   shoulderFlexionGoniometerDeg,
@@ -184,6 +185,34 @@ test("goniometer flexion overwrites baked overlay metrics when hip landmarks exi
   });
   const table = computeOverlayMetrics(overlay);
   expect(table.shoulder_flexion_mean_deg).toBeCloseTo(0, 5);
+});
+
+test("NVP and straightness use the rest wrist, not the index tip", () => {
+  const fps = 60;
+  const frames = [];
+  for (let i = 0; i < 24; i += 1) {
+    const t = Math.max(0, i - 4) / 19;
+    frames.push({
+      time: i / fps,
+      wrist: [0.20 + t * 0.40, 0.70],
+      palm: [0.20 + t * 0.40, 0.70 + Math.sin(i * 1.7) * 0.12],
+      speed: i >= 4 && i <= 20 ? 16 : 0,
+      trunk: [0.25, 0.32],
+      elbow_angle: 90,
+    });
+  }
+  const overlay = {
+    fps,
+    frames,
+    movement_window: { start_idx: 4, end_idx: 20 },
+    peak_frames: [8, 14],
+  };
+  const rest = restLandmarkPalm(overlay);
+  expect(rest[1]).toBeCloseTo(0.70, 5);
+  expect(pathLandmarkXY(frames[20])[1]).toBeCloseTo(0.70, 5);
+  expect(frames[20].palm[1]).not.toBeCloseTo(0.70, 2);
+  const s = straightnessFromRest(overlay, 20);
+  expect(s).toBeGreaterThan(0.95);
 });
 
 test("NVP and straightness start at the rest palm landmark, not velocity onset", () => {

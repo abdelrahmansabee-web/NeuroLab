@@ -23,6 +23,7 @@ test("UE validation panel lists the eight clinic SPSS variables", () => {
 });
 
 test("skeleton marks keep NVP, trunk, and shoulder and drop leftover chord/pause/Ha", () => {
+  expect(marksSrc).toContain("pathLandmarkXY");
   expect(marksSrc).toContain("nvpPeakIndicesFromRest");
   expect(marksSrc).toContain("trunkHorizontalDispNorm");
   expect(marksSrc).toContain("tableLineUnderShoulder");

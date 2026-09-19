@@ -7,6 +7,7 @@ import {
   nvpPeakIndicesInWindow,
   overlayMovementWindow,
   overlayPauseSpeedThreshold,
+  pathLandmarkXY,
   restPathStartIdx,
 } from "./validationPanelMetrics";
 import { addCupToSpan, tableYFromCup } from "./overlayCupTable";
@@ -29,7 +30,7 @@ export function classifyPalmPath(frames, startIdx, untilIdx, speedThreshold) {
   const hi = Math.max(startIdx, Math.min(frames.length - 1, untilIdx));
   const lo = Math.max(0, Math.min(hi, startIdx));
   for (let i = lo; i <= hi; i += 1) {
-    const palm = frames[i]?.palm;
+    const palm = pathLandmarkXY(frames[i]);
     if (!palm || palm[0] == null || palm[1] == null) continue;
     pts.push({
       i,
@@ -504,7 +505,7 @@ export function drawPanelKinematicMarks(ctx, {
   // NVP: one small dot per peak_frame up to now, with +1 as each peak appears.
   const peaks = nvpPeakIndicesFromRest(overlayData, untilIdx);
   for (let n = 0; n < peaks.length; n += 1) {
-    const p = toCanvas(frames[peaks[n]]?.palm, cw, ch);
+    const p = toCanvas(pathLandmarkXY(frames[peaks[n]]), cw, ch);
     if (!p) continue;
     ctx.beginPath();
     ctx.arc(p[0], p[1], 3.1, 0, Math.PI * 2);
@@ -525,10 +526,11 @@ export function drawPanelKinematicMarks(ctx, {
     ctx.restore();
   }
 
-  // Current palm tick (path end).
-  if (palm) {
+  // Current hand tick (wrist rest-landmark path end, not index tip).
+  const pathEnd = toCanvas(pathLandmarkXY(frames[untilIdx]), cw, ch);
+  if (pathEnd) {
     ctx.beginPath();
-    ctx.arc(palm[0], palm[1], 3, 0, Math.PI * 2);
+    ctx.arc(pathEnd[0], pathEnd[1], 3, 0, Math.PI * 2);
     ctx.fillStyle = "#fff";
     ctx.fill();
   }
