@@ -8,6 +8,8 @@ import {
   isTransientAnalyzePollError,
   readAnalyzeUi,
   setKinAnalyzeActive,
+  shouldAbortAnalyzeControllerOnLeave,
+  shouldKeepAnalyzingAfterUploadDrop,
   shouldResumeAnalyze,
   writeAnalyzeUi,
 } from "./kinAnalyzeGuard";
@@ -50,4 +52,15 @@ test("background fetch drops are retried; leaving a section is not a cancel", ()
   expect(isTransientAnalyzePollError(Object.assign(new Error("aborted"), { name: "AbortError" }), { aborted: true })).toBe(false);
   expect(isAnalyzeLeaveAbort(Object.assign(new Error("aborted"), { name: "AbortError" }), true)).toBe(true);
   expect(isAnalyzeLeaveAbort(Object.assign(new Error("aborted"), { name: "AbortError" }), false)).toBe(false);
+});
+
+test("leaving kinematics does not abort an upload that still has no job id", () => {
+  expect(shouldAbortAnalyzeControllerOnLeave({ uploading: true, hasJobId: false })).toBe(false);
+  expect(shouldAbortAnalyzeControllerOnLeave({ uploading: false, hasJobId: true })).toBe(true);
+  expect(shouldKeepAnalyzingAfterUploadDrop(
+    Object.assign(new Error("aborted"), { name: "AbortError" }),
+    { hasJobId: false },
+  )).toBe(true);
+  expect(shouldKeepAnalyzingAfterUploadDrop(new TypeError("Failed to fetch"), { hasJobId: false })).toBe(true);
+  expect(shouldKeepAnalyzingAfterUploadDrop(new TypeError("Failed to fetch"), { hasJobId: true })).toBe(false);
 });

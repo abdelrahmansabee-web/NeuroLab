@@ -40,19 +40,10 @@ export function shouldUseEphemeralSpaceVideo(filename, localUploadNames) {
   return false;
 }
 
-/** Wrap a recalled Drive/IDB clip so Analyze can POST it. Never use Space /video/. */
-export function blobAsAnalyzeFile(blob, filename) {
+/** Recalled Drive/IDB clip for Analyze. Same blob — do not copy (iPad kills the POST). */
+export function blobAsAnalyzeFile(blob, _filename) {
   if (!(blob instanceof Blob) || blob.size <= 0) return null;
-  const name = String(filename || "").trim() || "video.mp4";
-  const type = String(blob.type || "").trim() || "video/mp4";
-  try {
-    if (typeof File === "function") return new File([blob], name, { type });
-  } catch { /* ignore */ }
-  try {
-    return blob.slice(0, blob.size, type);
-  } catch {
-    return blob;
-  }
+  return blob;
 }
 
 export function analyzeSourceForOpenSession({ file, originalBlob, filename } = {}) {

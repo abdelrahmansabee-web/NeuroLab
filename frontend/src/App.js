@@ -83,6 +83,8 @@ import {
   isTransientAnalyzePollError,
   readAnalyzeUi,
   setKinAnalyzeActive,
+  shouldAbortAnalyzeControllerOnLeave,
+  shouldKeepAnalyzingAfterUploadDrop,
   shouldResumeAnalyze,
   writeAnalyzeUi,
 } from "./kinAnalyzeGuard";
@@ -3980,6 +3982,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   }, [patientCacheKey, kinematicsResults, applyValidationCacheToState, cacheMatchOpts]);
 
   const abortRef = useRef({});
+  const uploadAbortRef = useRef({});
   const overlayVideoSyncedRef = useRef({});
   const dataRef = useRef(data);
   const leaveAbortRef = useRef(false);
@@ -4007,12 +4010,18 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     };
   }, []);
 
-  // Leaving kinematics (or the app) must not cancel the server job.
+  // Leaving kinematics may stop polling. Do not abort a POST that has no job id yet.
   useEffect(() => {
     leaveAbortRef.current = false;
     return () => {
       leaveAbortRef.current = true;
-      Object.values(abortRef.current).forEach((controller) => {
+      const ui = readAnalyzeUi();
+      Object.entries(abortRef.current).forEach(([phase, controller]) => {
+        const jobId = analyzeJobIdForPhase(phase, ui, dataRef.current?.analyzeJobs);
+        if (!shouldAbortAnalyzeControllerOnLeave({
+          hasJobId: Boolean(jobId),
+          uploading: Boolean(ui?.uploading) && !jobId,
+        })) return;
         try { controller.abort(); } catch { /* ignore */ }
       });
     };
@@ -4150,6 +4159,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       abortRef.current[phase].abort();
       delete abortRef.current[phase];
     }
+    if (uploadAbortRef.current[phase]) {
+      uploadAbortRef.current[phase].abort();
+      delete uploadAbortRef.current[phase];
+    }
     if (status === "analyzing") {
       const ui = readAnalyzeUi();
       if (!ui?.phase || ui.phase === phase) clearAnalyzeUi();
@@ -4184,6 +4197,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       if (abortRef.current[ph.k]) {
         abortRef.current[ph.k].abort();
         delete abortRef.current[ph.k];
+      }
+      if (uploadAbortRef.current[ph.k]) {
+        uploadAbortRef.current[ph.k].abort();
+        delete uploadAbortRef.current[ph.k];
       }
     });
     const upd = { ...data };
@@ -4758,19 +4775,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     });
     if (!(file instanceof Blob) || file.size <= 0) {
       let recalled = null;
-      const liveUrl = originalVideoBlobsRef.current[phase];
-      if (typeof liveUrl === "string" && liveUrl.startsWith("blob:")) {
-        try {
-          recalled = await (await fetch(liveUrl)).blob();
-        } catch { /* ignore */ }
-      }
-      if (!(recalled instanceof Blob) || recalled.size <= 0) {
-        const cached = patientCacheKey
-          ? await loadValidationSessionArtifact(patientCacheKey, phase)
-          : null;
-        if (!cached?.patientKey || cached.patientKey === patientCacheKey) {
-          recalled = cached?.originalVideoBlob;
-        }
+      const cached = patientCacheKey
+        ? await loadValidationSessionArtifact(patientCacheKey, phase)
+        : null;
+      if (!cached?.patientKey || cached.patientKey === patientCacheKey) {
+        recalled = cached?.originalVideoBlob;
       }
       if (!(recalled instanceof Blob) || recalled.size <= 0) {
         const cloud = await hydrateValidationFromCloud(phase, {
@@ -4783,6 +4792,16 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
           recalled = cloud?.originalVideoBlob;
         }
       }
+      const liveUrl = originalVideoBlobsRef.current[phase];
+      if (
+        (!(recalled instanceof Blob) || recalled.size <= 0)
+        && typeof liveUrl === "string"
+        && liveUrl.startsWith("blob:")
+      ) {
+        try {
+          recalled = await (await fetch(liveUrl)).blob();
+        } catch { /* ignore */ }
+      }
       file = analyzeSourceForOpenSession({ originalBlob: recalled, filename });
     }
     if (!(file instanceof Blob) || file.size <= 0) {
@@ -4793,7 +4812,9 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     if (filename) localUploadNamesRef.current.add(filename);
 
     const controller = new AbortController();
+    const uploadController = new AbortController();
     abortRef.current[phase] = controller;
+    uploadAbortRef.current[phase] = uploadController;
     leaveAbortRef.current = false;
     setKinAnalyzeActive(true);
     setOverlayMountReady((prev) => ({ ...prev, [phase]: false }));
@@ -4815,7 +4836,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     });
     onChange({ ...data, [statusKey(phase)]: "analyzing" });
     setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 5, step: "Uploading…" } }));
-    writeAnalyzeUi({ phase, pct: 5, step: "Uploading…" });
+    writeAnalyzeUi({ phase, pct: 5, step: "Uploading…", uploading: true });
 
     const isCsv = String(file.name || filename || "").toLowerCase().endsWith(".csv");
 
@@ -4848,7 +4869,24 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       }
 
       const endpoint = isCsv ? "/analyze-csv" : "/analyze";
-      const res = await fetch(`${API_BASE}${endpoint}`, { method: "POST", body: fd, signal: controller.signal });
+      const postOnce = () => fetch(`${API_BASE}${endpoint}`, {
+        method: "POST",
+        body: fd,
+        signal: uploadController.signal,
+      });
+      let res;
+      try {
+        res = await postOnce();
+      } catch (err) {
+        if (uploadController.signal.aborted && !leaveAbortRef.current) throw err;
+        if (shouldKeepAnalyzingAfterUploadDrop(err, { hasJobId: false }) && !uploadController.signal.aborted) {
+          setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 5, step: "Retrying upload…" } }));
+          writeAnalyzeUi({ phase, pct: 5, step: "Retrying upload…", uploading: true });
+          res = await postOnce();
+        } else {
+          throw err;
+        }
+      }
       if (!res.ok) {
         let detail = `Server error ${res.status}`;
         try { const e = await res.json(); if (e.error || e.detail) detail += `: ${e.error || e.detail}`; } catch (_) {}
@@ -4865,7 +4903,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
           [statusKey(phase)]: "analyzing",
           analyzeJobs: { ...(cur.analyzeJobs || {}), [phase]: { jobId } },
         });
-        writeAnalyzeUi({ phase, jobId, pct: 8, step: "Analyzing…" });
+        writeAnalyzeUi({ phase, jobId, pct: 8, step: "Analyzing…", uploading: false });
         result = await followAnalyzeJob(phase, jobId, controller);
       }
 
@@ -4874,6 +4912,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       if (isAnalyzeLeaveAbort(err, leaveAbortRef.current) || (err?.name === "AbortError" && leaveAbortRef.current)) {
         const jobId = analyzeJobIdForPhase(phase, readAnalyzeUi(), dataRef.current?.analyzeJobs);
         if (jobId) {
+          setKinAnalyzeActive(true);
+          return;
+        }
+        if (shouldKeepAnalyzingAfterUploadDrop(err, { hasJobId: false })) {
           setKinAnalyzeActive(true);
           return;
         }
@@ -4897,6 +4939,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       clearAnalyzeUi();
     } finally {
       delete abortRef.current[phase];
+      delete uploadAbortRef.current[phase];
       if (!leaveAbortRef.current) {
         setKinAnalyzeActive(false);
       }
@@ -4929,6 +4972,15 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       window.removeEventListener("pageshow", onVis);
     };
   }, []);
+
+  useEffect(() => {
+    phases.forEach((ph) => {
+      const jobId = analyzeJobIdForPhase(ph.k, readAnalyzeUi(), data?.analyzeJobs);
+      if (!shouldResumeAnalyze(data?.[statusKey(ph.k)], jobId)) return;
+      if (abortRef.current[ph.k]) return;
+      resumeAnalyzeJobRef.current(ph.k, jobId);
+    });
+  }, [data?.analyzeJobs, data?.status_pre, data?.status_post, data?.status_baseline]);
 
   const downloadFile = async (phase, type) => {
     const result = kinematicsResults[phase];

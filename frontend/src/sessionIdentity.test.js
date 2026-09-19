@@ -66,6 +66,5 @@ test("Analyze can use this patient's recalled original instead of a file-input F
   });
   expect(recalled).toBeTruthy();
   expect(recalled.size).toBe(3);
-  expect(recalled.name || "").toBe("her_pre.mp4");
   expect(analyzeSourceForOpenSession({ filename: "gone.mp4" })).toBeNull();
 });

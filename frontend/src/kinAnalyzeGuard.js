@@ -77,6 +77,23 @@ export function shouldResumeAnalyze(status, jobId) {
   return String(status || "") === "analyzing" && Boolean(String(jobId || "").trim());
 }
 
+/** Leaving kinematics may abort polling. Aborting the upload kills the job before it exists. */
+export function shouldAbortAnalyzeControllerOnLeave({ hasJobId, uploading } = {}) {
+  if (uploading && !hasJobId) return false;
+  return true;
+}
+
+/** Upload dropped before the server issued a job id — keep the card, do not snap back to Play. */
+export function shouldKeepAnalyzingAfterUploadDrop(err, { hasJobId } = {}) {
+  if (hasJobId) return false;
+  const name = err?.name || "";
+  const msg = String(err?.message || "").toLowerCase();
+  if (name === "AbortError") return true;
+  if (name === "TypeError") return true;
+  if (msg.includes("failed to fetch") || msg.includes("network") || msg.includes("load failed")) return true;
+  return false;
+}
+
 /** Browser/background fetch drops — keep the server job, do not fail the clinic card. */
 export function isTransientAnalyzePollError(err, signal) {
   if (signal?.aborted) return false;
