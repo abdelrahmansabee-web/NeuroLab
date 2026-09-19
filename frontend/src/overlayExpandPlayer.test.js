@@ -1,6 +1,11 @@
 import React from "react";
 import { render, fireEvent } from "@testing-library/react";
 import { ValidationOverlayPlayer } from "./ValidationOverlayPlayer";
+import { isGhostClick, resetGhostClick } from "./uiGhostClick";
+
+beforeAll(() => {
+  HTMLMediaElement.prototype.load = function load() {};
+});
 
 const overlayData = {
   frames: [
@@ -91,6 +96,55 @@ test("expand keeps the same in-card video node", () => {
   expect(document.documentElement.classList.contains("nl-overlay-expanded")).toBe(false);
 });
 
+test("Close swallows the leftover click so the top-bar menu does not open", () => {
+  resetGhostClick();
+  window.matchMedia = (query) => ({
+    matches: false,
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+  });
+  window.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  };
+  HTMLCanvasElement.prototype.getContext = () => ({
+    clearRect() {},
+    fillRect() {},
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    arc() {},
+    closePath() {},
+    stroke() {},
+    fill() {},
+    save() {},
+    restore() {},
+    measureText: () => ({ width: 10 }),
+    createLinearGradient: () => ({ addColorStop() {} }),
+    createRadialGradient: () => ({ addColorStop() {} }),
+  });
+
+  const { getByTitle, getByLabelText } = render(
+    <ValidationOverlayPlayer videoUrl="blob:test-overlay" overlayData={overlayData} phaseLabel="Post" />,
+  );
+  fireEvent.pointerDown(getByTitle("Fullscreen"));
+  fireEvent.pointerDown(getByLabelText("Close fullscreen"));
+  expect(isGhostClick()).toBe(true);
+  const seen = [];
+  const onClick = (e) => {
+    if (!e.defaultPrevented) seen.push("click");
+  };
+  document.addEventListener("click", onClick);
+  document.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  expect(seen).toEqual([]);
+  document.removeEventListener("click", onClick);
+  resetGhostClick();
+});
+
 test("expand html class stays when overlay data identity changes", () => {
   window.matchMedia = (query) => ({
     matches: false,
@@ -144,4 +198,50 @@ test("expand html class stays when overlay data identity changes", () => {
   );
   expect(document.documentElement.classList.contains("nl-overlay-expanded")).toBe(true);
   expect(getByTitle("Exit fullscreen")).toBeTruthy();
+});
+
+test("compact overlay chrome uses icons instead of Chalk Marks Table text", () => {
+  window.matchMedia = (query) => ({
+    matches: true,
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+  });
+  window.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  };
+  HTMLCanvasElement.prototype.getContext = () => ({
+    clearRect() {},
+    fillRect() {},
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    arc() {},
+    closePath() {},
+    stroke() {},
+    fill() {},
+    save() {},
+    restore() {},
+    measureText: () => ({ width: 10 }),
+    createLinearGradient: () => ({ addColorStop() {} }),
+    createRadialGradient: () => ({ addColorStop() {} }),
+  });
+
+  const { container, getByTitle } = render(
+    <ValidationOverlayPlayer videoUrl="blob:test-overlay" overlayData={overlayData} phaseLabel="Pre" />,
+  );
+  const video = container.querySelector("video");
+  expect(video.getAttribute("preload")).toBe("metadata");
+  const tools = container.querySelector(".validation-controls-tools");
+  expect(tools).toBeTruthy();
+  expect(tools.textContent).not.toMatch(/Chalk|Clinic|Marks|Table/);
+  expect(getByTitle("Chalk limb ribbons (tap for clinical)")).toBeTruthy();
+  expect(getByTitle("Hide marks on the drawing")).toBeTruthy();
+  expect(getByTitle("Tap, then tap the table surface on the video. You can also drag the gold line.")).toBeTruthy();
+  expect(getByTitle("Fullscreen")).toBeTruthy();
+  expect(getByTitle("Download overlay video")).toBeTruthy();
 });

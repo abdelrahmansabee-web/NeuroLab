@@ -10,6 +10,7 @@ import {
   NL_SPRING_TOAST,
   NL_TWEEN_MENU,
 } from "./motionPresets";
+import { isGhostClick } from "./uiGhostClick";
 import {
   User, Activity, Sliders, TrendingUp, Heart, Timer, Cpu, FileText,
   Menu, X, ChevronRight, Play, Square, RotateCcw, Copy, Check,
@@ -33,8 +34,16 @@ import {
 } from "./thesisDocs";
 import { importPatientFile, buildImportRecord } from "./patientImport";
 import { ValidationOverlayPlayer, computeOverlayMetrics } from "./ValidationOverlayPlayer";
+import {
+  overlayPlayerMountDelayMs,
+  isBrowserNativeOverlayVideoName,
+  playbackVideoBlob,
+  shouldApplyCachedOriginalVideo,
+} from "./overlayVideoPlayback";
+import { clinicTrialRoleFromPhase, summarizeOverlayClock } from "./analysisPhaseCompare";
 import SessionStatusBar, { revealSessionStatusBar } from "./SessionStatusBar";
 import PtrIosSpinner from "./PtrIosSpinner";
+import { performHardRefresh } from "./hardRefresh";
 import AuthGate, { authHeaders, clearAuthToken, rememberLoginEmail } from "./AuthGate";
 import { downloadBlob as downloadBlobUtil, blobToBase64 } from "./downloadUtils";
 import {
@@ -43,8 +52,11 @@ import {
   shouldHydrateMediaBlobIntoState,
   shouldHydrateOverlayIntoState,
   validationCacheMatchesResult,
+  requestClinicPersistentStorage,
 } from "./validationSessionCache";
+import { analyzeSourceForOpenSession, findPatientForOpenSession, kinematicsResultsForOpenSession, shouldUseEphemeralSpaceVideo } from "./sessionIdentity";
 import {
+  backupDriveArtifact,
   backupValidationArtifactsToDrive,
   restoreValidationArtifactsFromDrive,
   validationUnifiedDriveName,
@@ -54,14 +66,36 @@ import {
   DRIVE_RECALL_EVENT,
   formatRecallToast,
   recallAnalyzedSessionsFromDrive,
+  coalesceRecallPatients,
+  isDriveRecallRunning,
+  preferPatientInRecallList,
+  shouldDeferBootRecallUntilEmailRestore,
 } from "./driveSessionRestore";
 import {
   analysisResultErrorMessage,
   ANALYZE_POLL_MS,
+  ANALYZE_POLL_TRANSIENT_RETRIES,
+  analyzeJobIdForPhase,
   analyzePollExceeded,
+  clearAnalyzeUi,
+  isAnalyzeLeaveAbort,
   isKinAnalyzeActive,
+  isTransientAnalyzePollError,
+  readAnalyzeUi,
   setKinAnalyzeActive,
+  shouldAbortAnalyzeControllerOnLeave,
+  shouldKeepAnalyzingAfterUploadDrop,
+  shouldResumeAnalyze,
+  writeAnalyzeUi,
 } from "./kinAnalyzeGuard";
+import {
+  appendClinicHealLog,
+  classifyClinicFault,
+  clinicHealBudgetAllows,
+  clinicHealNotice,
+  noteClinicHealAttempt,
+  readClinicHealLog,
+} from "./clinicSelfHeal";
 import {
   resolveKinMetricValue,
   loadLiveKinResults,
@@ -70,12 +104,10 @@ import {
   isPanelTableKey,
 } from "./kinMetrics";
 import { inferWmftFromKinematics, applyWmftInference } from "./wmftInference";
-import { MOVEMENT_PROFILE_FIELDS, MOVEMENT_PROFILE_GROUP_LABELS, MOVEMENT_PROFILE_GROUP_ORDER, resolveProfileMetric, formatProfileValue, getMovementProfile } from "./movementProfile";
 import {
   CLINICAL_MOVEMENT_TASKS,
   CLINICAL_DOMAIN_LABELS,
-  TASK_PHASE_METRIC_KEYS,
-  TASK_PHASE_NOTES,
+  CLINIC_UE_SPSS_KEYS,
   clinicalTaskById,
   clinicalTaskDomain,
   clinicalTasksForDomain,
@@ -121,6 +153,24 @@ function isStandalonePWA() {
     || window.navigator.standalone === true;
 }
 
+const RAED_APP_ORIGIN = "https://abdelrahmansabee-raedai.hf.space";
+
+/** Google OAuth cannot finish inside the huggingface.co Spaces iframe. */
+function openConnectDrive() {
+  const dest = `${RAED_APP_ORIGIN}/connect-drive`;
+  try {
+    if (window.top && window.top !== window.self) {
+      window.top.location.href = dest;
+      return;
+    }
+  } catch (e) { /* ignore */ }
+  if (typeof window !== "undefined" && /huggingface\.co$/i.test(window.location.hostname)) {
+    window.location.href = dest;
+    return;
+  }
+  window.location.href = "/connect-drive";
+}
+
 /** iPad / iPhone / coarse pointer ? lighter glass & no Framer tap springs. */
 function isTouchUi() {
   if (typeof window === "undefined") return false;
@@ -145,7 +195,8 @@ const SIDEBAR_X_HIDDEN = -280;
 const MOBILE_SIDEBAR_W = "75%";
 /** Sidebar aside slide (transform); main/top bar use width + inset for centered content. */
 const SIDEBAR_SHELL_TRANSITION = "transform 320ms cubic-bezier(0.32, 0.72, 0, 1)";
-const SIDEBAR_LAYOUT_TRANSITION = "left 320ms cubic-bezier(0.32, 0.72, 0, 1), width 320ms cubic-bezier(0.32, 0.72, 0, 1), margin-left 320ms cubic-bezier(0.32, 0.72, 0, 1)";
+/** Do not animate left/width/margin — that layout fight cuts every chrome motion. */
+const SIDEBAR_LAYOUT_TRANSITION = "none";
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
   if (window.matchMedia("(min-width: 768px)").matches) return SIDEBAR_W;
@@ -608,7 +659,8 @@ function pumpDriveFileBackupQueue() {
       }
       const job = driveFileBackupQueue.shift();
       try {
-        await backupFileToDrive(job.name, job.blob, job.opts);
+        const ok = await backupFileToDrive(job.name, job.blob, job.opts);
+        if (!ok) driveFileBackupDone.delete(job.key);
       } catch {
         driveFileBackupDone.delete(job.key);
       }
@@ -623,9 +675,14 @@ function pumpDriveFileBackupQueue() {
   }
 }
 
+function isDriveVideoBackup(name, blob) {
+  if (/\.(mp4|mov|m4v|webm)$/i.test(String(name || ""))) return true;
+  return String(blob?.type || "").toLowerCase().startsWith("video/");
+}
+
 function scheduleDriveFileBackup(name, blob, opts = {}) {
   if (!blob || !(blob instanceof Blob)) return;
-  if (blob.size > DRIVE_FILE_MAX_BYTES) {
+  if (!isDriveVideoBackup(name, blob) && blob.size > DRIVE_FILE_MAX_BYTES) {
     console.warn("Drive backup skipped (file too large):", name, blob.size);
     return;
   }
@@ -674,8 +731,11 @@ function backupSessionKinematicsVideosToDrive(kinematicsData, demographics) {
 
 async function backupFileToDrive(name, blob, opts = {}) {
   try {
-    const contentBase64 = await blobToBase64(blob);
     const { patientKey, subfolder, scope } = opts;
+    if (patientKey) {
+      return backupDriveArtifact(patientKey, name, blob, subfolder || "videos");
+    }
+    const contentBase64 = await blobToBase64(blob);
     const r = await fetch("/auth/backup-file", {
       method: "POST",
       credentials: "same-origin",
@@ -689,7 +749,17 @@ async function backupFileToDrive(name, blob, opts = {}) {
         scope: scope || undefined,
       }),
     });
-    return r.ok;
+    if (!r.ok) return false;
+    try {
+      const body = await r.json();
+      if (body?.skipped) {
+        console.warn("Drive backup skipped:", name, body.reason);
+        return false;
+      }
+    } catch {
+      /* ignore non-JSON */
+    }
+    return true;
   } catch (e) {
     console.warn("Drive file backup failed:", e);
     return false;
@@ -742,17 +812,85 @@ async function restoreFromDrive() {
   }
 }
 
-function startDriveSessionRecall(patients, { showToast, force = false } = {}) {
-  const list = Array.isArray(patients) && patients.length ? patients : loadPatients();
-  if (!list.length) return Promise.resolve(null);
-  return recallAnalyzedSessionsFromDrive(list, {
-    force,
-    onDone: (summary) => {
-      const msg = formatRecallToast(summary);
-      if (msg) showToast?.(msg, summary.incomplete ? "warning" : "success");
-    },
-  }).catch((err) => {
+function emitRecallChipDone(detail = {}) {
+  if (isDriveRecallRunning()) return;
+  try {
+    window.dispatchEvent(new CustomEvent(DRIVE_RECALL_EVENT, {
+      detail: {
+        attempted: false,
+        complete: 0,
+        incomplete: 0,
+        rows: [],
+        ...detail,
+      },
+    }));
+  } catch { /* ignore */ }
+}
+
+let driveRecallKickoff = false;
+let driveRecallThisVisit = false;
+
+function startDriveSessionRecall(patients, { showToast, force = false, allowRepeat = false } = {}) {
+  return (async () => {
+    if (driveRecallKickoff || isDriveRecallRunning()) return null;
+    if (!allowRepeat && !force && driveRecallThisVisit) return null;
+    driveRecallKickoff = true;
+    try {
+      let list;
+      try {
+        list = await coalesceRecallPatients(patients, {
+          loadPatients,
+          savePatients: (remote) => {
+            const merged = mergePatientLists(loadPatients(), remote);
+            return savePatients(merged);
+          },
+          pullRemotePatients: async () => {
+            const r = await fetchWithTimeout("/api/patients", {}, 45000);
+            if (r.status === 401 || r.status === 403) {
+              const err = new Error("auth");
+              err.code = r.status;
+              throw err;
+            }
+            if (!r.ok) return [];
+            const data = await r.json().catch(() => []);
+            return Array.isArray(data) ? data : [];
+          },
+        });
+      } catch (err) {
+        if (err?.code === 401 || err?.code === 403) {
+          showToast?.("Sign in on this Home Screen icon to recall sessions from Drive", "error");
+        }
+        console.warn("Drive session recall patient pull failed:", err);
+        emitRecallChipDone({ error: "auth" });
+        return null;
+      }
+      if (!list.length) {
+        if (isStandalonePWA()) {
+          showToast?.("No sessions on this icon yet — sign in here, then wait for Recalling", "warning");
+        }
+        emitRecallChipDone();
+        return null;
+      }
+      let prefer = "";
+      try {
+        const fd = JSON.parse(localStorage.getItem("neuro_fd_data") || "{}");
+        prefer = patientDriveKeyFromDemographics(fd?.demographics, fd?._loadedId);
+      } catch { /* ignore */ }
+      list = preferPatientInRecallList(list, prefer);
+      driveRecallThisVisit = true;
+      return await recallAnalyzedSessionsFromDrive(list, {
+        force,
+        onDone: (summary) => {
+          const msg = formatRecallToast(summary);
+          if (msg) showToast?.(msg, summary.incomplete ? "warning" : "success");
+        },
+      });
+    } finally {
+      driveRecallKickoff = false;
+    }
+  })().catch((err) => {
     console.warn("Drive session recall failed:", err);
+    emitRecallChipDone({ error: "failed" });
     return null;
   });
 }
@@ -1052,11 +1190,12 @@ async function syncPatientsWithServerInner({ showToast, silent = false, skipDriv
   try {
     const now = Date.now();
     const localEmpty = !Array.isArray(localPts) || localPts.length === 0;
-    // Silent boot skips Drive for speed ? EXCEPT when this origin has no patients
-    // (Space rename / new Home Screen): then Drive folder+PDF restore is required.
+    // skipDrive must win even when this Home Screen icon has no local patients.
+    // Waiting on /auth/restore (up to 240s) blocked /api/patients from saving,
+    // so Recalling never started while Safari's already-synced list sat on the server.
     const skipDriveRestore =
-      !localEmpty &&
-      (skipDrive || silent || now - lastSilentDriveRestoreAt < SILENT_DRIVE_RESTORE_MS);
+      skipDrive ||
+      (!localEmpty && (silent || now - lastSilentDriveRestoreAt < SILENT_DRIVE_RESTORE_MS));
     const driveRestoreP = skipDriveRestore
       ? Promise.resolve([])
       : restoreFromDrive().then((pts) => {
@@ -1162,7 +1301,8 @@ async function syncPatientsWithServerInner({ showToast, silent = false, skipDriv
       );
     }
     console.warn("Patient sync error:", err);
-    return { ok: false, patients: localPts, pushed: false, timedOut };
+    const kept = loadPatients();
+    return { ok: false, patients: kept.length ? kept : localPts, pushed: false, timedOut };
   }
 }
 
@@ -1235,10 +1375,13 @@ async function applyIpadLocalStorageBackup() {
 /** One-time strong restore after Space rename / empty new-origin PWA. */
 async function restoreStudyDataFromServer({ showToast } = {}) {
   await applyIpadLocalStorageBackup();
-  // Prefer server + Drive merge; empty local must not wipe server records.
-  const result = await syncPatientsWithServer({ showToast, silent: false, skipDrive: false });
+  // Pull the server list first. Drive folder/PDF rebuild runs only if that list is empty.
+  let result = await syncPatientsWithServer({ showToast, silent: true, skipDrive: true });
+  if (!result?.patients?.length) {
+    result = await syncPatientsWithServer({ showToast, silent: true, skipDrive: false });
+  }
   if (result?.patients?.length) {
-    startDriveSessionRecall(result.patients, { force: true });
+    startDriveSessionRecall(result.patients, { showToast, force: true, allowRepeat: true });
   }
   return result;
 }
@@ -1287,7 +1430,7 @@ async function restorePatientsFromDriveNow({ showToast } = {}) {
     }
     showToast?.(`Restored ${merged.length} patient(s) from Drive${detail}`, "success");
     window.dispatchEvent(new CustomEvent(PATIENTS_SYNC_EVENT, { detail: { count: merged.length } }));
-    startDriveSessionRecall(merged, { showToast, force: true });
+    startDriveSessionRecall(merged, { showToast, force: true, allowRepeat: true });
     return { ok: true, patients: merged, pushed: true };
   } catch (err) {
     console.warn("Restore from Drive failed:", err);
@@ -3576,7 +3719,7 @@ function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyz
             style={{ boxShadow: `0 0 10px ${film.glow}` }}
           />
         </div>
-        <p className="text-[8px] text-white/35 mt-1">Server processing — keep tab open</p>
+        <p className="text-[8px] text-white/35 mt-1">Server processing — you can change sections</p>
       </div>
     </div>
   );
@@ -3647,18 +3790,9 @@ const KinOverlayErrorBoundary = class extends React.Component {
 };
 
 const KinSection = React.memo(function KinSection({ data, demographics, onChange, showToast, sessionKey }) {
-  const [kinematicsResults, setKinematicsResults] = useState(() => {
-    try {
-      const ls = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {};
-      const fd = data?.analysisResults || {};
-      // Current form/session data takes precedence over stale localStorage.
-      const merged = { ...ls, ...fd };
-      delete merged.during;
-      return merged;
-    } catch {
-      return data?.analysisResults || {};
-    }
-  });
+  const [kinematicsResults, setKinematicsResults] = useState(() => (
+    kinematicsResultsForOpenSession(data?.analysisResults)
+  ));
   const [settings, setSettings] = useState({
     cutoffFrequency: 4.0,
     filterOrder: 4,
@@ -3701,10 +3835,40 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     try { return JSON.parse(localStorage.getItem(KIN_LS_EXP_KEY)) || {}; } catch { return {}; }
   });
   const [kinResultsTab, setKinResultsTab] = useState("compare");
-  const [showAllKinMetrics, setShowAllKinMetrics] = useState(false);
   const [mediaPreview, setMediaPreview] = useState(null);
   const [analysisStatus, setAnalysisStatus] = useState({});
-  const [analysisProgress, setAnalysisProgress] = useState({});
+  const [analysisProgress, setAnalysisProgress] = useState(() => {
+    const ui = readAnalyzeUi();
+    if (!ui?.phase) return {};
+    return { [ui.phase]: { pct: ui.pct, step: ui.step || "Analyzing…" } };
+  });
+  const [healNotice, setHealNotice] = useState(() => readClinicHealLog()[0] || null);
+  const healBudgetRef = useRef({});
+  const reportClinicHeal = useCallback((fault, recovered, phase) => {
+    if (!fault || fault.code === "unknown") return;
+    if (recovered) {
+      if (!clinicHealBudgetAllows(healBudgetRef.current, fault.code, phase)) return;
+      healBudgetRef.current = noteClinicHealAttempt(healBudgetRef.current, fault.code, phase);
+    }
+    setHealNotice(appendClinicHealLog({ ...fault, recovered, phase }));
+    if (recovered && (fault.recover === "retry_upload" || fault.recover === "use_recalled_original")) {
+      showToast(clinicHealNotice(fault, recovered), "info");
+    }
+  }, [showToast]);
+  useEffect(() => {
+    const onRej = (ev) => {
+      const reason = ev?.reason;
+      const fault = classifyClinicFault({
+        err: reason,
+        message: reason?.message,
+        name: reason?.name,
+      });
+      if (fault.code === "unknown") return;
+      reportClinicHeal(fault, false);
+    };
+    window.addEventListener("unhandledrejection", onRej);
+    return () => window.removeEventListener("unhandledrejection", onRej);
+  }, [reportClinicHeal]);
   const [showResultsTable, setShowResultsTable] = useState(false);
   const [videoBlobs, setVideoBlobs] = useState({});
   const [videoLoading, setVideoLoading] = useState({});
@@ -3716,6 +3880,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   /** Phases whose loaded clip does not match the overlay analysis (baked composite). */
   const [overlaySourceBad, setOverlaySourceBad] = useState({});
   const overlaySourceRetryRef = useRef({});
+  const localUploadNamesRef = useRef(new Set());
   const driveBakeToastRef = useRef({});
   const videoBlobsRef = useRef(videoBlobs);
   const videoLoadingRef = useRef(videoLoading);
@@ -3729,8 +3894,14 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     [demographics, sessionKey],
   );
 
+  const cacheMatchOpts = useMemo(
+    () => ({ relaxCsvMatch: true, patientKey: patientCacheKey }),
+    [patientCacheKey],
+  );
+
   const applyValidationCacheToState = useCallback((phase, cached) => {
     if (!cached) return false;
+    if (patientCacheKey && cached.patientKey && cached.patientKey !== patientCacheKey) return false;
     let applied = false;
     if (cached.overlay?.frames?.length) {
       startTransition(() => {
@@ -3767,7 +3938,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       applied = true;
     }
     return applied;
-  }, []);
+  }, [patientCacheKey]);
 
   const persistValidationPhase = useCallback(async (phase, partial = {}) => {
     if (!patientCacheKey) return;
@@ -3808,13 +3979,14 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     if (!patientCacheKey) return null;
     const phaseResult = kinematicsResults[phase];
     const existing = await loadValidationSessionArtifact(patientCacheKey, phase);
-    const existingValid = validationCacheMatchesResult(existing, phaseResult, { relaxCsvMatch: true })
+    const existingValid = validationCacheMatchesResult(existing, phaseResult, cacheMatchOpts)
       ? existing
       : null;
-    const wantOverlay = needs.overlay !== false && !existingValid?.overlay?.frames?.length;
-    const wantOriginal = needs.original !== false && !(existingValid?.originalVideoBlob?.size > 0);
-    const wantUnified = needs.unified !== false && !(existingValid?.unifiedVideoBlob?.size > 0);
-    const wantKinematics = needs.kinematics === true && !existingValid?.kinematicsSnapshot;
+    const forceDrive = needs.forceDrive === true;
+    const wantOverlay = needs.overlay !== false && (forceDrive || !existingValid?.overlay?.frames?.length);
+    const wantOriginal = needs.original !== false && (forceDrive || !(existingValid?.originalVideoBlob?.size > 0));
+    const wantUnified = needs.unified !== false && (forceDrive || !(existingValid?.unifiedVideoBlob?.size > 0));
+    const wantKinematics = needs.kinematics === true && (forceDrive || !existingValid?.kinematicsSnapshot);
     if (!wantOverlay && !wantOriginal && !wantUnified && !wantKinematics) {
       if (existingValid) applyValidationCacheToState(phase, existingValid);
       return existingValid;
@@ -3837,15 +4009,19 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         phaseResult?.unified_validation_video ?? existingValid?.unifiedVideoFilename,
       savedAt: Date.now(),
     };
-    const matched = validationCacheMatchesResult(merged, phaseResult, { relaxCsvMatch: true });
+    const matched = validationCacheMatchesResult(merged, phaseResult, cacheMatchOpts);
     if (!matched && !(needs.kinematics && merged.kinematicsSnapshot)) return existingValid;
     await saveValidationSessionArtifact(merged);
     applyValidationCacheToState(phase, merged);
     return merged;
-  }, [patientCacheKey, kinematicsResults, applyValidationCacheToState]);
+  }, [patientCacheKey, kinematicsResults, applyValidationCacheToState, cacheMatchOpts]);
 
   const abortRef = useRef({});
+  const uploadAbortRef = useRef({});
   const overlayVideoSyncedRef = useRef({});
+  const dataRef = useRef(data);
+  const leaveAbortRef = useRef(false);
+  useEffect(() => { dataRef.current = data; }, [data]);
 
   useEffect(() => {
     try {
@@ -3869,20 +4045,55 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     };
   }, []);
 
-  // Reload kinematics when switching patient session
+  // Leaving kinematics may stop polling. Do not abort a POST that has no job id yet.
   useEffect(() => {
-    if (!sessionKey) return;
-    const fromFd = data?.analysisResults;
-    if (fromFd && typeof fromFd === "object" && Object.keys(fromFd).length > 0) {
-      const cleaned = { ...fromFd };
-      delete cleaned.during;
-      setKinematicsResults(cleaned);
-      localStorage.setItem(KIN_LS_KEY, JSON.stringify(cleaned));
+    leaveAbortRef.current = false;
+    return () => {
+      leaveAbortRef.current = true;
+      const ui = readAnalyzeUi();
+      Object.entries(abortRef.current).forEach(([phase, controller]) => {
+        const jobId = analyzeJobIdForPhase(phase, ui, dataRef.current?.analyzeJobs);
+        if (!shouldAbortAnalyzeControllerOnLeave({
+          hasJobId: Boolean(jobId),
+          uploading: Boolean(ui?.uploading) && !jobId,
+        })) return;
+        try { controller.abort(); } catch { /* ignore */ }
+      });
+    };
+  }, []);
+
+  // Reload kinematics when switching patient session. Also drop leftover
+  // overlay/video pixels so a hard refresh cannot keep another patient's clips.
+  useEffect(() => {
+    setOverlayData({});
+    setOverlayMountReady({});
+    setDriveBakeDone({});
+    setOverlaySourceBad({});
+    setOriginalVideoBlobs((prev) => {
+      Object.values(prev).forEach((url) => {
+        if (typeof url === "string") URL.revokeObjectURL(url);
+      });
+      originalVideoBlobsRef.current = {};
+      return {};
+    });
+    setVideoBlobs((prev) => {
+      Object.values(prev).forEach((url) => {
+        if (typeof url === "string") URL.revokeObjectURL(url);
+      });
+      videoBlobsRef.current = {};
+      return {};
+    });
+    overlayVideoSyncedRef.current = {};
+    localUploadNamesRef.current = new Set();
+    const fromFd = kinematicsResultsForOpenSession(data?.analysisResults);
+    if (Object.keys(fromFd).length > 0) {
+      setKinematicsResults(fromFd);
+      try { localStorage.setItem(KIN_LS_KEY, JSON.stringify(fromFd)); } catch { /* ignore */ }
     } else {
       setKinematicsResults({});
-      localStorage.removeItem(KIN_LS_KEY);
+      try { localStorage.removeItem(KIN_LS_KEY); } catch { /* ignore */ }
     }
-  }, [sessionKey]);
+  }, [patientCacheKey]);
 
   useEffect(() => {
     localStorage.setItem(KIN_LS_EXP_KEY, JSON.stringify(expandedResults));
@@ -3930,11 +4141,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
   const handleFile = (phase, file) => {
     if (!file) return;
+    if (file.name) localUploadNamesRef.current.add(file.name);
     const isVideo = !file.name.toLowerCase().endsWith(".csv");
     let upd;
     if (isVideo) {
-      const lower = file.name.toLowerCase();
-      const browserNativeVideo = lower.endsWith(".mp4") || lower.endsWith(".webm");
+      const browserNativeVideo = isBrowserNativeOverlayVideoName(file.name);
       let videoUrl;
       if (browserNativeVideo) {
         videoUrl = URL.createObjectURL(file);
@@ -3983,8 +4194,16 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       abortRef.current[phase].abort();
       delete abortRef.current[phase];
     }
+    if (uploadAbortRef.current[phase]) {
+      uploadAbortRef.current[phase].abort();
+      delete uploadAbortRef.current[phase];
+    }
     if (status === "analyzing") {
-      onChange({ ...data, [statusKey(phase)]: "uploaded" });
+      const ui = readAnalyzeUi();
+      if (!ui?.phase || ui.phase === phase) clearAnalyzeUi();
+      const nextJobs = { ...(data.analyzeJobs || {}) };
+      delete nextJobs[phase];
+      onChange({ ...data, [statusKey(phase)]: "uploaded", analyzeJobs: nextJobs });
       showToast(`Analysis cancelled for ${phase}`);
       return;
     }
@@ -4014,6 +4233,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         abortRef.current[ph.k].abort();
         delete abortRef.current[ph.k];
       }
+      if (uploadAbortRef.current[ph.k]) {
+        uploadAbortRef.current[ph.k].abort();
+        delete uploadAbortRef.current[ph.k];
+      }
     });
     const upd = { ...data };
     phases.forEach((ph) => {
@@ -4025,6 +4248,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       upd[statusKey(ph.k)] = "idle";
     });
     upd.analysisResults = {};
+    upd.analyzeJobs = {};
+    clearAnalyzeUi();
     setKinematicsResults({});
     setExpandedResults({});
     setOverlayData({});
@@ -4049,7 +4274,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       if (!res.ok) throw new Error(`Failed to load overlay data (${res.status})`);
       const overlay = await res.json();
       console.log("overlay-debug", csvFilename, {
-        affected_side: overlay.affected_side,
+        phase,
+        ...summarizeOverlayClock(overlay),
         table_surface_y: overlay.table_surface_y,
         table_surface_fallback: overlay.table_surface_fallback,
         table_under_shoulder: overlay.table_under_shoulder,
@@ -4088,17 +4314,22 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       let cachedOverlay = null;
       if (patientCacheKey) {
         const cached = await loadValidationSessionArtifact(patientCacheKey, phase);
-        if (validationCacheMatchesResult(cached, { csv_filename: csvFilename }, { relaxCsvMatch: true }) && cached?.overlay?.frames?.length) {
+        if (validationCacheMatchesResult(cached, { csv_filename: csvFilename }, cacheMatchOpts) && cached?.overlay?.frames?.length) {
           cachedOverlay = cached.overlay;
-          applyValidationCacheToState(phase, { overlay: cached.overlay });
+          applyValidationCacheToState(phase, { overlay: cached.overlay, patientKey: cached.patientKey });
         } else {
           const cloud = await hydrateValidationFromCloud(phase, { overlay: true, original: false, unified: false });
-          if (validationCacheMatchesResult(cloud, { csv_filename: csvFilename }, { relaxCsvMatch: true }) && cloud?.overlay?.frames?.length) {
+          if (validationCacheMatchesResult(cloud, { csv_filename: csvFilename }, cacheMatchOpts) && cloud?.overlay?.frames?.length) {
             cachedOverlay = cloud.overlay;
           }
         }
       }
       if (cachedOverlay?.frames?.length) {
+        reportClinicHeal(classifyClinicFault({
+          context: "overlay",
+          status: 404,
+          message: err?.message || "Failed to load overlay data",
+        }), true, phase);
         const metrics = resolveOverlayMetrics(cachedOverlay);
         if (syncResults) {
           setKinematicsResults((prev) => {
@@ -4119,10 +4350,14 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         return { overlay: cachedOverlay, metrics };
       }
       console.error(`Overlay data error for ${phase}:`, err);
+      reportClinicHeal(classifyClinicFault({
+        context: "overlay",
+        message: err?.message || `Overlay data failed for ${phase}`,
+      }), false, phase);
       showToast(`Overlay data failed for ${phase}`, "error");
       return null;
     }
-  }, [showToast, onChange, data, kinematicsResults, patientCacheKey, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud]);
+  }, [showToast, onChange, data, kinematicsResults, patientCacheKey, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, cacheMatchOpts, reportClinicHeal]);
 
   const fetchOverlayDataWithRetry = useCallback(async (phase, csvFilename, opts = {}, maxAttempts = 5) => {
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -4155,15 +4390,33 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     const applyCachedOriginal = async () => {
       if (!patientCacheKey) return false;
       const cached = await loadValidationSessionArtifact(patientCacheKey, phase);
-      if (!validationCacheMatchesResult(cached, phaseResult, { relaxCsvMatch: true })) return false;
+      if (!validationCacheMatchesResult(cached, phaseResult, cacheMatchOpts)) return false;
       const blob = cached?.originalVideoBlob;
       if (!(blob instanceof Blob) || blob.size <= 0) return false;
-      applyValidationCacheToState(phase, { originalVideoBlob: blob });
+      applyValidationCacheToState(phase, {
+        originalVideoBlob: playbackVideoBlob(blob, filename),
+      });
       return true;
     };
 
     try {
+      const cloud = await hydrateValidationFromCloud(phase, {
+        overlay: false,
+        original: true,
+        unified: false,
+        forceDrive: true,
+      });
+      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.originalVideoBlob?.size) return;
+      if (shouldApplyCachedOriginalVideo({ force }) && await applyCachedOriginal()) return;
       if (await applyCachedOriginal()) return;
+      if (!shouldUseEphemeralSpaceVideo(filename, localUploadNamesRef.current)) {
+        reportClinicHeal(classifyClinicFault({
+          context: "original-video",
+          message: "Original video expired on server — please re-upload",
+        }), false, phase);
+        showToast("Original video expired on server — please re-upload", "error");
+        return;
+      }
 
       const candidates = [];
       const add = (name) => {
@@ -4181,16 +4434,17 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         const res = await fetch(url);
         if (res.status === 404) continue;
         if (!res.ok) throw new Error(`Failed (${res.status})`);
-        const blob = await res.blob();
+        const blob = playbackVideoBlob(await res.blob(), name);
         if (!blob.size) continue;
         loaded = blob;
         loadedName = name;
         break;
       }
       if (!loaded) {
-        if (await applyCachedOriginal()) return;
-        const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
-        if (validationCacheMatchesResult(cloud, phaseResult, { relaxCsvMatch: true }) && cloud?.originalVideoBlob?.size) return;
+        reportClinicHeal(classifyClinicFault({
+          context: "original-video",
+          message: "Original video expired on server — please re-upload",
+        }), false, phase);
         showToast("Original video expired on server — please re-upload", "error");
         return;
       }
@@ -4209,20 +4463,37 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       });
     } catch (err) {
       console.error(`Failed to cache original video for ${phase}:`, err);
-      if (await applyCachedOriginal()) return;
+      if (await applyCachedOriginal()) {
+        reportClinicHeal(classifyClinicFault({
+          context: "original-video",
+          message: err?.message || "Original video expired on server — please re-upload",
+        }), true, phase);
+        return;
+      }
       const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
-      if (validationCacheMatchesResult(cloud, phaseResult, { relaxCsvMatch: true }) && cloud?.originalVideoBlob?.size) return;
+      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.originalVideoBlob?.size) {
+        reportClinicHeal(classifyClinicFault({
+          context: "original-video",
+          message: err?.message || "Original video expired on server — please re-upload",
+        }), true, phase);
+        return;
+      }
+      reportClinicHeal(classifyClinicFault({
+        context: "original-video",
+        message: err?.message || "Original video could not be loaded for overlay",
+      }), false, phase);
       showToast("Original video could not be loaded for overlay", "error");
     }
-  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud]);
+  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, cacheMatchOpts, reportClinicHeal]);
 
   const ensureOriginalVideoBlob = useCallback(async (phase, file, serverFilename) => {
     const fileLower = file?.name?.toLowerCase() || "";
     const fileIsCsv = fileLower.endsWith(".csv");
-    const browserNative = fileLower.endsWith(".mp4") || fileLower.endsWith(".webm");
+    const browserNative = isBrowserNativeOverlayVideoName(file?.name);
 
-    // Always play the same file the server analyzed (incl. *_rotated.mp4). Local iPhone
-    // blobs can disagree with Safari rotation vs OpenCV overlay coordinates.
+    // Keep the live iPad file if it already plays. Force-fetch after Analyze
+    // revoked that URL, then IDB/server often left PRE at 0:00/0:00.
+    if (originalVideoBlobsRef.current[phase]) return true;
     if (serverFilename) {
       await loadOriginalVideoBlob(phase, serverFilename, { force: true });
       if (originalVideoBlobsRef.current[phase]) return true;
@@ -4259,12 +4530,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         if (!result) continue;
         const hasOverlay = Boolean(overlayData[ph.k]?.frames?.length);
         const hasOriginal = Boolean(originalVideoBlobsRef.current[ph.k]);
-        const hasUnified = Boolean(videoBlobsRef.current[ph.k]);
-        if (hasOverlay && hasOriginal && hasUnified) continue;
+        if (hasOverlay && hasOriginal) continue;
         const merged = await hydrateValidationFromCloud(ph.k, {
           overlay: !hasOverlay,
           original: !hasOriginal,
-          unified: !hasUnified,
+          unified: false,
           kinematics: !result.csv_filename,
         });
         if (cancelled) break;
@@ -4286,8 +4556,9 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         hydrateValidationFromCloud(ph.k, {
           overlay: true,
           original: true,
-          unified: true,
+          unified: false,
           kinematics: true,
+          forceDrive: true,
         }).catch(() => {});
       });
     };
@@ -4316,16 +4587,26 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       const prev = overlayVideoSyncedRef.current[ph.k];
       if (prev === name && originalVideoBlobsRef.current[ph.k]) return;
       overlayVideoSyncedRef.current[ph.k] = name;
+      if (originalVideoBlobsRef.current[ph.k]) return;
       loadOriginalVideoBlob(ph.k, name, { force: Boolean(prev && prev !== name) });
     });
   }, [overlayData, loadOriginalVideoBlob]);
 
+  const overlayMountFingerprint = phases
+    .map((ph) => `${ph.k}:${overlayData[ph.k] ? 1 : 0}${originalVideoBlobs[ph.k] ? 1 : 0}${overlayMountReady[ph.k] ? 1 : 0}`)
+    .join("|");
+
   useEffect(() => {
-    phases.forEach((ph) => {
-      if (!overlayData[ph.k] || !originalVideoBlobs[ph.k] || overlayMountReady[ph.k]) return;
-      setOverlayMountReady((prev) => (prev[ph.k] ? prev : { ...prev, [ph.k]: true }));
-    });
-  }, [overlayData, originalVideoBlobs]);
+    const next = phases.find((ph) => overlayData[ph.k] && originalVideoBlobs[ph.k] && !overlayMountReady[ph.k]);
+    if (!next) return undefined;
+    const already = phases.filter((ph) => overlayMountReady[ph.k]).length;
+    const delay = overlayPlayerMountDelayMs(already);
+    const t = window.setTimeout(() => {
+      setOverlayMountReady((prev) => (prev[next.k] ? prev : { ...prev, [next.k]: true }));
+    }, delay);
+    return () => window.clearTimeout(t);
+    // Ready flags only — overlay object identity churn from Drive recall must not reset the stagger.
+  }, [overlayMountFingerprint]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The player loaded a clip that does not match the analysis (usually a cached baked
   // composite). Pull the analyzed original straight from the server once; if that fails,
@@ -4343,6 +4624,24 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       return;
     }
     overlaySourceRetryRef.current[phase] = tries + 1;
+    const phaseResult = kinematicsResults[phase];
+    try {
+      const cached = patientCacheKey
+        ? await loadValidationSessionArtifact(patientCacheKey, phase)
+        : null;
+      if (validationCacheMatchesResult(cached, phaseResult, cacheMatchOpts) && cached?.originalVideoBlob?.size) {
+        applyValidationCacheToState(phase, { originalVideoBlob: cached.originalVideoBlob });
+        return;
+      }
+      const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
+      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.originalVideoBlob?.size) return;
+    } catch (err) {
+      console.warn("overlay source patient restore failed:", err);
+    }
+    if (!shouldUseEphemeralSpaceVideo(name, localUploadNamesRef.current)) {
+      giveUp();
+      return;
+    }
     // Fetch before swapping: a failed refetch must not drop the clip we already play.
     let fresh = null;
     try {
@@ -4374,7 +4673,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       originalVideoBlob: fresh,
       kinematicsSnapshot: kinematicsResults[phase],
     });
-  }, [overlayData, kinematicsResults, persistValidationPhase, showToast]);
+  }, [overlayData, kinematicsResults, persistValidationPhase, showToast, patientCacheKey, cacheMatchOpts, applyValidationCacheToState, hydrateValidationFromCloud]);
 
   // A freshly loaded clip gets a new verdict from the player.
   useEffect(() => {
@@ -4389,15 +4688,213 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     });
   }, [originalVideoBlobs]);
 
+  const applyAnalyzeSuccess = async (phase, result, file) => {
+    const resultError = analysisResultErrorMessage(result);
+    if (resultError) {
+      throw new Error(resultError);
+    }
+
+    const { unified_validation_video_b64: _, ...resultWithoutB64 } = result;
+    const videoFilename = result.video_filename || file?.name;
+    if (file?.name) localUploadNamesRef.current.add(file.name);
+    if (videoFilename) localUploadNamesRef.current.add(videoFilename);
+
+    if (videoFilename && !(file?.name || "").toLowerCase().endsWith(".csv")) {
+      await ensureOriginalVideoBlob(phase, file, videoFilename);
+    }
+
+    const phasePayload = {
+      ...resultWithoutB64,
+      video_filename: videoFilename,
+    };
+
+    const nextResults = { ...kinematicsResults, [phase]: phasePayload };
+    const cur = dataRef.current || data;
+    const nextJobs = { ...(cur.analyzeJobs || {}) };
+    delete nextJobs[phase];
+    setKinematicsResults(nextResults);
+    onChange({
+      ...cur,
+      analysisResults: stripKinResultsForStorage(nextResults),
+      [resultKey(phase)]: stripKinPhaseForSync(resultWithoutB64),
+      [statusKey(phase)]: "completed",
+      analyzeJobs: nextJobs,
+    });
+    showToast(`Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials — mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
+    setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
+    clearAnalyzeUi();
+
+    if (result.csv_filename && !(file?.name || "").toLowerCase().endsWith(".csv")) {
+      setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Loading validation overlay…" } }));
+      fetchOverlayDataWithRetry(phase, result.csv_filename, { syncResults: true }, 8).catch(() => {
+        showToast("Validation overlay could not be loaded", "error");
+      });
+    }
+  };
+
+  const followAnalyzeJob = async (phase, jobId, controller) => {
+    setKinAnalyzeActive(true);
+    writeAnalyzeUi({ phase, jobId, pct: 5, step: "Analyzing…" });
+    const pollMs = ANALYZE_POLL_MS;
+    let attempts = 0;
+    let transient = 0;
+    for (;;) {
+      attempts += 1;
+      if (analyzePollExceeded(attempts)) {
+        throw new Error("Analysis is taking too long. Please retry.");
+      }
+      if (controller.signal.aborted) {
+        const abortErr = new Error("Analysis cancelled");
+        abortErr.name = "AbortError";
+        throw abortErr;
+      }
+      try {
+        const pr = await fetch(`${API_BASE}/analyze-progress/${encodeURIComponent(jobId)}`, {
+          signal: controller.signal,
+        });
+        if (!pr.ok) throw new Error(`Progress poll failed (${pr.status})`);
+        const prog = await pr.json();
+        transient = 0;
+        startTransition(() => {
+          setAnalysisProgress((prev) => ({
+            ...prev,
+            [phase]: {
+              pct: typeof prog.pct === "number" ? prog.pct : 5,
+              step: prog.step || "Analyzing…",
+            },
+          }));
+        });
+        writeAnalyzeUi({
+          phase,
+          jobId,
+          pct: prog.pct,
+          step: prog.step || "Analyzing…",
+        });
+        if (prog.done) {
+          if (prog.error) throw new Error(prog.error);
+          break;
+        }
+      } catch (err) {
+        if (isAnalyzeLeaveAbort(err, leaveAbortRef.current) || (err?.name === "AbortError" && controller.signal.aborted && leaveAbortRef.current)) {
+          throw err;
+        }
+        if (err?.name === "AbortError" && controller.signal.aborted) {
+          throw err;
+        }
+        if (isTransientAnalyzePollError(err, controller.signal) && transient < ANALYZE_POLL_TRANSIENT_RETRIES) {
+          transient += 1;
+          await new Promise((resolve) => setTimeout(resolve, pollMs * transient));
+          continue;
+        }
+        throw err;
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+    const rr = await fetch(`${API_BASE}/analyze-result/${encodeURIComponent(jobId)}`, {
+      signal: controller.signal,
+    });
+    if (!rr.ok) {
+      let detail = `Server error ${rr.status}`;
+      try { const e = await rr.json(); if (e.error) detail += `: ${e.error}`; } catch (_) {}
+      throw new Error(detail);
+    }
+    return rr.json();
+  };
+
+  const resumeAnalyzeJob = async (phase, jobId) => {
+    if (!phase || !jobId || abortRef.current[phase]) return;
+    const controller = new AbortController();
+    abortRef.current[phase] = controller;
+    leaveAbortRef.current = false;
+    setKinAnalyzeActive(true);
+    try {
+      const result = await followAnalyzeJob(phase, jobId, controller);
+      await applyAnalyzeSuccess(phase, result, dataRef.current?.[`${vidKey(phase)}_file`]);
+    } catch (err) {
+      if (isAnalyzeLeaveAbort(err, leaveAbortRef.current) || (err?.name === "AbortError" && leaveAbortRef.current)) {
+        setKinAnalyzeActive(true);
+        return;
+      }
+      if (err.name === "AbortError") {
+        showToast(`Analysis cancelled for ${phase}`, "info");
+      } else {
+        showToast(err.message || "Analysis failed", "error");
+        console.error("ANALYSIS ERROR:", err);
+      }
+      const cur = dataRef.current || data;
+      const nextJobs = { ...(cur.analyzeJobs || {}) };
+      delete nextJobs[phase];
+      onChange({ ...cur, [statusKey(phase)]: "uploaded", analyzeJobs: nextJobs });
+      clearAnalyzeUi();
+      setKinAnalyzeActive(false);
+    } finally {
+      delete abortRef.current[phase];
+      if (!leaveAbortRef.current) {
+        setKinAnalyzeActive(false);
+      }
+    }
+  };
+
   const analyzeVideo = async (phase) => {
-    const file = data[`${vidKey(phase)}_file`];
-    if (!file) {
+    const filename = data[vidKey(phase)];
+    const hadInputFile = data[`${vidKey(phase)}_file`] instanceof Blob && data[`${vidKey(phase)}_file`].size > 0;
+    let file = analyzeSourceForOpenSession({
+      file: data[`${vidKey(phase)}_file`],
+      filename,
+    });
+    if (!(file instanceof Blob) || file.size <= 0) {
+      let recalled = null;
+      const cached = patientCacheKey
+        ? await loadValidationSessionArtifact(patientCacheKey, phase)
+        : null;
+      if (!cached?.patientKey || cached.patientKey === patientCacheKey) {
+        recalled = cached?.originalVideoBlob;
+      }
+      if (!(recalled instanceof Blob) || recalled.size <= 0) {
+        const cloud = await hydrateValidationFromCloud(phase, {
+          overlay: false,
+          original: true,
+          unified: false,
+          forceDrive: true,
+        });
+        if (!cloud?.patientKey || cloud.patientKey === patientCacheKey) {
+          recalled = cloud?.originalVideoBlob;
+        }
+      }
+      const liveUrl = originalVideoBlobsRef.current[phase];
+      if (
+        (!(recalled instanceof Blob) || recalled.size <= 0)
+        && typeof liveUrl === "string"
+        && liveUrl.startsWith("blob:")
+      ) {
+        try {
+          recalled = await (await fetch(liveUrl)).blob();
+        } catch { /* ignore */ }
+      }
+      file = analyzeSourceForOpenSession({ originalBlob: recalled, filename });
+    }
+    if (!(file instanceof Blob) || file.size <= 0) {
+      reportClinicHeal(classifyClinicFault({
+        context: "analyze-upload",
+        message: "Please select a file first",
+      }), false, phase);
       showToast("Please select a file first", "error");
       return;
     }
+    if (!hadInputFile) {
+      reportClinicHeal(classifyClinicFault({
+        context: "analyze-upload",
+        message: "Please select a file first",
+      }), true, phase);
+    }
+    if (file.name) localUploadNamesRef.current.add(file.name);
+    if (filename) localUploadNamesRef.current.add(filename);
 
     const controller = new AbortController();
+    const uploadController = new AbortController();
     abortRef.current[phase] = controller;
+    uploadAbortRef.current[phase] = uploadController;
+    leaveAbortRef.current = false;
     setKinAnalyzeActive(true);
     setOverlayMountReady((prev) => ({ ...prev, [phase]: false }));
     setDriveBakeDone((prev) => ({ ...prev, [phase]: false }));
@@ -4418,14 +4915,9 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     });
     onChange({ ...data, [statusKey(phase)]: "analyzing" });
     setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 5, step: "Uploading…" } }));
-    try {
-      sessionStorage.setItem(
-        "neuro_kin_analyze_ui",
-        JSON.stringify({ phase, pct: 5, step: "Uploading…" }),
-      );
-    } catch { /* ignore */ }
+    writeAnalyzeUi({ phase, pct: 5, step: "Uploading…", uploading: true });
 
-    const isCsv = file.name.endsWith(".csv");
+    const isCsv = String(file.name || filename || "").toLowerCase().endsWith(".csv");
 
     const demoSide = demographics?.side;
     const strokeSideHint =
@@ -4435,8 +4927,9 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
     try {
       const fd = new FormData();
-      fd.append(isCsv ? "csv" : "video", file);
+      fd.append(isCsv ? "csv" : "video", file, file.name || filename || (isCsv ? "data.csv" : "video.mp4"));
       fd.append("phase", phase);
+      fd.append("trial_role", clinicTrialRoleFromPhase(phase));
       // Use demographics paretic side when set; otherwise auto-detect from kinematics.
       fd.append("stroke_side", strokeSideHint);
       fd.append("affected_side", strokeSideHint);
@@ -4455,7 +4948,30 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       }
 
       const endpoint = isCsv ? "/analyze-csv" : "/analyze";
-      const res = await fetch(`${API_BASE}${endpoint}`, { method: "POST", body: fd, signal: controller.signal });
+      const postOnce = () => fetch(`${API_BASE}${endpoint}`, {
+        method: "POST",
+        body: fd,
+        signal: uploadController.signal,
+      });
+      let res;
+      try {
+        res = await postOnce();
+      } catch (err) {
+        if (uploadController.signal.aborted && !leaveAbortRef.current) throw err;
+        if (shouldKeepAnalyzingAfterUploadDrop(err, { hasJobId: false }) && !uploadController.signal.aborted) {
+          reportClinicHeal(classifyClinicFault({
+            context: "analyze-upload",
+            name: err?.name,
+            message: err?.message,
+            hasJobId: false,
+          }), true, phase);
+          setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 5, step: "Retrying upload…" } }));
+          writeAnalyzeUi({ phase, pct: 5, step: "Retrying upload…", uploading: true });
+          res = await postOnce();
+        } else {
+          throw err;
+        }
+      }
       if (!res.ok) {
         let detail = `Server error ${res.status}`;
         try { const e = await res.json(); if (e.error || e.detail) detail += `: ${e.error || e.detail}`; } catch (_) {}
@@ -4466,98 +4982,46 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
       if (result.job_id && result.async && !isCsv) {
         const jobId = result.job_id;
-        const pollMs = ANALYZE_POLL_MS;
-        let attempts = 0;
-        for (;;) {
-          attempts += 1;
-          if (analyzePollExceeded(attempts)) {
-            throw new Error("Analysis is taking too long. Please retry.");
-          }
-          if (controller.signal.aborted) {
-            const abortErr = new Error("Analysis cancelled");
-            abortErr.name = "AbortError";
-            throw abortErr;
-          }
-          const pr = await fetch(`${API_BASE}/analyze-progress/${encodeURIComponent(jobId)}`, {
-            signal: controller.signal,
-          });
-          if (!pr.ok) throw new Error(`Progress poll failed (${pr.status})`);
-          const prog = await pr.json();
-          startTransition(() => {
-            setAnalysisProgress((prev) => ({
-              ...prev,
-              [phase]: {
-                pct: typeof prog.pct === "number" ? prog.pct : 5,
-                step: prog.step || "Analyzing…",
-              },
-            }));
-          });
-          try {
-            sessionStorage.setItem(
-              "neuro_kin_analyze_ui",
-              JSON.stringify({
-                phase,
-                pct: prog.pct,
-                step: prog.step || "Analyzing…",
-              }),
-            );
-          } catch { /* ignore */ }
-          if (prog.done) {
-            if (prog.error) throw new Error(prog.error);
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, pollMs));
-        }
-        const rr = await fetch(`${API_BASE}/analyze-result/${encodeURIComponent(jobId)}`, {
-          signal: controller.signal,
+        const cur = dataRef.current || data;
+        onChange({
+          ...cur,
+          [statusKey(phase)]: "analyzing",
+          analyzeJobs: { ...(cur.analyzeJobs || {}), [phase]: { jobId } },
         });
-        if (!rr.ok) {
-          let detail = `Server error ${rr.status}`;
-          try { const e = await rr.json(); if (e.error) detail += `: ${e.error}`; } catch (_) {}
-          throw new Error(detail);
-        }
-        result = await rr.json();
+        writeAnalyzeUi({ phase, jobId, pct: 8, step: "Analyzing…", uploading: false });
+        result = await followAnalyzeJob(phase, jobId, controller);
       }
 
-      const resultError = analysisResultErrorMessage(result);
-      if (resultError) {
-        throw new Error(resultError);
-      }
-
-      // Strip the huge base64 payload before persisting; keep only the filename.
-      const { unified_validation_video_b64: _, ...resultWithoutB64 } = result;
-      const videoFilename = result.video_filename || file.name;
-
-      if (!isCsv && videoFilename) {
-        await ensureOriginalVideoBlob(phase, file, videoFilename);
-      }
-
-      const phasePayload = {
-        ...resultWithoutB64,
-        video_filename: videoFilename,
-      };
-
-      const nextResults = { ...kinematicsResults, [phase]: phasePayload };
-      setKinematicsResults(nextResults);
-      onChange({
-        ...data,
-        analysisResults: stripKinResultsForStorage(nextResults),
-        [resultKey(phase)]: stripKinPhaseForSync(resultWithoutB64),
-        [statusKey(phase)]: "completed",
-      });
-      showToast(`Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials — mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
-      setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
-      try {
-        sessionStorage.removeItem("neuro_kin_analyze_ui");
-      } catch { /* ignore */ }
-
-      if (!isCsv && result.csv_filename) {
-        setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Loading validation overlay…" } }));
-        fetchOverlayDataWithRetry(phase, result.csv_filename, { syncResults: true }, 8).catch(() => {
-          showToast("Validation overlay could not be loaded", "error");
-        });
-      }
+      await applyAnalyzeSuccess(phase, result, file);
     } catch (err) {
+      if (isAnalyzeLeaveAbort(err, leaveAbortRef.current) || (err?.name === "AbortError" && leaveAbortRef.current)) {
+        const jobId = analyzeJobIdForPhase(phase, readAnalyzeUi(), dataRef.current?.analyzeJobs);
+        if (jobId) {
+          setKinAnalyzeActive(true);
+          return;
+        }
+        if (shouldKeepAnalyzingAfterUploadDrop(err, { hasJobId: false })) {
+          reportClinicHeal(classifyClinicFault({
+            context: "analyze-upload",
+            name: err?.name,
+            message: err?.message,
+            hasJobId: false,
+          }), true, phase);
+          setKinAnalyzeActive(true);
+          return;
+        }
+        const cur = dataRef.current || data;
+        onChange({ ...cur, [statusKey(phase)]: "uploaded" });
+        clearAnalyzeUi();
+        setKinAnalyzeActive(false);
+        return;
+      }
+      reportClinicHeal(classifyClinicFault({
+        context: "analyze-upload",
+        name: err?.name,
+        message: err?.message,
+        hasJobId: Boolean(analyzeJobIdForPhase(phase, readAnalyzeUi(), dataRef.current?.analyzeJobs)),
+      }), false, phase);
       if (err.name === "AbortError") {
         showToast(`Analysis cancelled for ${phase}`, "info");
       } else {
@@ -4565,15 +5029,55 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         showToast(errorMsg, "error");
         console.error("ANALYSIS ERROR:", err);
       }
-      onChange({ ...data, [statusKey(phase)]: "uploaded" });
+      const cur = dataRef.current || data;
+      const nextJobs = { ...(cur.analyzeJobs || {}) };
+      delete nextJobs[phase];
+      onChange({ ...cur, [statusKey(phase)]: "uploaded", analyzeJobs: nextJobs });
+      clearAnalyzeUi();
     } finally {
       delete abortRef.current[phase];
-      setKinAnalyzeActive(false);
-      try {
-        sessionStorage.removeItem("neuro_kin_analyze_ui");
-      } catch { /* ignore */ }
+      delete uploadAbortRef.current[phase];
+      if (!leaveAbortRef.current) {
+        setKinAnalyzeActive(false);
+      }
     }
   };
+
+  const resumeAnalyzeJobRef = useRef(resumeAnalyzeJob);
+  resumeAnalyzeJobRef.current = resumeAnalyzeJob;
+
+  useEffect(() => {
+    const kick = () => {
+      const ui = readAnalyzeUi();
+      const cur = dataRef.current || {};
+      phases.forEach((ph) => {
+        const status = cur[statusKey(ph.k)] || "";
+        const jobId = analyzeJobIdForPhase(ph.k, ui, cur.analyzeJobs);
+        if (!shouldResumeAnalyze(status, jobId)) return;
+        resumeAnalyzeJobRef.current(ph.k, jobId);
+      });
+    };
+    kick();
+    const onVis = () => {
+      if (typeof document !== "undefined" && document.visibilityState && document.visibilityState !== "visible") return;
+      kick();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("pageshow", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pageshow", onVis);
+    };
+  }, []);
+
+  useEffect(() => {
+    phases.forEach((ph) => {
+      const jobId = analyzeJobIdForPhase(ph.k, readAnalyzeUi(), data?.analyzeJobs);
+      if (!shouldResumeAnalyze(data?.[statusKey(ph.k)], jobId)) return;
+      if (abortRef.current[ph.k]) return;
+      resumeAnalyzeJobRef.current(ph.k, jobId);
+    });
+  }, [data?.analyzeJobs, data?.status_pre, data?.status_post, data?.status_baseline]);
 
   const downloadFile = async (phase, type) => {
     const result = kinematicsResults[phase];
@@ -4694,7 +5198,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     const applyCachedUnified = async () => {
       if (!patientCacheKey) return false;
       const cached = await loadValidationSessionArtifact(patientCacheKey, phase);
-      if (!validationCacheMatchesResult(cached, phaseResult, { relaxCsvMatch: true })) return false;
+      if (!validationCacheMatchesResult(cached, phaseResult, cacheMatchOpts)) return false;
       const blob = cached?.unifiedVideoBlob;
       if (!(blob instanceof Blob) || blob.size <= 0) return false;
       if (cached.unifiedVideoFilename && cached.unifiedVideoFilename !== filename) return false;
@@ -4703,12 +5207,34 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     };
 
     try {
+      const cloud = await hydrateValidationFromCloud(phase, {
+        overlay: false,
+        original: false,
+        unified: true,
+        forceDrive: true,
+      });
+      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.unifiedVideoBlob?.size) return;
+      if (await applyCachedUnified()) return;
+      if (!shouldUseEphemeralSpaceVideo(filename, localUploadNamesRef.current)) {
+        reportClinicHeal(classifyClinicFault({
+          context: "validation-video",
+          message: "Validation video expired on server — please re-analyze",
+        }), false, phase);
+        if (!silent) showToast("Validation video expired on server — please re-analyze", "error");
+        setVideoBlobs((prev) => {
+          if (prev[phase]) URL.revokeObjectURL(prev[phase]);
+          return { ...prev, [phase]: null };
+        });
+        return;
+      }
       const url = `${API_BASE}/video/${encodeURIComponent(filename)}`;
       const res = await fetch(url);
       if (res.status === 404) {
-        if (await applyCachedUnified()) return;
-        const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
-        if (validationCacheMatchesResult(cloud, phaseResult, { relaxCsvMatch: true }) && cloud?.unifiedVideoBlob?.size) return;
+        reportClinicHeal(classifyClinicFault({
+          context: "validation-video",
+          status: 404,
+          message: "Validation video expired on server — please re-analyze",
+        }), false, phase);
         if (!silent) showToast("Validation video expired on server — please re-analyze", "error");
         setVideoBlobs((prev) => {
           if (prev[phase]) URL.revokeObjectURL(prev[phase]);
@@ -4731,9 +5257,25 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       });
     } catch (err) {
       console.error("Failed to cache validation video:", err);
-      if (await applyCachedUnified()) return;
+      if (await applyCachedUnified()) {
+        reportClinicHeal(classifyClinicFault({
+          context: "validation-video",
+          message: err?.message || "Validation video expired on server — please re-analyze",
+        }), true, phase);
+        return;
+      }
       const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
-      if (validationCacheMatchesResult(cloud, phaseResult, { relaxCsvMatch: true }) && cloud?.unifiedVideoBlob?.size) return;
+      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.unifiedVideoBlob?.size) {
+        reportClinicHeal(classifyClinicFault({
+          context: "validation-video",
+          message: err?.message || "Validation video expired on server — please re-analyze",
+        }), true, phase);
+        return;
+      }
+      reportClinicHeal(classifyClinicFault({
+        context: "validation-video",
+        message: err?.message || "Validation video could not be loaded — try expanding it",
+      }), false, phase);
       if (!silent) showToast("Validation video could not be loaded — try expanding it", "error");
       setVideoBlobs((prev) => {
         if (prev[phase]) URL.revokeObjectURL(prev[phase]);
@@ -4744,7 +5286,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       setVideoLoading((prev) => ({ ...prev, [phase]: false }));
       setVideoAttempts((prev) => ({ ...prev, [phase]: (prev[phase] || 0) + 1 }));
     }
-  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, demographics, sessionKey]);
+  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, demographics, sessionKey, cacheMatchOpts, reportClinicHeal]);
 
 
   const [uvErrors, setUvErrors] = useState({});
@@ -4891,7 +5433,15 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     }
     const val = getMetricValue(phase, key);
     const formatKey = key === "peak_velocity_panel" ? "peak_velocity_cm_s" : key;
-    if (isPanelTableKey(formatKey) || formatKey === "pause_stops_panel") {
+    if (
+      isPanelTableKey(formatKey)
+      || formatKey === "pause_stops_panel"
+      || formatKey === "nvp_reach"
+      || formatKey === "nvp_drink"
+      || formatKey === "nvp_transport"
+      || formatKey === "nvp_return"
+      || formatKey === "nvp_total"
+    ) {
       const raw = val === KIN_EMPTY ? null : val;
       return formatPanelAlignedKinValue(formatKey, raw, om);
     }
@@ -4902,11 +5452,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   const KIN_TIPS = {
     task_complete: "Did the patient finish the expected phases (reach, lift/transport, return)? Higher = completed.",
     task_completion_ratio: "Share of expected task phases detected. Compare this before full-task smoothness.",
-    nvp_reach: "Same as the NVP chip on the validation-video panel (peaks counted up to movement-window end).",
+    nvp_reach: "Velocity peaks on the reach path from the rest wrist landmark through reach end. Same peaks as the overlay NVP dots. Not the index tip.",
     nvp_drink: "Velocity peaks while lifting the cup from the table to the highest point achieved.",
     nvp_transport: "Velocity peaks during the transport / drink-lift phase (same as NVP drink for drink task).",
     nvp_return: "Velocity peaks while returning the cup/hand to the table.",
-    nvp_total: "Sum of NVP across reach + drink/transport + return phases.",
+    nvp_total: "Unique velocity peaks across reach + drink/transport + return. Never less than any phase NVP.",
     drink_lift_height_cm: "How high the palm rose during drink (table → peak), in cm using the 85 cm table width scale. Higher = greater lift.",
     lift_height_cm: "Peak vertical lift during transport, in cm (85 cm table scale).",
     drink_lift_height_sw: "Drink lift height in shoulder-width units (secondary / normalized).",
@@ -4918,9 +5468,9 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     grasp_dwell_sec: "Terminal low-speed time at the end of reach (cup grasp fixation). Functional — not counted as path pause.",
     functional_hold_sec: "Grasp dwell + mouth/face hold during transport. Functional time, not path pause.",
     pause_time_sec_total: "All low-speed time including grasp/mouth dwell (exploratory).",
-    nvp: "NVP on the validation-video panel (peaks up to movement end). Same number as the NVP chip on the overlay.",
-    nvp_reach: "Same as the NVP chip on the validation-video panel (peaks up to movement-window end).",
-    straightness: "Path straightness from the validation-video panel (same formula and 2 decimals).",
+    nvp: "NVP on the validation-video panel (peaks from the rest wrist landmark through the current/window end). Not the index tip. Same number as the NVP chip on the overlay.",
+    nvp_reach: "Velocity peaks on the reach path from the rest wrist landmark, not the index tip. Total NVP cannot be lower than this.",
+    straightness: "Path straightness from the rest wrist landmark to the current wrist (displacement / path length). Not the index tip.",
     pause_time_sec: "Pause time from the validation-video panel: every frame below 5% of peak hand speed (no min-run / dwell split).",
     number_of_stops: "Stops from the validation-video panel: speed threshold crossings (same as Pause / stops).",
     trunk_ratio: "Trunk / palm displacement ratio from the validation-video panel (0–1, not percent).",
@@ -4933,8 +5483,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     trunk_ratio: "Trunk displacement / palm displacement. Lower = less trunk compensation.",
     shoulder_elevation_cm: "How much the affected shoulder rose (rest → peak), in cm using the 85 cm table scale. Lower = less shoulder hike.",
     shoulder_elevation_palm_ratio: "Shoulder elevation as a unitless palm-anchor ratio (exploratory).",
-    elbow_angle_mean_deg: "Mean elbow flexion angle during the movement window.",
-    shoulder_flexion_mean_deg: "Mean shoulder flexion angle (trunk–shoulder–elbow) during the movement window.",
+    elbow_angle_mean_deg: "Mean elbow extension angle (interior shoulder–elbow–wrist) during the movement window.",
+    shoulder_flexion_mean_deg: "Mean shoulder flexion like a goniometer: midaxillary line (shoulder to same-side hip) vs humerus (shoulder to elbow). 0° = arm alongside the trunk.",
+    shoulder_abduction_mean_deg: "Mean shoulder abduction angle during the movement window. Higher = worse compensatory lift.",
+    trunk_forward_displacement_cm: "Peak trunk displacement toward the target, in cm using the 85 cm table scale. Lower = less trunk compensation.",
+    average_hand_velocity_cm_s: "Mean hand speed during the movement window (cm/s, 85 cm table scale).",
     movement_time_sec: "Active movement duration (onset to offset).",
     peak_velocity_cm_s: "Peak hand speed during reach (cm/s), scaled with the 85 cm table width. Higher = faster reach.",
     peak_elbow_ang_vel_deg_s: "Peak elbow angular velocity during the reach (deg/s).",
@@ -4943,6 +5496,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     tremor_8_12hz_power: "Hand-speed power in 8–12 Hz from the validation video overlay (same as Tremor 8–12 Hz on the skeleton). Lower = less tremor. Index/ADL tremor stay under Show all.",
     fine_motor_quality_index: "Hand / finger quality 0–100 from the validation overlay: index-tip smoothness (fewer peaks/micro-stops, lower speed CV) plus pinch opening when available. Higher = better.",
     shoulder_abduction_rom_deg: "Shoulder abduction range during the reach (validation overlay).",
+    adl_shoulder_abduction_mean_deg: "Mean shoulder abduction during drink transport (lower = less compensatory lift).",
     forearm_pronation_supination_rom_deg: "Forearm pronation/supination ROM (validation overlay).",
     fine_motor_quality_index: "Fine motor quality index 0–100 (validation overlay).",
     adl_shoulder_abduction_mean_deg: "Mean shoulder abduction during drink transport (lower = less compensatory lift).",
@@ -4955,10 +5509,9 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     pause_stops_panel: "Same Pause / stops row as the validation-video panel.",
   };
 
-  const CARD_PREVIEW_KEYS = ["task_complete", "nvp_reach", "nvp_drink", "nvp_total", "drink_lift_height_cm"];
+  const CARD_PREVIEW_KEYS = CLINIC_UE_SPSS_KEYS;
 
   const variables = orderedKinematicResultsTableVars({
-    includeExtended: showAllKinMetrics,
     clinicalTask: clinicalMovementTask,
     kinematicsResults,
   }).map((v) => ({
@@ -5078,6 +5631,19 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   return (
     <div className="space-y-5">
       <SH icon={Cpu} en="Kinematics AI Laboratory" tr="Kinematik Yapay Zeka Laboratuvarı" badge="Pre · Post · Healthy side" />
+
+      {healNotice && (
+        <div
+          className={`rounded-xl border px-3 py-2 text-[11px] ${
+            healNotice.recovered
+              ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+              : "border-amber-400/25 bg-amber-500/10 text-amber-100"
+          }`}
+        >
+          <p className="font-extrabold uppercase tracking-wide text-[10px] opacity-80">Clinic watch</p>
+          <p className="mt-0.5 leading-snug">{clinicHealNotice(healNotice, healNotice.recovered)}</p>
+        </div>
+      )}
 
       <Glass className="p-5 sm:p-6">
         <div className="flex items-center justify-between mb-3">
@@ -5445,22 +6011,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
             <div className="min-w-0">
               <p className="text-sm font-extrabold text-white/80">Kinematic Results</p>
               <p className="text-[10px] text-white/40 mt-0.5">
-                {showAllKinMetrics ? "All stored metrics" : "Core movement quality (15)"}
+                Clinic SPSS variables ({CLINIC_UE_SPSS_KEYS.length})
               </p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowAllKinMetrics((v) => !v)}
-                className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all ${
-                  showAllKinMetrics
-                    ? "bg-white/12 border-white/25 text-white"
-                    : "bg-white/[0.04] border-white/[0.1] text-white/60 hover:text-white/85"
-                }`}
-                title={showAllKinMetrics ? "Show core quality metrics only" : "Show every stored metric"}
-              >
-                {showAllKinMetrics ? "Core only" : "Show all"}
-              </button>
               <GBtn variant="danger" onClick={clearAllKin} className="text-[10px] py-1.5 px-3" title="Remove all results">
                 <X className="w-3 h-3 mr-1" />
                 Clear All
@@ -5685,124 +6239,6 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         </Glass>
       )}
 
-      {showResultsTable && activeResultPhases.some((ph) => getMovementProfile(kinematicsResults[ph.k]) || kinematicsResults[ph.k]?.movement_quality_index != null) && (
-        <Glass className="p-4 sm:p-5">
-          <p className="text-sm font-extrabold text-white/80 mb-1">Movement quality &amp; joint specs</p>
-          <p className="text-[11px] text-white/45 mb-4 leading-relaxed">
-            Fine motor (index path, micro-stops, pinch), forearm pronation/supination (3D palm normal or index–pinky 2D), shoulder abduction (both shoulders visible), plus flexion/elbow ? and ?/s. Re-analyze after updates. Side-only camera: abduction/rotation flags may show low reliability ? use oblique/frontal clips for rotation tasks.
-          </p>
-          <div className="space-y-4">
-            {activeResultPhases.map((ph) => {
-              const prof = getMovementProfile(kinematicsResults[ph.k]);
-              if (!prof && kinematicsResults[ph.k]?.movement_quality_index == null) return null;
-              const reliabilityNotes = [];
-              if (prof?.shoulder_abduction_reliable === false) {
-                reliabilityNotes.push("Shoulder abduction: limited (shoulders not well separated in view)");
-              }
-              if (prof?.forearm_rotation_reliable === false) {
-                reliabilityNotes.push("Forearm rotation: limited (need index+pinky / 3D landmarks)");
-              }
-              return (
-                <div key={ph.k} className={`rounded-xl border p-3 sm:p-4 ${phaseValueCls(ph.c)}`}>
-                  <p className={`text-xs font-extrabold uppercase mb-3 ${phaseLabelCls(ph.c)}`}>{ph.l}</p>
-                  {reliabilityNotes.length > 0 && (
-                    <p className="text-[10px] text-amber-200/70 mb-3 leading-snug">{reliabilityNotes.join(" — ")}</p>
-                  )}
-                  <div className="space-y-4">
-                    {MOVEMENT_PROFILE_GROUP_ORDER.map((groupId) => {
-                      const fields = MOVEMENT_PROFILE_FIELDS.filter((f) => f.group === groupId);
-                      const cells = fields
-                        .map((f) => {
-                          const val = resolveProfileMetric(kinematicsResults[ph.k], f.key, overlayData?.[ph.k]);
-                          if (val == null && f.key !== "task_pattern") return null;
-                          return (
-                            <div key={f.key} className="rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-2">
-                              <p className="text-[9px] font-bold text-white/45 leading-tight">{f.label}</p>
-                              <p className="text-sm font-mono font-extrabold text-white/90 mt-0.5">
-                                {formatProfileValue(f.key, val ?? NA)}
-                                {f.unit ? <span className="text-[9px] font-normal text-white/35 ml-0.5">{f.unit}</span> : null}
-                              </p>
-                            </div>
-                          );
-                        })
-                        .filter(Boolean);
-                      if (!cells.length) return null;
-                      return (
-                        <div key={groupId}>
-                          <p className="text-[10px] font-extrabold uppercase tracking-wide text-white/50 mb-2">
-                            {MOVEMENT_PROFILE_GROUP_LABELS[groupId] || groupId}
-                          </p>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">{cells}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Glass>
-      )}
-
-      {showResultsTable && activeResultPhases.some((ph) => (kinematicsResults[ph.k]?.task_phases || []).length > 0) && (
-        <Glass className="p-4 sm:p-5">
-          <p className="text-sm font-extrabold text-white/80 mb-1">Task phases &amp; variables</p>
-          <p className="text-[11px] text-white/45 mb-4">
-            Per-phase kinematics from detected movement bouts (reach, transport, return). Study table above still uses the primary reach window for Pre/Post/Healthy comparison.
-          </p>
-          <div className="space-y-5">
-            {activeResultPhases.map((ph) => {
-              const phases = kinematicsResults[ph.k]?.task_phases || [];
-              if (!phases.length) return null;
-              const taskLabel = kinematicsResults[ph.k]?.clinical_task_label || clinicalTaskById(kinematicsResults[ph.k]?.clinical_task).label;
-              return (
-                <div key={ph.k} className={`rounded-xl border p-3 sm:p-4 ${phaseValueCls(ph.c)}`}>
-                  <p className={`text-xs font-extrabold uppercase mb-1 ${phaseLabelCls(ph.c)}`}>{ph.l}</p>
-                  <p className="text-[11px] text-white/55 mb-3">{taskLabel}</p>
-                  {phases.map((tp) => (
-                    <div key={`${ph.k}-${tp.id}`} className="mb-4 last:mb-0">
-                      <p className="text-[11px] font-bold text-white/75 mb-2">
-                        {tp.label}
-                        {tp.duration_sec != null ? (
-                          <span className="text-white/40 font-normal ml-2">{tp.duration_sec}s</span>
-                        ) : null}
-                        {tp.task_window?.rom != null ? (
-                          <span className="text-white/40 font-normal ml-2">ROM {tp.task_window.rom}</span>
-                        ) : null}
-                        {tp.expected_rom_ok === true ? (
-                          <span className="text-emerald-400/80 font-normal ml-2">within expected ROM</span>
-                        ) : null}
-                        {tp.expected_rom_ok === false ? (
-                          <span className="text-amber-300/80 font-normal ml-2">ROM outside expected range</span>
-                        ) : null}
-                      </p>
-                      {TASK_PHASE_NOTES[tp.id] ? (
-                        <p className="text-[10px] text-white/50 mb-2 leading-snug">{TASK_PHASE_NOTES[tp.id]}</p>
-                      ) : null}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                        {TASK_PHASE_METRIC_KEYS.map((mk) => {
-                          const val = tp.metrics?.[mk.key];
-                          if (val == null) return null;
-                          return (
-                            <div key={mk.key} className="rounded-lg border border-white/[0.06] bg-black/20 px-2 py-1.5">
-                              <p className="text-[9px] text-white/45">{mk.label}</p>
-                              <p className="text-xs font-mono font-bold text-white/90">
-                                {formatProfileValue(mk.key, val)}
-                                {mk.unit ? <span className="text-[9px] text-white/35 ml-0.5">{mk.unit}</span> : null}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        </Glass>
-      )}
-
       {Object.keys(kinematicsResults).filter(k => kinematicsResults[k]?.velocity_profile).length >= 1 && (
         <Glass className="p-4 sm:p-5">
           <p className="text-sm font-extrabold text-white/80 mb-3">Combined Velocity Profile</p>
@@ -5825,7 +6261,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[99998] flex flex-col bg-black/95 backdrop-blur-sm"
+            className="fixed inset-0 z-[99998] flex flex-col bg-black/95"
             onClick={() => setMediaPreview(null)}
           >
             <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 gap-2" onClick={(e) => e.stopPropagation()}>
@@ -6137,10 +6573,8 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
               const { ok, patients: merged } = await syncPatientsWithServer({ showToast });
               if (ok) {
                 setPatients(merged);
-                const curId = fd._loadedId || fd.demographics?.participantId;
-                if (curId) {
-                  const cur = merged.find((p) => (p._id || p.demographics?.participantId) === curId);
-                  if (cur) {
+                const cur = findPatientForOpenSession(merged, fd);
+                if (cur) {
                     setFd((prev) => {
                       const next = { ...prev, ...cur };
                       const incoming = cur.kinematics?.analysisResults;
@@ -6154,7 +6588,6 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
                     if (cur.kinematics?.analysisResults) {
                       localStorage.setItem(KIN_LS_KEY, JSON.stringify(cur.kinematics.analysisResults));
                     }
-                  }
                 }
               } else {
                 refreshPatients();
@@ -6216,7 +6649,7 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
           )}
           <GBtn
             variant="default"
-            onClick={() => { window.location.href = "/connect-drive"; }}
+            onClick={() => { openConnectDrive(); }}
             title="Reconnect Google Drive (same window — keeps PWA session)"
           >
             <HardDrive className="w-4 h-4" />
@@ -6976,7 +7409,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
   }
 </style></head><body><div class="wrap">
   <div class="header" style="background:${d.group === "1" ? "rgba(167,243,208,0.3)" : "rgba(251,207,232,0.4)"}">
-    <div style="display:flex;align-items:center;gap:14px"><img src="/raed-logo.png?v=32.80" alt="RA.ED AI" style="height:56px;width:auto"/><div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div></div>
+    <div style="display:flex;align-items:center;gap:14px"><img src="/raed-logo-navy.png?v=32.86" alt="RA.ED AI" style="height:56px;width:auto"/><div><h1>${d.group === "1" ? "AOMI Group / AOMI Grubu" : "Control Group / Kontrol Grubu"}</h1><div class="sub">Clinical Assessment Report / Klinik Değerlendirme Raporu</div></div></div>
     <div class="meta">${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}<br>${esc(d.name || "Participant")}</div>
   </div>
   <div class="patient">
@@ -8262,14 +8695,18 @@ const AnalysisDashboard = () => {
             <p className="text-sm text-white/70 leading-relaxed mb-4">{STUDY_DESIGN.design} — Primary: <strong className="text-violet-300">{STUDY_DESIGN.primaryOutcome}</strong> — α={STUDY_DESIGN.alpha}</p>
             <div className="grid md:grid-cols-2 gap-4 text-xs">
               <div>
-                <p className="font-bold text-teal-300 mb-2">Kinematic ({KINEMATIC_VARS.length} vars — manuscript tiers)</p>
+                <p className="font-bold text-teal-300 mb-2">Kinematic ({CLINIC_UE_SPSS_KEYS.length} clinic SPSS vars)</p>
                 <ul className="space-y-1 text-white/60">
-                  {KINEMATIC_VARS.map((k) => (
+                  {CLINIC_UE_SPSS_KEYS.map((key) => {
+                    const k = KINEMATIC_VARS.find((v) => v.key === key);
+                    if (!k) return null;
+                    return (
                     <li key={k.key}>
                       • {k.label} ({k.key}) — {k.tier}
                       {k.dir === "lower" ? " ↓" : k.dir === "higher" ? " ↑" : ""}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </div>
               <div>
@@ -8394,7 +8831,7 @@ const AnalysisDashboard = () => {
         </Glass>
           {backendReport?.holm_secondary_kinematic && (
         <Glass className="p-5">
-              <p className="text-xs font-extrabold text-amber-300 uppercase tracking-widest mb-4">Holm–Bonferroni (secondary kinematic, k={KINEMATIC_VARS.filter((k) => k.tier === "secondary").length})</p>
+              <p className="text-xs font-extrabold text-amber-300 uppercase tracking-widest mb-4">Holm–Bonferroni (clinic SPSS kinematic, k={CLINIC_UE_SPSS_KEYS.length})</p>
               <div className="overflow-x-auto rounded-xl border border-amber-500/20">
             <table className="w-full text-xs">
               <thead>
@@ -8952,16 +9389,7 @@ export default function App() {
         setTimeout(attempt, 4000);
         return;
       }
-      syncPatientsWithServer({ silent: true, skipDrive: true }).then(({ ok, patients: merged }) => {
-        if (!ok) return;
-        const curId = fd._loadedId || fd.demographics?.participantId;
-        if (curId) {
-          const cur = merged.find((p) => (p._id || p.demographics?.participantId) === curId);
-          if (cur?.kinematics?.analysisResults) {
-            localStorage.setItem(KIN_LS_KEY, JSON.stringify(cur.kinematics.analysisResults));
-          }
-        }
-      });
+      syncPatientsWithServer({ silent: true, skipDrive: true });
     };
     const t = setTimeout(attempt, bootDelayMs);
     return () => {
@@ -8979,12 +9407,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    requestClinicPersistentStorage();
     let cancelled = false;
+    const params = new URLSearchParams(window.location.search);
+    const justConnected = params.get("drive") === "connected";
+    if (justConnected) {
+      params.delete("drive");
+      const qs = params.toString();
+      try {
+        window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
+      } catch { /* ignore */ }
+    }
     const run = () => {
       if (cancelled || isKinAnalyzeActive()) return;
-      startDriveSessionRecall(loadPatients(), { showToast });
+      if (!justConnected && shouldDeferBootRecallUntilEmailRestore(loadPatients())) return;
+      startDriveSessionRecall(loadPatients(), {
+        showToast,
+        force: justConnected,
+        allowRepeat: justConnected,
+      });
     };
-    const t = setTimeout(run, 2800);
+    const t = setTimeout(run, justConnected ? 600 : isStandalonePWA() ? 400 : 2800);
     const onSynced = (ev) => {
       if (ev?.detail?.skipDriveRecall) return;
       if (cancelled || isKinAnalyzeActive()) return;
@@ -9067,6 +9510,10 @@ export default function App() {
     }
     syncPatientsWithServer({ silent: true, skipDrive: true });
   }, [showToast]);
+
+  const runHardRefresh = useCallback(() => {
+    performHardRefresh({ version: readNlVersion() });
+  }, []);
 
   const logout = useCallback(() => {
     clearAuthToken();
@@ -9328,7 +9775,7 @@ export default function App() {
       { onClick: () => importRef.current?.click(), icon: <FileUp />, label: "Import patient", colorClass: "hover:text-emerald-300" },
       { onClick: () => bgRef.current?.click(), icon: <ImageIcon />, label: "Background" },
       { onClick: () => { goToSection("database"); if (!isDesktop) setSidebar(false); }, icon: <Database />, label: "Database" },
-      { onClick: () => { window.location.href = "/connect-drive"; }, icon: <HardDrive />, label: "Connect Drive", colorClass: "hover:text-sky-300" },
+      { onClick: () => { openConnectDrive(); }, icon: <HardDrive />, label: "Connect Drive", colorClass: "hover:text-sky-300" },
       ...(user?.is_admin ? [{ onClick: () => { goToSection("users"); if (!isDesktop) setSidebar(false); }, icon: <Users />, label: "Users", colorClass: "hover:text-violet-300" }] : []),
       { onClick: logout, icon: <LogOut />, label: "Sign out", colorClass: "hover:text-rose-300" },
     ];
@@ -9437,6 +9884,21 @@ export default function App() {
     </motion.button>
   );
 
+  const topBarHardRefreshBtn = (
+    <motion.button
+      type="button"
+      whileHover={{ scale: 1.05 }}
+      whileTap={nlMotionTap(0.95)}
+      onClick={runHardRefresh}
+      className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0"
+      style={GLASS_FIELD}
+      title="Reload app"
+      aria-label="Reload app"
+    >
+      <RefreshCw className="w-4 h-4" />
+    </motion.button>
+  );
+
   function DesktopUnifiedTopBar() {
     const shellRef = useRef(null);
     const rowRef = useRef(null);
@@ -9530,11 +9992,15 @@ export default function App() {
                 restoreBusy={Boolean(originRestoreBanner)}
                 onOpenSession={(record) => handleLoadSession(record, { section: "kinematics" })}
               />
+              {topBarHardRefreshBtn}
 
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={nlMotionTap(0.95)}
-                onClick={() => setMobileTopMenuOpen((p) => !p)}
+                onClick={() => {
+                  if (isGhostClick()) return;
+                  setMobileTopMenuOpen((p) => !p);
+                }}
                 className={`w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
                 style={GLASS_FIELD}
                 title="More actions"
@@ -9557,7 +10023,7 @@ export default function App() {
     <DesktopUnifiedTopBar />
   ) : (
     <div
-      className={`app-topbar-glass glass-float relative flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl overflow-visible ${sidebar && !isDesktop ? "" : "pr-[7.5rem]"} ${GLASS_CLS}`}
+      className={`app-topbar-glass glass-float relative flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl overflow-visible ${sidebar && !isDesktop ? "" : "pr-[10.75rem]"} ${GLASS_CLS}`}
       style={{ boxShadow: FLOAT_M }}
     >
       {topBarMenuBtn}
@@ -9577,10 +10043,14 @@ export default function App() {
             restoreBusy={Boolean(originRestoreBanner)}
             onOpenSession={(record) => handleLoadSession(record, { section: "kinematics" })}
           />
+          {topBarHardRefreshBtn}
           <motion.button
             whileHover={{ scale: 1.08 }}
             whileTap={nlMotionTap(0.92)}
-            onClick={() => setMobileTopMenuOpen((p) => !p)}
+            onClick={() => {
+              if (isGhostClick()) return;
+              setMobileTopMenuOpen((p) => !p);
+            }}
             className="w-9 h-9 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
             style={GLASS_FIELD}
             title="Menu"
@@ -9997,7 +10467,7 @@ export default function App() {
                       </button>
                     )}
                     <img
-                      src={`${process.env.PUBLIC_URL || ""}/raed-logo.png?v=32.80`}
+                      src={`${process.env.PUBLIC_URL || ""}/raed-logo-navy.png?v=32.86`}
                       alt="RA.ED AI"
                       className="w-[8.75rem] h-auto object-contain"
                       style={{ background: "transparent" }}
@@ -10256,6 +10726,9 @@ export default function App() {
         }
 
         .ptr-inner { position: relative; }
+        [data-nl-app-scroll="1"] {
+          overscroll-behavior-y: contain;
+        }
         .ptr-pull-content {
           transform: translate3d(0, 0, 0);
           backface-visibility: hidden;
@@ -10273,6 +10746,39 @@ export default function App() {
           height: 20px;
           transform: scale(var(--ptr-scale, 1));
           transform-origin: 50% 50%;
+        }
+        .ptr-ios-tick {
+          position: absolute;
+          left: 50%;
+          top: 0;
+          width: 11%;
+          height: 30%;
+          margin-left: -5.5%;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.92);
+          transform-origin: 50% 166.67%;
+          opacity: 0.18;
+        }
+        .ptr-ios-tick:nth-child(1) { transform: rotate(0deg); opacity: 1; }
+        .ptr-ios-tick:nth-child(2) { transform: rotate(45deg); opacity: 0.88; }
+        .ptr-ios-tick:nth-child(3) { transform: rotate(90deg); opacity: 0.74; }
+        .ptr-ios-tick:nth-child(4) { transform: rotate(135deg); opacity: 0.58; }
+        .ptr-ios-tick:nth-child(5) { transform: rotate(180deg); opacity: 0.42; }
+        .ptr-ios-tick:nth-child(6) { transform: rotate(225deg); opacity: 0.3; }
+        .ptr-ios-tick:nth-child(7) { transform: rotate(270deg); opacity: 0.2; }
+        .ptr-ios-tick:nth-child(8) { transform: rotate(315deg); opacity: 0.12; }
+        .ptr-spinning .ptr-ios-tick { animation: ptr-ios-fade 0.8s linear infinite; }
+        .ptr-spinning .ptr-ios-tick:nth-child(1) { animation-delay: -0.7s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(2) { animation-delay: -0.6s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(3) { animation-delay: -0.5s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(4) { animation-delay: -0.4s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(5) { animation-delay: -0.3s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(6) { animation-delay: -0.2s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(7) { animation-delay: -0.1s; }
+        .ptr-spinning .ptr-ios-tick:nth-child(8) { animation-delay: 0s; }
+        @keyframes ptr-ios-fade {
+          0% { opacity: 1; }
+          100% { opacity: 0.12; }
         }
         video { outline: none; background: #000; }
         .grid { min-width: 0; }
@@ -10401,7 +10907,7 @@ export default function App() {
               <motion.button
                 type="button"
                 aria-label="Close menu"
-                className="absolute inset-0 bg-black/50 backdrop-blur-[3px]"
+                className="absolute inset-0 bg-black/50"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}

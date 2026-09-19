@@ -1,0 +1,17 @@
+---26---
+Understanding this proximal-to-distal principle further informed the sequential structure of the PETTLEP-based AOMI protocol employed in the present study. The five progressive imagery blocks were ordered to mirror the physiological hierarchy of normal reaching: movement initiation first, followed by trunk stability, then shoulder girdle control, then elbow opening, and finally integrated smooth movement. This ordering reflects the neurophysiological logic of APA-first, limb-action-second, and was chosen to maximize the ecological validity and motor specificity of the imagery protocol.
+
+---61---
+The present study addressed these gaps by delivering a single session of PETTLEP-based AOMI — incorporating a sensorimotor transfer calibration phase, individualized mirror-reversed first-person observation, and progressive corrective motor imagery targeting initiation, postural control, and smoothness — and measuring the immediate kinematic response using the custom MediaPipe-based markerless motion capture pipeline with monocular depth estimation. This trial was designed to provide the first direct, objective evidence for the acute neuromotor effects of this approach in persons post-stroke.
+
+---229---
+Imagery of trunk stability reinstates feedforward postural control: The trunk stability imagery in Block 2 was specifically designed to reinstate, at the level of cortical motor representation, the feedforward postural organization that normally precedes arm movement. By imagining the trunk as stable and grounded before the arm reaches forward, the participant rehearsed the APA-first, arm-action-second sequence that characterizes normal reaching (20). This cortical rehearsal of the anticipatory postural hierarchy was hypothesized to reduce compensatory trunk lean in the subsequent physical assessment.
+
+---230---
+Imagery of reciprocal muscle quieting targets spinal reflex dysregulation: The elbow opening and muscle quieting imagery in Block 4 specifically addressed the co-contraction and impaired reciprocal inhibition that underlie movement fragmentation in spastic hemiparesis (27). By imagining smooth elbow extension with relaxed antagonist musculature, the participant rehearsed the neural pattern of agonist activation with antagonist inhibition — a pattern that MI has been shown to reinforce through modulation of spinal interneuronal circuits (31).
+
+---231---
+Real-time timing preserves temporal motor coding: The PETTLEP timing component — imagining the movement in real time — preserved the temporal structure of the motor program, ensuring that the rehearsed neural patterns matched the actual timing requirements of the movement. This was particularly important for smoothness_pause_pct and total_duration_s, because the temporal dynamics of velocity generation were intimately linked to the timing of motor planning sub-commands.
+
+---244---
+Integration into Early Rehabilitation: A 22-minute, single-session PETTLEP-based AOMI intervention requiring only a tablet and headphones is highly feasible for integration into the early rehabilitation phase, even in individuals with severe motor impairment who cannot participate in task-based physical training.

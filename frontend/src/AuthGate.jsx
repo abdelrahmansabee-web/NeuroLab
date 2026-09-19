@@ -6,6 +6,7 @@ const BUTTON = "w-full rounded-lg px-4 py-3 text-sm font-medium text-white bg-wh
 const LINK = "text-xs text-white/50 hover:text-white/80 transition";
 
 const AUTH_TOKEN_KEY = "neurolab_token";
+export const RAED_LAST_EMAIL_KEY = "raed_last_email";
 
 export function getAuthToken() {
   try { return localStorage.getItem(AUTH_TOKEN_KEY); } catch { return null; }
@@ -15,11 +16,33 @@ export function clearAuthToken() {
   try { localStorage.removeItem(AUTH_TOKEN_KEY); } catch {}
 }
 
+export function rememberLoginEmail(email) {
+  const cleaned = String(email || "").trim().toLowerCase();
+  if (!cleaned) return;
+  try { localStorage.setItem(RAED_LAST_EMAIL_KEY, cleaned); } catch {}
+}
+
+export function readRememberedEmail() {
+  try { return localStorage.getItem(RAED_LAST_EMAIL_KEY) || ""; } catch { return ""; }
+}
+
 export function authHeaders() {
   const token = getAuthToken();
   const headers = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   return headers;
+}
+
+async function plantAuthCookie(token) {
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    await fetch("/auth/drive/connect-cookie", {
+      method: "POST",
+      credentials: "same-origin",
+      headers,
+    });
+  } catch { /* Home Screen cookie jar; ignore if the route is waking up */ }
 }
 
 export default function AuthGate({ children }) {
@@ -41,7 +64,11 @@ export default function AuthGate({ children }) {
         throw new Error("not authenticated");
       })
       .then((data) => {
+        if (data?.token) {
+          try { localStorage.setItem(AUTH_TOKEN_KEY, data.token); } catch {}
+        }
         setState("unlocked");
+        plantAuthCookie(data?.token || getAuthToken());
       })
       .catch(() => setState("locked"));
   }, []);
@@ -98,6 +125,10 @@ export default function AuthGate({ children }) {
       }
       if (data.token) {
         try { localStorage.setItem(AUTH_TOKEN_KEY, data.token); } catch {}
+        await plantAuthCookie(data.token);
+      }
+      if (mode === "login") {
+        try { localStorage.setItem("raed_origin_restore_pending", "1"); } catch {}
       }
       if (mode === "reset") {
         setSuccess(data.message || "Password updated.");

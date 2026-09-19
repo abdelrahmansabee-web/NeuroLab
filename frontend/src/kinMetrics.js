@@ -109,13 +109,7 @@ export function mergeKinAnalysisResults(fdKr, lsKr) {
   return out;
 }
 
-/** Live session kinematics: localStorage (KinSection) deep-merged over saved form data. */
+/** Live session kinematics from the open form only — never global neuro_kin_results. */
 export function loadLiveKinResults(fd) {
-  let ls = {};
-  try {
-    ls = JSON.parse(localStorage.getItem(KIN_RESULTS_LS_KEY)) || {};
-  } catch {
-    ls = {};
-  }
-  return mergeKinAnalysisResults(fd?.kinematics?.analysisResults, ls);
+  return mergeKinAnalysisResults(fd?.kinematics?.analysisResults, {});
 }

@@ -1,0 +1,11 @@
+frontend/build/logo512.png filter=lfs diff=lfs merge=lfs -text
+frontend/build/logo512-white.png filter=lfs diff=lfs merge=lfs -text
+frontend/build/logo192.png filter=lfs diff=lfs merge=lfs -text
+frontend/build/logo192-white.png filter=lfs diff=lfs merge=lfs -text
+frontend/build/apple-touch-icon.png filter=lfs diff=lfs merge=lfs -text
+frontend/build/apple-touch-icon-white.png filter=lfs diff=lfs merge=lfs -text
+frontend/build/favicon-32.png filter=lfs diff=lfs merge=lfs -text
+frontend/build/favicon-32-white.png filter=lfs diff=lfs merge=lfs -text
+frontend/build/favicon.ico filter=lfs diff=lfs merge=lfs -text
+frontend/build/raed-logo.png filter=lfs diff=lfs merge=lfs -text
+frontend/build/raed-logo-navy.png filter=lfs diff=lfs merge=lfs -text

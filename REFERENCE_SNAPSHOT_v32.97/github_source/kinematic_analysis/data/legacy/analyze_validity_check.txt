@@ -1,0 +1,30 @@
+=== baseline ===
+SPARC: -1.5997209877178713
+window onset: 0.067 s
+window offset: 1.167 s
+amplitude SW: 1.2362478621604076
+trunk_ratio: 0.08493211701752151
+shoulder_elevation_cm: None
+hand_displacement_cm: 46.67043451408036
+sparc_quality_advisory: {'sparc_reliable': True, 'flags': [], 'notes': ['SPARC window appears suitable for literature comparison.'], 'active_frames': 67, 'active_duration_s': 1.117, 'amplitude_sw': 1.236, 'speed_space': 'body_frame'}
+
+=== pre ===
+SPARC: -2.4765484704916014
+window onset: 3.367 s
+window offset: 6.8 s
+amplitude SW: 0.9380550657812361
+trunk_ratio: 0.2553253865636107
+shoulder_elevation_cm: None
+hand_displacement_cm: 31.507479346669353
+sparc_quality_advisory: {'sparc_reliable': True, 'flags': [], 'notes': ['SPARC window appears suitable for literature comparison.'], 'active_frames': 207, 'active_duration_s': 3.45, 'amplitude_sw': 0.938, 'speed_space': 'body_frame'}
+
+=== post ===
+SPARC: -2.854151202960641
+window onset: 2.267 s
+window offset: 5.767 s
+amplitude SW: 0.8974671913179485
+trunk_ratio: 0.12557575571361612
+shoulder_elevation_cm: None
+hand_displacement_cm: 33.99498084775402
+sparc_quality_advisory: {'sparc_reliable': True, 'flags': [], 'notes': ['SPARC window appears suitable for literature comparison.'], 'active_frames': 211, 'active_duration_s': 3.517, 'amplitude_sw': 0.897, 'speed_space': 'body_frame'}
+

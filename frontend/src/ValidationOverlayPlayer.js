@@ -1,23 +1,34 @@
 import React, { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
-import { Play, Pause, Maximize, Minimize2, ChevronLeft, ChevronRight, Download, X } from "lucide-react";
+import {
+  Play,
+  Pause,
+  Maximize,
+  Minimize2,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  X,
+  Pencil,
+  Bone,
+  Crosshair,
+  Table2,
+} from "lucide-react";
 import { downloadBlob } from "./downloadUtils";
 import {
-  buildTremorCameraTrack,
   formatTremorAmplitude,
   resolveTremorMetrics,
 } from "./tremorMetrics";
 import {
+  computeOverlayMetrics,
   computeValidationPanelLive,
   elbowAngVelAt,
+  nvpPeakIndicesFromRest,
   pickOverlayMetric,
+  shoulderFlexionGoniometerDeg,
 } from "./validationPanelMetrics";
 import {
   buildPinchEvidenceLines,
-  buildTremorEvidenceLines,
   drawEvidenceCard,
-  drawTremorCameraEvidence,
-  localTremorActivity,
-  localTremorEnvelopeAt,
   pinchApertureFromFrame,
   pinchApertureWindowStats,
 } from "./overlayMetricEvidence";
@@ -33,13 +44,31 @@ import {
   saveSharedTableSurfaceY,
   tableMarkHitGeom,
 } from "./overlayTableUserMark";
-import { resetHoldIfSeek } from "./overlayPoseHold";
+import { holdBodyDisplay, holdDisplayLandmark, holdFingerCanvas, resetHoldIfSeek } from "./overlayPoseHold";
+import { swallowGhostClick } from "./uiGhostClick";
 import {
+  OVERLAY_VIDEO_PRELOAD,
+  OVERLAY_VIDEO_RELOAD_MAX,
+  OVERLAY_VIDEO_STALL_MS,
+  enqueueOverlayVideoAttach,
   getOverlayFrameState,
+  overlayLandmarkAt,
+  blendOverlayLandmark,
   isAppleTouchVideo,
   overlayBakeFreeEventName,
+  overlayLivePaintFromCurrentTime,
+  overlayNeedsRafUntilFirstVfcPaint,
+  overlayPaintWatchdogStalled,
+  overlayPlaybackPaintStalled,
+  overlayKickShouldResetPresentedTime,
+  overlayKickShouldCancelLiveVfc,
+  overlayRafFallbackPlaybackTime,
   overlaySourceLooksMismatched,
+  overlayVideoLooksStalled,
+  overlayVideoShouldRetryError,
+  kickOverlayVideoElement,
   releaseOverlayBake,
+  reloadOverlayVideoElement,
   shouldRestartPlayback,
   tryAcquireOverlayBake,
 } from "./overlayVideoPlayback";
@@ -572,21 +601,28 @@ function getValidationPanelRowDefs(overlayData, clinicalTask) {
   return UE_VALIDATION_PANEL_ROWS;
 }
 
-/** Upper-extremity validation panel — matches kinematics table core + validation extras. */
-const UE_VALIDATION_PANEL_ROWS = [
-  { id: "mov_time", label: "Movement time", kind: "live", key: "movementTime", suffix: " s", decimals: 2 },
-  { id: "mov_quality", label: "Movement quality", kind: "metric", metricKeys: ["movement_quality_index"], accent: true },
-  { id: "straightness", label: "Straightness", kind: "live", key: "straightness", decimals: 2 },
-  { id: "peak_vel", label: "Peak velocity", kind: "peakVelCm", accent: true },
-  { id: "pause", label: "Pause / stops", kind: "pause" },
-  { id: "trunk", label: "Trunk ratio", kind: "live", key: "trunkRatio", decimals: 2 },
+/** Upper-extremity validation panel — the eight clinic SPSS variables (Total NVP is the header chip). */
+export const UE_VALIDATION_PANEL_ROWS = [
   { id: "sh_elev", label: "Shoulder elevation", kind: "shoulderElev" },
-  { id: "elbow_mean", label: "Elbow angle mean", kind: "metric", metricKeys: ["elbow_angle_mean_deg", "elbow_angle_mean"], suffix: "°", decimals: 1 },
-  { id: "tremor", label: "Tremor 8–12 Hz", kind: "tremor", tremorKey: "tremor_8_12hz_power" },
-  { id: "tremor_hz", label: "Tremor peak freq", kind: "tremorFreq", tremorKey: "tremor_peak_freq_hz" },
-  { id: "kin_abd", label: "Shoulder abduction", kind: "live", key: "shoulderAbduction", suffix: "°", decimals: 0 },
-  { id: "kin_finger", label: "Finger quality", kind: "live", key: "fingerQuality", decimals: 0 },
+  { id: "trunk_fwd", label: "Trunk forward displacement", kind: "live", key: "liveTrunkForwardDisplacementCm", suffix: " cm", decimals: 1 },
+  { id: "mov_time", label: "Movement time", kind: "live", key: "movementTime", suffix: " s", decimals: 2 },
+  { id: "avg_vel", label: "Average hand velocity", kind: "live", key: "liveAverageHandVelocityCmS", suffix: " cm/s", decimals: 1 },
+  { id: "elbow_mean", label: "Elbow extension angle", kind: "live", key: "liveElbowAngleMeanDeg", suffix: "°", decimals: 1 },
+  { id: "sh_flex", label: "Shoulder flexion angle", kind: "live", key: "liveShoulderFlexionMeanDeg", suffix: "°", decimals: 1 },
+  { id: "sh_abd", label: "Shoulder abduction angle", kind: "live", key: "liveShoulderAbductionMeanDeg", suffix: "°", decimals: 1 },
 ];
+
+function pickPanelMetric(overlayData, keys) {
+  const direct = pickOverlayMetric(overlayData, keys);
+  if (direct != null) return direct;
+  const filled = computeOverlayMetrics(overlayData);
+  if (!filled) return null;
+  for (const k of keys || []) {
+    const v = filled[k];
+    if (v != null && v !== "" && !Number.isNaN(Number(v))) return Number(v);
+  }
+  return null;
+}
 
 function formatPanelRowValue(row, live, overlayData, formatValue) {
   if (row.kind === "live") {
@@ -609,8 +645,8 @@ function formatPanelRowValue(row, live, overlayData, formatValue) {
     return "—";
   }
   if (row.kind === "shoulderElev") {
-    const cm = pickOverlayMetric(overlayData, ["shoulder_elevation_cm"]);
-    if (cm != null && Number(cm) > 0) return `${formatValue(Number(cm), 1)} cm`;
+    const liveCm = live.liveShoulderElevationCm;
+    if (liveCm != null && Number(liveCm) > 0) return `${formatValue(Number(liveCm), 1)} cm`;
     const v = live.shoulderElevationPalm || live.shoulderElevationTable || live.shoulderElevation;
     if (v > 0) return formatValue(v, 3);
     return "—";
@@ -633,7 +669,7 @@ function formatPanelRowValue(row, live, overlayData, formatValue) {
     return `${Number(v).toFixed(1)} Hz`;
   }
   if (row.kind === "metric" && row.metricKeys) {
-    const v = pickOverlayMetric(overlayData, row.metricKeys);
+    const v = pickPanelMetric(overlayData, row.metricKeys);
     if (v == null) return "—";
     const decimals = row.decimals != null ? row.decimals : 2;
     const formatted = formatValue(v, decimals);
@@ -705,6 +741,7 @@ export function ValidationOverlayPlayer({
   const autoRenderStartedRef = useRef(false);
   const userPlayedRef = useRef(false);
   const sourceMismatchNotifiedRef = useRef(false);
+  const videoReloadTriesRef = useRef(0);
   const onSourceMismatchRef = useRef(onSourceMismatch);
   onSourceMismatchRef.current = onSourceMismatch;
   const overlayDurationRef = useRef(overlayData?.duration_sec);
@@ -715,6 +752,7 @@ export function ValidationOverlayPlayer({
   const canvasLayoutCacheRef = useRef({ key: "", result: null });
   const gutterLayoutCacheRef = useRef({ key: "", result: null });
   const lastPaintMediaTimeRef = useRef(-1);
+  const lastPresentedWallMsRef = useRef(-1);
   const usePresentedTimeRef = useRef(false);
   const lastPanelUpdateIdxRef = useRef(-1);
   const liveMetricsCacheRef = useRef(null);
@@ -725,6 +763,7 @@ export function ValidationOverlayPlayer({
   const fingerStickyRef = useRef({});
   /** Last live finger canvas points (no EMA). Used only to reset on seeks. */
   const fingerSmoothRef = useRef({});
+  const bodyHoldRef = useRef({});
   const cupLiveRef = useRef(null);
   const tableCreamRef = useRef(null);
   const tableHintYRef = useRef(null);
@@ -757,7 +796,6 @@ export function ValidationOverlayPlayer({
   const win = overlayData?.movement_window || { start_idx: 0, end_idx: frames.length - 1 };
   const velocityProfile = overlayData?.velocity_profile;
   const peakFrames = overlayData?.peak_frames || [];
-  const tremorCameraTrack = useMemo(() => buildTremorCameraTrack(overlayData), [overlayData]);
 
   const getElbowAngVel = useCallback((idx) => elbowAngVelAt(frames, fps, idx), [frames, fps]);
 
@@ -855,23 +893,47 @@ export function ValidationOverlayPlayer({
     const updatePanelCharts = !touchPerf || video.paused;
     const f = frames[idx];
     const fNext = frames[Math.min(idx + 1, frames.length - 1)];
+    const fPrev = frames[Math.max(0, idx - 1)];
+    const fNext2 = frames[Math.min(idx + 2, frames.length - 1)];
     if (!f) return;
 
     const color = phaseColor;
 
-    function pt(name) {
-      const p = f[name];
-      const pn = alpha > 0 ? fNext?.[name] : null;
-      if (!p || p[0] == null || p[1] == null) return null;
-      let nx = p[0];
-      let ny = p[1];
-      if (pn && pn[0] != null && pn[1] != null && alpha > 0) {
-        nx = p[0] + (pn[0] - p[0]) * alpha;
-        ny = p[1] + (pn[1] - p[1]) * alpha;
+    const BODY_HOLD_KEYS = [
+      "nose", "lear", "rear",
+      "leye", "reye", "leye_inner", "leye_outer", "reye_inner", "reye_outer",
+      "mouth_l", "mouth_r",
+      "trunk", "lshoulder", "rshoulder", "lelbow", "relbow",
+      "lwrist", "rwrist", "lhip", "rhip", "lknee", "rknee", "lankle", "rankle",
+      "shoulder", "elbow", "palm", "wrist", "hl_wrist", "thumb", "index", "pinky", "middle", "ring",
+    ];
+    const rawBody = {};
+    BODY_HOLD_KEYS.forEach((name) => {
+      const blended = overlayLandmarkAt(frames, idx, alpha, name);
+      if (!blended) {
+        rawBody[name] = null;
+        return;
       }
+      const nx = blended[0];
+      const ny = blended[1];
+      const isHandLm = /^(index|thumb|pinky|middle|ring|hl_wrist)$/.test(name);
+      if (isHandLm && (nx <= 0.0002 || nx >= 0.9998 || ny <= 0.0002 || ny >= 0.9998)) {
+        rawBody[name] = null;
+        return;
+      }
+      rawBody[name] = blended;
+    });
+    const heldBody = holdBodyDisplay(bodyHoldRef.current, rawBody, cw, ch, idx);
+
+    function pt(name) {
+      if (Object.prototype.hasOwnProperty.call(heldBody, name)) return heldBody[name];
+      const blended = overlayLandmarkAt(frames, idx, alpha, name);
+      if (!blended) return null;
+      const nx = blended[0];
+      const ny = blended[1];
       const isHandLm = /^(index|thumb|pinky|middle|ring|hl_wrist)$/.test(name);
       if (isHandLm && (nx <= 0.0002 || nx >= 0.9998 || ny <= 0.0002 || ny >= 0.9998)) return null;
-      return [nx * cw, ny * ch];
+      return holdDisplayLandmark(bodyHoldRef.current, name, blended, cw, ch, idx);
     }
 
     function toCanvas(p) {
@@ -1103,7 +1165,7 @@ export function ValidationOverlayPlayer({
     });
     const handRoot = skel.palmPt || skel.forearmEnd || pt("wrist");
 
-    const currentNVP = peakFrames.filter((pi) => pi <= idx).length;
+    const currentNVP = nvpPeakIndicesFromRest(overlayData, idx).length;
 
     let panelLive = liveMetricsCacheRef.current?.panelLive;
     if (updatePanelMetrics) {
@@ -1162,12 +1224,16 @@ export function ValidationOverlayPlayer({
     if (f && typeof f.shoulder_abduction_deg === "number" && f.shoulder_abduction_deg > 0) {
       currentShoulderAbduction = f.shoulder_abduction_deg;
     }
+    let currentShoulderFlexion = shoulderFlexionGoniometerDeg(f, overlayData?.affected_side);
+    if (currentShoulderFlexion == null && f && typeof f.shoulder_flexion_deg === "number" && f.shoulder_flexion_deg > 0) {
+      currentShoulderFlexion = f.shoulder_flexion_deg;
+    }
     let currentFingerQuality = panelLive?.fingerQuality ?? cachedLive.fingerQuality ?? 0;
     let tremorLive = tremorLiveCacheRef.current?.data;
     let adlTremorLive = tremorLiveCacheRef.current?.adlData;
     const resolvedTremor = resolveTremorMetrics(overlayData);
 
-    const showExtendedKin = false; // UE abduction/finger overlays disabled
+    const showExtendedKin = false; // finger / HL extras stay off
 
     const dpr = overlayCanvasDpr();
     const labelSize = `${Math.round(10 * dpr)}px`;
@@ -1214,18 +1280,21 @@ export function ValidationOverlayPlayer({
     }
 
     const cx = cw / 2;
-    if (!touchPerf) {
-      if (shoulder && showExtendedKin && currentShoulderAbduction > 0) {
+    if (!touchPerf && showKinematicMarks) {
+      if (shoulder && currentShoulderFlexion != null && Number.isFinite(currentShoulderFlexion)) {
+        drawSimpleLabel(`Flex ${currentShoulderFlexion.toFixed(0)}°`, shoulder, shoulder[0] > cx ? -118 : 14, -22, {
+          color: color.text,
+          border: color.glow,
+        });
+      }
+      if (shoulder && currentShoulderAbduction > 0) {
         drawSimpleLabel(`Abd ${currentShoulderAbduction.toFixed(0)}°`, shoulder, shoulder[0] > cx ? -118 : 14, 6, {
           color: "#93c5fd",
           border: "rgba(59,130,246,0.55)",
         });
       }
-      if (elbow) {
+      if (elbow && currentElbowAngle > 0) {
         drawSimpleLabel(`El ${currentElbowAngle.toFixed(0)}°`, elbow, elbow[0] > cx ? -80 : 14, -22, { color: color.text, border: color.glow });
-      }
-      if (palm) {
-        drawSimpleLabel(`Ha ${Math.round(speed)} °/s`, palm, palm[0] > cx ? -100 : 18, -24, { color: "#fde047", border: "rgba(250,204,21,0.6)" });
       }
     }
 
@@ -1242,15 +1311,10 @@ export function ValidationOverlayPlayer({
     };
     const JOINT_ORDER = ["mcp", "ip", "tip"];
 
-    function jointToCanvas(pair, pairNext) {
-      if (!pair || pair[0] == null || pair[1] == null) return null;
-      let nx = pair[0];
-      let ny = pair[1];
-      if (pairNext && pairNext[0] != null && pairNext[1] != null && alpha > 0) {
-        nx = pair[0] + (pairNext[0] - pair[0]) * alpha;
-        ny = pair[1] + (pairNext[1] - pair[1]) * alpha;
-      }
-      return [nx * cw, ny * ch];
+    function jointToCanvas(pair, pairNext, pairPrev, pairNext2) {
+      const blended = blendOverlayLandmark(pairPrev, pair, pairNext, pairNext2, alpha);
+      if (!blended) return null;
+      return [blended[0] * cw, blended[1] * ch];
     }
 
     // Pre-v37 overlays re-anchored HL tips onto pose wrist (floated off fingers).
@@ -1268,15 +1332,11 @@ export function ValidationOverlayPlayer({
     };
 
     const smoothStore = fingerSmoothRef.current;
+    const fingerOrigin = poseWristPt || hlWristPt;
     const smoothFinger = (key, cpt, live) => {
       if (!cpt) return null;
       if (!live) return cpt;
-      if (smoothStore._idx != null && Math.abs(idx - smoothStore._idx) > 8) {
-        Object.keys(smoothStore).forEach((k) => { if (k !== "_idx") delete smoothStore[k]; });
-      }
-      smoothStore._idx = idx;
-      smoothStore[key] = [...cpt];
-      return cpt;
+      return holdFingerCanvas(smoothStore, key, cpt, fingerOrigin, cw, ch, idx);
     };
 
     const jointDots = [];
@@ -1304,8 +1364,15 @@ export function ValidationOverlayPlayer({
         const fj = fingerJoints[fid];
         if (!fj) return;
         JOINT_ORDER.forEach((jname) => {
+          const fjPrev = fPrev?.finger_joints?.[fid];
           const fjNext = fNext?.finger_joints?.[fid];
-          let cpt = jointToCanvas(fj[jname], fjNext?.[jname]);
+          const fjNext2 = fNext2?.finger_joints?.[fid];
+          let cpt = jointToCanvas(
+            fj[jname],
+            fjNext?.[jname],
+            fjPrev?.[jname],
+            fjNext2?.[jname],
+          );
           if (!cpt && jname === "tip") cpt = pt(fid);
           cpt = undoReanchor(cpt);
           const coordsOk = Boolean(cpt)
@@ -1405,89 +1472,11 @@ export function ValidationOverlayPlayer({
       });
     }
 
-    // --- Tremor: 1:1 residual halo + scribble only when abs 8–12 Hz exceeds noise floor ---
-    const tremorAnchor = palm || pt("wrist") || pt("hl_wrist");
-    const swPxTremor = Number(overlayData?.shoulder_width_px) || 0;
-    const tremorEnv = tremorAnchor ? localTremorEnvelopeAt(overlayData, idx) : null;
-    const tremorAct = tremorAnchor ? localTremorActivity(frames, idx, fps, swPxTremor) : null;
-    const tremorIntensity = tremorEnv != null ? Math.min(1, tremorEnv * 4) : tremorAct != null ? Math.min(1, tremorAct * 12) : 0;
-    const tremorLivePow =
-      idx >= win.end_idx
-        ? resolvedTremor?.tremor_8_12hz_power
-        : tremorLive?.tremor_8_12hz_power ?? resolvedTremor?.tremor_8_12hz_power;
-    const tremorPeakHz =
-      idx >= win.end_idx
-        ? resolvedTremor?.tremor_peak_freq_hz
-        : tremorLive?.tremor_peak_freq_hz ?? resolvedTremor?.tremor_peak_freq_hz;
-    const tremorAbsRms =
-      idx >= win.end_idx
-        ? resolvedTremor?.tremor_abs_rms_px
-        : tremorLive?.tremor_abs_rms_px ?? resolvedTremor?.tremor_abs_rms_px;
-    const tremorPresent =
-      (idx >= win.end_idx
-        ? resolvedTremor?.tremor_present
-        : tremorLive?.tremor_present ?? resolvedTremor?.tremor_present) === true;
-
-    if (tremorPresent && tremorAnchor && idx >= win.start_idx && idx <= win.end_idx && tremorCameraTrack) {
-      drawTremorCameraEvidence(ctx, {
-        anchor: tremorAnchor,
-        idx,
-        track: tremorCameraTrack,
-        cw,
-        ch,
-        dpr,
-        livePow: tremorLivePow,
-        peakHz: tremorPeakHz,
-        intensity: tremorIntensity,
-        present: true,
-        absRmsPx: tremorAbsRms,
-        shoulderWidthPx: swPxTremor,
-      });
-    }
-
     // --- Pinch aperture on skeleton (explains grasp quality) ---
     if (!touchPerf) {
       const fwPx = Number(overlayData?.frame_width_px) || cw;
       const fhPx = Number(overlayData?.frame_height_px) || ch;
-      const swPx = swPxTremor;
-
-      // Visible tremor mark when abs 8–12 Hz is above the noise floor (no 14–26× gain).
-      if (tremorPresent && tremorAnchor && idx >= win.start_idx && idx <= win.end_idx) {
-        const r = 14 + Math.min(1, tremorIntensity) * 18;
-        const alphaHalo = 0.18 + Math.min(0.5, tremorIntensity * 0.45);
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(tremorAnchor[0], tremorAnchor[1], r, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(251,113,133,${Math.min(0.95, alphaHalo).toFixed(2)})`;
-        ctx.lineWidth = 2.2;
-        ctx.shadowColor = "rgba(251,113,133,0.45)";
-        ctx.shadowBlur = 8;
-        ctx.stroke();
-        ctx.restore();
-        drawSimpleLabel(
-          `Tr ${formatTremorAmplitude(tremorAbsRms, swPxTremor, true)}${tremorPeakHz != null ? ` · ${Number(tremorPeakHz).toFixed(1)}Hz` : ""}`,
-          tremorAnchor,
-          tremorAnchor[0] > cx ? -150 : 20,
-          -52,
-          { color: "#fda4af", border: "rgba(251,113,133,0.55)", bg: "rgba(40,10,18,0.85)" },
-        );
-        if (showExtendedKin) {
-          drawEvidenceCard(
-            ctx,
-            buildTremorEvidenceLines(overlayData, tremorLivePow, tremorPeakHz, tremorAbsRms),
-            tremorAnchor,
-            {
-              cw,
-              ch,
-              dpr,
-              offsetX: tremorAnchor[0] > cx ? -210 : 18,
-              offsetY: -118,
-              border: "rgba(251,113,133,0.4)",
-              titleColor: "#fecdd3",
-            },
-          );
-        }
-      }
+      const swPx = Number(overlayData?.shoulder_width_px) || 0;
 
       const thumbTip = jointDots.find((d) => d.fid === "thumb" && d.jname === "tip")?.cpt || pt("thumb");
       const indexTipEv = jointDots.find((d) => d.fid === "index" && d.jname === "tip")?.cpt || pt("index");
@@ -1594,6 +1583,12 @@ export function ValidationOverlayPlayer({
         shoulderElevationPalm: currentShoulderElevationPalm,
         shoulderAbduction: currentShoulderAbduction,
         fingerQuality: currentFingerQuality,
+        liveShoulderElevationCm: panelLive?.liveShoulderElevationCm,
+        liveTrunkForwardDisplacementCm: panelLive?.liveTrunkForwardDisplacementCm,
+        liveAverageHandVelocityCmS: panelLive?.liveAverageHandVelocityCmS,
+        liveElbowAngleMeanDeg: panelLive?.liveElbowAngleMeanDeg,
+        liveShoulderFlexionMeanDeg: panelLive?.liveShoulderFlexionMeanDeg,
+        liveShoulderAbductionMeanDeg: panelLive?.liveShoulderAbductionMeanDeg,
         tremor_8_12hz_power: panelLive?.tremor_8_12hz_power
           ?? tremorLive?.tremor_8_12hz_power
           ?? resolvedTremor?.tremor_8_12hz_power,
@@ -1654,7 +1649,8 @@ export function ValidationOverlayPlayer({
     const unscaledRowH = 14 * dpr;
     const unscaledHeaderH = 26 * dpr;
     const unscaledHeaderGap = 22 * dpr;
-    const unscaledPanelH = unscaledHeaderH + unscaledHeaderGap + unscaledRowH * 13 + unscaledChartH * 3 + unscaledPad * 2 + 20;
+    const rowDefsInline = getValidationPanelRowDefs(overlayData, clinicalTask);
+    const unscaledPanelH = unscaledHeaderH + unscaledHeaderGap + unscaledRowH * (rowDefsInline.length + 1) + unscaledChartH * 3 + unscaledPad * 2 + 20;
     const maxPanelH = ch - unscaledPad * 2;
     const panelScale = unscaledPanelH > maxPanelH ? Math.max(0.65, maxPanelH / unscaledPanelH) : 1;
     const pad = unscaledPad * panelScale;
@@ -1702,8 +1698,13 @@ export function ValidationOverlayPlayer({
       shoulderElevationPalm: currentShoulderElevationPalm,
       shoulderAbduction: currentShoulderAbduction,
       fingerQuality: currentFingerQuality,
+      liveShoulderElevationCm: panelLive?.liveShoulderElevationCm,
+      liveTrunkForwardDisplacementCm: panelLive?.liveTrunkForwardDisplacementCm,
+      liveAverageHandVelocityCmS: panelLive?.liveAverageHandVelocityCmS,
+      liveElbowAngleMeanDeg: panelLive?.liveElbowAngleMeanDeg,
+      liveShoulderFlexionMeanDeg: panelLive?.liveShoulderFlexionMeanDeg,
+      liveShoulderAbductionMeanDeg: panelLive?.liveShoulderAbductionMeanDeg,
     };
-    const rowDefsInline = getValidationPanelRowDefs(overlayData, clinicalTask);
 
     let cy = py + headerH + headerGap;
     rowDefsInline.forEach((row) => {
@@ -1764,7 +1765,7 @@ export function ValidationOverlayPlayer({
     ctx.fillText(`Speed ${Math.round(speed)} °/s`, gx, gy - 4);
     }
 
-  }, [frames, fps, win, peakV, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, tremorCameraTrack, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, overlayStyle, showKinematicMarks]);
+  }, [frames, fps, win, peakV, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, overlayStyle, showKinematicMarks]);
 
   const drawRecordingFrame = useCallback(() => {
     const video = videoRef.current;
@@ -1992,16 +1993,31 @@ export function ValidationOverlayPlayer({
 
     const useVfc = typeof video.requestVideoFrameCallback === "function";
     let rafActive = false;
+    lastPaintMediaTimeRef.current = -1;
+    lastPresentedWallMsRef.current = -1;
 
     const runPaint = (explicitTime) => {
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
       if (Number.isFinite(explicitTime)) {
         videoTimeRef.current = explicitTime;
         usePresentedTimeRef.current = true;
+        lastPaintMediaTimeRef.current = explicitTime;
+        lastPresentedWallMsRef.current = now;
+      } else if (!video.paused && useVfc) {
+        videoTimeRef.current = overlayRafFallbackPlaybackTime({
+          currentTime: video.currentTime,
+          lastPresentedTime: lastPaintMediaTimeRef.current,
+          lastPresentedWallMs: lastPresentedWallMsRef.current,
+          nowMs: now,
+          playbackRate: video.playbackRate || 1,
+        });
+        usePresentedTimeRef.current = lastPaintMediaTimeRef.current >= 0;
       } else {
         videoTimeRef.current = video.currentTime ?? 0;
         usePresentedTimeRef.current = false;
+        lastPaintMediaTimeRef.current = videoTimeRef.current;
+        lastPresentedWallMsRef.current = now;
       }
-      lastPaintMediaTimeRef.current = videoTimeRef.current;
       drawOverlay();
       usePresentedTimeRef.current = false;
       if (recording) drawRecordingFrame();
@@ -2011,6 +2027,11 @@ export function ValidationOverlayPlayer({
       if (!videoRef.current || !canvasRef.current) return;
       const touchLive = isCoarsePointerDevice();
       if (touchLive && !videoRef.current.paused) {
+        if (!overlayLivePaintFromCurrentTime({
+          playing: true,
+          useVideoFrameCallback: useVfc,
+          rafFallback: rafActive,
+        })) return;
         runPaint();
         return;
       }
@@ -2069,6 +2090,7 @@ export function ValidationOverlayPlayer({
     const onVideoFrame = (_now, metadata) => {
       const t = metadata?.mediaTime ?? video.currentTime ?? 0;
       runPaint(t);
+      if (rafActive) stopRafLoop();
       if (!video.paused && useVfc) {
         vfcIdRef.current = video.requestVideoFrameCallback(onVideoFrame);
       }
@@ -2081,7 +2103,10 @@ export function ValidationOverlayPlayer({
       const vh = video.videoHeight || 1;
       setVideoAspect(vw / vh);
       videoTimeRef.current = video.currentTime ?? 0;
-      lastPaintMediaTimeRef.current = -1;
+      if (overlayKickShouldResetPresentedTime("metadata")) {
+        lastPaintMediaTimeRef.current = -1;
+        lastPresentedWallMsRef.current = -1;
+      }
       setDisplayDuration(video.duration || 0);
       setDisplayTime(video.currentTime || 0);
       if (
@@ -2103,10 +2128,20 @@ export function ValidationOverlayPlayer({
 
     const onPlay = () => {
       setIsPlaying(true);
-      lastPaintMediaTimeRef.current = -1;
+      if (overlayKickShouldResetPresentedTime("play")) {
+        lastPaintMediaTimeRef.current = -1;
+        lastPresentedWallMsRef.current = -1;
+      }
+      stopRafLoop();
       if (useVfc) {
-        stopRafLoop();
-        vfcIdRef.current = video.requestVideoFrameCallback(onVideoFrame);
+        if (overlayKickShouldCancelLiveVfc("play") || !vfcIdRef.current) {
+          stopVfc();
+          try {
+            vfcIdRef.current = video.requestVideoFrameCallback(onVideoFrame);
+          } catch {
+            startRafLoop(true);
+          }
+        }
       } else {
         startRafLoop();
       }
@@ -2117,7 +2152,10 @@ export function ValidationOverlayPlayer({
       stopVfc();
       stopRafLoop();
       videoTimeRef.current = video.currentTime ?? 0;
-      lastPaintMediaTimeRef.current = -1;
+      if (overlayKickShouldResetPresentedTime("pause")) {
+        lastPaintMediaTimeRef.current = -1;
+        lastPresentedWallMsRef.current = -1;
+      }
       schedulePaint();
     };
 
@@ -2142,50 +2180,90 @@ export function ValidationOverlayPlayer({
     const onResize = () => {
       canvasLayoutCacheRef.current = { key: "", result: null };
       gutterLayoutCacheRef.current = { key: "", result: null };
-      lastPaintMediaTimeRef.current = -1;
       schedulePaint();
     };
 
-    const kickPlaybackPaint = () => {
-      lastPaintMediaTimeRef.current = -1;
-      stopVfc();
-      stopRafLoop();
-      if (!video.paused && !video.ended) {
-        if (useVfc) {
+    const kickPlaybackPaint = (reason = "playing") => {
+      if (overlayKickShouldResetPresentedTime(reason)) {
+        lastPaintMediaTimeRef.current = -1;
+        lastPresentedWallMsRef.current = -1;
+      }
+      if (video.paused || video.ended) {
+        schedulePaint();
+        return;
+      }
+      if (useVfc) {
+        if (overlayKickShouldCancelLiveVfc(reason) || !vfcIdRef.current) {
+          stopVfc();
           try {
             vfcIdRef.current = video.requestVideoFrameCallback(onVideoFrame);
           } catch {
             startRafLoop(true);
           }
-        } else {
-          startRafLoop();
         }
+        if (reason === "stall" && lastPaintMediaTimeRef.current >= 0) {
+          startRafLoop(true);
+        }
+        return;
       }
-      schedulePaint();
+      startRafLoop();
     };
 
     const onVisibility = () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      kickPlaybackPaint();
+      kickPlaybackPaint("focus");
+    };
+    const onPlaying = () => kickPlaybackPaint("playing");
+    const onPageShow = () => kickPlaybackPaint("pageshow");
+    const onWindowFocus = () => kickPlaybackPaint("focus");
+    const onSeeked = () => {
+      if (overlayKickShouldResetPresentedTime("seek")) {
+        lastPaintMediaTimeRef.current = -1;
+        lastPresentedWallMsRef.current = -1;
+      }
+      schedulePaint();
     };
 
     video.addEventListener("loadedmetadata", onLoadedMetadata);
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("play", onPlay);
-    video.addEventListener("playing", kickPlaybackPaint);
-    video.addEventListener("seeked", schedulePaint);
+    video.addEventListener("playing", onPlaying);
+    video.addEventListener("seeked", onSeeked);
     video.addEventListener("pause", onPause);
     video.addEventListener("ended", onVideoEnded);
     window.addEventListener("resize", onResize);
-    window.addEventListener("pageshow", kickPlaybackPaint);
-    window.addEventListener("focus", kickPlaybackPaint);
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("focus", onWindowFocus);
     document.addEventListener("visibilitychange", onVisibility);
 
     const watchdogId = window.setInterval(() => {
       if (video.paused || video.ended) return;
-      const t = video.currentTime || 0;
-      if (Math.abs(t - lastPaintMediaTimeRef.current) > 0.12) {
-        kickPlaybackPaint();
+      if (overlayNeedsRafUntilFirstVfcPaint({
+        playing: true,
+        useVideoFrameCallback: useVfc,
+        lastPaintMediaTime: lastPaintMediaTimeRef.current,
+        currentTime: video.currentTime,
+      })) {
+        startRafLoop(true);
+        return;
+      }
+      if (useVfc && vfcIdRef.current && lastPaintMediaTimeRef.current < 0) return;
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      if (
+        overlayPaintWatchdogStalled({
+          paused: video.paused,
+          ended: video.ended,
+          lastPaintWallMs: lastPresentedWallMsRef.current,
+          nowMs: now,
+        })
+        || overlayPlaybackPaintStalled({
+          currentTime: video.currentTime,
+          lastPaintMediaTime: lastPaintMediaTimeRef.current,
+          paused: video.paused,
+          ended: video.ended,
+        })
+      ) {
+        kickPlaybackPaint("stall");
       }
     }, 180);
 
@@ -2196,13 +2274,13 @@ export function ValidationOverlayPlayer({
       video.removeEventListener("loadedmetadata", onLoadedMetadata);
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("play", onPlay);
-      video.removeEventListener("playing", kickPlaybackPaint);
-      video.removeEventListener("seeked", schedulePaint);
+      video.removeEventListener("playing", onPlaying);
+      video.removeEventListener("seeked", onSeeked);
       video.removeEventListener("pause", onPause);
       video.removeEventListener("ended", onVideoEnded);
       window.removeEventListener("resize", onResize);
-      window.removeEventListener("pageshow", kickPlaybackPaint);
-      window.removeEventListener("focus", kickPlaybackPaint);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("focus", onWindowFocus);
       document.removeEventListener("visibilitychange", onVisibility);
       window.clearInterval(watchdogId);
       stopVfc();
@@ -2447,11 +2525,63 @@ export function ValidationOverlayPlayer({
     autoRenderStartedRef.current = false;
     userPlayedRef.current = false;
     sourceMismatchNotifiedRef.current = false;
+    videoReloadTriesRef.current = 0;
     setDownloadUrl(null);
     setRenderProgress(0);
     cupLiveRef.current = null;
     tableCreamRef.current = null;
     tableCreamTriesRef.current = 0;
+  }, [videoUrl]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !videoUrl) return undefined;
+    video.preload = OVERLAY_VIDEO_PRELOAD;
+    let cancelled = false;
+    const startedAt = Date.now();
+
+    const kickLoad = () => enqueueOverlayVideoAttach(() => {
+      if (cancelled || !videoRef.current) return;
+      if (video.readyState >= 1 && Number(video.duration) > 0.05) return;
+      kickOverlayVideoElement(video);
+    });
+
+    kickLoad();
+
+    const stallId = window.setInterval(() => {
+      if (cancelled || recordingRef.current) return;
+      if (!overlayVideoLooksStalled({
+        readyState: video.readyState,
+        duration: video.duration,
+        videoWidth: video.videoWidth,
+        elapsedMs: Date.now() - startedAt,
+      })) return;
+      if (videoReloadTriesRef.current >= OVERLAY_VIDEO_RELOAD_MAX) return;
+      videoReloadTriesRef.current += 1;
+      enqueueOverlayVideoAttach(() => {
+        if (cancelled) return;
+        reloadOverlayVideoElement(video);
+        kickOverlayVideoElement(video);
+      });
+    }, OVERLAY_VIDEO_STALL_MS);
+
+    const onMediaError = () => {
+      if (cancelled) return;
+      if (!overlayVideoShouldRetryError(video.error?.code, videoReloadTriesRef.current)) return;
+      videoReloadTriesRef.current += 1;
+      enqueueOverlayVideoAttach(() => {
+        if (cancelled) return;
+        reloadOverlayVideoElement(video);
+        kickOverlayVideoElement(video);
+      });
+    };
+    video.addEventListener("error", onMediaError);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(stallId);
+      video.removeEventListener("error", onMediaError);
+    };
   }, [videoUrl]);
 
   useEffect(() => {
@@ -2530,7 +2660,10 @@ export function ValidationOverlayPlayer({
           <p className="text-sm font-bold text-white/90 truncate pr-3">{phaseLabel || "Validation"} — Validation</p>
           <button
             type="button"
-            onPointerDown={controlTap(exitExpanded)}
+            onPointerDown={controlTap(() => {
+              swallowGhostClick();
+              exitExpanded();
+            })}
             className="validation-control-btn flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white text-xs font-semibold hover:bg-white/[0.10] active:bg-white/[0.14] transition touch-manipulation"
             aria-label="Close fullscreen"
           >
@@ -2623,7 +2756,7 @@ export function ValidationOverlayPlayer({
                 playsInline
                 webkit-playsinline="true"
                 muted
-                preload="auto"
+                preload={OVERLAY_VIDEO_PRELOAD}
                 className={`block object-contain bg-transparent pointer-events-none ${
                   isExpanded ? "w-full h-full" : "w-full h-full max-w-full max-h-[80vh]"
                 }`}
@@ -2631,7 +2764,7 @@ export function ValidationOverlayPlayer({
                   const el = e?.currentTarget || e?.target;
                   const mediaErr = el?.error;
                   if (mediaErr?.code === 1) return;
-                  if (mediaErr?.code === 4 && (!el?.src || el.readyState < 2)) return;
+                  if (videoReloadTriesRef.current < OVERLAY_VIDEO_RELOAD_MAX) return;
                   onError?.(mediaErr || new Error("Video failed to load"));
                 }}
               />
@@ -2688,40 +2821,43 @@ export function ValidationOverlayPlayer({
             <button
               type="button"
               onPointerDown={controlTap(() => setOverlayStyle((s) => (s === "chalk" ? "clinical" : "chalk")))}
-              className={`validation-control-btn validation-control-chip ${
+              className={`validation-control-btn validation-control-icon ${
                 overlayStyle === "chalk" ? "is-active" : ""
               }`}
+              aria-label={overlayStyle === "chalk" ? "Chalk" : "Clinic"}
               title={overlayStyle === "chalk" ? "Chalk limb ribbons (tap for clinical)" : "Clinical skeleton (tap for chalk)"}
             >
-              {overlayStyle === "chalk" ? "Chalk" : "Clinic"}
+              {overlayStyle === "chalk" ? <Pencil className="w-4 h-4" /> : <Bone className="w-4 h-4" />}
             </button>
             <button
               type="button"
               onPointerDown={controlTap(() => setShowKinematicMarks((v) => !v))}
-              className={`validation-control-btn validation-control-chip ${
+              className={`validation-control-btn validation-control-icon ${
                 showKinematicMarks ? "is-active" : ""
               }`}
+              aria-label="Marks"
               aria-pressed={showKinematicMarks}
               title={showKinematicMarks ? "Hide marks on the drawing" : "Show marks on the drawing"}
             >
-              Marks
+              <Crosshair className="w-4 h-4" />
             </button>
             <button
               type="button"
               onPointerDown={controlTap(onTableChip)}
-              className={`validation-control-btn validation-control-chip ${
+              className={`validation-control-btn validation-control-icon ${
                 tablePlaceMode ? "is-table-place is-active" : (tableUserMark ? "is-active" : "")
               }`}
+              aria-label="Table"
               aria-pressed={Boolean(tablePlaceMode || tableUserMark)}
               title={
                 tablePlaceMode
-                  ? "Tap the table surface on the video, or tap Table to cancel"
+                  ? "Tap the table surface on the video, or tap again to cancel"
                   : tableUserMark
                     ? "Table mark is set — tap to place it again, or drag the gold line"
-                    : "Tap Table, then tap the table surface on the video. You can also drag the gold line."
+                    : "Tap, then tap the table surface on the video. You can also drag the gold line."
               }
             >
-              {tablePlaceMode ? "Tap table" : "Table"}
+              <Table2 className="w-4 h-4" />
             </button>
             <button
               type="button"

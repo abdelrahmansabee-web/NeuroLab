@@ -1,0 +1,47 @@
+{
+  "snapshot_id": "REFERENCE_SNAPSHOT_v32.97",
+  "created_at": "2026-09-17T11:16:43Z",
+  "purpose": "Full restore point of clinic UI 32.97: overlay body bones display-only zero-phase, 32.72 lerp paint (no Catmull-Rom overshoot), NVP peak recount, Task phases and MQ joint-specs gone, Drive originals as multipart.",
+  "nl_version": "32.97",
+  "clinician_verified": [
+    "Requested a new full program backup after 32.97 went live"
+  ],
+  "hf_space": {
+    "url": "https://huggingface.co/spaces/AbdelrahmanSabee/raedai",
+    "app_url": "https://abdelrahmansabee-raedai.hf.space/",
+    "git_url": "https://huggingface.co/spaces/AbdelrahmanSabee/raedai.git",
+    "commit": "a688d87af99d0d735b4b1583a65d3fe7cb39f3ec",
+    "commit_title": "32.97: Zero-phase overlay body bones; restore lerp paint",
+    "frontend_nl_version": "32.97",
+    "js": "main.02a4dd26.js",
+    "css": "main.21e1d84a.css",
+    "sdk": "docker",
+    "app_port": 7860
+  },
+  "github": {
+    "url": "https://github.com/abdelrahmansabee-web/NeuroLab",
+    "ref": "cursor/backup-full-v3297-f95a",
+    "source_commit": "008a65f5fcbf14330baf6a3fcb7f1c2e89c0206f",
+    "frontend_nl_version": "32.97",
+    "note": "github_source is GitHub HEAD 32.97 (body zero-phase paint + 32.72 lerp; NVP recount; Task phases removed). Dirty CRA stubs were not copied."
+  },
+  "bytes": {
+    "github_source": 36383047,
+    "hf_space": 6778184,
+    "total": 43265757
+  },
+  "file_count": 812,
+  "excluded": [
+    ".git",
+    "venv/",
+    "node_modules/",
+    "uploads/ outputs/ data/ (patient runtime data)",
+    "backend/results and kinematic_analysis/videos (kept on the git tag, too large to duplicate here)",
+    "*.task MediaPipe models (Dockerfile downloads at build)",
+    "*.js.map source maps",
+    "stale HF main.<hash>.js bundles other than the live 32.97 files",
+    "HF Space secrets (JWT_SECRET, MFA_ENCRYPTION_KEY, Google Drive credentials)",
+    "nested REFERENCE_SNAPSHOT_v28.81 / v32.52 / v32.72 / v32.82 / v32.84 / v32.96 and backups/",
+    "dirty CRA stubs AuthGate.jsx analysisPlan.js index.js patientImport.js thesisDocs.js"
+  ]
+}

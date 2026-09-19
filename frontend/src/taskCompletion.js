@@ -3,6 +3,13 @@
  * Incomplete Pre vs complete Post must not treat extra full-task NVP as worsening.
  */
 import { clinicalTaskById } from "./clinicalTasks";
+import {
+  countNvpPeaksFromRest,
+  countNvpPeaksInWindow,
+  nvpPeakIndicesInWindow,
+  overlayMovementWindow,
+  restPathStartIdx,
+} from "./validationPanelMetrics";
 
 export const FULL_TASK_SMOOTHNESS_KEYS = ["nvp_full_task"];
 export const REACH_WINDOW_SMOOTHNESS_KEYS = [
@@ -196,6 +203,96 @@ export function pickTransportPhase(result) {
   );
 }
 
+function phaseFrameWindow(phase) {
+  if (!phase || typeof phase !== "object") return null;
+  const s = Number(
+    phase.start_frame
+    ?? phase.start_idx
+    ?? phase.task_window?.start
+    ?? phase.task_window?.start_idx,
+  );
+  const e = Number(
+    phase.end_frame
+    ?? phase.end_idx
+    ?? phase.task_window?.end
+    ?? phase.task_window?.end_idx,
+  );
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
+  return { startIdx: Math.min(s, e), untilIdx: Math.max(s, e) };
+}
+
+function overlayPeakFrames(result, overlayData) {
+  const src = overlaySource(result, overlayData);
+  const peaks = src?.peak_frames;
+  return Array.isArray(peaks) ? peaks : [];
+}
+
+function uniqueNvpCount(peakFrames, windows) {
+  const seen = new Set();
+  (windows || []).forEach((win) => {
+    if (!win) return;
+    nvpPeakIndicesInWindow(peakFrames, win.startIdx, win.untilIdx).forEach((pi) => {
+      seen.add(Number(pi));
+    });
+  });
+  return seen.size;
+}
+
+/** Recount NVP rows from the same peak_frames + phase windows the overlay uses. */
+export function countTaskNvpFromPeaks(result, overlayData = null) {
+  const peaks = overlayPeakFrames(result, overlayData);
+  const reachPhase = findTaskPhase(result, "reach_grasp") || listTaskPhases(result)[0];
+  const transport = pickTransportPhase(result);
+  const ret = findTaskPhase(result, "return");
+  const reachWin = phaseFrameWindow(reachPhase);
+  const drinkWin = phaseFrameWindow(transport);
+  const returnWin = phaseFrameWindow(ret);
+  let fallbackReachWin = null;
+  const src = overlaySource(result, overlayData);
+  if (src?.frames?.length) {
+    const { startIdx, endIdx } = overlayMovementWindow(src);
+    const restIdx = restPathStartIdx(src);
+    fallbackReachWin = { startIdx: Math.min(startIdx, restIdx), untilIdx: endIdx };
+  }
+  let reachCountWin = reachWin || (!drinkWin && !returnWin ? fallbackReachWin : null);
+  if (reachCountWin && src?.frames?.length) {
+    const restIdx = restPathStartIdx(src);
+    reachCountWin = { ...reachCountWin, startIdx: Math.min(reachCountWin.startIdx, restIdx) };
+  }
+  const nvpReach = reachCountWin
+    ? (src?.frames?.length
+      ? countNvpPeaksFromRest(src, reachCountWin.untilIdx)
+      : (peaks.length ? countNvpPeaksInWindow(peaks, reachCountWin.startIdx, reachCountWin.untilIdx) : null))
+    : null;
+  const nvpDrink = drinkWin && peaks.length
+    ? countNvpPeaksInWindow(peaks, drinkWin.startIdx, drinkWin.untilIdx)
+    : null;
+  const nvpReturn = returnWin && peaks.length
+    ? countNvpPeaksInWindow(peaks, returnWin.startIdx, returnWin.untilIdx)
+    : null;
+  const unionWins = [reachCountWin, drinkWin, returnWin].filter(Boolean);
+  const nvpTotal = peaks.length && unionWins.length
+    ? uniqueNvpCount(peaks, unionWins)
+    : null;
+  return {
+    nvp_reach: nvpReach,
+    nvp_drink: nvpDrink,
+    nvp_return: nvpReturn,
+    nvp_total: nvpTotal,
+  };
+}
+
+function coalesceNvpTotal(fromPeaksTotal, parts, storedTotal) {
+  const finite = parts.filter((v) => v != null && Number.isFinite(Number(v))).map((v) => Number(v));
+  const maxPart = finite.length ? Math.max(...finite) : null;
+  const stored = storedTotal != null && Number.isFinite(Number(storedTotal)) ? Number(storedTotal) : null;
+  const peakTotal = fromPeaksTotal != null && Number.isFinite(Number(fromPeaksTotal)) ? Number(fromPeaksTotal) : null;
+  if (peakTotal != null) return Math.max(peakTotal, maxPart ?? peakTotal);
+  const candidates = [stored, maxPart].filter((v) => v != null);
+  if (!candidates.length) return null;
+  return Math.max(...candidates);
+}
+
 export function deriveTaskCompletion(result, overlayData = null) {
   if (!result || typeof result !== "object") {
     return {
@@ -271,14 +368,20 @@ export function enrichKinematicCompletion(result, overlayData = null) {
   const functionalHold = num(result?.functional_hold_sec);
   const pauseTotal = num(result?.pause_time_sec_total);
   const transport = pickTransportPhase(result);
-  const nvpReach = num(result?.nvp_reach) ?? pickReachPhaseMetric(result, "nvp");
+  const fromPeaks = countTaskNvpFromPeaks(result, overlayData);
+  const nvpReach = fromPeaks.nvp_reach
+    ?? num(result?.nvp_reach)
+    ?? pickReachPhaseMetric(result, "nvp");
   const nvpTransport =
-    num(result?.nvp_transport)
+    fromPeaks.nvp_drink
+    ?? num(result?.nvp_transport)
     ?? num(result?.nvp_drink)
     ?? num(transport?.metrics?.nvp);
-  const nvpReturn = num(result?.nvp_return) ?? pickPhaseMetric(result, "return", "nvp");
+  const nvpReturn = fromPeaks.nvp_return
+    ?? num(result?.nvp_return)
+    ?? pickPhaseMetric(result, "return", "nvp");
   const parts = [nvpReach, nvpTransport, nvpReturn].filter((v) => v != null);
-  const nvpTotal = num(result?.nvp_total) ?? (parts.length ? parts.reduce((a, b) => a + b, 0) : null);
+  const nvpTotal = coalesceNvpTotal(fromPeaks.nvp_total, parts, num(result?.nvp_total));
   const liftCm =
     num(result?.drink_lift_height_cm)
     ?? num(result?.lift_height_cm)
@@ -291,7 +394,7 @@ export function enrichKinematicCompletion(result, overlayData = null) {
     task_complete: c.taskComplete == null ? null : (c.taskComplete ? 1 : 0),
     task_completion_ratio: c.taskCompletionRatio == null ? null : Number(c.taskCompletionRatio),
     nvp_reach: nvpReach,
-    nvp_drink: num(result?.nvp_drink) ?? nvpTransport,
+    nvp_drink: fromPeaks.nvp_drink ?? num(result?.nvp_drink) ?? nvpTransport,
     nvp_transport: nvpTransport,
     nvp_return: nvpReturn,
     nvp_total: nvpTotal,
