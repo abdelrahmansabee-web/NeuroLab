@@ -53,6 +53,7 @@ import {
   validationCacheMatchesResult,
   requestClinicPersistentStorage,
 } from "./validationSessionCache";
+import { findPatientForOpenSession, kinematicsResultsForOpenSession } from "./sessionIdentity";
 import {
   backupDriveArtifact,
   backupValidationArtifactsToDrive,
@@ -3769,18 +3770,9 @@ const KinOverlayErrorBoundary = class extends React.Component {
 };
 
 const KinSection = React.memo(function KinSection({ data, demographics, onChange, showToast, sessionKey }) {
-  const [kinematicsResults, setKinematicsResults] = useState(() => {
-    try {
-      const ls = JSON.parse(localStorage.getItem(KIN_LS_KEY)) || {};
-      const fd = data?.analysisResults || {};
-      // Current form/session data takes precedence over stale localStorage.
-      const merged = { ...ls, ...fd };
-      delete merged.during;
-      return merged;
-    } catch {
-      return data?.analysisResults || {};
-    }
-  });
+  const [kinematicsResults, setKinematicsResults] = useState(() => (
+    kinematicsResultsForOpenSession(data?.analysisResults)
+  ));
   const [settings, setSettings] = useState({
     cutoffFrequency: 4.0,
     filterOrder: 4,
@@ -3850,8 +3842,14 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     [demographics, sessionKey],
   );
 
+  const cacheMatchOpts = useMemo(
+    () => ({ relaxCsvMatch: true, patientKey: patientCacheKey }),
+    [patientCacheKey],
+  );
+
   const applyValidationCacheToState = useCallback((phase, cached) => {
     if (!cached) return false;
+    if (patientCacheKey && cached.patientKey && cached.patientKey !== patientCacheKey) return false;
     let applied = false;
     if (cached.overlay?.frames?.length) {
       startTransition(() => {
@@ -3888,7 +3886,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       applied = true;
     }
     return applied;
-  }, []);
+  }, [patientCacheKey]);
 
   const persistValidationPhase = useCallback(async (phase, partial = {}) => {
     if (!patientCacheKey) return;
@@ -3929,7 +3927,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     if (!patientCacheKey) return null;
     const phaseResult = kinematicsResults[phase];
     const existing = await loadValidationSessionArtifact(patientCacheKey, phase);
-    const existingValid = validationCacheMatchesResult(existing, phaseResult, { relaxCsvMatch: true })
+    const existingValid = validationCacheMatchesResult(existing, phaseResult, cacheMatchOpts)
       ? existing
       : null;
     const wantOverlay = needs.overlay !== false && !existingValid?.overlay?.frames?.length;
@@ -3958,12 +3956,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         phaseResult?.unified_validation_video ?? existingValid?.unifiedVideoFilename,
       savedAt: Date.now(),
     };
-    const matched = validationCacheMatchesResult(merged, phaseResult, { relaxCsvMatch: true });
+    const matched = validationCacheMatchesResult(merged, phaseResult, cacheMatchOpts);
     if (!matched && !(needs.kinematics && merged.kinematicsSnapshot)) return existingValid;
     await saveValidationSessionArtifact(merged);
     applyValidationCacheToState(phase, merged);
     return merged;
-  }, [patientCacheKey, kinematicsResults, applyValidationCacheToState]);
+  }, [patientCacheKey, kinematicsResults, applyValidationCacheToState, cacheMatchOpts]);
 
   const abortRef = useRef({});
   const overlayVideoSyncedRef = useRef({});
@@ -3990,20 +3988,37 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     };
   }, []);
 
-  // Reload kinematics when switching patient session
+  // Reload kinematics when switching patient session. Also drop leftover
+  // overlay/video pixels so a hard refresh cannot keep another patient's clips.
   useEffect(() => {
-    if (!sessionKey) return;
-    const fromFd = data?.analysisResults;
-    if (fromFd && typeof fromFd === "object" && Object.keys(fromFd).length > 0) {
-      const cleaned = { ...fromFd };
-      delete cleaned.during;
-      setKinematicsResults(cleaned);
-      localStorage.setItem(KIN_LS_KEY, JSON.stringify(cleaned));
+    setOverlayData({});
+    setOverlayMountReady({});
+    setDriveBakeDone({});
+    setOverlaySourceBad({});
+    setOriginalVideoBlobs((prev) => {
+      Object.values(prev).forEach((url) => {
+        if (typeof url === "string") URL.revokeObjectURL(url);
+      });
+      originalVideoBlobsRef.current = {};
+      return {};
+    });
+    setVideoBlobs((prev) => {
+      Object.values(prev).forEach((url) => {
+        if (typeof url === "string") URL.revokeObjectURL(url);
+      });
+      videoBlobsRef.current = {};
+      return {};
+    });
+    overlayVideoSyncedRef.current = {};
+    const fromFd = kinematicsResultsForOpenSession(data?.analysisResults);
+    if (Object.keys(fromFd).length > 0) {
+      setKinematicsResults(fromFd);
+      try { localStorage.setItem(KIN_LS_KEY, JSON.stringify(fromFd)); } catch { /* ignore */ }
     } else {
       setKinematicsResults({});
-      localStorage.removeItem(KIN_LS_KEY);
+      try { localStorage.removeItem(KIN_LS_KEY); } catch { /* ignore */ }
     }
-  }, [sessionKey]);
+  }, [patientCacheKey]);
 
   useEffect(() => {
     localStorage.setItem(KIN_LS_EXP_KEY, JSON.stringify(expandedResults));
@@ -4209,12 +4224,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       let cachedOverlay = null;
       if (patientCacheKey) {
         const cached = await loadValidationSessionArtifact(patientCacheKey, phase);
-        if (validationCacheMatchesResult(cached, { csv_filename: csvFilename }, { relaxCsvMatch: true }) && cached?.overlay?.frames?.length) {
+        if (validationCacheMatchesResult(cached, { csv_filename: csvFilename }, cacheMatchOpts) && cached?.overlay?.frames?.length) {
           cachedOverlay = cached.overlay;
-          applyValidationCacheToState(phase, { overlay: cached.overlay });
+          applyValidationCacheToState(phase, { overlay: cached.overlay, patientKey: cached.patientKey });
         } else {
           const cloud = await hydrateValidationFromCloud(phase, { overlay: true, original: false, unified: false });
-          if (validationCacheMatchesResult(cloud, { csv_filename: csvFilename }, { relaxCsvMatch: true }) && cloud?.overlay?.frames?.length) {
+          if (validationCacheMatchesResult(cloud, { csv_filename: csvFilename }, cacheMatchOpts) && cloud?.overlay?.frames?.length) {
             cachedOverlay = cloud.overlay;
           }
         }
@@ -4243,7 +4258,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       showToast(`Overlay data failed for ${phase}`, "error");
       return null;
     }
-  }, [showToast, onChange, data, kinematicsResults, patientCacheKey, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud]);
+  }, [showToast, onChange, data, kinematicsResults, patientCacheKey, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, cacheMatchOpts]);
 
   const fetchOverlayDataWithRetry = useCallback(async (phase, csvFilename, opts = {}, maxAttempts = 5) => {
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -4276,7 +4291,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     const applyCachedOriginal = async () => {
       if (!patientCacheKey) return false;
       const cached = await loadValidationSessionArtifact(patientCacheKey, phase);
-      if (!validationCacheMatchesResult(cached, phaseResult, { relaxCsvMatch: true })) return false;
+      if (!validationCacheMatchesResult(cached, phaseResult, cacheMatchOpts)) return false;
       const blob = cached?.originalVideoBlob;
       if (!(blob instanceof Blob) || blob.size <= 0) return false;
       applyValidationCacheToState(phase, {
@@ -4313,7 +4328,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       if (!loaded) {
         if (await applyCachedOriginal()) return;
         const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
-        if (validationCacheMatchesResult(cloud, phaseResult, { relaxCsvMatch: true }) && cloud?.originalVideoBlob?.size) return;
+        if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.originalVideoBlob?.size) return;
         showToast("Original video expired on server — please re-upload", "error");
         return;
       }
@@ -4334,10 +4349,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       console.error(`Failed to cache original video for ${phase}:`, err);
       if (await applyCachedOriginal()) return;
       const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
-      if (validationCacheMatchesResult(cloud, phaseResult, { relaxCsvMatch: true }) && cloud?.originalVideoBlob?.size) return;
+      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.originalVideoBlob?.size) return;
       showToast("Original video could not be loaded for overlay", "error");
     }
-  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud]);
+  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, cacheMatchOpts]);
 
   const ensureOriginalVideoBlob = useCallback(async (phase, file, serverFilename) => {
     const fileLower = file?.name?.toLowerCase() || "";
@@ -4828,7 +4843,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     const applyCachedUnified = async () => {
       if (!patientCacheKey) return false;
       const cached = await loadValidationSessionArtifact(patientCacheKey, phase);
-      if (!validationCacheMatchesResult(cached, phaseResult, { relaxCsvMatch: true })) return false;
+      if (!validationCacheMatchesResult(cached, phaseResult, cacheMatchOpts)) return false;
       const blob = cached?.unifiedVideoBlob;
       if (!(blob instanceof Blob) || blob.size <= 0) return false;
       if (cached.unifiedVideoFilename && cached.unifiedVideoFilename !== filename) return false;
@@ -4842,7 +4857,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       if (res.status === 404) {
         if (await applyCachedUnified()) return;
         const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
-        if (validationCacheMatchesResult(cloud, phaseResult, { relaxCsvMatch: true }) && cloud?.unifiedVideoBlob?.size) return;
+        if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.unifiedVideoBlob?.size) return;
         if (!silent) showToast("Validation video expired on server — please re-analyze", "error");
         setVideoBlobs((prev) => {
           if (prev[phase]) URL.revokeObjectURL(prev[phase]);
@@ -4867,7 +4882,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       console.error("Failed to cache validation video:", err);
       if (await applyCachedUnified()) return;
       const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
-      if (validationCacheMatchesResult(cloud, phaseResult, { relaxCsvMatch: true }) && cloud?.unifiedVideoBlob?.size) return;
+      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.unifiedVideoBlob?.size) return;
       if (!silent) showToast("Validation video could not be loaded — try expanding it", "error");
       setVideoBlobs((prev) => {
         if (prev[phase]) URL.revokeObjectURL(prev[phase]);
@@ -4878,7 +4893,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       setVideoLoading((prev) => ({ ...prev, [phase]: false }));
       setVideoAttempts((prev) => ({ ...prev, [phase]: (prev[phase] || 0) + 1 }));
     }
-  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, demographics, sessionKey]);
+  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, demographics, sessionKey, cacheMatchOpts]);
 
 
   const [uvErrors, setUvErrors] = useState({});
@@ -6152,10 +6167,8 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
               const { ok, patients: merged } = await syncPatientsWithServer({ showToast });
               if (ok) {
                 setPatients(merged);
-                const curId = fd._loadedId || fd.demographics?.participantId;
-                if (curId) {
-                  const cur = merged.find((p) => (p._id || p.demographics?.participantId) === curId);
-                  if (cur) {
+                const cur = findPatientForOpenSession(merged, fd);
+                if (cur) {
                     setFd((prev) => {
                       const next = { ...prev, ...cur };
                       const incoming = cur.kinematics?.analysisResults;
@@ -6169,7 +6182,6 @@ const DatabaseSection = ({ fd, setFd, onLoadSession, showToast, isActive }) => {
                     if (cur.kinematics?.analysisResults) {
                       localStorage.setItem(KIN_LS_KEY, JSON.stringify(cur.kinematics.analysisResults));
                     }
-                  }
                 }
               } else {
                 refreshPatients();
@@ -8971,16 +8983,7 @@ export default function App() {
         setTimeout(attempt, 4000);
         return;
       }
-      syncPatientsWithServer({ silent: true, skipDrive: true }).then(({ ok, patients: merged }) => {
-        if (!ok) return;
-        const curId = fd._loadedId || fd.demographics?.participantId;
-        if (curId) {
-          const cur = merged.find((p) => (p._id || p.demographics?.participantId) === curId);
-          if (cur?.kinematics?.analysisResults) {
-            localStorage.setItem(KIN_LS_KEY, JSON.stringify(cur.kinematics.analysisResults));
-          }
-        }
-      });
+      syncPatientsWithServer({ silent: true, skipDrive: true });
     };
     const t = setTimeout(attempt, bootDelayMs);
     return () => {
