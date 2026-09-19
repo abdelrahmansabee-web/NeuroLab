@@ -1,4 +1,9 @@
-import { holdTrackingNoise, overlayTrackingNoisePx, resetHoldIfSeek } from "./overlayPoseHold";
+import {
+  holdDisplayLandmark,
+  holdTrackingNoise,
+  overlayTrackingNoisePx,
+  resetHoldIfSeek,
+} from "./overlayPoseHold";
 
 test("rest jitter under 2px is held; real motion updates", () => {
   const store = {};
@@ -23,4 +28,14 @@ test("seek clears the hold store", () => {
 
 test("noise floor is at least 2px", () => {
   expect(overlayTrackingNoisePx(1280, 720)).toBeGreaterThanOrEqual(2);
+});
+
+test("display hold ignores camera/MediaPipe jitter and follows real body motion", () => {
+  const store = {};
+  const still = holdDisplayLandmark(store, "shoulder", [0.40, 0.30], 1000, 800, 10);
+  const noise = holdDisplayLandmark(store, "shoulder", [0.401, 0.301], 1000, 800, 11);
+  const move = holdDisplayLandmark(store, "shoulder", [0.45, 0.30], 1000, 800, 12);
+  expect(noise).toBe(still);
+  expect(move[0]).toBeCloseTo(450, 8);
+  expect(move[1]).toBeCloseTo(240, 8);
 });

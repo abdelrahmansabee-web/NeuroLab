@@ -18,6 +18,15 @@ export function resetHoldIfSeek(store, idx, jump = 8) {
   store._idx = idx;
 }
 
+/** Canvas point from a 0–1 landmark, held until motion beats camera/MediaPipe noise. */
+export function holdDisplayLandmark(store, key, blended, cw, ch, idx) {
+  if (!blended) return null;
+  resetHoldIfSeek(store, idx);
+  const canvas = [Number(blended[0]) * cw, Number(blended[1]) * ch];
+  if (!Number.isFinite(canvas[0]) || !Number.isFinite(canvas[1])) return null;
+  return holdTrackingNoise(store, key, canvas, overlayTrackingNoisePx(cw, ch));
+}
+
 /** Keep last drawn point until canvas motion exceeds tracking noise. */
 export function holdTrackingNoise(store, key, next, pxFloor = OVERLAY_TRACKING_NOISE_PX) {
   if (!next) return null;

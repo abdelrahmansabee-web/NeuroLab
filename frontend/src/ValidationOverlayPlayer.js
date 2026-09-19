@@ -44,7 +44,7 @@ import {
   saveSharedTableSurfaceY,
   tableMarkHitGeom,
 } from "./overlayTableUserMark";
-import { resetHoldIfSeek } from "./overlayPoseHold";
+import { holdDisplayLandmark, resetHoldIfSeek } from "./overlayPoseHold";
 import {
   OVERLAY_VIDEO_PRELOAD,
   OVERLAY_VIDEO_RELOAD_MAX,
@@ -757,6 +757,7 @@ export function ValidationOverlayPlayer({
   const fingerStickyRef = useRef({});
   /** Last live finger canvas points (no EMA). Used only to reset on seeks. */
   const fingerSmoothRef = useRef({});
+  const bodyHoldRef = useRef({});
   const cupLiveRef = useRef(null);
   const tableCreamRef = useRef(null);
   const tableHintYRef = useRef(null);
@@ -899,7 +900,7 @@ export function ValidationOverlayPlayer({
       const ny = blended[1];
       const isHandLm = /^(index|thumb|pinky|middle|ring|hl_wrist)$/.test(name);
       if (isHandLm && (nx <= 0.0002 || nx >= 0.9998 || ny <= 0.0002 || ny >= 0.9998)) return null;
-      return [nx * cw, ny * ch];
+      return holdDisplayLandmark(bodyHoldRef.current, name, blended, cw, ch, idx);
     }
 
     function toCanvas(p) {
