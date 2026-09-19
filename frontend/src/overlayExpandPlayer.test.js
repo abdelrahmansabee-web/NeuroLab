@@ -1,6 +1,7 @@
 import React from "react";
 import { render, fireEvent } from "@testing-library/react";
 import { ValidationOverlayPlayer } from "./ValidationOverlayPlayer";
+import { isGhostClick, resetGhostClick } from "./uiGhostClick";
 
 beforeAll(() => {
   HTMLMediaElement.prototype.load = function load() {};
@@ -93,6 +94,55 @@ test("expand keeps the same in-card video node", () => {
   expect(home.querySelector(".validation-player-fullscreen")).toBeNull();
   expect(home.querySelector("video")).toBe(video);
   expect(document.documentElement.classList.contains("nl-overlay-expanded")).toBe(false);
+});
+
+test("Close swallows the leftover click so the top-bar menu does not open", () => {
+  resetGhostClick();
+  window.matchMedia = (query) => ({
+    matches: false,
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+  });
+  window.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  };
+  HTMLCanvasElement.prototype.getContext = () => ({
+    clearRect() {},
+    fillRect() {},
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    arc() {},
+    closePath() {},
+    stroke() {},
+    fill() {},
+    save() {},
+    restore() {},
+    measureText: () => ({ width: 10 }),
+    createLinearGradient: () => ({ addColorStop() {} }),
+    createRadialGradient: () => ({ addColorStop() {} }),
+  });
+
+  const { getByTitle, getByLabelText } = render(
+    <ValidationOverlayPlayer videoUrl="blob:test-overlay" overlayData={overlayData} phaseLabel="Post" />,
+  );
+  fireEvent.pointerDown(getByTitle("Fullscreen"));
+  fireEvent.pointerDown(getByLabelText("Close fullscreen"));
+  expect(isGhostClick()).toBe(true);
+  const seen = [];
+  const onClick = (e) => {
+    if (!e.defaultPrevented) seen.push("click");
+  };
+  document.addEventListener("click", onClick);
+  document.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  expect(seen).toEqual([]);
+  document.removeEventListener("click", onClick);
+  resetGhostClick();
 });
 
 test("expand html class stays when overlay data identity changes", () => {

@@ -45,6 +45,7 @@ import {
   tableMarkHitGeom,
 } from "./overlayTableUserMark";
 import { holdDisplayLandmark, resetHoldIfSeek } from "./overlayPoseHold";
+import { swallowGhostClick } from "./uiGhostClick";
 import {
   OVERLAY_VIDEO_PRELOAD,
   OVERLAY_VIDEO_RELOAD_MAX,
@@ -2574,7 +2575,10 @@ export function ValidationOverlayPlayer({
           <p className="text-sm font-bold text-white/90 truncate pr-3">{phaseLabel || "Validation"} — Validation</p>
           <button
             type="button"
-            onPointerDown={controlTap(exitExpanded)}
+            onPointerDown={controlTap(() => {
+              swallowGhostClick();
+              exitExpanded();
+            })}
             className="validation-control-btn flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white text-xs font-semibold hover:bg-white/[0.10] active:bg-white/[0.14] transition touch-manipulation"
             aria-label="Close fullscreen"
           >
