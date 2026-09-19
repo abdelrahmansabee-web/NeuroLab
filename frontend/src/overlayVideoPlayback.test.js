@@ -9,7 +9,11 @@ import {
   isAppleTouchVideo,
   overlayLivePaintFromCurrentTime,
   overlayNeedsRafUntilFirstVfcPaint,
+  overlayPaintWatchdogStalled,
   overlayPlaybackPaintStalled,
+  overlayKickShouldResetPresentedTime,
+  overlayKickShouldCancelLiveVfc,
+  overlayRafFallbackPlaybackTime,
   overlayPlayerMountDelayMs,
   overlaySourceLooksMismatched,
   overlayVideoLooksStalled,
@@ -99,6 +103,68 @@ test("iOS currentTime behind mediaTime is not a stalled overlay paint", () => {
     paused: true,
     ended: false,
   })).toBe(false);
+});
+
+test("watchdog sees a dropped RVFC even when currentTime lags the picture", () => {
+  expect(overlayPaintWatchdogStalled({
+    paused: false,
+    ended: false,
+    lastPaintWallMs: 1000,
+    nowMs: 1220,
+  })).toBe(true);
+  expect(overlayPaintWatchdogStalled({
+    paused: false,
+    ended: false,
+    lastPaintWallMs: 1000,
+    nowMs: 1040,
+  })).toBe(false);
+  expect(overlayPaintWatchdogStalled({
+    paused: true,
+    ended: false,
+    lastPaintWallMs: 1000,
+    nowMs: 1400,
+  })).toBe(false);
+  expect(overlayPaintWatchdogStalled({
+    paused: false,
+    ended: false,
+    lastPaintWallMs: -1,
+    nowMs: 1400,
+  })).toBe(false);
+});
+
+test("playing hitch keeps presented time and does not cancel a live RVFC", () => {
+  expect(overlayKickShouldResetPresentedTime("playing")).toBe(false);
+  expect(overlayKickShouldResetPresentedTime("focus")).toBe(false);
+  expect(overlayKickShouldResetPresentedTime("pause")).toBe(true);
+  expect(overlayKickShouldResetPresentedTime("play")).toBe(true);
+  expect(overlayKickShouldResetPresentedTime("seek")).toBe(true);
+  expect(overlayKickShouldCancelLiveVfc("playing")).toBe(false);
+  expect(overlayKickShouldCancelLiveVfc("focus")).toBe(false);
+  expect(overlayKickShouldCancelLiveVfc("stall")).toBe(true);
+  expect(overlayKickShouldCancelLiveVfc("play")).toBe(true);
+});
+
+test("RAF fallback stays on last presented time instead of lagged currentTime", () => {
+  expect(overlayRafFallbackPlaybackTime({
+    currentTime: 4.70,
+    lastPresentedTime: 5.00,
+    lastPresentedWallMs: 1000,
+    nowMs: 1080,
+    playbackRate: 1,
+  })).toBeCloseTo(5.08, 8);
+  expect(overlayRafFallbackPlaybackTime({
+    currentTime: 4.70,
+    lastPresentedTime: 5.00,
+    lastPresentedWallMs: 1000,
+    nowMs: 2000,
+    playbackRate: 1,
+  })).toBeCloseTo(5.25, 8);
+  expect(overlayRafFallbackPlaybackTime({
+    currentTime: 0.40,
+    lastPresentedTime: -1,
+    lastPresentedWallMs: -1,
+    nowMs: 1000,
+  })).toBeCloseTo(0.40, 8);
 });
 
 test("overlay pose blends between stored frames for the presented video time", () => {

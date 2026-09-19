@@ -58,7 +58,11 @@ import {
   overlayBakeFreeEventName,
   overlayLivePaintFromCurrentTime,
   overlayNeedsRafUntilFirstVfcPaint,
+  overlayPaintWatchdogStalled,
   overlayPlaybackPaintStalled,
+  overlayKickShouldResetPresentedTime,
+  overlayKickShouldCancelLiveVfc,
+  overlayRafFallbackPlaybackTime,
   overlaySourceLooksMismatched,
   overlayVideoLooksStalled,
   overlayVideoShouldRetryError,
@@ -748,6 +752,7 @@ export function ValidationOverlayPlayer({
   const canvasLayoutCacheRef = useRef({ key: "", result: null });
   const gutterLayoutCacheRef = useRef({ key: "", result: null });
   const lastPaintMediaTimeRef = useRef(-1);
+  const lastPresentedWallMsRef = useRef(-1);
   const usePresentedTimeRef = useRef(false);
   const lastPanelUpdateIdxRef = useRef(-1);
   const liveMetricsCacheRef = useRef(null);
@@ -1988,16 +1993,31 @@ export function ValidationOverlayPlayer({
 
     const useVfc = typeof video.requestVideoFrameCallback === "function";
     let rafActive = false;
+    lastPaintMediaTimeRef.current = -1;
+    lastPresentedWallMsRef.current = -1;
 
     const runPaint = (explicitTime) => {
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
       if (Number.isFinite(explicitTime)) {
         videoTimeRef.current = explicitTime;
         usePresentedTimeRef.current = true;
+        lastPaintMediaTimeRef.current = explicitTime;
+        lastPresentedWallMsRef.current = now;
+      } else if (!video.paused && useVfc) {
+        videoTimeRef.current = overlayRafFallbackPlaybackTime({
+          currentTime: video.currentTime,
+          lastPresentedTime: lastPaintMediaTimeRef.current,
+          lastPresentedWallMs: lastPresentedWallMsRef.current,
+          nowMs: now,
+          playbackRate: video.playbackRate || 1,
+        });
+        usePresentedTimeRef.current = lastPaintMediaTimeRef.current >= 0;
       } else {
         videoTimeRef.current = video.currentTime ?? 0;
         usePresentedTimeRef.current = false;
+        lastPaintMediaTimeRef.current = videoTimeRef.current;
+        lastPresentedWallMsRef.current = now;
       }
-      lastPaintMediaTimeRef.current = videoTimeRef.current;
       drawOverlay();
       usePresentedTimeRef.current = false;
       if (recording) drawRecordingFrame();
@@ -2083,7 +2103,10 @@ export function ValidationOverlayPlayer({
       const vh = video.videoHeight || 1;
       setVideoAspect(vw / vh);
       videoTimeRef.current = video.currentTime ?? 0;
-      lastPaintMediaTimeRef.current = -1;
+      if (overlayKickShouldResetPresentedTime("metadata")) {
+        lastPaintMediaTimeRef.current = -1;
+        lastPresentedWallMsRef.current = -1;
+      }
       setDisplayDuration(video.duration || 0);
       setDisplayTime(video.currentTime || 0);
       if (
@@ -2105,10 +2128,20 @@ export function ValidationOverlayPlayer({
 
     const onPlay = () => {
       setIsPlaying(true);
-      lastPaintMediaTimeRef.current = -1;
+      if (overlayKickShouldResetPresentedTime("play")) {
+        lastPaintMediaTimeRef.current = -1;
+        lastPresentedWallMsRef.current = -1;
+      }
+      stopRafLoop();
       if (useVfc) {
-        stopRafLoop();
-        vfcIdRef.current = video.requestVideoFrameCallback(onVideoFrame);
+        if (overlayKickShouldCancelLiveVfc("play") || !vfcIdRef.current) {
+          stopVfc();
+          try {
+            vfcIdRef.current = video.requestVideoFrameCallback(onVideoFrame);
+          } catch {
+            startRafLoop(true);
+          }
+        }
       } else {
         startRafLoop();
       }
@@ -2119,7 +2152,10 @@ export function ValidationOverlayPlayer({
       stopVfc();
       stopRafLoop();
       videoTimeRef.current = video.currentTime ?? 0;
-      lastPaintMediaTimeRef.current = -1;
+      if (overlayKickShouldResetPresentedTime("pause")) {
+        lastPaintMediaTimeRef.current = -1;
+        lastPresentedWallMsRef.current = -1;
+      }
       schedulePaint();
     };
 
@@ -2144,43 +2180,60 @@ export function ValidationOverlayPlayer({
     const onResize = () => {
       canvasLayoutCacheRef.current = { key: "", result: null };
       gutterLayoutCacheRef.current = { key: "", result: null };
-      lastPaintMediaTimeRef.current = -1;
       schedulePaint();
     };
 
-    const kickPlaybackPaint = () => {
-      lastPaintMediaTimeRef.current = -1;
-      stopVfc();
-      stopRafLoop();
-      if (!video.paused && !video.ended) {
-        if (useVfc) {
+    const kickPlaybackPaint = (reason = "playing") => {
+      if (overlayKickShouldResetPresentedTime(reason)) {
+        lastPaintMediaTimeRef.current = -1;
+        lastPresentedWallMsRef.current = -1;
+      }
+      if (video.paused || video.ended) {
+        schedulePaint();
+        return;
+      }
+      if (useVfc) {
+        if (overlayKickShouldCancelLiveVfc(reason) || !vfcIdRef.current) {
+          stopVfc();
           try {
             vfcIdRef.current = video.requestVideoFrameCallback(onVideoFrame);
           } catch {
             startRafLoop(true);
           }
-        } else {
-          startRafLoop();
         }
+        if (reason === "stall" && lastPaintMediaTimeRef.current >= 0) {
+          startRafLoop(true);
+        }
+        return;
       }
-      schedulePaint();
+      startRafLoop();
     };
 
     const onVisibility = () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      kickPlaybackPaint();
+      kickPlaybackPaint("focus");
+    };
+    const onPlaying = () => kickPlaybackPaint("playing");
+    const onPageShow = () => kickPlaybackPaint("pageshow");
+    const onWindowFocus = () => kickPlaybackPaint("focus");
+    const onSeeked = () => {
+      if (overlayKickShouldResetPresentedTime("seek")) {
+        lastPaintMediaTimeRef.current = -1;
+        lastPresentedWallMsRef.current = -1;
+      }
+      schedulePaint();
     };
 
     video.addEventListener("loadedmetadata", onLoadedMetadata);
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("play", onPlay);
-    video.addEventListener("playing", kickPlaybackPaint);
-    video.addEventListener("seeked", schedulePaint);
+    video.addEventListener("playing", onPlaying);
+    video.addEventListener("seeked", onSeeked);
     video.addEventListener("pause", onPause);
     video.addEventListener("ended", onVideoEnded);
     window.addEventListener("resize", onResize);
-    window.addEventListener("pageshow", kickPlaybackPaint);
-    window.addEventListener("focus", kickPlaybackPaint);
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("focus", onWindowFocus);
     document.addEventListener("visibilitychange", onVisibility);
 
     const watchdogId = window.setInterval(() => {
@@ -2195,13 +2248,22 @@ export function ValidationOverlayPlayer({
         return;
       }
       if (useVfc && vfcIdRef.current && lastPaintMediaTimeRef.current < 0) return;
-      if (overlayPlaybackPaintStalled({
-        currentTime: video.currentTime,
-        lastPaintMediaTime: lastPaintMediaTimeRef.current,
-        paused: video.paused,
-        ended: video.ended,
-      })) {
-        kickPlaybackPaint();
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      if (
+        overlayPaintWatchdogStalled({
+          paused: video.paused,
+          ended: video.ended,
+          lastPaintWallMs: lastPresentedWallMsRef.current,
+          nowMs: now,
+        })
+        || overlayPlaybackPaintStalled({
+          currentTime: video.currentTime,
+          lastPaintMediaTime: lastPaintMediaTimeRef.current,
+          paused: video.paused,
+          ended: video.ended,
+        })
+      ) {
+        kickPlaybackPaint("stall");
       }
     }, 180);
 
@@ -2212,13 +2274,13 @@ export function ValidationOverlayPlayer({
       video.removeEventListener("loadedmetadata", onLoadedMetadata);
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("play", onPlay);
-      video.removeEventListener("playing", kickPlaybackPaint);
-      video.removeEventListener("seeked", schedulePaint);
+      video.removeEventListener("playing", onPlaying);
+      video.removeEventListener("seeked", onSeeked);
       video.removeEventListener("pause", onPause);
       video.removeEventListener("ended", onVideoEnded);
       window.removeEventListener("resize", onResize);
-      window.removeEventListener("pageshow", kickPlaybackPaint);
-      window.removeEventListener("focus", kickPlaybackPaint);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("focus", onWindowFocus);
       document.removeEventListener("visibilitychange", onVisibility);
       window.clearInterval(watchdogId);
       stopVfc();

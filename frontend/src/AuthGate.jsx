@@ -6,6 +6,7 @@ const BUTTON = "w-full rounded-lg px-4 py-3 text-sm font-medium text-white bg-wh
 const LINK = "text-xs text-white/50 hover:text-white/80 transition";
 
 const AUTH_TOKEN_KEY = "neurolab_token";
+export const RAED_LAST_EMAIL_KEY = "raed_last_email";
 
 export function getAuthToken() {
   try { return localStorage.getItem(AUTH_TOKEN_KEY); } catch { return null; }
@@ -13,6 +14,16 @@ export function getAuthToken() {
 
 export function clearAuthToken() {
   try { localStorage.removeItem(AUTH_TOKEN_KEY); } catch {}
+}
+
+export function rememberLoginEmail(email) {
+  const cleaned = String(email || "").trim().toLowerCase();
+  if (!cleaned) return;
+  try { localStorage.setItem(RAED_LAST_EMAIL_KEY, cleaned); } catch {}
+}
+
+export function readRememberedEmail() {
+  try { return localStorage.getItem(RAED_LAST_EMAIL_KEY) || ""; } catch { return ""; }
 }
 
 export function authHeaders() {

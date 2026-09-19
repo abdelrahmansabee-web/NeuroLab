@@ -65,6 +65,72 @@ export function overlayPlaybackPaintStalled({
   return (t - last) > threshold;
 }
 
+/**
+ * iOS currentTime lags the picture, so it cannot see a dropped RVFC.
+ * Use wall time since the last presented-frame paint.
+ */
+export function overlayPaintWatchdogStalled({
+  paused,
+  ended,
+  lastPaintWallMs,
+  nowMs,
+  thresholdMs = OVERLAY_PAINT_STALL_SEC * 1000,
+} = {}) {
+  if (paused || ended) return false;
+  const last = Number(lastPaintWallMs);
+  const now = Number(nowMs);
+  if (!Number.isFinite(last) || last < 0 || !Number.isFinite(now)) return false;
+  return (now - last) > thresholdMs;
+}
+
+/**
+ * Decoder "playing" after a hitch must keep the last presented mediaTime.
+ * Wiping it forces a currentTime paint, so the skeleton lags then snaps.
+ */
+export function overlayKickShouldResetPresentedTime(reason) {
+  return reason === "seek"
+    || reason === "pause"
+    || reason === "play"
+    || reason === "ended"
+    || reason === "metadata"
+    || reason === "new-source";
+}
+
+/**
+ * Decoder "playing" / focus must not cancel a live RVFC. Canceling it is
+ * what makes the first callback never fire and mid-clip paints fall back
+ * to lagged currentTime.
+ */
+export function overlayKickShouldCancelLiveVfc(reason) {
+  return reason === "stall" || reason === "play";
+}
+
+/**
+ * RAF fallback clock after a presented frame exists. Do not read currentTime
+ * — on iOS that trails the picture and the skeleton cuts when RVFC returns.
+ */
+export function overlayRafFallbackPlaybackTime({
+  currentTime,
+  lastPresentedTime,
+  lastPresentedWallMs,
+  nowMs,
+  playbackRate = 1,
+  maxAheadSec = 0.25,
+} = {}) {
+  const last = Number(lastPresentedTime);
+  const wall = Number(lastPresentedWallMs);
+  const now = Number(nowMs);
+  const rate = Number(playbackRate);
+  const speed = Number.isFinite(rate) && rate > 0 ? rate : 1;
+  if (Number.isFinite(last) && last >= 0 && Number.isFinite(wall) && Number.isFinite(now)) {
+    const dt = Math.max(0, (now - wall) / 1000) * speed;
+    const cap = Math.max(0, Number(maxAheadSec) || 0) * speed;
+    return last + Math.min(dt, cap);
+  }
+  const t = Number(currentTime);
+  return Number.isFinite(t) ? t : 0;
+}
+
 function overlayFrameTime(frames, idx, t0, fps) {
   const frame = frames[idx];
   if (!frame) return t0 + idx / fps;
