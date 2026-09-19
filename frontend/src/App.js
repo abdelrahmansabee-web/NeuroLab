@@ -89,6 +89,14 @@ import {
   writeAnalyzeUi,
 } from "./kinAnalyzeGuard";
 import {
+  appendClinicHealLog,
+  classifyClinicFault,
+  clinicHealBudgetAllows,
+  clinicHealNotice,
+  noteClinicHealAttempt,
+  readClinicHealLog,
+} from "./clinicSelfHeal";
+import {
   resolveKinMetricValue,
   loadLiveKinResults,
   KIN_RESULTS_LS_KEY,
@@ -3834,6 +3842,33 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     if (!ui?.phase) return {};
     return { [ui.phase]: { pct: ui.pct, step: ui.step || "Analyzing…" } };
   });
+  const [healNotice, setHealNotice] = useState(() => readClinicHealLog()[0] || null);
+  const healBudgetRef = useRef({});
+  const reportClinicHeal = useCallback((fault, recovered, phase) => {
+    if (!fault || fault.code === "unknown") return;
+    if (recovered) {
+      if (!clinicHealBudgetAllows(healBudgetRef.current, fault.code, phase)) return;
+      healBudgetRef.current = noteClinicHealAttempt(healBudgetRef.current, fault.code, phase);
+    }
+    setHealNotice(appendClinicHealLog({ ...fault, recovered, phase }));
+    if (recovered && (fault.recover === "retry_upload" || fault.recover === "use_recalled_original")) {
+      showToast(clinicHealNotice(fault, recovered), "info");
+    }
+  }, [showToast]);
+  useEffect(() => {
+    const onRej = (ev) => {
+      const reason = ev?.reason;
+      const fault = classifyClinicFault({
+        err: reason,
+        message: reason?.message,
+        name: reason?.name,
+      });
+      if (fault.code === "unknown") return;
+      reportClinicHeal(fault, false);
+    };
+    window.addEventListener("unhandledrejection", onRej);
+    return () => window.removeEventListener("unhandledrejection", onRej);
+  }, [reportClinicHeal]);
   const [showResultsTable, setShowResultsTable] = useState(false);
   const [videoBlobs, setVideoBlobs] = useState({});
   const [videoLoading, setVideoLoading] = useState({});
@@ -4290,6 +4325,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         }
       }
       if (cachedOverlay?.frames?.length) {
+        reportClinicHeal(classifyClinicFault({
+          context: "overlay",
+          status: 404,
+          message: err?.message || "Failed to load overlay data",
+        }), true, phase);
         const metrics = resolveOverlayMetrics(cachedOverlay);
         if (syncResults) {
           setKinematicsResults((prev) => {
@@ -4310,10 +4350,14 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         return { overlay: cachedOverlay, metrics };
       }
       console.error(`Overlay data error for ${phase}:`, err);
+      reportClinicHeal(classifyClinicFault({
+        context: "overlay",
+        message: err?.message || `Overlay data failed for ${phase}`,
+      }), false, phase);
       showToast(`Overlay data failed for ${phase}`, "error");
       return null;
     }
-  }, [showToast, onChange, data, kinematicsResults, patientCacheKey, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, cacheMatchOpts]);
+  }, [showToast, onChange, data, kinematicsResults, patientCacheKey, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, cacheMatchOpts, reportClinicHeal]);
 
   const fetchOverlayDataWithRetry = useCallback(async (phase, csvFilename, opts = {}, maxAttempts = 5) => {
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -4366,6 +4410,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       if (shouldApplyCachedOriginalVideo({ force }) && await applyCachedOriginal()) return;
       if (await applyCachedOriginal()) return;
       if (!shouldUseEphemeralSpaceVideo(filename, localUploadNamesRef.current)) {
+        reportClinicHeal(classifyClinicFault({
+          context: "original-video",
+          message: "Original video expired on server — please re-upload",
+        }), false, phase);
         showToast("Original video expired on server — please re-upload", "error");
         return;
       }
@@ -4393,6 +4441,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         break;
       }
       if (!loaded) {
+        reportClinicHeal(classifyClinicFault({
+          context: "original-video",
+          message: "Original video expired on server — please re-upload",
+        }), false, phase);
         showToast("Original video expired on server — please re-upload", "error");
         return;
       }
@@ -4411,12 +4463,28 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       });
     } catch (err) {
       console.error(`Failed to cache original video for ${phase}:`, err);
-      if (await applyCachedOriginal()) return;
+      if (await applyCachedOriginal()) {
+        reportClinicHeal(classifyClinicFault({
+          context: "original-video",
+          message: err?.message || "Original video expired on server — please re-upload",
+        }), true, phase);
+        return;
+      }
       const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
-      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.originalVideoBlob?.size) return;
+      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.originalVideoBlob?.size) {
+        reportClinicHeal(classifyClinicFault({
+          context: "original-video",
+          message: err?.message || "Original video expired on server — please re-upload",
+        }), true, phase);
+        return;
+      }
+      reportClinicHeal(classifyClinicFault({
+        context: "original-video",
+        message: err?.message || "Original video could not be loaded for overlay",
+      }), false, phase);
       showToast("Original video could not be loaded for overlay", "error");
     }
-  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, cacheMatchOpts]);
+  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, cacheMatchOpts, reportClinicHeal]);
 
   const ensureOriginalVideoBlob = useCallback(async (phase, file, serverFilename) => {
     const fileLower = file?.name?.toLowerCase() || "";
@@ -4769,6 +4837,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
   const analyzeVideo = async (phase) => {
     const filename = data[vidKey(phase)];
+    const hadInputFile = data[`${vidKey(phase)}_file`] instanceof Blob && data[`${vidKey(phase)}_file`].size > 0;
     let file = analyzeSourceForOpenSession({
       file: data[`${vidKey(phase)}_file`],
       filename,
@@ -4805,8 +4874,18 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       file = analyzeSourceForOpenSession({ originalBlob: recalled, filename });
     }
     if (!(file instanceof Blob) || file.size <= 0) {
+      reportClinicHeal(classifyClinicFault({
+        context: "analyze-upload",
+        message: "Please select a file first",
+      }), false, phase);
       showToast("Please select a file first", "error");
       return;
+    }
+    if (!hadInputFile) {
+      reportClinicHeal(classifyClinicFault({
+        context: "analyze-upload",
+        message: "Please select a file first",
+      }), true, phase);
     }
     if (file.name) localUploadNamesRef.current.add(file.name);
     if (filename) localUploadNamesRef.current.add(filename);
@@ -4880,6 +4959,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       } catch (err) {
         if (uploadController.signal.aborted && !leaveAbortRef.current) throw err;
         if (shouldKeepAnalyzingAfterUploadDrop(err, { hasJobId: false }) && !uploadController.signal.aborted) {
+          reportClinicHeal(classifyClinicFault({
+            context: "analyze-upload",
+            name: err?.name,
+            message: err?.message,
+            hasJobId: false,
+          }), true, phase);
           setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 5, step: "Retrying upload…" } }));
           writeAnalyzeUi({ phase, pct: 5, step: "Retrying upload…", uploading: true });
           res = await postOnce();
@@ -4916,6 +5001,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
           return;
         }
         if (shouldKeepAnalyzingAfterUploadDrop(err, { hasJobId: false })) {
+          reportClinicHeal(classifyClinicFault({
+            context: "analyze-upload",
+            name: err?.name,
+            message: err?.message,
+            hasJobId: false,
+          }), true, phase);
           setKinAnalyzeActive(true);
           return;
         }
@@ -4925,6 +5016,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         setKinAnalyzeActive(false);
         return;
       }
+      reportClinicHeal(classifyClinicFault({
+        context: "analyze-upload",
+        name: err?.name,
+        message: err?.message,
+        hasJobId: Boolean(analyzeJobIdForPhase(phase, readAnalyzeUi(), dataRef.current?.analyzeJobs)),
+      }), false, phase);
       if (err.name === "AbortError") {
         showToast(`Analysis cancelled for ${phase}`, "info");
       } else {
@@ -5119,6 +5216,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.unifiedVideoBlob?.size) return;
       if (await applyCachedUnified()) return;
       if (!shouldUseEphemeralSpaceVideo(filename, localUploadNamesRef.current)) {
+        reportClinicHeal(classifyClinicFault({
+          context: "validation-video",
+          message: "Validation video expired on server — please re-analyze",
+        }), false, phase);
         if (!silent) showToast("Validation video expired on server — please re-analyze", "error");
         setVideoBlobs((prev) => {
           if (prev[phase]) URL.revokeObjectURL(prev[phase]);
@@ -5129,6 +5230,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       const url = `${API_BASE}/video/${encodeURIComponent(filename)}`;
       const res = await fetch(url);
       if (res.status === 404) {
+        reportClinicHeal(classifyClinicFault({
+          context: "validation-video",
+          status: 404,
+          message: "Validation video expired on server — please re-analyze",
+        }), false, phase);
         if (!silent) showToast("Validation video expired on server — please re-analyze", "error");
         setVideoBlobs((prev) => {
           if (prev[phase]) URL.revokeObjectURL(prev[phase]);
@@ -5151,9 +5257,25 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       });
     } catch (err) {
       console.error("Failed to cache validation video:", err);
-      if (await applyCachedUnified()) return;
+      if (await applyCachedUnified()) {
+        reportClinicHeal(classifyClinicFault({
+          context: "validation-video",
+          message: err?.message || "Validation video expired on server — please re-analyze",
+        }), true, phase);
+        return;
+      }
       const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
-      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.unifiedVideoBlob?.size) return;
+      if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.unifiedVideoBlob?.size) {
+        reportClinicHeal(classifyClinicFault({
+          context: "validation-video",
+          message: err?.message || "Validation video expired on server — please re-analyze",
+        }), true, phase);
+        return;
+      }
+      reportClinicHeal(classifyClinicFault({
+        context: "validation-video",
+        message: err?.message || "Validation video could not be loaded — try expanding it",
+      }), false, phase);
       if (!silent) showToast("Validation video could not be loaded — try expanding it", "error");
       setVideoBlobs((prev) => {
         if (prev[phase]) URL.revokeObjectURL(prev[phase]);
@@ -5164,7 +5286,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       setVideoLoading((prev) => ({ ...prev, [phase]: false }));
       setVideoAttempts((prev) => ({ ...prev, [phase]: (prev[phase] || 0) + 1 }));
     }
-  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, demographics, sessionKey, cacheMatchOpts]);
+  }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, demographics, sessionKey, cacheMatchOpts, reportClinicHeal]);
 
 
   const [uvErrors, setUvErrors] = useState({});
@@ -5509,6 +5631,19 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   return (
     <div className="space-y-5">
       <SH icon={Cpu} en="Kinematics AI Laboratory" tr="Kinematik Yapay Zeka Laboratuvarı" badge="Pre · Post · Healthy side" />
+
+      {healNotice && (
+        <div
+          className={`rounded-xl border px-3 py-2 text-[11px] ${
+            healNotice.recovered
+              ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-100"
+              : "border-amber-400/25 bg-amber-500/10 text-amber-100"
+          }`}
+        >
+          <p className="font-extrabold uppercase tracking-wide text-[10px] opacity-80">Clinic watch</p>
+          <p className="mt-0.5 leading-snug">{clinicHealNotice(healNotice, healNotice.recovered)}</p>
+        </div>
+      )}
 
       <Glass className="p-5 sm:p-6">
         <div className="flex items-center justify-between mb-3">
