@@ -87,6 +87,7 @@ import { inferWmftFromKinematics, applyWmftInference } from "./wmftInference";
 import {
   CLINICAL_MOVEMENT_TASKS,
   CLINICAL_DOMAIN_LABELS,
+  CLINIC_UE_SPSS_KEYS,
   clinicalTaskById,
   clinicalTaskDomain,
   clinicalTasksForDomain,
@@ -3822,7 +3823,6 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     try { return JSON.parse(localStorage.getItem(KIN_LS_EXP_KEY)) || {}; } catch { return {}; }
   });
   const [kinResultsTab, setKinResultsTab] = useState("compare");
-  const [showAllKinMetrics, setShowAllKinMetrics] = useState(false);
   const [mediaPreview, setMediaPreview] = useState(null);
   const [analysisStatus, setAnalysisStatus] = useState({});
   const [analysisProgress, setAnalysisProgress] = useState({});
@@ -5044,7 +5044,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   const KIN_TIPS = {
     task_complete: "Did the patient finish the expected phases (reach, lift/transport, return)? Higher = completed.",
     task_completion_ratio: "Share of expected task phases detected. Compare this before full-task smoothness.",
-    nvp_reach: "Velocity peaks on the reach window (onset → reach end). Same peak_frames as the overlay dots, not peaks before onset.",
+    nvp_reach: "Velocity peaks on the reach path from the rest wrist landmark through reach end. Same peaks as the overlay NVP dots. Not the index tip.",
     nvp_drink: "Velocity peaks while lifting the cup from the table to the highest point achieved.",
     nvp_transport: "Velocity peaks during the transport / drink-lift phase (same as NVP drink for drink task).",
     nvp_return: "Velocity peaks while returning the cup/hand to the table.",
@@ -5060,9 +5060,9 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     grasp_dwell_sec: "Terminal low-speed time at the end of reach (cup grasp fixation). Functional — not counted as path pause.",
     functional_hold_sec: "Grasp dwell + mouth/face hold during transport. Functional time, not path pause.",
     pause_time_sec_total: "All low-speed time including grasp/mouth dwell (exploratory).",
-    nvp: "NVP on the validation-video panel (peaks from movement onset through the current/window end). Same number as the NVP chip on the overlay.",
-    nvp_reach: "Velocity peaks on the reach window from the same peak_frames as the overlay. Total NVP cannot be lower than this.",
-    straightness: "Path straightness from the validation-video panel (same formula and 2 decimals).",
+    nvp: "NVP on the validation-video panel (peaks from the rest wrist landmark through the current/window end). Not the index tip. Same number as the NVP chip on the overlay.",
+    nvp_reach: "Velocity peaks on the reach path from the rest wrist landmark, not the index tip. Total NVP cannot be lower than this.",
+    straightness: "Path straightness from the rest wrist landmark to the current wrist (displacement / path length). Not the index tip.",
     pause_time_sec: "Pause time from the validation-video panel: every frame below 5% of peak hand speed (no min-run / dwell split).",
     number_of_stops: "Stops from the validation-video panel: speed threshold crossings (same as Pause / stops).",
     trunk_ratio: "Trunk / palm displacement ratio from the validation-video panel (0–1, not percent).",
@@ -5075,8 +5075,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     trunk_ratio: "Trunk displacement / palm displacement. Lower = less trunk compensation.",
     shoulder_elevation_cm: "How much the affected shoulder rose (rest → peak), in cm using the 85 cm table scale. Lower = less shoulder hike.",
     shoulder_elevation_palm_ratio: "Shoulder elevation as a unitless palm-anchor ratio (exploratory).",
-    elbow_angle_mean_deg: "Mean elbow flexion angle during the movement window.",
-    shoulder_flexion_mean_deg: "Mean shoulder flexion angle (trunk–shoulder–elbow) during the movement window.",
+    elbow_angle_mean_deg: "Mean elbow extension angle (interior shoulder–elbow–wrist) during the movement window.",
+    shoulder_flexion_mean_deg: "Mean shoulder flexion like a goniometer: midaxillary line (shoulder to same-side hip) vs humerus (shoulder to elbow). 0° = arm alongside the trunk.",
+    shoulder_abduction_mean_deg: "Mean shoulder abduction angle during the movement window. Higher = worse compensatory lift.",
+    trunk_forward_displacement_cm: "Peak trunk displacement toward the target, in cm using the 85 cm table scale. Lower = less trunk compensation.",
+    average_hand_velocity_cm_s: "Mean hand speed during the movement window (cm/s, 85 cm table scale).",
     movement_time_sec: "Active movement duration (onset to offset).",
     peak_velocity_cm_s: "Peak hand speed during reach (cm/s), scaled with the 85 cm table width. Higher = faster reach.",
     peak_elbow_ang_vel_deg_s: "Peak elbow angular velocity during the reach (deg/s).",
@@ -5085,6 +5088,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     tremor_8_12hz_power: "Hand-speed power in 8–12 Hz from the validation video overlay (same as Tremor 8–12 Hz on the skeleton). Lower = less tremor. Index/ADL tremor stay under Show all.",
     fine_motor_quality_index: "Hand / finger quality 0–100 from the validation overlay: index-tip smoothness (fewer peaks/micro-stops, lower speed CV) plus pinch opening when available. Higher = better.",
     shoulder_abduction_rom_deg: "Shoulder abduction range during the reach (validation overlay).",
+    adl_shoulder_abduction_mean_deg: "Mean shoulder abduction during drink transport (lower = less compensatory lift).",
     forearm_pronation_supination_rom_deg: "Forearm pronation/supination ROM (validation overlay).",
     fine_motor_quality_index: "Fine motor quality index 0–100 (validation overlay).",
     adl_shoulder_abduction_mean_deg: "Mean shoulder abduction during drink transport (lower = less compensatory lift).",
@@ -5097,10 +5101,9 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     pause_stops_panel: "Same Pause / stops row as the validation-video panel.",
   };
 
-  const CARD_PREVIEW_KEYS = ["task_complete", "nvp_reach", "nvp_drink", "nvp_total", "drink_lift_height_cm"];
+  const CARD_PREVIEW_KEYS = CLINIC_UE_SPSS_KEYS;
 
   const variables = orderedKinematicResultsTableVars({
-    includeExtended: showAllKinMetrics,
     clinicalTask: clinicalMovementTask,
     kinematicsResults,
   }).map((v) => ({
@@ -5587,22 +5590,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
             <div className="min-w-0">
               <p className="text-sm font-extrabold text-white/80">Kinematic Results</p>
               <p className="text-[10px] text-white/40 mt-0.5">
-                {showAllKinMetrics ? "All stored metrics" : "Core movement quality (15)"}
+                Clinic SPSS variables ({CLINIC_UE_SPSS_KEYS.length})
               </p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowAllKinMetrics((v) => !v)}
-                className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all ${
-                  showAllKinMetrics
-                    ? "bg-white/12 border-white/25 text-white"
-                    : "bg-white/[0.04] border-white/[0.1] text-white/60 hover:text-white/85"
-                }`}
-                title={showAllKinMetrics ? "Show core quality metrics only" : "Show every stored metric"}
-              >
-                {showAllKinMetrics ? "Core only" : "Show all"}
-              </button>
               <GBtn variant="danger" onClick={clearAllKin} className="text-[10px] py-1.5 px-3" title="Remove all results">
                 <X className="w-3 h-3 mr-1" />
                 Clear All
@@ -8286,14 +8277,18 @@ const AnalysisDashboard = () => {
             <p className="text-sm text-white/70 leading-relaxed mb-4">{STUDY_DESIGN.design} — Primary: <strong className="text-violet-300">{STUDY_DESIGN.primaryOutcome}</strong> — α={STUDY_DESIGN.alpha}</p>
             <div className="grid md:grid-cols-2 gap-4 text-xs">
               <div>
-                <p className="font-bold text-teal-300 mb-2">Kinematic ({KINEMATIC_VARS.length} vars — manuscript tiers)</p>
+                <p className="font-bold text-teal-300 mb-2">Kinematic ({CLINIC_UE_SPSS_KEYS.length} clinic SPSS vars)</p>
                 <ul className="space-y-1 text-white/60">
-                  {KINEMATIC_VARS.map((k) => (
+                  {CLINIC_UE_SPSS_KEYS.map((key) => {
+                    const k = KINEMATIC_VARS.find((v) => v.key === key);
+                    if (!k) return null;
+                    return (
                     <li key={k.key}>
                       • {k.label} ({k.key}) — {k.tier}
                       {k.dir === "lower" ? " ↓" : k.dir === "higher" ? " ↑" : ""}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </div>
               <div>
@@ -8418,7 +8413,7 @@ const AnalysisDashboard = () => {
         </Glass>
           {backendReport?.holm_secondary_kinematic && (
         <Glass className="p-5">
-              <p className="text-xs font-extrabold text-amber-300 uppercase tracking-widest mb-4">Holm–Bonferroni (secondary kinematic, k={KINEMATIC_VARS.filter((k) => k.tier === "secondary").length})</p>
+              <p className="text-xs font-extrabold text-amber-300 uppercase tracking-widest mb-4">Holm–Bonferroni (clinic SPSS kinematic, k={CLINIC_UE_SPSS_KEYS.length})</p>
               <div className="overflow-x-auto rounded-xl border border-amber-500/20">
             <table className="w-full text-xs">
               <thead>

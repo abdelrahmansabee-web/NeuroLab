@@ -1,3 +1,6 @@
+import { enrichKinematicCompletion, FULL_TASK_SMOOTHNESS_KEYS, REACH_WINDOW_SMOOTHNESS_KEYS, fullTaskSmoothnessComparable } from "./taskCompletion";
+import { CLINIC_UE_SPSS_KEYS, coreMetricKeysForTask, isClinicUeSpssTaskId } from "./clinicalTasks";
+
 /**
  * PETTLEP AOMI RCT — Analysis plan, master dataset, SPSS syntax, preliminary stats.
  * Aligned with manuscript: 2×2 mixed ANOVA (Group × Time), n=28, primary = SPARC.
@@ -5,85 +8,247 @@
 
 export const STUDY_DESIGN = {
   title: "Immediate Effects of PETTLEP-Based AOMI on Upper Limb Kinematics",
-  design: "Single-blind, pretest–posttest, parallel RCT",
+  design: "Single-blind, pretest–posttest, parallel RCT; UE reach/ADL (+ optional LE tasks)",
   groups: { "1": "AOMI", "2": "Control" },
   targetN: 28,
   perGroup: 14,
   alpha: 0.05,
-  primaryOutcome: "NVP / straightness / pause time / stops",
+  primaryOutcome: "Task completion, then reach-window NVP / straightness / pause / stops",
 };
 
-/** Reach-to-grasp protocol kinematic variables (ethics-form final set) */
+/** Reach-to-grasp / drink protocol kinematic variables (+ LE when selected).
+ *  UI table defaults to task core keys; full list remains for SPSS / "Show all".
+ */
 export const KINEMATIC_VARS = [
-  // Primary outcomes
-  { key: "nvp", label: "Number of Velocity Peaks (NVP)", unit: "count", dir: "lower", tier: "primary" },
-  { key: "straightness", label: "Path straightness", unit: "ratio", dir: "higher", tier: "primary" },
-  { key: "pause_time_sec", label: "Pause time", unit: "s", dir: "lower", tier: "primary" },
-  { key: "number_of_stops", label: "Number of stops", unit: "count", dir: "lower", tier: "primary" },
-  // Secondary outcomes
-  { key: "trunk_ratio", label: "Trunk ratio", unit: "ratio", dir: "lower", tier: "secondary" },
-  { key: "shoulder_elevation_norm", label: "Shoulder elevation (norm)", unit: "ratio", dir: "lower", tier: "secondary", fallback: "shoulder_vert_norm" },
-  { key: "shoulder_elevation_table_ratio", label: "Shoulder elevation / table", unit: "ratio", dir: "lower", tier: "secondary" },
-  { key: "shoulder_elevation_palm_ratio", label: "Shoulder elevation / palm anchor", unit: "ratio", dir: "lower", tier: "secondary" },
-  { key: "elbow_angle_mean_deg", label: "Elbow angle (mean)", unit: "deg", dir: "none", tier: "secondary" },
-  { key: "movement_time_sec", label: "Movement time", unit: "s", dir: "lower", tier: "secondary" },
-  { key: "peak_elbow_ang_vel_deg_s", label: "Peak elbow angular velocity", unit: "deg/s", dir: "higher", tier: "secondary" },
+  // ── UE core movement quality (default UI) ──
+  { key: "task_complete", label: "Task complete", unit: "0/1", dir: "higher", tier: "primary", core: true },
+  { key: "nvp_reach", label: "NVP (reach)", unit: "count", dir: "lower", tier: "primary", core: true },
+  { key: "nvp_drink", label: "NVP (drink lift)", unit: "count", dir: "lower", tier: "primary", core: true },
+  { key: "nvp_return", label: "NVP (return)", unit: "count", dir: "lower", tier: "primary", core: true },
+  { key: "nvp_total", label: "NVP (total)", unit: "count", dir: "lower", tier: "primary", core: true },
+  { key: "drink_lift_height_cm", label: "Drink lift height", unit: "cm", dir: "higher", tier: "primary", core: true },
+  { key: "straightness", label: "Path straightness", unit: "ratio", dir: "higher", tier: "primary", core: true },
+  { key: "pause_time_sec", label: "Pause time", unit: "s", dir: "lower", tier: "primary", core: true },
+  { key: "number_of_stops", label: "Number of stops", unit: "count", dir: "lower", tier: "primary", core: true },
+  { key: "trunk_ratio", label: "Trunk ratio", unit: "ratio", dir: "lower", tier: "secondary", core: true },
+  { key: "shoulder_elevation_cm", label: "Shoulder elevation", unit: "cm", dir: "lower", tier: "secondary", core: true },
+  { key: "peak_velocity_cm_s", label: "Peak hand velocity", unit: "cm/s", dir: "higher", tier: "secondary", core: true },
+  { key: "movement_time_sec", label: "Movement time", unit: "s", dir: "lower", tier: "secondary", core: true },
+  { key: "trunk_forward_displacement_cm", label: "Trunk forward displacement", unit: "cm", dir: "lower", tier: "secondary", core: true },
+  { key: "average_hand_velocity_cm_s", label: "Average hand velocity", unit: "cm/s", dir: "higher", tier: "secondary", core: true },
+  { key: "tremor_8_12hz_power", label: "Tremor 8–12 Hz", unit: "rel.", dir: "lower", tier: "secondary", core: true },
+  { key: "fine_motor_quality_index", label: "Hand / finger quality", unit: "0–100", dir: "higher", tier: "secondary", core: true },
+
+  // ── UE isolated-task / ADL extras (shown when task selected or Show all) ──
+  { key: "forearm_pronation_supination_rom_deg", label: "Pron/sup ROM", unit: "°", dir: "none", tier: "secondary", core: true },
+  { key: "peak_forearm_rotation_vel_deg_s", label: "Peak forearm rotation", unit: "°/s", dir: "higher", tier: "secondary", core: true },
+  { key: "sparc_forearm_rotation", label: "SPARC forearm rotation", unit: "", dir: "higher", tier: "exploratory" },
+  { key: "shoulder_abduction_rom_deg", label: "Abd ROM", unit: "°", dir: "none", tier: "secondary", core: true },
+  { key: "shoulder_abduction_mean_deg", label: "Shoulder abduction angle (mean)", unit: "°", dir: "lower", tier: "secondary", core: true },
+  { key: "peak_shoulder_abduction_vel_deg_s", label: "Peak abduction speed", unit: "°/s", dir: "higher", tier: "exploratory" },
+  { key: "shoulder_abduction_trunk_compensation_index", label: "Abduction+trunk compensation", unit: "0–1", dir: "lower", tier: "secondary", core: true },
+  { key: "pinch_grasp_quality_index", label: "Pinch/grasp quality", unit: "0–100", dir: "higher", tier: "secondary", core: true },
+  { key: "pinch_tremor_8_12hz_power", label: "Pinch tremor 8–12 Hz", unit: "rel.", dir: "lower", tier: "exploratory" },
+  { key: "finger_flex_ext_quality_index", label: "Finger flex/ext quality", unit: "0–100", dir: "higher", tier: "exploratory" },
+
+  // ── Extended UE (backend / SPSS / Show all) ──
+  { key: "task_completion_ratio", label: "Task completion ratio", unit: "0–1", dir: "higher", tier: "exploratory" },
+  { key: "nvp_transport", label: "NVP (transport)", unit: "count", dir: "lower", tier: "exploratory" },
+  { key: "lift_height_cm", label: "Lift height (transport)", unit: "cm", dir: "higher", tier: "exploratory" },
+  { key: "drink_lift_height_sw", label: "Drink lift height (SW)", unit: "SW", dir: "higher", tier: "exploratory" },
+  { key: "lift_height_sw", label: "Lift height (transport, SW)", unit: "SW", dir: "higher", tier: "exploratory" },
+  { key: "straightness_reach", label: "Path straightness (reach window)", unit: "ratio", dir: "higher", tier: "exploratory" },
+  { key: "pause_time_sec_reach", label: "Pause time (reach window)", unit: "s", dir: "lower", tier: "exploratory" },
+  { key: "number_of_stops_reach", label: "Number of stops (reach window)", unit: "count", dir: "lower", tier: "exploratory" },
+  { key: "nvp", label: "NVP (alias = reach)", unit: "count", dir: "lower", tier: "exploratory" },
+  { key: "sip_bout_count", label: "Sip / mouth approaches", unit: "count", dir: "none", tier: "exploratory" },
+  { key: "grasp_dwell_sec", label: "Grasp / hold dwell", unit: "s", dir: "none", tier: "exploratory" },
+  { key: "functional_hold_sec", label: "Functional hold (grasp+mouth)", unit: "s", dir: "none", tier: "exploratory" },
+  { key: "pause_time_sec_total", label: "Pause time (total incl. dwell)", unit: "s", dir: "lower", tier: "exploratory" },
+  { key: "nvp_full_task", label: "NVP (full task, incl. sips)", unit: "count", dir: "lower", tier: "exploratory" },
+  { key: "shoulder_elevation_palm_ratio", label: "Shoulder elevation (ratio)", unit: "ratio", dir: "lower", tier: "exploratory" },
+  { key: "elbow_angle_mean_deg", label: "Elbow extension angle (mean)", unit: "deg", dir: "none", tier: "secondary", core: true },
+  { key: "shoulder_flexion_mean_deg", label: "Shoulder flexion angle (mean)", unit: "deg", dir: "none", tier: "secondary", core: true },
+  { key: "peak_elbow_ang_vel_deg_s", label: "Peak elbow angular velocity", unit: "deg/s", dir: "higher", tier: "exploratory" },
+  { key: "peak_shoulder_flexion_vel_deg_s", label: "Peak shoulder flexion velocity", unit: "deg/s", dir: "higher", tier: "exploratory" },
+  { key: "index_tremor_8_12hz_power", label: "Index tremor 8–12 Hz", unit: "rel.", dir: "lower", tier: "exploratory" },
+  { key: "adl_tremor_8_12hz_power", label: "Tremor 8–12 Hz (ADL phase)", unit: "rel.", dir: "lower", tier: "exploratory" },
+  { key: "tremor_peak_freq_hz", label: "Tremor peak frequency", unit: "Hz", dir: "none", tier: "exploratory" },
+  { key: "movement_quality_index", label: "Movement quality index", unit: "0–100", dir: "higher", tier: "exploratory" },
+
+  // ── LE / gait / STS / squat / balance (kept; shown for LE tasks) ──
+  { key: "lr_symmetry_index", label: "L/R symmetry", unit: "0–1", dir: "higher", tier: "primary", core: true },
+  { key: "gait_speed_m_s", label: "Gait speed", unit: "m/s", dir: "higher", tier: "primary", core: true },
+  { key: "cadence_spm", label: "Cadence", unit: "steps/min", dir: "higher", tier: "primary", core: true },
+  { key: "ankle_df_peak_L_deg", label: "Ankle DF peak L", unit: "deg", dir: "higher", tier: "primary", core: true },
+  { key: "ankle_df_peak_R_deg", label: "Ankle DF peak R", unit: "deg", dir: "higher", tier: "primary", core: true },
+  { key: "ankle_pf_peak_L_deg", label: "Ankle PF peak L", unit: "deg", dir: "higher", tier: "primary", core: true },
+  { key: "ankle_pf_peak_R_deg", label: "Ankle PF peak R", unit: "deg", dir: "higher", tier: "primary", core: true },
+  { key: "foot_drop_index", label: "Foot-drop index", unit: "0–1", dir: "lower", tier: "secondary", core: true },
+  { key: "hip_hike_index", label: "Hip-hike index", unit: "0–1", dir: "lower", tier: "secondary", core: true },
+  { key: "circumduction_index", label: "Circumduction index", unit: "0–1", dir: "lower", tier: "secondary", core: true },
+  { key: "trunk_lean_max_deg", label: "Trunk lean max", unit: "deg", dir: "lower", tier: "secondary", core: true },
+  { key: "sparc_com", label: "SPARC (COM)", unit: "", dir: "higher", tier: "exploratory" },
+  { key: "stiff_knee_index", label: "Stiff-knee index", unit: "0–1", dir: "lower", tier: "exploratory" },
+  { key: "push_off_deficit_index", label: "Push-off deficit", unit: "0–1", dir: "lower", tier: "exploratory" },
+  { key: "vaulting_index", label: "Vaulting index", unit: "0–1", dir: "lower", tier: "exploratory" },
+  { key: "sts_time_sec", label: "STS time", unit: "s", dir: "lower", tier: "secondary", core: true },
+  { key: "com_rise_norm", label: "COM rise (HW)", unit: "", dir: "higher", tier: "secondary", core: true },
+  { key: "weight_shift_asymmetry", label: "Weight-shift asymmetry", unit: "0–1", dir: "lower", tier: "secondary", core: true },
+  { key: "trunk_compensation_index", label: "Trunk compensation", unit: "0–1", dir: "lower", tier: "secondary", core: true },
+  { key: "squat_depth_norm", label: "Squat depth (HW)", unit: "", dir: "higher", tier: "secondary", core: true },
+  { key: "min_knee_angle_deg", label: "Min knee (squat)", unit: "deg", dir: "none", tier: "secondary", core: true },
+  { key: "knee_rom_L_deg", label: "Knee ROM L", unit: "deg", dir: "none", tier: "exploratory" },
+  { key: "knee_rom_R_deg", label: "Knee ROM R", unit: "deg", dir: "none", tier: "exploratory" },
+  { key: "com_sway_path_norm", label: "COM sway path", unit: "HW", dir: "lower", tier: "secondary", core: true },
+  { key: "com_sway_area_norm", label: "COM sway area", unit: "HW²", dir: "lower", tier: "secondary", core: true },
+  { key: "sway_velocity_mean", label: "Sway velocity", unit: "px/s", dir: "lower", tier: "secondary", core: true },
+  { key: "lr_loading_symmetry", label: "Loading symmetry", unit: "0–1", dir: "higher", tier: "secondary", core: true },
 ];
 
+/** Default UE results-table order — clinic SPSS set. */
+export const KINEMATIC_CORE_DISPLAY_ORDER = [...CLINIC_UE_SPSS_KEYS];
+
+/** Full order when user expands "Show all metrics". */
 export const KINEMATIC_DISPLAY_ORDER = [
+  ...KINEMATIC_CORE_DISPLAY_ORDER,
+  "task_completion_ratio",
+  "nvp_transport",
+  "lift_height_cm",
+  "drink_lift_height_sw",
+  "lift_height_sw",
   "nvp",
-  "straightness",
-  "pause_time_sec",
-  "number_of_stops",
-  "trunk_ratio",
-  "shoulder_elevation_norm",
-  "shoulder_elevation_table_ratio",
+  "straightness_reach",
+  "pause_time_sec_reach",
+  "number_of_stops_reach",
+  "sip_bout_count",
+  "grasp_dwell_sec",
+  "functional_hold_sec",
+  "nvp_full_task",
+  "pause_time_sec_total",
   "shoulder_elevation_palm_ratio",
-  "elbow_angle_mean_deg",
-  "movement_time_sec",
   "peak_elbow_ang_vel_deg_s",
+  "peak_shoulder_flexion_vel_deg_s",
+  "forearm_pronation_supination_rom_deg",
+  "peak_forearm_rotation_vel_deg_s",
+  "shoulder_abduction_rom_deg",
+  "pinch_grasp_quality_index",
+  "finger_flex_ext_quality_index",
+  "index_tremor_8_12hz_power",
+  "adl_tremor_8_12hz_power",
+  "tremor_peak_freq_hz",
+  "movement_quality_index",
+  "lr_symmetry_index",
+  "gait_speed_m_s",
+  "cadence_spm",
+  "ankle_df_peak_L_deg",
+  "ankle_df_peak_R_deg",
+  "ankle_pf_peak_L_deg",
+  "ankle_pf_peak_R_deg",
+  "foot_drop_index",
+  "hip_hike_index",
+  "circumduction_index",
+  "trunk_lean_max_deg",
+  "sts_time_sec",
+  "com_sway_path_norm",
 ];
-
 /** Manuscript / ethics-form reference pattern (Pre → Post → Healthy) */
 export const MANUSCRIPT_KINEMATIC_TARGETS = {
+  nvp_reach: { pre: 3.5, post: 2.5, healthy: 1.5 },
   nvp: { pre: 3.5, post: 2.5, healthy: 1.5 },
   straightness: { pre: 0.82, post: 0.88, healthy: 0.94 },
   pause_time_sec: { pre: 0.45, post: 0.25, healthy: 0.10 },
   number_of_stops: { pre: 2.5, post: 1.5, healthy: 0.5 },
   trunk_ratio: { pre: 0.32, post: 0.18, healthy: 0.03 },
-  shoulder_elevation_norm: { pre: 0.18, post: 0.12, healthy: 0.065 },
-  shoulder_elevation_table_ratio: { pre: 0.25, post: 0.16, healthy: 0.09 },
+  shoulder_elevation_cm: { pre: 4.0, post: 2.5, healthy: 1.2 },
   shoulder_elevation_palm_ratio: { pre: 0.25, post: 0.16, healthy: 0.09 },
-  elbow_angle_mean_deg: { pre: 125, post: 130, healthy: 135 },
+  drink_lift_height_cm: { pre: 18, post: 24, healthy: 30 },
   movement_time_sec: { pre: 2.2, post: 1.7, healthy: 1.2 },
+  peak_velocity_cm_s: { pre: 35, post: 48, healthy: 65 },
   peak_elbow_ang_vel_deg_s: { pre: 160.0, post: 200.0, healthy: 240.0 },
+  peak_shoulder_flexion_vel_deg_s: { pre: 120.0, post: 150.0, healthy: 180.0 },
 };
 
-export function orderedKinematicVars() {
+export function orderedKinematicVars(order = KINEMATIC_CORE_DISPLAY_ORDER) {
   const byKey = Object.fromEntries(KINEMATIC_VARS.map((v) => [v.key, v]));
-  return KINEMATIC_DISPLAY_ORDER.map((k) => byKey[k]).filter(Boolean);
+  return order.map((k) => byKey[k]).filter(Boolean);
 }
 
-export function orderedKinematicResultsTableVars(opts = {}) {
-  void opts;
-  return orderedKinematicVars();
+/** Extra rows only when "Show all metrics" is on (validation overlay extras). */
+export const VALIDATION_PANEL_TABLE_EXTRAS = [
+  { key: "tremor_8_12hz_power", label: "Tremor 8–12 Hz", unit: "rel.", dir: "lower" },
+  { key: "index_tremor_8_12hz_power", label: "Index tremor 8–12 Hz", unit: "rel.", dir: "lower" },
+  { key: "tremor_peak_freq_hz", label: "Tremor peak freq", unit: "Hz", dir: "none" },
+  { key: "movement_quality_index", label: "Movement quality", unit: "0–100", dir: "higher" },
+  { key: "shoulder_abduction_rom_deg", label: "Abd ROM (reach)", unit: "°", dir: "none" },
+  { key: "forearm_pronation_supination_rom_deg", label: "Pron/sup ROM", unit: "°", dir: "none" },
+  { key: "adl_shoulder_abduction_mean_deg", label: "Abduction (ADL drink)", unit: "°", dir: "lower" },
+  { key: "adl_shoulder_abduction_rom_deg", label: "Abd ROM (ADL)", unit: "°", dir: "lower" },
+  { key: "adl_finger_flex_ext_quality_index", label: "Finger flex/ext Q (ADL)", unit: "0–100", dir: "higher" },
+  { key: "adl_head_forward_flexion_compensation_index", label: "Head compensation (ADL)", unit: "0–1", dir: "lower" },
+  { key: "adl_tremor_8_12hz_power", label: "Tremor (ADL)", unit: "rel.", dir: "lower" },
+  { key: "pause_stops_panel", label: "Pause / stops", unit: "s / count", dir: "lower", synthetic: true },
+  {
+    key: "peak_velocity_panel",
+    label: "Peak velocity",
+    unit: "cm/s",
+    dir: "higher",
+    panelAlias: true,
+  },
+];
+
+function kinematicTierGroup(tier) {
+  if (tier === "primary") return "Primary";
+  if (tier === "secondary") return "Secondary";
+  return "Exploratory";
+}
+
+function kinematicDirToDirection(dir) {
+  if (dir === "lower") return "lower";
+  if (dir === "higher") return "higher";
+  return "none";
+}
+
+/**
+ * Results table rows.
+ * @param {{ includeExtended?: boolean, clinicalTask?: string|null, kinematicsResults?: object|null }} opts
+ */
+export function orderedKinematicResultsTableVars({
+  includeExtended = false,
+  clinicalTask = null,
+  kinematicsResults = null,
+} = {}) {
+  const resultTask =
+    clinicalTask
+    || kinematicsResults?.pre?.clinical_task
+    || kinematicsResults?.post?.clinical_task
+    || kinematicsResults?.baseline?.clinical_task
+    || null;
+  const taskId = String(resultTask || "study_reach_grasp").toLowerCase();
+  void includeExtended;
+  const taskCore = isClinicUeSpssTaskId(taskId)
+    ? CLINIC_UE_SPSS_KEYS
+    : (coreMetricKeysForTask(taskId) || CLINIC_UE_SPSS_KEYS);
+  return orderedKinematicVars(taskCore).map((v) => ({
+    group: kinematicTierGroup(v.tier),
+    name: v.label,
+    key: v.key,
+    unit: v.unit || "—",
+    direction: kinematicDirToDirection(v.dir),
+  }));
 }
 
 export const CLINICAL_VARS = [
-  { pre: "WMFT_Rating_Pre", post: "WMFT_Rating_Post", label: "WMFT-4 rating sum", dir: "higher", test: "mixed", tier: "secondary" },
-  { pre: "WMFT_Time_Pre", post: "WMFT_Time_Post", label: "WMFT-4 time sum (s)", dir: "lower", test: "mixed", tier: "secondary" },
+  { pre: "BBT_Paretic_Pre", post: "BBT_Paretic_Post", label: "BBT paretic hand (blocks/60s)", dir: "higher", test: "mixed", tier: "secondary" },
   { pre: "VAMS_Happy_Pre", post: "VAMS_Happy_Post", label: "VAMS Happy", dir: "higher", test: "mixed", tier: "secondary" },
   { pre: "VAMS_Calm_Pre", post: "VAMS_Calm_Post", label: "VAMS Calm", dir: "higher", test: "mixed", tier: "secondary" },
   { pre: "VAMS_Sad_Pre", post: "VAMS_Sad_Post", label: "VAMS Sad", dir: "lower", test: "mixed", tier: "secondary" },
   { pre: "VAMS_Tense_Pre", post: "VAMS_Tense_Post", label: "VAMS Tense", dir: "lower", test: "mixed", tier: "secondary" },
-  { pre: "KVIQ_Vis_Pre", post: "KVIQ_Vis_Post", label: "KVIQ-10 visual total", dir: "higher", test: "mixed", tier: "moderator" },
-  { pre: "KVIQ_Kin_Pre", post: "KVIQ_Kin_Post", label: "KVIQ-10 kinesthetic total", dir: "higher", test: "mixed", tier: "moderator" },
   { pre: "VAS_Pre", post: "VAS_Post", label: "VAS pain (mean)", dir: "lower", test: "mixed", tier: "secondary" },
   { pre: "MDRS_Control_Pre", post: "MDRS_Difference_Post", label: "MDRS motor control change", dir: "higher", test: "post_only", tier: "secondary" },
   { pre: null, post: "IPAQ_MET", label: "IPAQ total MET-min/wk", dir: "none", test: "descriptive", tier: "moderator" },
 ];
 
-const primaryKinematicKeys = KINEMATIC_VARS.filter((k) => k.tier === "primary").map((k) => k.key).join(" ");
 const secondaryKinematicKeys = KINEMATIC_VARS.filter((k) => k.tier === "secondary").map((k) => k.key).join(", ");
 const nKinematic = KINEMATIC_VARS.length;
 
@@ -92,9 +257,9 @@ export const SPSS_WORKFLOW = [
   { step: 2, title: "Variable labels & deltas", spss: `COMPUTE delta_* = *_Post − *_Pre for ${nKinematic} kinematic + clinical vars` },
   { step: 3, title: "Healthy side equivalence", spss: "T-TEST / Mann-Whitney / Chi-square on Pre scores & demographics" },
   { step: 4, title: "Normality (Shapiro–Wilk)", spss: "EXAMINE … BY Group on Pre, Post, and Δ for each DV" },
-  { step: 5, title: "Primary analysis", spss: `GLM ${primaryKinematicKeys} Pre Post BY Group /WSFACTOR=time 2 — Holm–Bonferroni k=4` },
+  { step: 5, title: "Primary analysis", spss: "Hierarchical: TaskComplete then GLM nvp_reach (and 3 reach-window smoothness) Pre Post BY Group; Holm–Bonferroni k=4. Full-task NVP only if TaskComplete_Pre = TaskComplete_Post" },
   { step: 6, title: "Secondary kinematic", spss: `${secondaryKinematicKeys}; Holm–Bonferroni k=${KINEMATIC_VARS.filter((k) => k.tier === "secondary").length}` },
-  { step: 8, title: "Clinical scales", spss: "GLM WMFT-4, VAMS-4, VAS, KVIQ; MWU/Wilcoxon if non-normal" },
+  { step: 8, title: "Clinical scales", spss: "GLM VAMS-4, VAS; MWU/Wilcoxon if non-normal" },
   { step: 9, title: "MDRS post-only", spss: "Mann-Whitney MDRS_Difference_Post BY Group" },
   { step: 10, title: "Moderators", spss: "CORRELATIONS KVIQ-10 Pre with Δ kinematic; split by Group" },
   { step: 11, title: "Sensitivity", spss: "MIXED models + LOCF imputation (ITT)" },
@@ -102,17 +267,59 @@ export const SPSS_WORKFLOW = [
 ];
 
 const LEGACY_KIN_MAP = {
-  nvp: ["nvp"],
-  straightness: ["straightness"],
-  pause_time_sec: ["pause_time_sec", "pause_time"],
-  number_of_stops: ["number_of_stops", "n_stops", "stops"],
+  task_complete: ["task_complete"],
+  task_completion_ratio: ["task_completion_ratio"],
+  nvp_reach: ["nvp_reach"],
+  nvp_drink: ["nvp_drink", "nvp_transport"],
+  nvp_transport: ["nvp_transport", "nvp_drink"],
+  nvp_return: ["nvp_return"],
+  nvp_total: ["nvp_total", "nvp"],
+  drink_lift_height_cm: ["drink_lift_height_cm", "lift_height_cm"],
+  lift_height_cm: ["lift_height_cm", "drink_lift_height_cm"],
+  drink_lift_height_sw: ["drink_lift_height_sw", "lift_height_sw"],
+  lift_height_sw: ["lift_height_sw", "drink_lift_height_sw"],
+  straightness_reach: ["straightness_reach"],
+  pause_time_sec_reach: ["pause_time_sec_reach"],
+  number_of_stops_reach: ["number_of_stops_reach"],
+  sip_bout_count: ["sip_bout_count"],
+  grasp_dwell_sec: ["grasp_dwell_sec"],
+  functional_hold_sec: ["functional_hold_sec"],
+  pause_time_sec_total: ["pause_time_sec_total"],
+  number_of_stops_total: ["number_of_stops_total"],
+  nvp_full_task: ["nvp_full_task", "nvp_total"],
+  nvp: ["nvp", "nvp_reach"],
+  straightness: ["straightness", "straightness_reach"],
+  pause_time_sec: ["pause_time_sec", "pause_time_sec_reach", "pause_time_sec_path", "pause_time"],
+  number_of_stops: ["number_of_stops", "number_of_stops_reach", "number_of_stops_path", "n_stops", "stops"],
   trunk_ratio: ["trunk_ratio", "total_trunk_palm_ratio"],
-  shoulder_elevation_norm: ["shoulder_elevation_norm", "shoulder_vert_norm"],
-  shoulder_elevation_table_ratio: ["shoulder_elevation_table_ratio"],
+  trunk_forward_displacement_cm: ["trunk_forward_displacement_cm", "trunk_displacement_cm"],
+  average_hand_velocity_cm_s: ["average_hand_velocity_cm_s", "mean_hand_speed_cm_s"],
+  shoulder_elevation_cm: ["shoulder_elevation_cm"],
   shoulder_elevation_palm_ratio: ["shoulder_elevation_palm_ratio"],
   elbow_angle_mean_deg: ["elbow_angle_mean_deg", "elbow_angle_mean"],
+  shoulder_flexion_mean_deg: ["shoulder_flexion_mean_deg", "shoulder_flexion_mean"],
+  shoulder_abduction_mean_deg: ["shoulder_abduction_mean_deg"],
   movement_time_sec: ["movement_time_sec", "total_duration_s", "duration"],
-  peak_elbow_ang_vel_deg_s: ["peak_elbow_ang_vel_deg_s", "peak_velocity_deg_s", "peak_velocity_px_s", "peak_velocity_cm_s", "total_peak_velocity"],
+  peak_velocity_cm_s: ["peak_velocity_cm_s", "total_peak_velocity", "peak_velocity_px_s"],
+  peak_elbow_ang_vel_deg_s: ["peak_elbow_ang_vel_deg_s", "peak_velocity_deg_s"],
+  peak_shoulder_flexion_vel_deg_s: ["peak_shoulder_flexion_vel_deg_s"],
+  tremor_8_12hz_power: ["tremor_8_12hz_power", "hand_speed_tremor_8_12hz_power"],
+  index_tremor_8_12hz_power: ["index_tremor_8_12hz_power"],
+  tremor_peak_freq_hz: ["tremor_peak_freq_hz"],
+  tremor_index: ["tremor_index"],
+  adl_tremor_8_12hz_power: ["adl_tremor_8_12hz_power"],
+  movement_quality_index: ["movement_quality_index"],
+  shoulder_abduction_rom_deg: ["shoulder_abduction_rom_deg"],
+  forearm_pronation_supination_rom_deg: ["forearm_pronation_supination_rom_deg"],
+  fine_motor_quality_index: ["fine_motor_quality_index"],
+  adl_shoulder_abduction_mean_deg: ["adl_shoulder_abduction_mean_deg", "shoulder_abduction_mean_deg"],
+  adl_shoulder_abduction_rom_deg: ["adl_shoulder_abduction_rom_deg"],
+  adl_finger_flex_ext_rom_sw: ["adl_finger_flex_ext_rom_sw", "finger_flex_ext_rom_sw"],
+  adl_finger_flex_ext_quality_index: ["adl_finger_flex_ext_quality_index", "finger_flex_ext_quality_index"],
+  adl_head_forward_flexion_compensation_index: [
+    "adl_head_forward_flexion_compensation_index",
+    "head_forward_flexion_compensation_index",
+  ],
 };
 
 export function pickKinField(result, canonicalKey, fallbackKey = null) {
@@ -120,46 +327,102 @@ export function pickKinField(result, canonicalKey, fallbackKey = null) {
   const keys = [canonicalKey];
   if (fallbackKey) keys.push(fallbackKey);
   const aliases = (LEGACY_KIN_MAP[canonicalKey] || []).concat(keys);
-  for (const k of aliases) {
-    const v = result[k];
-    if (v !== undefined && v !== null && v !== "" && !Number.isNaN(Number(v))) return Number(v);
+  const sources = [result, result.movement_profile, result.overlay_metrics, result.validation_summary];
+  for (const src of sources) {
+    if (!src || typeof src !== "object") continue;
+    for (const k of aliases) {
+      const v = src[k];
+      if (v !== undefined && v !== null && v !== "" && !Number.isNaN(Number(v))) return Number(v);
+    }
   }
   return null;
+}
+
+function numOrNull(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Fill clinic SPSS keys that already exist as px (or nested profile) without new formulas. */
+export function deriveRequestedClinicKinematics(result, out = {}) {
+  if (!result || typeof result !== "object") return out;
+  const cm = numOrNull(result.cm_per_px)
+    ?? numOrNull(result.overlay_metrics?.cm_per_px)
+    ?? numOrNull(result.movement_profile?.cm_per_px);
+  if (out.trunk_forward_displacement_cm == null) {
+    const px = numOrNull(result.trunk_displacement_px);
+    if (cm != null && cm > 0 && px != null) out.trunk_forward_displacement_cm = px * cm;
+  }
+  if (out.average_hand_velocity_cm_s == null) {
+    const meanPx = numOrNull(result.mean_hand_speed_px_s)
+      ?? numOrNull(result.movement_profile?.mean_hand_speed_px_s);
+    if (cm != null && cm > 0 && meanPx != null) out.average_hand_velocity_cm_s = meanPx * cm;
+  }
+  return out;
 }
 
 export function normalizeKinematicResult(result) {
   if (!result) return null;
   const out = {};
+  const enriched = enrichKinematicCompletion(result);
   KINEMATIC_VARS.forEach(({ key, fallback }) => {
-    const v = pickKinField(result, key, fallback);
+    let v = pickKinField(result, key, fallback);
+    if (v === null && enriched[key] != null && enriched[key] !== "") {
+      v = Number(enriched[key]);
+      if (Number.isNaN(v)) v = null;
+    }
     if (v !== null) out[key] = v;
   });
+  const profile = result?.movement_profile;
+  if (profile && typeof profile === "object") {
+    [
+      "tremor_8_12hz_power",
+      "tremor_index",
+      "tremor_peak_freq_hz",
+      "index_tremor_8_12hz_power",
+      "hand_speed_tremor_8_12hz_power",
+      "adl_tremor_8_12hz_power",
+      "movement_quality_index",
+    ].forEach((key) => {
+      if (out[key] == null && profile[key] != null && profile[key] !== "") {
+        out[key] = Number(profile[key]);
+      }
+    });
+  }
+  if (out.movement_quality_index == null && result?.movement_quality_index != null) {
+    out.movement_quality_index = Number(result.movement_quality_index);
+  }
+  if (out.adl_tremor_8_12hz_power == null && result?.adl_tremor_8_12hz_power != null) {
+    out.adl_tremor_8_12hz_power = Number(result.adl_tremor_8_12hz_power);
+  }
+  deriveRequestedClinicKinematics(result, out);
   return Object.keys(out).length ? out : null;
 }
 
-/** Pre→Post % (calc_improvement — exact Python port). */
+/** Pre→Post relative % change. Returns null when relative % is undefined (e.g. Pre ≈ 0). */
 export function calcImprovement(pre, post, direction) {
   const preN = Number(pre);
   const postN = Number(post);
   if (Number.isNaN(preN) || Number.isNaN(postN)) return null;
-  if (direction === "higher") {
-    return (postN - preN) / Math.abs(preN) * 100;
+  // Relative % needs a non-zero baseline — avoid Infinity%.
+  if (Math.abs(preN) < 1e-12) {
+    if (Math.abs(postN - preN) < 1e-12) return 0;
+    return null;
   }
-  return (preN - postN) / preN * 100;
+  let pct;
+  if (direction === "higher") {
+    pct = ((postN - preN) / Math.abs(preN)) * 100;
+  } else if (direction === "lower") {
+    pct = ((preN - postN) / Math.abs(preN)) * 100;
+  } else {
+    // Descriptive: unsigned magnitude of relative change
+    pct = ((postN - preN) / Math.abs(preN)) * 100;
+  }
+  if (!Number.isFinite(pct)) return null;
+  return pct;
 }
 
-/** Post→Healthy % or gap (calc_gap — exact Python port). */
-export function calcGap(post, healthy, direction) {
-  const postN = Number(post);
-  const healthyN = Number(healthy);
-  if (Number.isNaN(postN) || Number.isNaN(healthyN)) return null;
-  if (direction === "higher") {
-    return Math.abs(healthyN - postN) / Math.abs(healthyN) * 100;
-  }
-  return postN - healthyN;
-}
-
-/** Absolute Pre→Post delta when relative % is undefined (Pre ≈ 0). */
+/** Absolute Pre→Post delta label when relative % is not defined (Pre ≈ 0). */
 export function formatKinPrePostAbsDelta(pre, post) {
   const preN = Number(pre);
   const postN = Number(post);
@@ -174,32 +437,55 @@ export function formatKinPrePostAbsDelta(pre, post) {
   return `Δ ${a.toFixed(3)}`;
 }
 
+/** Post→Healthy % or gap (calc_gap — exact Python port). */
+export function calcGap(post, healthy, direction) {
+  const postN = Number(post);
+  const healthyN = Number(healthy);
+  if (Number.isNaN(postN) || Number.isNaN(healthyN)) return null;
+  if (Math.abs(healthyN) < 1e-12 && direction === "higher") return null;
+  if (direction === "higher") {
+    const pct = (Math.abs(healthyN - postN) / Math.abs(healthyN)) * 100;
+    return Number.isFinite(pct) ? pct : null;
+  }
+  return postN - healthyN;
+}
+
 export function formatKinPrePostPct(pct) {
-  if (pct == null || Number.isNaN(pct)) return null;
+  if (pct == null || Number.isNaN(pct) || !Number.isFinite(pct)) return null;
   return `${Math.abs(pct).toFixed(0)}%`;
 }
 
 export function formatKinPostHealthyPct(pct) {
-  if (pct == null || Number.isNaN(pct)) return null;
+  if (pct == null || Number.isNaN(pct) || !Number.isFinite(pct)) return null;
   return `${Math.abs(pct).toFixed(1)}%`;
 }
 
 /** Format a raw kinematic value the same way everywhere (table, report, video overlay). */
 export function formatKinValue(key, value) {
-  if (value == null || value === "—") return "—";
+  if (value == null || value === "\u2014") return "\u2014";
   if (typeof value === "string") return value;
   const val = Number(value);
   if (Number.isNaN(val)) return String(value);
-  if (key === "nvp") return val.toFixed(0);
-  if (key === "straightness") return val.toFixed(3);
-  if (key === "pause_time_sec") return val.toFixed(2);
-  if (key === "number_of_stops") return val.toFixed(0);
+  if (key === "task_complete") return Number(val) === 1 ? "Complete" : "Incomplete";
+  if (key === "task_completion_ratio") return val.toFixed(2);
+  if (key === "nvp" || key === "nvp_reach" || key === "nvp_drink" || key === "nvp_transport" || key === "nvp_return" || key === "nvp_total" || key === "nvp_full_task" || key === "sip_bout_count") return val.toFixed(0);
+  if (key === "drink_lift_height_cm" || key === "lift_height_cm" || key === "shoulder_elevation_cm" || key === "trunk_forward_displacement_cm") return val.toFixed(1);
+  if (key === "peak_velocity_cm_s" || key === "hand_displacement_cm" || key === "average_hand_velocity_cm_s") return val.toFixed(1);
+  if (key === "drink_lift_height_sw" || key === "lift_height_sw") return val.toFixed(3);
+  if (key === "straightness" || key === "straightness_reach") return val.toFixed(3);
+  if (key === "pause_time_sec" || key === "pause_time_sec_reach" || key === "pause_time_sec_total" || key === "grasp_dwell_sec" || key === "functional_hold_sec") return val.toFixed(2);
+  if (key === "number_of_stops" || key === "number_of_stops_reach" || key === "number_of_stops_total" || key === "grasp_dwell_stops") return val.toFixed(0);
   if (key === "trunk_ratio") return `${(val * 100).toFixed(1)}%`;
-  if (key === "shoulder_elevation_norm" || key === "shoulder_vert_norm") return val.toFixed(3);
-  if (key === "shoulder_elevation_table_ratio" || key === "shoulder_elevation_palm_ratio") return val.toFixed(3);
+  if (key === "shoulder_elevation_palm_ratio") return val.toFixed(3);
   if (key === "elbow_angle_mean_deg") return val.toFixed(1);
+  if (key === "shoulder_flexion_mean_deg") return val.toFixed(1);
   if (key === "movement_time_sec") return val.toFixed(2);
-  if (key === "peak_elbow_ang_vel_deg_s") return `${val.toFixed(1)} °/s`;
+  if (key === "peak_elbow_ang_vel_deg_s") return `${val.toFixed(1)}\u00b0/s`;
+  if (key === "peak_shoulder_flexion_vel_deg_s") return `${val.toFixed(1)}\u00b0/s`;
+  if (key.includes("tremor") && key.includes("power")) return `${(val * 100).toFixed(1)}% rel`;
+  if (key === "tremor_peak_freq_hz" || key.endsWith("_peak_freq_hz")) return `${val.toFixed(1)} Hz`;
+  if (key === "fine_motor_quality_index" || key.endsWith("_quality_index")) return val.toFixed(0);
+  if (key.includes("_rom_deg") || (key.includes("deg") && !key.includes("vel"))) return val.toFixed(1);
   if (key.includes("ratio") || key.includes("trunk") || key.includes("_sw") || key.includes("path_eff")) return val.toFixed(3);
   return val.toFixed(2);
 }
@@ -238,35 +524,45 @@ export function computeRecoveryPct(pre, post, healthy, direction) {
 
 /** Whether pre/post/healthy side values are comparable for cross-phase deltas (view/arm gates). */
 export function kinCrossPhaseComparable(kinematicsResults, metricKey, armForPhase = null) {
-  const phases = ["pre", "post", "baseline"].filter((p) => kinematicsResults?.[p]);
-  if (phases.length < 2) return true;
-
-  // Smoothness metrics require sufficient reach amplitude to be comparable across phases.
-  if (["sparc", "nvp", "straightness", "pause_time_sec", "number_of_stops"].includes(metricKey)) {
-    return phases.every((p) => kinematicsResults[p]?.sparc_comparable !== false);
-  }
-
-  return true;
+  return kinCrossPhaseDeltaStatus(kinematicsResults, metricKey, armForPhase).comparable;
 }
 
+/**
+ * Comparability + short reason for Pre→Post badge (n/c instead of a blank dash).
+ * Reach-window smoothness stays comparable even when task completion differs.
+ */
 export function kinCrossPhaseDeltaStatus(kinematicsResults, metricKey, armForPhase = null) {
-  const comparable = kinCrossPhaseComparable(kinematicsResults, metricKey, armForPhase);
-  return { comparable, reason: comparable ? null : "n/c" };
+  void armForPhase;
+  if (
+    metricKey === "pause_stops_panel"
+    || metricKey === "side_analyzed"
+    || metricKey === "side"
+  ) {
+    return { comparable: false, reason: "n/c · not a single value" };
+  }
+
+  if (FULL_TASK_SMOOTHNESS_KEYS.includes(metricKey)) {
+    if (!fullTaskSmoothnessComparable(kinematicsResults)) {
+      return { comparable: false, reason: "n/c · task complete differs" };
+    }
+  }
+
+  // Primary study window (reach): always allow Pre→Post %; banner still warns on low amp / completion.
+  if (REACH_WINDOW_SMOOTHNESS_KEYS.includes(metricKey)) {
+    return { comparable: true, reason: null };
+  }
+
+  const phases = ["pre", "post", "baseline"].filter((p) => kinematicsResults?.[p]);
+  if (metricKey === "sparc" && phases.length >= 2) {
+    const ok = phases.every((p) => kinematicsResults[p]?.sparc_comparable !== false);
+    if (!ok) return { comparable: false, reason: "n/c · low reach amp" };
+  }
+
+  return { comparable: true, reason: null };
 }
 
 /** Key metrics for per-patient recovery summary. */
-export const RECOVERY_SUMMARY_KEYS = [
-  "nvp",
-  "straightness",
-  "pause_time_sec",
-  "number_of_stops",
-  "trunk_ratio",
-  "shoulder_elevation_norm",
-  "shoulder_elevation_table_ratio",
-  "shoulder_elevation_palm_ratio",
-  "elbow_angle_mean_deg",
-  "peak_elbow_ang_vel_deg_s",
-];
+export const RECOVERY_SUMMARY_KEYS = [...CLINIC_UE_SPSS_KEYS];
 
 /** Read pre/post/healthy side kinematics from patient record. */
 export function getPatientKinPhase(patient, phase) {
@@ -291,11 +587,71 @@ function appendManuscriptAliases(row, suffix, m) {
   const legacy = {
     total_trunk_palm_ratio: kinCell(m, "trunk_ratio"),
     total_duration_s: kinCell(m, "movement_time_sec"),
-    total_peak_velocity: kinCell(m, "peak_elbow_ang_vel_deg_s"),
+    total_peak_velocity: kinCell(m, "peak_velocity_cm_s"),
   };
   Object.entries(legacy).forEach(([k, v]) => {
     row[`${k}_${suffix}`] = v;
   });
+}
+
+/** SPSS-ready demographic columns (numeric codes aligned with app GSelect values). */
+export const DEMO_SPSS_KEYS = [
+  "ID",
+  "Group",
+  "Age",
+  "Sex",
+  "TimeSinceStroke",
+  "StrokeType",
+  "AffectedSide",
+  "DominantHand",
+  "Hemisphere",
+  "DiseaseStage",
+  "MAS",
+  "MRC",
+];
+
+const MAS_UI_TO_SPSS = { "0": 0, "1": 1, "1+": 2, "2": 3, "3": 4, "4": 5 };
+const DOMINANT_HAND_TO_SPSS = { right: 1, left: 2, both: 3 };
+const HEMISPHERE_TO_SPSS = { left: 1, right: 2, bilateral: 3 };
+const DISEASE_STAGE_TO_SPSS = { acute: 1, subacute: 2, chronic: 3 };
+
+function spssNumericOrBlank(v) {
+  if (v === "" || v === null || v === undefined) return "";
+  const n = Number(v);
+  return Number.isFinite(n) ? n : "";
+}
+
+function mapUiToSpss(map, raw) {
+  if (raw === "" || raw === null || raw === undefined) return "";
+  const key = String(raw).trim().toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(map, key)) return map[key];
+  if (Object.prototype.hasOwnProperty.call(map, String(raw).trim())) return map[String(raw).trim()];
+  return "";
+}
+
+/** Map demographics object → SPSS numeric row fragment (UI unchanged). */
+export function exportDemographicsForSpss(d = {}) {
+  const masRaw = d.mas ?? "";
+  let masSpss = "";
+  if (masRaw !== "" && masRaw != null) {
+    const k = String(masRaw).trim();
+    if (Object.prototype.hasOwnProperty.call(MAS_UI_TO_SPSS, k)) masSpss = MAS_UI_TO_SPSS[k];
+  }
+
+  return {
+    ID: d.participantId != null && d.participantId !== "" ? String(d.participantId) : "",
+    Group: spssNumericOrBlank(d.group),
+    Age: spssNumericOrBlank(d.age),
+    Sex: spssNumericOrBlank(d.sex),
+    TimeSinceStroke: spssNumericOrBlank(d.timeSinceStroke),
+    StrokeType: spssNumericOrBlank(d.strokeType),
+    AffectedSide: spssNumericOrBlank(d.side),
+    DominantHand: mapUiToSpss(DOMINANT_HAND_TO_SPSS, d.dominantHand),
+    Hemisphere: mapUiToSpss(HEMISPHERE_TO_SPSS, d.hemisphere),
+    DiseaseStage: mapUiToSpss(DISEASE_STAGE_TO_SPSS, d.diseaseStage),
+    MAS: masSpss,
+    MRC: spssNumericOrBlank(d.mrc),
+  };
 }
 
 export function applyLOCF(rows) {
@@ -321,15 +677,7 @@ export function buildMasterRow(patient, wmftItems, kgiaMovements, ipaqActs) {
   if (!d.participantId && !d.name) return null;
 
   const row = {
-    ID: d.participantId || "",
-    Group: d.group || "",
-    Age: d.age ?? "",
-    Sex: d.sex ?? "",
-    TimeSinceStroke: d.timeSinceStroke ?? "",
-    StrokeType: d.strokeType ?? "",
-    AffectedSide: d.side ?? "",
-    MAS: d.mas ?? "",
-    MRC: d.mrc ?? "",
+    ...exportDemographicsForSpss(d),
   };
 
   ["pre", "post"].forEach((tp) => {
@@ -363,6 +711,12 @@ export function buildMasterRow(patient, wmftItems, kgiaMovements, ipaqActs) {
   row.WMFT_Time_Post = rtPost || "";
   row.WMFT_Rating_Pre = rc > 0 ? rrPre : "";
   row.WMFT_Rating_Post = rc > 0 ? rrPost : "";
+
+  const bbt = patient.bbt || {};
+  row.BBT_Paretic_Pre = bbt.pre?.pareticBlocks ?? "";
+  row.BBT_Paretic_Post = bbt.post?.pareticBlocks ?? "";
+  row.BBT_Unaffected_Pre = bbt.pre?.unaffectedBlocks ?? "";
+  row.BBT_Unaffected_Post = bbt.post?.unaffectedBlocks ?? "";
 
   const vams = patient.vams || {};
   ["happy", "sad", "calm", "tense"].forEach((k) => {
@@ -401,7 +755,7 @@ export function buildMasterRow(patient, wmftItems, kgiaMovements, ipaqActs) {
 
   const vas = patient.vas || {};
   let vp = 0, vq = 0, pc = 0, qc = 0;
-  ["rest", "activity", "night"].forEach((k) => {
+  ["rest", "activity"].forEach((k) => {
     const p = parseFloat(vas[k]?.pre), q = parseFloat(vas[k]?.post);
     if (!isNaN(p)) { vp += p; pc++; }
     if (!isNaN(q)) { vq += q; qc++; }
@@ -431,7 +785,7 @@ function cap(s) {
 function spssMixedGlm(l, key, label, opts = {}) {
   const { primary = false, comment = "" } = opts;
   if (comment) l(`* ${comment}`);
-  l(`* --- ${label}${primary ? " [PRIMARY — α=.05 uncorrected]" : ""} ---`);
+  l(`* --- ${label}${primary ? " [PRIMARY — Î±=.05 uncorrected]" : ""} ---`);
   l(`GLM ${key}_Pre ${key}_Post BY Group`);
   l("  /WSFACTOR=time 2 Polynomial");
   l("  /METHOD=SSTYPE(3)");
@@ -453,8 +807,63 @@ function spssClinicalGlm(l, pre, post, label) {
 
 function spssFormatForColumn(name) {
   if (name === "ID") return "A30";
-  if (["Group", "Sex", "StrokeType", "AffectedSide"].includes(name)) return "F2.0";
+  if (
+    [
+      "Group",
+      "Sex",
+      "StrokeType",
+      "AffectedSide",
+      "DominantHand",
+      "Hemisphere",
+      "DiseaseStage",
+      "MAS",
+      "MRC",
+    ].includes(name)
+  ) {
+    return "F8.0";
+  }
+  if (name === "Age" || name === "TimeSinceStroke") return "F8.2";
   return "F12.6";
+}
+
+function masterRowColumnOrder(sampleRow) {
+  if (sampleRow && typeof sampleRow === "object") return Object.keys(sampleRow);
+  const kinAll = KINEMATIC_VARS;
+  return [
+    ...DEMO_SPSS_KEYS,
+    ...kinAll.flatMap(({ key }) => [`${key}_Pre`, `${key}_Post`]),
+    ...kinAll.flatMap(({ key }) => [`${key}_Healthy`]),
+    "total_trunk_palm_ratio_Pre",
+    "total_duration_s_Pre",
+    "total_peak_velocity_Pre",
+    "total_trunk_palm_ratio_Post",
+    "total_duration_s_Post",
+    "total_peak_velocity_Post",
+    "total_trunk_palm_ratio_Healthy",
+    "total_duration_s_Healthy",
+    "total_peak_velocity_Healthy",
+    "WMFT_Time_Pre",
+    "WMFT_Time_Post",
+    "WMFT_Rating_Pre",
+    "WMFT_Rating_Post",
+    "VAMS_Happy_Pre",
+    "VAMS_Happy_Post",
+    "VAMS_Sad_Pre",
+    "VAMS_Sad_Post",
+    "VAMS_Calm_Pre",
+    "VAMS_Calm_Post",
+    "VAMS_Tense_Pre",
+    "VAMS_Tense_Post",
+    "KVIQ_Vis_Pre",
+    "KVIQ_Vis_Post",
+    "KVIQ_Kin_Pre",
+    "KVIQ_Kin_Post",
+    "IPAQ_MET",
+    "VAS_Pre",
+    "VAS_Post",
+    "MDRS_Control_Pre",
+    "MDRS_Difference_Post",
+  ];
 }
 
 export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv", sampleRow = null) {
@@ -466,14 +875,14 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv", s
   const kinExploratory = KINEMATIC_VARS.filter((k) => k.tier === "exploratory");
   const kinAll = [...kinPrimary, ...kinSecondary, ...kinExploratory];
 
-  const primary = kinPrimary[0] || kinAll[0];
-  const primaryKey = primary?.key || "nvp";
-  const primaryLabel = primary?.label || primaryKey;
+  const smoothnessPrimary = kinPrimary.find((k) => k.key === "nvp_reach") || kinPrimary[0] || kinAll[0];
+  const primaryKey = smoothnessPrimary?.key || "nvp_reach";
+  const primaryLabel = smoothnessPrimary?.label || primaryKey;
 
   l("* =================================================================");
-  l("* PETTLEP AOMI RCT — SPSS Analysis Syntax (NeuroLab auto-generated)");
+  l("* PETTLEP AOMI RCT — SPSS Analysis Syntax (RA.ED AI auto-generated)");
   l("* Design: 2 (Group: AOMI vs Control) × 2 (Time: Pre, Post) mixed ANOVA");
-  l(`* Primary outcome: ${primaryLabel} (α=.05 uncorrected); secondary kinematics Holm k=${kinSecondary.length}`);
+  l(`* Primary smoothness: ${primaryLabel}; interpret task_complete first. Secondary Holm k=${kinSecondary.length}`);
   l("* References: Field (2018); Cohen (1988); Schulz et al. CONSORT 2010");
   l("* =================================================================");
   l("");
@@ -488,16 +897,7 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv", s
   l("  /FIRSTCASE=2");
   l("  /IMPORTCASE=ALL");
   l("  /VARIABLES=");
-  const importCols = sampleRow && typeof sampleRow === "object" ? Object.keys(sampleRow) : [
-    "ID", "Group", "Age", "Sex", "TimeSinceStroke", "StrokeType", "AffectedSide", "MAS", "MRC",
-    ...kinAll.flatMap(({ key }) => [`${key}_Pre`, `${key}_Post`]),
-    ...kinAll.flatMap(({ key }) => [`${key}_Healthy`]),
-    "WMFT_Time_Pre", "WMFT_Time_Post", "WMFT_Rating_Pre", "WMFT_Rating_Post",
-    "VAMS_Happy_Pre", "VAMS_Happy_Post", "VAMS_Sad_Pre", "VAMS_Sad_Post",
-    "VAMS_Calm_Pre", "VAMS_Calm_Post", "VAMS_Tense_Pre", "VAMS_Tense_Post",
-    "KVIQ_Vis_Pre", "KVIQ_Vis_Post", "KVIQ_Kin_Pre", "KVIQ_Kin_Post",
-    "IPAQ_MET", "VAS_Pre", "VAS_Post", "MDRS_Control_Pre", "MDRS_Difference_Post",
-  ];
+  const importCols = masterRowColumnOrder(sampleRow);
   importCols.forEach((col) => {
     l(`  ${col} ${spssFormatForColumn(col)}`);
   });
@@ -505,8 +905,32 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv", s
   l("CACHE.");
   l("EXECUTE.");
   l("");
-  l("VALUE LABELS Group 1 'AOMI' 2 'Control'.");
+  l("VALUE LABELS Group 1 'AOMI (Intervention)' 2 'Control'.");
   l("VALUE LABELS Sex 1 'Male' 2 'Female'.");
+  l("VALUE LABELS StrokeType 1 'Ischemic' 2 'Hemorrhagic'.");
+  l("VALUE LABELS AffectedSide 1 'Left' 2 'Right'.");
+  l("VALUE LABELS DominantHand 1 'Right' 2 'Left' 3 'Both'.");
+  l("VALUE LABELS Hemisphere 1 'Left' 2 'Right' 3 'Bilateral'.");
+  l("VALUE LABELS DiseaseStage 1 'Acute' 2 'Subacute' 3 'Chronic'.");
+  l("VALUE LABELS MAS 0 'No increase' 1 'Slight catch' 2 '1+ catch' 3 'More marked' 4 'Considerable' 5 'Rigid'.");
+  l("VALUE LABELS MRC 2 'Grade 2' 3 'Grade 3' 4 'Grade 4' 5 'Grade 5'.");
+  l("VALUE LABELS task_complete_Pre 0 'Incomplete' 1 'Complete'.");
+  l("VALUE LABELS task_complete_Post 0 'Incomplete' 1 'Complete'.");
+  l("EXECUTE.");
+  l("");
+  l("* --- Demographic variable labels ---");
+  l("VARIABLE LABELS ID 'Study participant ID'.");
+  l("VARIABLE LABELS Group 'Randomisation group'.");
+  l("VARIABLE LABELS Age 'Age (years)'.");
+  l("VARIABLE LABELS Sex 'Gender (1=Male, 2=Female)'.");
+  l("VARIABLE LABELS TimeSinceStroke 'Months since stroke'.");
+  l("VARIABLE LABELS StrokeType 'Stroke type (1=Ischemic, 2=Hemorrhagic)'.");
+  l("VARIABLE LABELS AffectedSide 'Paretic side (1=Left, 2=Right)'.");
+  l("VARIABLE LABELS DominantHand 'Dominant hand (1=Right, 2=Left, 3=Both)'.");
+  l("VARIABLE LABELS Hemisphere 'Affected hemisphere'.");
+  l("VARIABLE LABELS DiseaseStage 'Disease stage (acute/subacute/chronic)'.");
+  l("VARIABLE LABELS MAS 'Modified Ashworth Scale (SPSS codes 0–5; UI 1+ → 2)'.");
+  l("VARIABLE LABELS MRC 'MRC muscle strength (2–5)'.");
   l("EXECUTE.");
   l("");
 
@@ -533,7 +957,7 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv", s
 
   l("* --- 4. HEALTHY SIDE EQUIVALENCE ---");
   l("T-TEST GROUPS=Group(1 2)");
-  l(`  /VARIABLES=Age TimeSinceStroke MAS MRC ${primaryKey}_Pre trunk_ratio_Pre shoulder_elevation_norm_Pre.`);
+  l(`  /VARIABLES=Age TimeSinceStroke MAS MRC ${primaryKey}_Pre trunk_ratio_Pre shoulder_elevation_palm_ratio_Pre.`);
   l("CROSSTABS Sex StrokeType AffectedSide BY Group /STATISTICS=CHISQ.");
   l("NPAR TESTS /MANN-WHITNEY MAS MRC BY Group(1 2).");
   l("");
@@ -547,7 +971,10 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv", s
   l("* Decision: p≥.05 → parametric GLM; p<.05 → Wilcoxon (within) + Mann-Whitney (Δ between).");
   l("");
 
-  l(`* --- 6. PRIMARY OUTCOME (${primaryLabel}, α=.05 uncorrected) ---`);
+  l(`* --- 6. PRIMARY OUTCOMES (hierarchical: completion, then reach-window smoothness) ---`);
+  l("* Interpret task_complete / task_completion_ratio before smoothness.");
+  l("* Reach-window NVP family is comparable even when the cup was not lifted in Pre.");
+  l("* Full-task NVP is exploratory: SELECT IF task_complete_Pre = task_complete_Post.");
   kinPrimary.forEach(({ key, label }) => {
     spssMixedGlm(l, key, label, { primary: true });
   });
@@ -563,7 +990,7 @@ export function generateStudySPSSSyntax(csvFilename = "master_study_data.csv", s
   l(`* --- 7b. HOLM–BONFERRONI (secondary kinematic family, k=${kinSecondary.length}) ---`);
   l(`* 1) Record Group×Time interaction p-values from step 7.`);
   l(`* 2) Sort p-values ascending: p(1) ≤ … ≤ p(${kinSecondary.length}).`);
-  l(`* 3) Compare p(k) to α/(${kinSecondary.length}−k+1); report uncorrected + Holm-adjusted.`);
+  l(`* 3) Compare p(k) to Î±/(${kinSecondary.length}−k+1); report uncorrected + Holm-adjusted.`);
   l("");
   }
 
@@ -627,8 +1054,10 @@ export function analyzeOutcome(rows, spec) {
   const { pre, post, label, dir } = spec;
   if (!pre || !post) return null;
 
-  const aomi = rows.filter((r) => r.Group === "1");
-  const ctrl = rows.filter((r) => r.Group === "2");
+  const groupIsAomi = (r) => String(r.Group) === "1" || r.Group === 1;
+  const groupIsCtrl = (r) => String(r.Group) === "2" || r.Group === 2;
+  const aomi = rows.filter(groupIsAomi);
+  const ctrl = rows.filter(groupIsCtrl);
 
   const pull = (list, col) => list.map((r) => parseFloat(r[col])).filter((v) => !isNaN(v));
 

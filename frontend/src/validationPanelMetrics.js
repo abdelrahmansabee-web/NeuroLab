@@ -56,6 +56,239 @@ export function overlayMovementWindow(overlayData) {
   return { startIdx, endIdx };
 }
 
+function xyPair(pt) {
+  if (!pt || pt[0] == null || pt[1] == null) return null;
+  const x = Number(pt[0]);
+  const y = Number(pt[1]);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return [x, y];
+}
+
+/**
+ * Hand path for NVP / straightness: rest wrist landmark, never the overlay
+ * display palm (that field is the index tip).
+ */
+export function pathLandmarkXY(frame) {
+  return xyPair(frame?.wrist) || xyPair(frame?.hl_wrist) || xyPair(frame?.palm);
+}
+
+function medianNum(vals) {
+  const a = vals.filter((v) => Number.isFinite(v)).sort((x, y) => x - y);
+  if (!a.length) return null;
+  const m = Math.floor(a.length / 2);
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+
+/**
+ * Rest hand landmark: wrist on the table before the reach.
+ * Never the overlay `palm` field first — that is the index tip used only to draw fingers.
+ */
+export function restLandmarkPalm(overlayData) {
+  const stored = xyPair(overlayData?.rest_wrist);
+  if (stored) return stored;
+  const frames = overlayData?.frames || [];
+  if (!frames.length) {
+    return xyPair(overlayData?.start_wrist) || xyPair(overlayData?.start_palm);
+  }
+  const { startIdx } = overlayMovementWindow(overlayData);
+  const fps = Number(overlayData?.fps) || 60;
+  const earlyN = Math.max(1, Math.round(fps * 0.2));
+  const hi = Math.max(0, Math.min(frames.length - 1, startIdx > 0 ? Math.min(startIdx, earlyN) : 0));
+  const xs = [];
+  const ys = [];
+  for (let i = 0; i <= hi; i += 1) {
+    const p = pathLandmarkXY(frames[i]);
+    if (p) {
+      xs.push(p[0]);
+      ys.push(p[1]);
+    }
+  }
+  const mx = medianNum(xs);
+  const my = medianNum(ys);
+  if (mx != null && my != null) return [mx, my];
+  return (
+    xyPair(overlayData?.start_wrist)
+    || pathLandmarkXY(frames[startIdx])
+    || xyPair(overlayData?.start_palm)
+  );
+}
+
+function restLeaveEps(overlayData, restPalm) {
+  const frames = overlayData?.frames || [];
+  const { endIdx } = overlayMovementWindow(overlayData);
+  const endP = pathLandmarkXY(frames[endIdx]);
+  if (restPalm && endP) {
+    const reach = Math.hypot(endP[0] - restPalm[0], endP[1] - restPalm[1]);
+    if (reach > 1e-6) return Math.max(reach * 0.05, 1e-4);
+  }
+  return 0.02;
+}
+
+/** Frame of the rest landmark — last palm still at rest before the hand leaves it. */
+export function restPathStartIdx(overlayData) {
+  const frames = overlayData?.frames || [];
+  const { startIdx } = overlayMovementWindow(overlayData);
+  if (!frames.length) return 0;
+  if (Number.isFinite(Number(overlayData?.rest_idx))) {
+    return Math.max(0, Math.min(frames.length - 1, Number(overlayData.rest_idx)));
+  }
+  const rest = restLandmarkPalm(overlayData);
+  if (!rest) return startIdx;
+  const eps = restLeaveEps(overlayData, rest);
+  const last = Math.min(startIdx, frames.length - 1);
+  let firstLeave = null;
+  for (let i = 0; i <= last; i += 1) {
+    const p = pathLandmarkXY(frames[i]);
+    if (!p) continue;
+    if (Math.hypot(p[0] - rest[0], p[1] - rest[1]) > eps) {
+      firstLeave = i;
+      break;
+    }
+  }
+  if (firstLeave == null) return startIdx;
+  return Math.max(0, firstLeave - 1);
+}
+
+function palmDeltaSpeed(frames, fps, i) {
+  if (i <= 0) return 0;
+  const a = pathLandmarkXY(frames[i - 1]);
+  const b = pathLandmarkXY(frames[i]);
+  if (!a || !b) return 0;
+  return Math.hypot(b[0] - a[0], b[1] - a[1]) * fps;
+}
+
+function sampleHandSpeed(frames, fps, i) {
+  const baked = Number(frames[i]?.speed);
+  if (Number.isFinite(baked) && baked > 0) return baked;
+  return palmDeltaSpeed(frames, fps, i);
+}
+
+function localMaxima(values, prominence) {
+  const out = [];
+  for (let i = 1; i < values.length - 1; i += 1) {
+    const v = values[i];
+    if (v > values[i - 1] && v >= values[i + 1] && v >= prominence) out.push(i);
+  }
+  return out;
+}
+
+/**
+ * Overlay peak_frames miss rest→onset (bake zeros speed there). Fill that gap
+ * from the visible rest-palm path so NVP starts at the rest landmark.
+ */
+export function nvpPeakIndicesFromRest(overlayData, untilIdx) {
+  const frames = overlayData?.frames || [];
+  const { startIdx, endIdx } = overlayMovementWindow(overlayData);
+  const restIdx = restPathStartIdx(overlayData);
+  const hi = Math.min(
+    frames.length - 1,
+    Number.isFinite(Number(untilIdx)) ? Number(untilIdx) : endIdx,
+    endIdx,
+  );
+  const baked = nvpPeakIndicesInWindow(overlayData?.peak_frames, restIdx, hi);
+  if (restIdx >= startIdx) return baked;
+  const fps = Number(overlayData?.fps) || 60;
+  const speeds = [];
+  for (let i = restIdx; i <= hi; i += 1) speeds.push(sampleHandSpeed(frames, fps, i));
+  const mean = speeds.length ? speeds.reduce((s, v) => s + v, 0) / speeds.length : 0;
+  const varr = speeds.length
+    ? speeds.reduce((s, v) => s + (v - mean) ** 2, 0) / speeds.length
+    : 0;
+  const std = Math.sqrt(varr);
+  const peak = speeds.length ? Math.max(...speeds) : 0;
+  const prominence = std > 0 ? std * 0.30 : peak * 0.05;
+  const early = new Set(baked);
+  localMaxima(speeds, prominence).forEach((local) => {
+    const gi = restIdx + local;
+    if (gi >= restIdx && gi < startIdx && gi <= hi) early.add(gi);
+  });
+  return [...early].sort((a, b) => a - b);
+}
+
+export function countNvpPeaksFromRest(overlayData, untilIdx) {
+  return nvpPeakIndicesFromRest(overlayData, untilIdx).length;
+}
+
+export function straightnessFromRest(overlayData, untilIdx) {
+  const frames = overlayData?.frames || [];
+  if (!frames.length) return 0;
+  const restPalm = restLandmarkPalm(overlayData);
+  const restIdx = restPathStartIdx(overlayData);
+  const { endIdx } = overlayMovementWindow(overlayData);
+  const hi = Math.min(
+    frames.length - 1,
+    Number.isFinite(Number(untilIdx)) ? Number(untilIdx) : endIdx,
+    endIdx,
+  );
+  if (hi < restIdx || !restPalm) return 0;
+  let pathLength = 0;
+  let prev = restPalm;
+  for (let i = restIdx; i <= hi; i += 1) {
+    const curr = pathLandmarkXY(frames[i]);
+    if (!prev || !curr) {
+      if (curr) prev = curr;
+      continue;
+    }
+    pathLength += Math.hypot(curr[0] - prev[0], curr[1] - prev[1]);
+    prev = curr;
+  }
+  const endP = pathLandmarkXY(frames[hi]);
+  if (!endP || pathLength <= 0) return 0;
+  const displacement = Math.hypot(endP[0] - restPalm[0], endP[1] - restPalm[1]);
+  return Math.min(1, displacement / pathLength);
+}
+
+function angleBetweenDeg(v1, v2) {
+  const n1 = Math.hypot(v1[0], v1[1]);
+  const n2 = Math.hypot(v2[0], v2[1]);
+  if (n1 < 1e-6 || n2 < 1e-6) return null;
+  const cos = Math.max(-1, Math.min(1, (v1[0] * v2[0] + v1[1] * v2[1]) / (n1 * n2)));
+  return (Math.acos(cos) * 180) / Math.PI;
+}
+
+function sameSideHip(frame, affectedSide) {
+  const side = String(affectedSide || "").toLowerCase();
+  const left = side.startsWith("l");
+  const primary = xyPair(left ? frame?.lhip : frame?.rhip);
+  if (primary) return primary;
+  const secondary = xyPair(left ? frame?.rhip : frame?.lhip);
+  if (secondary) return secondary;
+  const lh = xyPair(frame?.lhip);
+  const rh = xyPair(frame?.rhip);
+  if (lh && rh) return [(lh[0] + rh[0]) / 2, (lh[1] + rh[1]) / 2];
+  return null;
+}
+
+/**
+ * Clinical goniometer shoulder flexion in the image plane:
+ * stationary arm = midaxillary line (shoulder → same-side hip),
+ * moving arm = humerus (shoulder → elbow / lateral epicondyle).
+ * 0° = arm alongside the trunk.
+ */
+export function shoulderFlexionGoniometerDeg(frame, affectedSide) {
+  const sh = xyPair(frame?.shoulder);
+  const el = xyPair(frame?.elbow);
+  if (!sh || !el) return null;
+  const hip = sameSideHip(frame, affectedSide);
+  let stat = hip ? [hip[0] - sh[0], hip[1] - sh[1]] : null;
+  if (!stat || Math.hypot(stat[0], stat[1]) < 1e-4) {
+    stat = [0, 1];
+  }
+  return angleBetweenDeg(stat, [el[0] - sh[0], el[1] - sh[1]]);
+}
+
+export function meanShoulderFlexionGoniometer(frames, startIdx, endIdx, affectedSide) {
+  const vals = [];
+  const last = Math.min(endIdx, (frames?.length || 1) - 1);
+  const lo = Math.max(0, startIdx);
+  for (let i = lo; i <= last; i += 1) {
+    const a = shoulderFlexionGoniometerDeg(frames[i], affectedSide);
+    if (a != null && Number.isFinite(a)) vals.push(a);
+  }
+  if (!vals.length) return null;
+  return vals.reduce((s, v) => s + v, 0) / vals.length;
+}
+
 /** Peaks on the path from onset through untilIdx — same gate as overlay NVP dots. */
 export function nvpPeakIndicesInWindow(peakFrames, startIdx, untilIdx) {
   const lo = Number(startIdx);
@@ -141,14 +374,15 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
   const idx = untilIdx == null || Number.isNaN(Number(untilIdx))
     ? endIdx
     : clampFrameIdx(frames, Number(untilIdx));
-  const peakFrames = overlayData.peak_frames || [];
   const f = frames[idx] || {};
 
   const speedThreshold = overlayPauseSpeedThreshold(frames);
   const inMovement = idx >= startIdx && idx <= endIdx;
   const t0 = startIdx < frames.length ? (frames[startIdx].time || startIdx / fps) : 0;
 
-  const nvp = countNvpPeaksInWindow(peakFrames, startIdx, Math.min(idx, endIdx));
+  const restIdx = restPathStartIdx(overlayData);
+  const restPalm = restLandmarkPalm(overlayData);
+  const nvp = countNvpPeaksFromRest(overlayData, Math.min(idx, endIdx));
 
   let peakElbowAngVel = 0;
   for (let i = 1; i <= idx && i < frames.length; i += 1) {
@@ -172,21 +406,7 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
     }
   }
 
-  let straightness = 0;
-  if (inMovement) {
-    let pathLength = 0;
-    const startP = frames[startIdx]?.palm;
-    for (let i = startIdx + 1; i <= idx && i < frames.length; i += 1) {
-      const prev = frames[i - 1]?.palm;
-      const curr = frames[i]?.palm;
-      if (prev && curr) pathLength += Math.hypot(curr[0] - prev[0], curr[1] - prev[1]);
-    }
-    const endP = frames[idx]?.palm;
-    if (startP && endP && pathLength > 0) {
-      const displacement = Math.hypot(endP[0] - startP[0], endP[1] - startP[1]);
-      straightness = Math.min(1, displacement / pathLength);
-    }
-  }
+  const straightness = idx >= restIdx ? straightnessFromRest(overlayData, Math.min(idx, endIdx)) : 0;
 
   let trunkRatio = 0;
   if (inMovement) {
@@ -254,6 +474,8 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
     startIdx,
     endIdx,
     nvp,
+    restIdx,
+    restPalm,
     movementTime,
     straightness,
     peakElbowAngVel,
@@ -300,6 +522,7 @@ export function computeValidationPanelLive(overlayData, untilIdx) {
       ?? tremorLive?.tremor_8_12hz_power
       ?? resolvedTremor?.tremor_8_12hz_power,
     shoulder_width_px: Number(overlayData?.shoulder_width_px) || 0,
+    ...computeClinicPanelLive(overlayData, idx),
   };
 }
 
@@ -396,6 +619,120 @@ function computeExploratoryExtras(overlayData) {
   return extras;
 }
 
+/** Running clinic SPSS numbers from movement onset through untilIdx (live panel). */
+function computeClinicPanelLive(overlayData, untilIdx) {
+  const frames = overlayData?.frames || [];
+  if (!frames.length) return {};
+  const { startIdx, endIdx } = overlayMovementWindow(overlayData);
+  const idx = untilIdx == null || Number.isNaN(Number(untilIdx))
+    ? endIdx
+    : clampFrameIdx(frames, Number(untilIdx));
+  if (idx < startIdx) return {};
+  const until = Math.max(startIdx, Math.min(idx, endIdx));
+  const cm = overlayCmPerPx(overlayData);
+  const sw = Number(overlayData?.shoulder_width_px) || Number(overlayData?.metrics?.shoulder_width_px) || 0;
+  const out = {};
+
+  if (cm != null) {
+    const speed = windowSeriesStats(frames, startIdx, until, "speed");
+    if (speed.mean != null) out.liveAverageHandVelocityCmS = speed.mean * cm;
+    const trunk = windowSeriesStats(frames, startIdx, until, "trunk_displacement_norm");
+    if (trunk.max != null && sw > 0) {
+      out.liveTrunkForwardDisplacementCm = trunk.max * sw * cm;
+    } else {
+      const a = frames[startIdx]?.trunk;
+      const b = frames[until]?.trunk;
+      if (a && b && a[0] != null && b[0] != null && sw > 0) {
+        out.liveTrunkForwardDisplacementCm = Math.abs(b[0] - a[0]) * sw * cm;
+      }
+    }
+    const elev = windowSeriesStats(frames, startIdx, until, "shoulder_elevation_norm");
+    if (elev.max != null && sw > 0) {
+      out.liveShoulderElevationCm = elev.max * sw * cm;
+    }
+  }
+
+  const elbow = windowSeriesStats(frames, startIdx, until, "elbow_angle", { skipNonPositive: true });
+  if (elbow.mean != null) out.liveElbowAngleMeanDeg = elbow.mean;
+  const gonio = meanShoulderFlexionGoniometer(frames, startIdx, until, overlayData?.affected_side);
+  if (gonio != null) {
+    out.liveShoulderFlexionMeanDeg = gonio;
+  } else {
+    const flex = windowSeriesStats(frames, startIdx, until, "shoulder_flexion_deg", { skipNonPositive: true });
+    if (flex.mean != null) out.liveShoulderFlexionMeanDeg = flex.mean;
+  }
+  const abd = windowSeriesStats(frames, startIdx, until, "shoulder_abduction_deg", { skipNonPositive: true });
+  if (abd.mean != null) out.liveShoulderAbductionMeanDeg = abd.mean;
+  return out;
+}
+
+function windowSeriesStats(frames, startIdx, endIdx, key, { skipNonPositive = false } = {}) {
+  const vals = [];
+  let max = -Infinity;
+  const last = Math.min(endIdx, (frames?.length || 1) - 1);
+  for (let i = startIdx; i <= last; i += 1) {
+    const v = Number(frames[i]?.[key]);
+    if (!Number.isFinite(v)) continue;
+    if (skipNonPositive && !(v > 0)) continue;
+    vals.push(v);
+    if (v > max) max = v;
+  }
+  if (!vals.length) return { mean: null, max: null };
+  return {
+    mean: vals.reduce((a, b) => a + b, 0) / vals.length,
+    max: max === -Infinity ? null : max,
+  };
+}
+
+function overlayCmPerPx(overlayData) {
+  const candidates = [
+    overlayData?.cm_per_px,
+    overlayData?.metrics?.cm_per_px,
+    overlayData?.table_scale?.cm_per_px,
+  ];
+  for (const c of candidates) {
+    const n = Number(c);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+/** Fill requested clinic keys from existing overlay frames when the backend left them blank. */
+export function fillMissingClinicOverlaySummaries(overlayData, out = {}) {
+  if (!overlayData?.frames?.length) return out;
+  const frames = overlayData.frames;
+  const { startIdx, endIdx } = overlayMovementWindow(overlayData);
+  const cm = overlayCmPerPx(overlayData);
+  const sw = Number(overlayData?.shoulder_width_px) || Number(overlayData?.metrics?.shoulder_width_px) || 0;
+
+  if (out.average_hand_velocity_cm_s == null && cm != null) {
+    const speed = windowSeriesStats(frames, startIdx, endIdx, "speed");
+    if (speed.mean != null) out.average_hand_velocity_cm_s = speed.mean * cm;
+  }
+  if (out.trunk_forward_displacement_cm == null && cm != null) {
+    const trunk = windowSeriesStats(frames, startIdx, endIdx, "trunk_displacement_norm");
+    if (trunk.max != null && sw > 0) {
+      out.trunk_forward_displacement_cm = trunk.max * sw * cm;
+    }
+  }
+  const gonio = meanShoulderFlexionGoniometer(frames, startIdx, endIdx, overlayData?.affected_side);
+  if (gonio != null) {
+    out.shoulder_flexion_mean_deg = gonio;
+  } else if (out.shoulder_flexion_mean_deg == null) {
+    const flex = windowSeriesStats(frames, startIdx, endIdx, "shoulder_flexion_deg", { skipNonPositive: true });
+    if (flex.mean != null) out.shoulder_flexion_mean_deg = flex.mean;
+  }
+  if (out.shoulder_abduction_mean_deg == null) {
+    const abd = windowSeriesStats(frames, startIdx, endIdx, "shoulder_abduction_deg", { skipNonPositive: true });
+    if (abd.mean != null) out.shoulder_abduction_mean_deg = abd.mean;
+  }
+  if (out.elbow_angle_mean_deg == null) {
+    const elbow = windowSeriesStats(frames, startIdx, endIdx, "elbow_angle", { skipNonPositive: true });
+    if (elbow.mean != null) out.elbow_angle_mean_deg = elbow.mean;
+  }
+  return out;
+}
+
 const overlayMetricsCache = new WeakMap();
 
 /**
@@ -429,11 +766,19 @@ export function computeOverlayMetrics(overlayData) {
       "head_flexion_increase_deg",
       "shoulder_abduction_mean_deg",
       "shoulder_abduction_rom_deg",
+      "shoulder_flexion_mean_deg",
+      "average_hand_velocity_cm_s",
+      "trunk_forward_displacement_cm",
+      "mean_hand_speed_px_s",
+      "nvp_total",
+      "cm_per_px",
     ];
     for (const k of passthrough) {
       if (backend[k] != null && backend[k] !== "") out[k] = backend[k];
     }
   }
+
+  fillMissingClinicOverlaySummaries(overlayData, out);
 
   overlayMetricsCache.set(overlayData, out);
   return out;

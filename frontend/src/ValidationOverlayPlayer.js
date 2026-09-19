@@ -15,24 +15,20 @@ import {
 } from "lucide-react";
 import { downloadBlob } from "./downloadUtils";
 import {
-  buildTremorCameraTrack,
   formatTremorAmplitude,
-  formatTremorPower,
   resolveTremorMetrics,
 } from "./tremorMetrics";
 import {
+  computeOverlayMetrics,
   computeValidationPanelLive,
   elbowAngVelAt,
-  nvpPeakIndicesInWindow,
+  nvpPeakIndicesFromRest,
   pickOverlayMetric,
+  shoulderFlexionGoniometerDeg,
 } from "./validationPanelMetrics";
 import {
   buildPinchEvidenceLines,
-  buildTremorEvidenceLines,
   drawEvidenceCard,
-  drawTremorCameraEvidence,
-  localTremorActivity,
-  localTremorEnvelopeAt,
   pinchApertureFromFrame,
   pinchApertureWindowStats,
 } from "./overlayMetricEvidence";
@@ -600,21 +596,28 @@ function getValidationPanelRowDefs(overlayData, clinicalTask) {
   return UE_VALIDATION_PANEL_ROWS;
 }
 
-/** Upper-extremity validation panel — matches kinematics table core + validation extras. */
-const UE_VALIDATION_PANEL_ROWS = [
-  { id: "mov_time", label: "Movement time", kind: "live", key: "movementTime", suffix: " s", decimals: 2 },
-  { id: "mov_quality", label: "Movement quality", kind: "metric", metricKeys: ["movement_quality_index"], accent: true },
-  { id: "straightness", label: "Straightness", kind: "live", key: "straightness", decimals: 2 },
-  { id: "peak_vel", label: "Peak velocity", kind: "peakVelCm", accent: true },
-  { id: "pause", label: "Pause / stops", kind: "pause" },
-  { id: "trunk", label: "Trunk ratio", kind: "live", key: "trunkRatio", decimals: 2 },
+/** Upper-extremity validation panel — the eight clinic SPSS variables (Total NVP is the header chip). */
+export const UE_VALIDATION_PANEL_ROWS = [
   { id: "sh_elev", label: "Shoulder elevation", kind: "shoulderElev" },
-  { id: "elbow_mean", label: "Elbow angle mean", kind: "metric", metricKeys: ["elbow_angle_mean_deg", "elbow_angle_mean"], suffix: "°", decimals: 1 },
-  { id: "tremor", label: "Tremor 8–12 Hz", kind: "tremor", tremorKey: "tremor_8_12hz_power" },
-  { id: "tremor_hz", label: "Tremor peak freq", kind: "tremorFreq", tremorKey: "tremor_peak_freq_hz" },
-  { id: "kin_abd", label: "Shoulder abduction", kind: "live", key: "shoulderAbduction", suffix: "°", decimals: 0 },
-  { id: "kin_finger", label: "Finger quality", kind: "live", key: "fingerQuality", decimals: 0 },
+  { id: "trunk_fwd", label: "Trunk forward displacement", kind: "live", key: "liveTrunkForwardDisplacementCm", suffix: " cm", decimals: 1 },
+  { id: "mov_time", label: "Movement time", kind: "live", key: "movementTime", suffix: " s", decimals: 2 },
+  { id: "avg_vel", label: "Average hand velocity", kind: "live", key: "liveAverageHandVelocityCmS", suffix: " cm/s", decimals: 1 },
+  { id: "elbow_mean", label: "Elbow extension angle", kind: "live", key: "liveElbowAngleMeanDeg", suffix: "°", decimals: 1 },
+  { id: "sh_flex", label: "Shoulder flexion angle", kind: "live", key: "liveShoulderFlexionMeanDeg", suffix: "°", decimals: 1 },
+  { id: "sh_abd", label: "Shoulder abduction angle", kind: "live", key: "liveShoulderAbductionMeanDeg", suffix: "°", decimals: 1 },
 ];
+
+function pickPanelMetric(overlayData, keys) {
+  const direct = pickOverlayMetric(overlayData, keys);
+  if (direct != null) return direct;
+  const filled = computeOverlayMetrics(overlayData);
+  if (!filled) return null;
+  for (const k of keys || []) {
+    const v = filled[k];
+    if (v != null && v !== "" && !Number.isNaN(Number(v))) return Number(v);
+  }
+  return null;
+}
 
 function formatPanelRowValue(row, live, overlayData, formatValue) {
   if (row.kind === "live") {
@@ -637,8 +640,8 @@ function formatPanelRowValue(row, live, overlayData, formatValue) {
     return "—";
   }
   if (row.kind === "shoulderElev") {
-    const cm = pickOverlayMetric(overlayData, ["shoulder_elevation_cm"]);
-    if (cm != null && Number(cm) > 0) return `${formatValue(Number(cm), 1)} cm`;
+    const liveCm = live.liveShoulderElevationCm;
+    if (liveCm != null && Number(liveCm) > 0) return `${formatValue(Number(liveCm), 1)} cm`;
     const v = live.shoulderElevationPalm || live.shoulderElevationTable || live.shoulderElevation;
     if (v > 0) return formatValue(v, 3);
     return "—";
@@ -661,7 +664,7 @@ function formatPanelRowValue(row, live, overlayData, formatValue) {
     return `${Number(v).toFixed(1)} Hz`;
   }
   if (row.kind === "metric" && row.metricKeys) {
-    const v = pickOverlayMetric(overlayData, row.metricKeys);
+    const v = pickPanelMetric(overlayData, row.metricKeys);
     if (v == null) return "—";
     const decimals = row.decimals != null ? row.decimals : 2;
     const formatted = formatValue(v, decimals);
@@ -786,7 +789,6 @@ export function ValidationOverlayPlayer({
   const win = overlayData?.movement_window || { start_idx: 0, end_idx: frames.length - 1 };
   const velocityProfile = overlayData?.velocity_profile;
   const peakFrames = overlayData?.peak_frames || [];
-  const tremorCameraTrack = useMemo(() => buildTremorCameraTrack(overlayData), [overlayData]);
 
   const getElbowAngVel = useCallback((idx) => elbowAngVelAt(frames, fps, idx), [frames, fps]);
 
@@ -1129,7 +1131,7 @@ export function ValidationOverlayPlayer({
     });
     const handRoot = skel.palmPt || skel.forearmEnd || pt("wrist");
 
-    const currentNVP = nvpPeakIndicesInWindow(peakFrames, win.start_idx || 0, idx).length;
+    const currentNVP = nvpPeakIndicesFromRest(overlayData, idx).length;
 
     let panelLive = liveMetricsCacheRef.current?.panelLive;
     if (updatePanelMetrics) {
@@ -1188,12 +1190,16 @@ export function ValidationOverlayPlayer({
     if (f && typeof f.shoulder_abduction_deg === "number" && f.shoulder_abduction_deg > 0) {
       currentShoulderAbduction = f.shoulder_abduction_deg;
     }
+    let currentShoulderFlexion = shoulderFlexionGoniometerDeg(f, overlayData?.affected_side);
+    if (currentShoulderFlexion == null && f && typeof f.shoulder_flexion_deg === "number" && f.shoulder_flexion_deg > 0) {
+      currentShoulderFlexion = f.shoulder_flexion_deg;
+    }
     let currentFingerQuality = panelLive?.fingerQuality ?? cachedLive.fingerQuality ?? 0;
     let tremorLive = tremorLiveCacheRef.current?.data;
     let adlTremorLive = tremorLiveCacheRef.current?.adlData;
     const resolvedTremor = resolveTremorMetrics(overlayData);
 
-    const showExtendedKin = false; // UE abduction/finger overlays disabled
+    const showExtendedKin = false; // finger / HL extras stay off
 
     const dpr = overlayCanvasDpr();
     const labelSize = `${Math.round(10 * dpr)}px`;
@@ -1240,18 +1246,21 @@ export function ValidationOverlayPlayer({
     }
 
     const cx = cw / 2;
-    if (!touchPerf) {
-      if (shoulder && showExtendedKin && currentShoulderAbduction > 0) {
+    if (!touchPerf && showKinematicMarks) {
+      if (shoulder && currentShoulderFlexion != null && Number.isFinite(currentShoulderFlexion)) {
+        drawSimpleLabel(`Flex ${currentShoulderFlexion.toFixed(0)}°`, shoulder, shoulder[0] > cx ? -118 : 14, -22, {
+          color: color.text,
+          border: color.glow,
+        });
+      }
+      if (shoulder && currentShoulderAbduction > 0) {
         drawSimpleLabel(`Abd ${currentShoulderAbduction.toFixed(0)}°`, shoulder, shoulder[0] > cx ? -118 : 14, 6, {
           color: "#93c5fd",
           border: "rgba(59,130,246,0.55)",
         });
       }
-      if (elbow) {
+      if (elbow && currentElbowAngle > 0) {
         drawSimpleLabel(`El ${currentElbowAngle.toFixed(0)}°`, elbow, elbow[0] > cx ? -80 : 14, -22, { color: color.text, border: color.glow });
-      }
-      if (palm) {
-        drawSimpleLabel(`Ha ${Math.round(speed)} °/s`, palm, palm[0] > cx ? -100 : 18, -24, { color: "#fde047", border: "rgba(250,204,21,0.6)" });
       }
     }
 
@@ -1433,84 +1442,11 @@ export function ValidationOverlayPlayer({
       });
     }
 
-    // --- Tremor: backup pulsing halo on the hand + 8–12 Hz camera sparkline ---
-    const tremorAnchor = palm || pt("wrist") || pt("hl_wrist");
-    const swPxTremor = Number(overlayData?.shoulder_width_px) || 0;
-    const tremorEnv = tremorAnchor ? localTremorEnvelopeAt(overlayData, idx) : null;
-    const tremorAct = tremorAnchor ? localTremorActivity(frames, idx, fps, swPxTremor) : null;
-    const tremorIntensity = tremorEnv != null ? Math.min(1, tremorEnv * 4) : tremorAct != null ? Math.min(1, tremorAct * 12) : 0;
-    const tremorLivePow =
-      idx >= win.end_idx
-        ? resolvedTremor?.tremor_8_12hz_power
-        : tremorLive?.tremor_8_12hz_power ?? resolvedTremor?.tremor_8_12hz_power;
-    const tremorPeakHz =
-      idx >= win.end_idx
-        ? resolvedTremor?.tremor_peak_freq_hz
-        : tremorLive?.tremor_peak_freq_hz ?? resolvedTremor?.tremor_peak_freq_hz;
-
-    if (tremorAnchor && idx >= win.start_idx && idx <= win.end_idx && tremorCameraTrack) {
-      drawTremorCameraEvidence(ctx, {
-        anchor: tremorAnchor,
-        idx,
-        track: tremorCameraTrack,
-        cw,
-        ch,
-        dpr,
-        livePow: tremorLivePow,
-        peakHz: tremorPeakHz,
-        intensity: tremorIntensity,
-      });
-    }
-
     // --- Pinch aperture on skeleton (explains grasp quality) ---
     if (!touchPerf) {
       const fwPx = Number(overlayData?.frame_width_px) || cw;
       const fhPx = Number(overlayData?.frame_height_px) || ch;
-      const swPx = swPxTremor;
-
-      // Tremor halo from backup (REFERENCE_SNAPSHOT / v32.52): pulsing ring on the palm.
-      if (tremorAnchor && idx >= win.start_idx && idx <= win.end_idx) {
-        if (tremorIntensity > 0.02 || tremorLivePow != null) {
-          const r = 14 + tremorIntensity * 42;
-          const alphaHalo = 0.12 + tremorIntensity * 0.55;
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(tremorAnchor[0], tremorAnchor[1], r, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(251,113,133,${Math.min(0.95, alphaHalo).toFixed(2)})`;
-          ctx.lineWidth = 2.5 + tremorIntensity * 3;
-          ctx.shadowColor = "rgba(251,113,133,0.65)";
-          ctx.shadowBlur = 12 + tremorIntensity * 18;
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(tremorAnchor[0], tremorAnchor[1], Math.max(6, r * 0.45), 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(251,113,133,${(0.08 + tremorIntensity * 0.28).toFixed(2)})`;
-          ctx.fill();
-          ctx.restore();
-          drawSimpleLabel(
-            `Tr ${formatTremorPower(tremorLivePow)}${tremorPeakHz != null ? ` · ${Number(tremorPeakHz).toFixed(1)}Hz` : ""}`,
-            tremorAnchor,
-            tremorAnchor[0] > cx ? -150 : 20,
-            -52,
-            { color: "#fda4af", border: "rgba(251,113,133,0.55)", bg: "rgba(40,10,18,0.85)" },
-          );
-          if (showExtendedKin || tremorLivePow != null) {
-            drawEvidenceCard(
-              ctx,
-              buildTremorEvidenceLines(overlayData, tremorLivePow, tremorPeakHz),
-              tremorAnchor,
-              {
-                cw,
-                ch,
-                dpr,
-                offsetX: tremorAnchor[0] > cx ? -210 : 18,
-                offsetY: -118,
-                border: "rgba(251,113,133,0.4)",
-                titleColor: "#fecdd3",
-              },
-            );
-          }
-        }
-      }
+      const swPx = Number(overlayData?.shoulder_width_px) || 0;
 
       const thumbTip = jointDots.find((d) => d.fid === "thumb" && d.jname === "tip")?.cpt || pt("thumb");
       const indexTipEv = jointDots.find((d) => d.fid === "index" && d.jname === "tip")?.cpt || pt("index");
@@ -1617,6 +1553,12 @@ export function ValidationOverlayPlayer({
         shoulderElevationPalm: currentShoulderElevationPalm,
         shoulderAbduction: currentShoulderAbduction,
         fingerQuality: currentFingerQuality,
+        liveShoulderElevationCm: panelLive?.liveShoulderElevationCm,
+        liveTrunkForwardDisplacementCm: panelLive?.liveTrunkForwardDisplacementCm,
+        liveAverageHandVelocityCmS: panelLive?.liveAverageHandVelocityCmS,
+        liveElbowAngleMeanDeg: panelLive?.liveElbowAngleMeanDeg,
+        liveShoulderFlexionMeanDeg: panelLive?.liveShoulderFlexionMeanDeg,
+        liveShoulderAbductionMeanDeg: panelLive?.liveShoulderAbductionMeanDeg,
         tremor_8_12hz_power: panelLive?.tremor_8_12hz_power
           ?? tremorLive?.tremor_8_12hz_power
           ?? resolvedTremor?.tremor_8_12hz_power,
@@ -1677,7 +1619,8 @@ export function ValidationOverlayPlayer({
     const unscaledRowH = 14 * dpr;
     const unscaledHeaderH = 26 * dpr;
     const unscaledHeaderGap = 22 * dpr;
-    const unscaledPanelH = unscaledHeaderH + unscaledHeaderGap + unscaledRowH * 13 + unscaledChartH * 3 + unscaledPad * 2 + 20;
+    const rowDefsInline = getValidationPanelRowDefs(overlayData, clinicalTask);
+    const unscaledPanelH = unscaledHeaderH + unscaledHeaderGap + unscaledRowH * (rowDefsInline.length + 1) + unscaledChartH * 3 + unscaledPad * 2 + 20;
     const maxPanelH = ch - unscaledPad * 2;
     const panelScale = unscaledPanelH > maxPanelH ? Math.max(0.65, maxPanelH / unscaledPanelH) : 1;
     const pad = unscaledPad * panelScale;
@@ -1725,8 +1668,13 @@ export function ValidationOverlayPlayer({
       shoulderElevationPalm: currentShoulderElevationPalm,
       shoulderAbduction: currentShoulderAbduction,
       fingerQuality: currentFingerQuality,
+      liveShoulderElevationCm: panelLive?.liveShoulderElevationCm,
+      liveTrunkForwardDisplacementCm: panelLive?.liveTrunkForwardDisplacementCm,
+      liveAverageHandVelocityCmS: panelLive?.liveAverageHandVelocityCmS,
+      liveElbowAngleMeanDeg: panelLive?.liveElbowAngleMeanDeg,
+      liveShoulderFlexionMeanDeg: panelLive?.liveShoulderFlexionMeanDeg,
+      liveShoulderAbductionMeanDeg: panelLive?.liveShoulderAbductionMeanDeg,
     };
-    const rowDefsInline = getValidationPanelRowDefs(overlayData, clinicalTask);
 
     let cy = py + headerH + headerGap;
     rowDefsInline.forEach((row) => {
@@ -1787,7 +1735,7 @@ export function ValidationOverlayPlayer({
     ctx.fillText(`Speed ${Math.round(speed)} °/s`, gx, gy - 4);
     }
 
-  }, [frames, fps, win, peakV, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, tremorCameraTrack, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, overlayStyle, showKinematicMarks]);
+  }, [frames, fps, win, peakV, velocityProfile, phaseColor, phaseLabel, getFrameIndex, getFrameState, peakFrames, getElbowAngVel, overlayData?.elbow_angle_profile, overlayData?.trunk_x_profile, overlayData?.table_surface_y, overlayData?.shoulder_palm_anchor, overlayData, clinicalTask, overlayStyle, showKinematicMarks]);
 
   const drawRecordingFrame = useCallback(() => {
     const video = videoRef.current;

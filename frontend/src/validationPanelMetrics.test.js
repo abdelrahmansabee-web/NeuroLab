@@ -2,6 +2,11 @@ import {
   computeOverlayMetrics,
   computeValidationPanelLive,
   formatPanelAlignedKinValue,
+  pathLandmarkXY,
+  restLandmarkPalm,
+  restPathStartIdx,
+  shoulderFlexionGoniometerDeg,
+  straightnessFromRest,
 } from "./validationPanelMetrics";
 import { resolveKinMetricValue } from "./kinMetrics";
 
@@ -56,8 +61,8 @@ test("table snapshot uses panel formulas at movement-window end, not server metr
 
   expect(panel).not.toBeNull();
   expect(table.nvp).toBe(panel.nvp);
-  expect(table.nvp).toBe(2);
-  expect(table.nvp_reach).toBe(2);
+  expect(table.nvp).toBe(3);
+  expect(table.nvp_reach).toBe(3);
   expect(table.straightness).toBeCloseTo(panel.straightness, 8);
   expect(table.pause_time_sec).toBeCloseTo(panel.pauseTime, 8);
   expect(table.number_of_stops).toBe(panel.stops);
@@ -84,16 +89,158 @@ test("resolveKinMetricValue prefers panel NVP over backend nvp_reach", () => {
     nvp: 7,
     overlay_metrics: { nvp: 2, nvp_reach: 2 },
   };
-  expect(resolveKinMetricValue(phaseResult, "nvp_reach", overlay)).toBe(2);
-  expect(resolveKinMetricValue(phaseResult, "nvp", overlay)).toBe(2);
+  expect(resolveKinMetricValue(phaseResult, "nvp_reach", overlay)).toBe(3);
+  expect(resolveKinMetricValue(phaseResult, "nvp", overlay)).toBe(3);
   expect(resolveKinMetricValue(phaseResult, "pause_time_sec", overlay)).toBeCloseTo(1 / 60, 8);
 });
 
-test("panel NVP ignores peaks before movement onset", () => {
+test("panel NVP counts peaks from the rest landmark, including before velocity onset", () => {
   const overlay = makeOverlay();
   const panel = computeValidationPanelLive(overlay, 14);
-  expect(panel.nvp).toBe(2);
+  expect(panel.nvp).toBe(3);
   expect(overlay.peak_frames).toEqual([2, 6, 10, 18]);
+});
+
+test("fills missing clinic summaries from overlay frames without changing panel NVP", () => {
+  const overlay = makeOverlay();
+  overlay.cm_per_px = 0.1;
+  overlay.shoulder_width_px = 200;
+  overlay.frames.forEach((f, i) => {
+    f.trunk_displacement_norm = i === 14 ? 0.2 : 0.05;
+    f.shoulder_flexion_deg = 40 + i;
+    f.shoulder_abduction_deg = 20 + i;
+  });
+  const table = computeOverlayMetrics(overlay);
+  expect(table.nvp).toBe(3);
+  expect(table.average_hand_velocity_cm_s).toBeGreaterThan(0);
+  expect(table.trunk_forward_displacement_cm).toBeCloseTo(0.2 * 200 * 0.1, 6);
+  expect(table.shoulder_flexion_mean_deg).toBeGreaterThan(0);
+  expect(table.shoulder_abduction_mean_deg).toBeGreaterThan(0);
+});
+
+test("clinic panel numbers accumulate from movement onset to the current frame", () => {
+  const overlay = makeOverlay();
+  overlay.cm_per_px = 0.1;
+  overlay.shoulder_width_px = 200;
+  overlay.frames.forEach((f, i) => {
+    f.trunk_displacement_norm = (i - 4) * 0.02;
+    f.shoulder_flexion_deg = 40 + i;
+    f.shoulder_abduction_deg = 10 + i;
+  });
+  const before = computeValidationPanelLive(overlay, 3);
+  const early = computeValidationPanelLive(overlay, 6);
+  const late = computeValidationPanelLive(overlay, 14);
+  expect(before.liveAverageHandVelocityCmS).toBeUndefined();
+  expect(early.nvp).toBe(2);
+  expect(late.nvp).toBe(3);
+  expect(early.movementTime).toBeLessThan(late.movementTime);
+  expect(early.liveAverageHandVelocityCmS).toBeGreaterThan(0);
+  expect(late.liveTrunkForwardDisplacementCm).toBeGreaterThan(early.liveTrunkForwardDisplacementCm);
+  expect(late.liveShoulderElevationCm).toBeGreaterThan(early.liveShoulderElevationCm);
+  expect(late.liveElbowAngleMeanDeg).toBeGreaterThan(early.liveElbowAngleMeanDeg);
+  expect(late.liveShoulderFlexionMeanDeg).toBeGreaterThan(early.liveShoulderFlexionMeanDeg);
+  expect(late.liveShoulderAbductionMeanDeg).toBeGreaterThan(early.liveShoulderAbductionMeanDeg);
+});
+
+test("does not overwrite backend shoulder abduction / flexion when already present", () => {
+  const overlay = makeOverlay();
+  overlay.metrics.shoulder_abduction_mean_deg = 33.3;
+  overlay.metrics.shoulder_flexion_mean_deg = 44.4;
+  overlay.frames.forEach((f) => {
+    f.shoulder_flexion_deg = 10;
+    f.shoulder_abduction_deg = 10;
+  });
+  const table = computeOverlayMetrics(overlay);
+  expect(table.shoulder_abduction_mean_deg).toBe(33.3);
+  expect(table.shoulder_flexion_mean_deg).toBe(44.4);
+});
+
+test("goniometer shoulder flexion is 0 when the humerus lies on the midaxillary line", () => {
+  const hanging = {
+    shoulder: [0.4, 0.3],
+    elbow: [0.4, 0.55],
+    rhip: [0.4, 0.75],
+  };
+  expect(shoulderFlexionGoniometerDeg(hanging, "right")).toBeCloseTo(0, 5);
+});
+
+test("goniometer shoulder flexion is 90 when the humerus is perpendicular to the trunk", () => {
+  const fwd = {
+    shoulder: [0.4, 0.3],
+    elbow: [0.7, 0.3],
+    rhip: [0.4, 0.75],
+  };
+  expect(shoulderFlexionGoniometerDeg(fwd, "right")).toBeCloseTo(90, 5);
+});
+
+test("goniometer flexion overwrites baked overlay metrics when hip landmarks exist", () => {
+  const overlay = makeOverlay();
+  overlay.affected_side = "right";
+  overlay.metrics.shoulder_flexion_mean_deg = 44.4;
+  overlay.frames.forEach((f) => {
+    f.shoulder = [0.4, 0.3];
+    f.elbow = [0.4, 0.55];
+    f.rhip = [0.4, 0.75];
+    f.shoulder_flexion_deg = 88;
+  });
+  const table = computeOverlayMetrics(overlay);
+  expect(table.shoulder_flexion_mean_deg).toBeCloseTo(0, 5);
+});
+
+test("NVP and straightness use the rest wrist, not the index tip", () => {
+  const fps = 60;
+  const frames = [];
+  for (let i = 0; i < 24; i += 1) {
+    const t = Math.max(0, i - 4) / 19;
+    frames.push({
+      time: i / fps,
+      wrist: [0.20 + t * 0.40, 0.70],
+      palm: [0.20 + t * 0.40, 0.70 + Math.sin(i * 1.7) * 0.12],
+      speed: i >= 4 && i <= 20 ? 16 : 0,
+      trunk: [0.25, 0.32],
+      elbow_angle: 90,
+    });
+  }
+  const overlay = {
+    fps,
+    frames,
+    movement_window: { start_idx: 4, end_idx: 20 },
+    peak_frames: [8, 14],
+  };
+  const rest = restLandmarkPalm(overlay);
+  expect(rest[1]).toBeCloseTo(0.70, 5);
+  expect(pathLandmarkXY(frames[20])[1]).toBeCloseTo(0.70, 5);
+  expect(frames[20].palm[1]).not.toBeCloseTo(0.70, 2);
+  const s = straightnessFromRest(overlay, 20);
+  expect(s).toBeGreaterThan(0.95);
+});
+
+test("NVP and straightness start at the rest palm landmark, not velocity onset", () => {
+  const fps = 60;
+  const frames = [];
+  for (let i = 0; i < 40; i += 1) {
+    const leftRest = i >= 8;
+    frames.push({
+      time: i / fps,
+      palm: leftRest ? [0.20 + (i - 8) * 0.02, 0.70] : [0.20, 0.70],
+      speed: leftRest ? 18 : 0,
+      trunk: [0.25, 0.32],
+      elbow_angle: 90,
+    });
+  }
+  const overlay = {
+    fps,
+    frames,
+    movement_window: { start_idx: 20, end_idx: 35 },
+    peak_frames: [12, 24, 30],
+  };
+  expect(restLandmarkPalm(overlay)[0]).toBeCloseTo(0.20, 5);
+  expect(restPathStartIdx(overlay)).toBeLessThan(20);
+  const panel = computeValidationPanelLive(overlay, 35);
+  expect(panel.nvp).toBe(3);
+  expect(straightnessFromRest(overlay, 35)).toBeGreaterThan(0);
+  expect(straightnessFromRest(overlay, 35)).toBeLessThanOrEqual(1);
+  expect(frames[20].palm[0]).toBeGreaterThan(restLandmarkPalm(overlay)[0]);
 });
 
 test("panel-aligned format matches video panel decimals (ratio, not percent)", () => {
