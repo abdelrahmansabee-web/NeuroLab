@@ -44,7 +44,7 @@ import {
   saveSharedTableSurfaceY,
   tableMarkHitGeom,
 } from "./overlayTableUserMark";
-import { holdDisplayLandmark, resetHoldIfSeek } from "./overlayPoseHold";
+import { holdBodyDisplay, holdDisplayLandmark, holdFingerCanvas, resetHoldIfSeek } from "./overlayPoseHold";
 import { swallowGhostClick } from "./uiGhostClick";
 import {
   OVERLAY_VIDEO_PRELOAD,
@@ -894,7 +894,34 @@ export function ValidationOverlayPlayer({
 
     const color = phaseColor;
 
+    const BODY_HOLD_KEYS = [
+      "nose", "lear", "rear",
+      "leye", "reye", "leye_inner", "leye_outer", "reye_inner", "reye_outer",
+      "mouth_l", "mouth_r",
+      "trunk", "lshoulder", "rshoulder", "lelbow", "relbow",
+      "lwrist", "rwrist", "lhip", "rhip", "lknee", "rknee", "lankle", "rankle",
+      "shoulder", "elbow", "palm", "wrist", "hl_wrist", "thumb", "index", "pinky", "middle", "ring",
+    ];
+    const rawBody = {};
+    BODY_HOLD_KEYS.forEach((name) => {
+      const blended = overlayLandmarkAt(frames, idx, alpha, name);
+      if (!blended) {
+        rawBody[name] = null;
+        return;
+      }
+      const nx = blended[0];
+      const ny = blended[1];
+      const isHandLm = /^(index|thumb|pinky|middle|ring|hl_wrist)$/.test(name);
+      if (isHandLm && (nx <= 0.0002 || nx >= 0.9998 || ny <= 0.0002 || ny >= 0.9998)) {
+        rawBody[name] = null;
+        return;
+      }
+      rawBody[name] = blended;
+    });
+    const heldBody = holdBodyDisplay(bodyHoldRef.current, rawBody, cw, ch, idx);
+
     function pt(name) {
+      if (Object.prototype.hasOwnProperty.call(heldBody, name)) return heldBody[name];
       const blended = overlayLandmarkAt(frames, idx, alpha, name);
       if (!blended) return null;
       const nx = blended[0];
@@ -1300,15 +1327,11 @@ export function ValidationOverlayPlayer({
     };
 
     const smoothStore = fingerSmoothRef.current;
+    const fingerOrigin = poseWristPt || hlWristPt;
     const smoothFinger = (key, cpt, live) => {
       if (!cpt) return null;
       if (!live) return cpt;
-      if (smoothStore._idx != null && Math.abs(idx - smoothStore._idx) > 8) {
-        Object.keys(smoothStore).forEach((k) => { if (k !== "_idx") delete smoothStore[k]; });
-      }
-      smoothStore._idx = idx;
-      smoothStore[key] = [...cpt];
-      return cpt;
+      return holdFingerCanvas(smoothStore, key, cpt, fingerOrigin, cw, ch, idx);
     };
 
     const jointDots = [];
