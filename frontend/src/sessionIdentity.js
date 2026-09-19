@@ -39,3 +39,26 @@ export function shouldUseEphemeralSpaceVideo(filename, localUploadNames) {
   }
   return false;
 }
+
+/** Wrap a recalled Drive/IDB clip so Analyze can POST it. Never use Space /video/. */
+export function blobAsAnalyzeFile(blob, filename) {
+  if (!(blob instanceof Blob) || blob.size <= 0) return null;
+  const name = String(filename || "").trim() || "video.mp4";
+  const type = String(blob.type || "").trim() || "video/mp4";
+  try {
+    if (typeof File === "function") return new File([blob], name, { type });
+  } catch { /* ignore */ }
+  try {
+    return blob.slice(0, blob.size, type);
+  } catch {
+    return blob;
+  }
+}
+
+export function analyzeSourceForOpenSession({ file, originalBlob, filename } = {}) {
+  if (file instanceof Blob && file.size > 0) {
+    if (file.name) return file;
+    return blobAsAnalyzeFile(file, filename) || file;
+  }
+  return blobAsAnalyzeFile(originalBlob, filename);
+}

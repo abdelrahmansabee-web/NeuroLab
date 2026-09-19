@@ -54,7 +54,7 @@ import {
   validationCacheMatchesResult,
   requestClinicPersistentStorage,
 } from "./validationSessionCache";
-import { findPatientForOpenSession, kinematicsResultsForOpenSession, shouldUseEphemeralSpaceVideo } from "./sessionIdentity";
+import { analyzeSourceForOpenSession, findPatientForOpenSession, kinematicsResultsForOpenSession, shouldUseEphemeralSpaceVideo } from "./sessionIdentity";
 import {
   backupDriveArtifact,
   backupValidationArtifactsToDrive,
@@ -4751,11 +4751,46 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   };
 
   const analyzeVideo = async (phase) => {
-    const file = data[`${vidKey(phase)}_file`];
-    if (!file) {
+    const filename = data[vidKey(phase)];
+    let file = analyzeSourceForOpenSession({
+      file: data[`${vidKey(phase)}_file`],
+      filename,
+    });
+    if (!(file instanceof Blob) || file.size <= 0) {
+      let recalled = null;
+      const liveUrl = originalVideoBlobsRef.current[phase];
+      if (typeof liveUrl === "string" && liveUrl.startsWith("blob:")) {
+        try {
+          recalled = await (await fetch(liveUrl)).blob();
+        } catch { /* ignore */ }
+      }
+      if (!(recalled instanceof Blob) || recalled.size <= 0) {
+        const cached = patientCacheKey
+          ? await loadValidationSessionArtifact(patientCacheKey, phase)
+          : null;
+        if (!cached?.patientKey || cached.patientKey === patientCacheKey) {
+          recalled = cached?.originalVideoBlob;
+        }
+      }
+      if (!(recalled instanceof Blob) || recalled.size <= 0) {
+        const cloud = await hydrateValidationFromCloud(phase, {
+          overlay: false,
+          original: true,
+          unified: false,
+          forceDrive: true,
+        });
+        if (!cloud?.patientKey || cloud.patientKey === patientCacheKey) {
+          recalled = cloud?.originalVideoBlob;
+        }
+      }
+      file = analyzeSourceForOpenSession({ originalBlob: recalled, filename });
+    }
+    if (!(file instanceof Blob) || file.size <= 0) {
       showToast("Please select a file first", "error");
       return;
     }
+    if (file.name) localUploadNamesRef.current.add(file.name);
+    if (filename) localUploadNamesRef.current.add(filename);
 
     const controller = new AbortController();
     abortRef.current[phase] = controller;
@@ -4782,7 +4817,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 5, step: "Uploading…" } }));
     writeAnalyzeUi({ phase, pct: 5, step: "Uploading…" });
 
-    const isCsv = file.name.endsWith(".csv");
+    const isCsv = String(file.name || filename || "").toLowerCase().endsWith(".csv");
 
     const demoSide = demographics?.side;
     const strokeSideHint =
@@ -4792,7 +4827,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
     try {
       const fd = new FormData();
-      fd.append(isCsv ? "csv" : "video", file);
+      fd.append(isCsv ? "csv" : "video", file, file.name || filename || (isCsv ? "data.csv" : "video.mp4"));
       fd.append("phase", phase);
       fd.append("trial_role", clinicTrialRoleFromPhase(phase));
       // Use demographics paretic side when set; otherwise auto-detect from kinematics.
