@@ -186,11 +186,17 @@ export function shouldHydrateMediaBlobIntoState(prevObjectUrl, incomingBlob) {
 }
 
 /** Reject stale cache rows from a previous analyze on the same patient/phase.
- *  When HF ephemeral files are gone, allow restore if the cached row has usable
- *  overlay/video even if csv_filename no longer matches the live Space path.
+ *  Missing csv on the live result may still restore this patient's IDB/Drive
+ *  artifacts. A different csv name is another analysis — do not paint it.
+ *  Space path drift is restored from the patient-scoped Drive folder instead.
  */
 export function validationCacheMatchesResult(cached, result, opts = {}) {
   if (!cached) return false;
+  const expectedKey = String(opts.patientKey || "").trim();
+  if (expectedKey) {
+    const cachedKey = String(cached.patientKey || "").trim();
+    if (!cachedKey || cachedKey !== expectedKey) return false;
+  }
   const relax = opts.relaxCsvMatch === true;
   const original = reviveMediaBlob(cached.originalVideoBlob);
   const unified = reviveMediaBlob(cached.unifiedVideoBlob);
@@ -203,8 +209,7 @@ export function validationCacheMatchesResult(cached, result, opts = {}) {
     return relax ? hasArtifact : false;
   }
   if (cached.csvFilename && cached.csvFilename !== result.csv_filename) {
-    // After Space rebuild, CSV path often changes — still reuse Drive/IDB artifacts.
-    return relax ? hasArtifact : false;
+    return false;
   }
   return true;
 }
