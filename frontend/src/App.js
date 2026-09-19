@@ -53,7 +53,13 @@ import {
   validationCacheMatchesResult,
   requestClinicPersistentStorage,
 } from "./validationSessionCache";
-import { findPatientForOpenSession, kinematicsResultsForOpenSession } from "./sessionIdentity";
+import {
+  findPatientForOpenSession,
+  kinAnalysisResultsSig,
+  kinAsyncStillCurrent,
+  kinematicsResultsForOpenSession,
+  shouldResetKinSessionMedia,
+} from "./sessionIdentity";
 import {
   backupDriveArtifact,
   backupValidationArtifactsToDrive,
@@ -3836,6 +3842,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   useEffect(() => { videoBlobsRef.current = videoBlobs; }, [videoBlobs]);
   useEffect(() => { videoLoadingRef.current = videoLoading; }, [videoLoading]);
   useEffect(() => { originalVideoBlobsRef.current = originalVideoBlobs; }, [originalVideoBlobs]);
+  const kinIdentityRef = useRef("");
+  const prevCacheKeyRef = useRef("");
+  const prevResultsSigRef = useRef(kinAnalysisResultsSig(data?.analysisResults));
+  const kinWorkStillHere = (started) => kinAsyncStillCurrent(started, kinIdentityRef.current);
 
   const patientCacheKey = useMemo(
     () => patientDriveKeyFromDemographics(demographics, sessionKey),
@@ -3847,22 +3857,25 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     [patientCacheKey],
   );
 
-  const applyValidationCacheToState = useCallback((phase, cached) => {
+  const applyValidationCacheToState = useCallback((phase, cached, startedKey) => {
     if (!cached) return false;
+    if (!kinAsyncStillCurrent(startedKey, kinIdentityRef.current)) return false;
     if (patientCacheKey && cached.patientKey && cached.patientKey !== patientCacheKey) return false;
     let applied = false;
     if (cached.overlay?.frames?.length) {
       startTransition(() => {
-        setOverlayData((prev) => (
-          shouldHydrateOverlayIntoState(prev[phase], cached.overlay)
+        setOverlayData((prev) => {
+          if (!kinAsyncStillCurrent(startedKey, kinIdentityRef.current)) return prev;
+          return shouldHydrateOverlayIntoState(prev[phase], cached.overlay)
             ? { ...prev, [phase]: cached.overlay }
-            : prev
-        ));
+            : prev;
+        });
       });
       applied = true;
     }
     if (cached.originalVideoBlob instanceof Blob && cached.originalVideoBlob.size > 0) {
       setOriginalVideoBlobs((prev) => {
+        if (!kinAsyncStillCurrent(startedKey, kinIdentityRef.current)) return prev;
         if (!shouldHydrateMediaBlobIntoState(prev[phase], cached.originalVideoBlob)) return prev;
         const objectUrl = URL.createObjectURL(cached.originalVideoBlob);
         const next = { ...prev, [phase]: objectUrl };
@@ -3873,16 +3886,20 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     }
     if (cached.unifiedVideoBlob instanceof Blob && cached.unifiedVideoBlob.size > 0) {
       setVideoBlobs((prev) => {
+        if (!kinAsyncStillCurrent(startedKey, kinIdentityRef.current)) return prev;
         if (!shouldHydrateMediaBlobIntoState(prev[phase], cached.unifiedVideoBlob)) return prev;
         const objectUrl = URL.createObjectURL(cached.unifiedVideoBlob);
         const next = { ...prev, [phase]: objectUrl };
         videoBlobsRef.current = next;
         return next;
       });
-      setDriveBakeDone((prev) => ({
-        ...prev,
-        [phase]: Boolean(cached.compositedOverlay) && Number(cached.compositedOverlayQuality || 0) >= 2,
-      }));
+      setDriveBakeDone((prev) => {
+        if (!kinAsyncStillCurrent(startedKey, kinIdentityRef.current)) return prev;
+        return {
+          ...prev,
+          [phase]: Boolean(cached.compositedOverlay) && Number(cached.compositedOverlayQuality || 0) >= 2,
+        };
+      });
       applied = true;
     }
     return applied;
@@ -3925,8 +3942,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
   const hydrateValidationFromCloud = useCallback(async (phase, needs = {}) => {
     if (!patientCacheKey) return null;
+    const started = kinIdentityRef.current;
     const phaseResult = kinematicsResults[phase];
     const existing = await loadValidationSessionArtifact(patientCacheKey, phase);
+    if (!kinWorkStillHere(started)) return null;
     const existingValid = validationCacheMatchesResult(existing, phaseResult, cacheMatchOpts)
       ? existing
       : null;
@@ -3935,7 +3954,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     const wantUnified = needs.unified !== false && !(existingValid?.unifiedVideoBlob?.size > 0);
     const wantKinematics = needs.kinematics === true && !existingValid?.kinematicsSnapshot;
     if (!wantOverlay && !wantOriginal && !wantUnified && !wantKinematics) {
-      if (existingValid) applyValidationCacheToState(phase, existingValid);
+      if (existingValid) applyValidationCacheToState(phase, existingValid, started);
       return existingValid;
     }
     const fromDrive = await restoreValidationArtifactsFromDrive(patientCacheKey, phase, {
@@ -3944,6 +3963,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       unified: wantUnified,
       kinematics: wantKinematics,
     });
+    if (!kinWorkStillHere(started)) return null;
     if (!fromDrive && !existingValid) return null;
     const merged = {
       ...(existingValid || {}),
@@ -3959,7 +3979,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     const matched = validationCacheMatchesResult(merged, phaseResult, cacheMatchOpts);
     if (!matched && !(needs.kinematics && merged.kinematicsSnapshot)) return existingValid;
     await saveValidationSessionArtifact(merged);
-    applyValidationCacheToState(phase, merged);
+    if (!kinWorkStillHere(started)) return merged;
+    applyValidationCacheToState(phase, merged, started);
     return merged;
   }, [patientCacheKey, kinematicsResults, applyValidationCacheToState, cacheMatchOpts]);
 
@@ -3988,33 +4009,48 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     };
   }, []);
 
-  // Reload kinematics when switching patient session. Also drop leftover
-  // overlay/video pixels so a hard refresh cannot keep another patient's clips.
+  // Reload kinematics when switching patient session. Drop leftover
+  // overlay/video so a stale fetch cannot paint the previous patient's clips.
   useEffect(() => {
-    setOverlayData({});
-    setOverlayMountReady({});
-    setDriveBakeDone({});
-    setOverlaySourceBad({});
-    setOriginalVideoBlobs((prev) => {
-      Object.values(prev).forEach((url) => {
-        if (typeof url === "string") URL.revokeObjectURL(url);
+    const prev = prevCacheKeyRef.current;
+    const next = patientCacheKey;
+    const nextSig = kinAnalysisResultsSig(data?.analysisResults);
+    const resetMedia = shouldResetKinSessionMedia(prev, next, prevResultsSigRef.current, nextSig);
+    prevCacheKeyRef.current = next;
+    prevResultsSigRef.current = nextSig;
+    if (resetMedia) {
+      kinIdentityRef.current = next;
+      Object.keys(abortRef.current).forEach((ph) => {
+        try { abortRef.current[ph]?.abort(); } catch { /* ignore */ }
+        delete abortRef.current[ph];
       });
-      originalVideoBlobsRef.current = {};
-      return {};
-    });
-    setVideoBlobs((prev) => {
-      Object.values(prev).forEach((url) => {
-        if (typeof url === "string") URL.revokeObjectURL(url);
+      setOverlayData({});
+      setOverlayMountReady({});
+      setDriveBakeDone({});
+      setOverlaySourceBad({});
+      setOriginalVideoBlobs((prevBlobs) => {
+        Object.values(prevBlobs).forEach((url) => {
+          if (typeof url === "string" && url.startsWith("blob:")) URL.revokeObjectURL(url);
+        });
+        originalVideoBlobsRef.current = {};
+        return {};
       });
-      videoBlobsRef.current = {};
-      return {};
-    });
-    overlayVideoSyncedRef.current = {};
+      setVideoBlobs((prevBlobs) => {
+        Object.values(prevBlobs).forEach((url) => {
+          if (typeof url === "string" && url.startsWith("blob:")) URL.revokeObjectURL(url);
+        });
+        videoBlobsRef.current = {};
+        return {};
+      });
+      overlayVideoSyncedRef.current = {};
+    } else if (!kinIdentityRef.current && next) {
+      kinIdentityRef.current = next;
+    }
     const fromFd = kinematicsResultsForOpenSession(data?.analysisResults);
     if (Object.keys(fromFd).length > 0) {
       setKinematicsResults(fromFd);
       try { localStorage.setItem(KIN_LS_KEY, JSON.stringify(fromFd)); } catch { /* ignore */ }
-    } else {
+    } else if (resetMedia) {
       setKinematicsResults({});
       try { localStorage.removeItem(KIN_LS_KEY); } catch { /* ignore */ }
     }
@@ -4177,12 +4213,15 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
   const fetchOverlayData = useCallback(async (phase, csvFilename, { syncResults = true } = {}) => {
     if (!csvFilename) return null;
+    const started = kinIdentityRef.current;
     const phaseResult = kinematicsResults[phase];
 
     try {
       const res = await fetch(`${API_BASE}/overlay-data/${encodeURIComponent(csvFilename)}?v=${Date.now()}`);
+      if (!kinWorkStillHere(started)) return null;
       if (!res.ok) throw new Error(`Failed to load overlay data (${res.status})`);
       const overlay = await res.json();
+      if (!kinWorkStillHere(started)) return null;
       console.log("overlay-debug", csvFilename, {
         phase,
         ...summarizeOverlayClock(overlay),
@@ -4199,11 +4238,14 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       });
       if (overlay.error) throw new Error(overlay.error);
       startTransition(() => {
-        setOverlayData((prev) => ({ ...prev, [phase]: overlay }));
+        setOverlayData((prev) => (
+          kinWorkStillHere(started) ? { ...prev, [phase]: overlay } : prev
+        ));
       });
       const metrics = resolveOverlayMetrics(overlay);
       if (syncResults) {
         setKinematicsResults((prev) => {
+          if (!kinWorkStillHere(started)) return prev;
           const existing = prev[phase] || {};
           const next = {
             ...prev,
@@ -4217,27 +4259,34 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
           return next;
         });
       }
-      setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
+      if (kinWorkStillHere(started)) {
+        setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
+      }
       persistValidationPhase(phase, { csvFilename, overlay, kinematicsSnapshot: phaseResult });
       return { overlay, metrics };
     } catch (err) {
+      if (!kinWorkStillHere(started)) return null;
       let cachedOverlay = null;
       if (patientCacheKey) {
         const cached = await loadValidationSessionArtifact(patientCacheKey, phase);
+        if (!kinWorkStillHere(started)) return null;
         if (validationCacheMatchesResult(cached, { csv_filename: csvFilename }, cacheMatchOpts) && cached?.overlay?.frames?.length) {
           cachedOverlay = cached.overlay;
-          applyValidationCacheToState(phase, { overlay: cached.overlay, patientKey: cached.patientKey });
+          applyValidationCacheToState(phase, { overlay: cached.overlay, patientKey: cached.patientKey }, started);
         } else {
           const cloud = await hydrateValidationFromCloud(phase, { overlay: true, original: false, unified: false });
+          if (!kinWorkStillHere(started)) return null;
           if (validationCacheMatchesResult(cloud, { csv_filename: csvFilename }, cacheMatchOpts) && cloud?.overlay?.frames?.length) {
             cachedOverlay = cloud.overlay;
           }
         }
       }
       if (cachedOverlay?.frames?.length) {
+        if (!kinWorkStillHere(started)) return null;
         const metrics = resolveOverlayMetrics(cachedOverlay);
         if (syncResults) {
           setKinematicsResults((prev) => {
+            if (!kinWorkStillHere(started)) return prev;
             const existing = prev[phase] || {};
             const next = {
               ...prev,
@@ -4274,6 +4323,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   const loadOriginalVideoBlob = useCallback(async (phase, filename, options = {}) => {
     const { force = false } = options;
     if (!filename) return;
+    const started = kinIdentityRef.current;
     if (!force && originalVideoBlobsRef.current[phase]) return;
     if (force) {
       setOriginalVideoBlobs((prev) => {
@@ -4291,12 +4341,14 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     const applyCachedOriginal = async () => {
       if (!patientCacheKey) return false;
       const cached = await loadValidationSessionArtifact(patientCacheKey, phase);
+      if (!kinWorkStillHere(started)) return false;
       if (!validationCacheMatchesResult(cached, phaseResult, cacheMatchOpts)) return false;
       const blob = cached?.originalVideoBlob;
       if (!(blob instanceof Blob) || blob.size <= 0) return false;
       applyValidationCacheToState(phase, {
         originalVideoBlob: playbackVideoBlob(blob, filename),
-      });
+        patientKey: cached.patientKey,
+      }, started);
       return true;
     };
 
@@ -4315,8 +4367,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       let loaded = null;
       let loadedName = null;
       for (const name of candidates) {
+        if (!kinWorkStillHere(started)) return;
         const url = `${API_BASE}/video/${encodeURIComponent(name)}`;
         const res = await fetch(url);
+        if (!kinWorkStillHere(started)) return;
         if (res.status === 404) continue;
         if (!res.ok) throw new Error(`Failed (${res.status})`);
         const blob = playbackVideoBlob(await res.blob(), name);
@@ -4328,11 +4382,16 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       if (!loaded) {
         if (await applyCachedOriginal()) return;
         const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: true, unified: false });
+        if (!kinWorkStillHere(started)) return;
         if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.originalVideoBlob?.size) return;
         showToast("Original video expired on server — please re-upload", "error");
         return;
       }
       const objectUrl = URL.createObjectURL(loaded);
+      if (!kinWorkStillHere(started)) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
       setOriginalVideoBlobs((prev) => {
         if (prev[phase]) URL.revokeObjectURL(prev[phase]);
         const next = { ...prev, [phase]: objectUrl };
@@ -4544,8 +4603,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       return;
     }
 
+    if (abortRef.current[phase]) {
+      try { abortRef.current[phase].abort(); } catch { /* ignore */ }
+    }
     const controller = new AbortController();
     abortRef.current[phase] = controller;
+    const started = kinIdentityRef.current;
     setKinAnalyzeActive(true);
     setOverlayMountReady((prev) => ({ ...prev, [phase]: false }));
     setDriveBakeDone((prev) => ({ ...prev, [phase]: false }));
@@ -4686,6 +4749,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         video_filename: videoFilename,
       };
 
+      if (!kinWorkStillHere(started)) return;
+
       const nextResults = { ...kinematicsResults, [phase]: phasePayload };
       setKinematicsResults(nextResults);
       onChange({
@@ -4708,19 +4773,23 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       }
     } catch (err) {
       if (err.name === "AbortError") {
-        showToast(`Analysis cancelled for ${phase}`, "info");
-      } else {
+        if (kinWorkStillHere(started) && abortRef.current[phase] === controller) {
+          showToast(`Analysis cancelled for ${phase}`, "info");
+        }
+      } else if (kinWorkStillHere(started)) {
         const errorMsg = err.message || "Analysis failed";
         showToast(errorMsg, "error");
         console.error("ANALYSIS ERROR:", err);
+        onChange({ ...data, [statusKey(phase)]: "uploaded" });
       }
-      onChange({ ...data, [statusKey(phase)]: "uploaded" });
     } finally {
-      delete abortRef.current[phase];
-      setKinAnalyzeActive(false);
-      try {
-        sessionStorage.removeItem("neuro_kin_analyze_ui");
-      } catch { /* ignore */ }
+      if (abortRef.current[phase] === controller) delete abortRef.current[phase];
+      if (kinWorkStillHere(started)) {
+        setKinAnalyzeActive(false);
+        try {
+          sessionStorage.removeItem("neuro_kin_analyze_ui");
+        } catch { /* ignore */ }
+      }
     }
   };
 
@@ -4836,6 +4905,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   // the hosting proxy blocks HEAD/range requests (e.g. some browsers/PWAs).
   const loadVideoBlob = useCallback(async (phase, filename, { silent = false } = {}) => {
     if (!filename || videoLoadingRef.current[phase]) return;
+    const started = kinIdentityRef.current;
     videoLoadingRef.current[phase] = true;
     setVideoLoading((prev) => ({ ...prev, [phase]: true }));
     const phaseResult = kinematicsResults[phase];
@@ -4843,20 +4913,23 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     const applyCachedUnified = async () => {
       if (!patientCacheKey) return false;
       const cached = await loadValidationSessionArtifact(patientCacheKey, phase);
+      if (!kinWorkStillHere(started)) return false;
       if (!validationCacheMatchesResult(cached, phaseResult, cacheMatchOpts)) return false;
       const blob = cached?.unifiedVideoBlob;
       if (!(blob instanceof Blob) || blob.size <= 0) return false;
       if (cached.unifiedVideoFilename && cached.unifiedVideoFilename !== filename) return false;
-      applyValidationCacheToState(phase, { unifiedVideoBlob: blob });
+      applyValidationCacheToState(phase, { unifiedVideoBlob: blob, patientKey: cached.patientKey }, started);
       return true;
     };
 
     try {
       const url = `${API_BASE}/video/${encodeURIComponent(filename)}`;
       const res = await fetch(url);
+      if (!kinWorkStillHere(started)) return;
       if (res.status === 404) {
         if (await applyCachedUnified()) return;
         const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
+        if (!kinWorkStillHere(started)) return;
         if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.unifiedVideoBlob?.size) return;
         if (!silent) showToast("Validation video expired on server — please re-analyze", "error");
         setVideoBlobs((prev) => {
@@ -4867,7 +4940,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       }
       if (!res.ok) throw new Error(`Failed (${res.status})`);
       const blob = await res.blob();
+      if (!kinWorkStillHere(started)) return;
       const objectUrl = URL.createObjectURL(blob);
+      if (!kinWorkStillHere(started)) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
       setVideoBlobs((prev) => {
         if (prev[phase]) URL.revokeObjectURL(prev[phase]);
         return { ...prev, [phase]: objectUrl };
@@ -4880,8 +4958,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       });
     } catch (err) {
       console.error("Failed to cache validation video:", err);
+      if (!kinWorkStillHere(started)) return;
       if (await applyCachedUnified()) return;
       const cloud = await hydrateValidationFromCloud(phase, { overlay: false, original: false, unified: true });
+      if (!kinWorkStillHere(started)) return;
       if (validationCacheMatchesResult(cloud, phaseResult, cacheMatchOpts) && cloud?.unifiedVideoBlob?.size) return;
       if (!silent) showToast("Validation video could not be loaded — try expanding it", "error");
       setVideoBlobs((prev) => {
@@ -4889,9 +4969,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         return { ...prev, [phase]: null };
       });
     } finally {
-      videoLoadingRef.current[phase] = false;
-      setVideoLoading((prev) => ({ ...prev, [phase]: false }));
-      setVideoAttempts((prev) => ({ ...prev, [phase]: (prev[phase] || 0) + 1 }));
+      if (kinWorkStillHere(started)) {
+        videoLoadingRef.current[phase] = false;
+        setVideoLoading((prev) => ({ ...prev, [phase]: false }));
+        setVideoAttempts((prev) => ({ ...prev, [phase]: (prev[phase] || 0) + 1 }));
+      }
     }
   }, [showToast, patientCacheKey, kinematicsResults, applyValidationCacheToState, persistValidationPhase, hydrateValidationFromCloud, demographics, sessionKey, cacheMatchOpts]);
 
