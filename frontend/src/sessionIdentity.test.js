@@ -1,4 +1,8 @@
-import { findPatientForOpenSession, kinematicsResultsForOpenSession } from "./sessionIdentity";
+import {
+  findPatientForOpenSession,
+  kinematicsResultsForOpenSession,
+  shouldUseEphemeralSpaceVideo,
+} from "./sessionIdentity";
 
 test("open session kinematics ignore leftover global KIN_LS", () => {
   const his = { pre: { video_filename: "man_pre.mp4" }, post: { video_filename: "man_post.mp4" } };
@@ -37,4 +41,11 @@ test("findPatientForOpenSession refuses a Study ID that hits two rows", () => {
   const a = { _id: "a", demographics: { participantId: "115" } };
   const b = { _id: "b", demographics: { participantId: "115" } };
   expect(findPatientForOpenSession([a, b], { demographics: { participantId: "115" } })).toBe(null);
+});
+
+test("Space /video names are not another patient's restore source", () => {
+  expect(shouldUseEphemeralSpaceVideo("IMG_1765.MOV", new Set())).toBe(false);
+  expect(shouldUseEphemeralSpaceVideo("IMG_1765.MOV", new Set(["IMG_1764.MOV"]))).toBe(false);
+  expect(shouldUseEphemeralSpaceVideo("IMG_1765.MOV", new Set(["IMG_1765.MOV"]))).toBe(true);
+  expect(shouldUseEphemeralSpaceVideo("", new Set(["IMG_1765.MOV"]))).toBe(false);
 });
