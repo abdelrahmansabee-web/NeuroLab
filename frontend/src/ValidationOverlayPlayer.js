@@ -59,7 +59,6 @@ import {
   blendOverlayLandmark,
   isAppleTouchVideo,
   overlayBakeFreeEventName,
-  overlayLivePaintFromCurrentTime,
   overlayNeedsRafUntilFirstVfcPaint,
   overlayPlaybackPaintStalled,
   overlaySourceLooksMismatched,
@@ -138,16 +137,30 @@ function AppShellBackground({ className = "" }) {
   );
 }
 
+/** Laptop skeleton/fork paint. iPad must use these same values. */
+function laptopSkeletonPaint() {
+  return { shadowOff: undefined, fingerBlur: 3, fingerWidth: 1.55, fingerCurve: 0.08, dprCap: 2 };
+}
+
 function overlayCanvasDpr() {
   const raw = window.devicePixelRatio || 1;
+  const cap = laptopSkeletonPaint().dprCap;
   const coarse = window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0;
-  // iPad/touch: cap at 1.0 — large canvases block the main thread and lag video + overlay.
-  return Math.min(raw, coarse ? 1 : 2);
+  if (coarse || isAppleTouchVideo()) return Math.min(raw, cap);
+  return Math.min(raw, 2);
 }
 
 function isCoarsePointerDevice() {
   if (typeof window === "undefined") return false;
   return window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0;
+}
+
+/**
+ * Freeze 32.97 full overlay on every device (laptop chalk, shadows, finger
+ * fork). The coarse/iPad lite path is not used.
+ */
+function clinicValidationPaint() {
+  return false;
 }
 
 /** Fit overlay canvas to the letterboxed video picture (object-fit: contain). */
@@ -872,8 +885,13 @@ export function ValidationOverlayPlayer({
 
     if (!frames.length) return;
 
-    const touchPerf = isCoarsePointerDevice();
-    const shadowOff = touchPerf ? 0 : undefined;
+    // Laptop paint profile. iPad/coarse is forced onto that same skeleton
+    // and fork; the laptop branch below is unchanged.
+    const onIpad = isAppleTouchVideo() || isCoarsePointerDevice();
+    const laptopPaint = laptopSkeletonPaint();
+    const touchPerf = clinicValidationPaint();
+    const shadowOff = onIpad ? laptopPaint.shadowOff : (touchPerf ? 0 : undefined);
+    const fingerBlur = onIpad ? laptopPaint.fingerBlur : (touchPerf ? 0 : 3);
 
     // RVFC paints pass the presented-frame mediaTime; other paints use currentTime.
     const playbackTime = usePresentedTimeRef.current
@@ -1369,9 +1387,9 @@ export function ValidationOverlayPlayer({
             .filter(Boolean);
           for (let i = 0; i < chain.length - 1; i += 1) {
             drawChalkStick(ctx, chain[i], chain[i + 1], {
-              width: 1.55,
-              blur: touchPerf ? 0 : 3,
-              curve: 0.08,
+              width: onIpad ? laptopPaint.fingerWidth : 1.55,
+              blur: fingerBlur,
+              curve: onIpad ? laptopPaint.fingerCurve : 0.08,
             });
           }
         });
@@ -2032,16 +2050,9 @@ export function ValidationOverlayPlayer({
 
     const schedulePaint = () => {
       if (!videoRef.current || !canvasRef.current) return;
-      const touchLive = isCoarsePointerDevice();
-      if (touchLive && !videoRef.current.paused) {
-        if (!overlayLivePaintFromCurrentTime({
-          playing: true,
-          useVideoFrameCallback: useVfc,
-          rafFallback: rafActive,
-        })) return;
-        runPaint();
-        return;
-      }
+      // Same paint turn as laptop. The old coarse-pointer branch returned
+      // early while video was playing, so the iPad skeleton never followed
+      // the 32.97 overlay the laptop already shows.
       if (paintPendingRef.current) return;
       paintPendingRef.current = true;
       requestAnimationFrame(() => {
