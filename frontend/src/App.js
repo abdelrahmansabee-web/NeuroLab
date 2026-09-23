@@ -72,9 +72,17 @@ import {
 import {
   analysisResultErrorMessage,
   ANALYZE_POLL_MS,
+  ANALYZE_POLL_TRANSIENT_RETRIES,
+  analyzeJobIdForPhase,
   analyzePollExceeded,
+  clearAnalyzeUi,
+  isAnalyzeLeaveAbort,
   isKinAnalyzeActive,
+  isTransientAnalyzePollError,
+  readAnalyzeUi,
   setKinAnalyzeActive,
+  shouldResumeAnalyze,
+  writeAnalyzeUi,
 } from "./kinAnalyzeGuard";
 import {
   resolveKinMetricValue,
@@ -3697,7 +3705,7 @@ function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyz
             style={{ boxShadow: `0 0 10px ${film.glow}` }}
           />
         </div>
-        <p className="text-[8px] text-white/35 mt-1">Server processing — keep tab open</p>
+        <p className="text-[8px] text-white/35 mt-1">Server processing — you can change sections</p>
       </div>
     </div>
   );
@@ -3825,7 +3833,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   const [showAllKinMetrics, setShowAllKinMetrics] = useState(false);
   const [mediaPreview, setMediaPreview] = useState(null);
   const [analysisStatus, setAnalysisStatus] = useState({});
-  const [analysisProgress, setAnalysisProgress] = useState({});
+  const [analysisProgress, setAnalysisProgress] = useState(() => {
+    const ui = readAnalyzeUi();
+    if (!ui?.phase) return {};
+    return { [ui.phase]: { pct: ui.pct, step: ui.step || "Analyzing…" } };
+  });
   const [showResultsTable, setShowResultsTable] = useState(false);
   const [videoBlobs, setVideoBlobs] = useState({});
   const [videoLoading, setVideoLoading] = useState({});
@@ -3967,6 +3979,9 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
   const abortRef = useRef({});
   const overlayVideoSyncedRef = useRef({});
+  const dataRef = useRef(data);
+  const leaveAbortRef = useRef(false);
+  useEffect(() => { dataRef.current = data; }, [data]);
 
   useEffect(() => {
     try {
@@ -3987,6 +4002,17 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   useEffect(() => {
     return () => {
       Object.values(originalVideoBlobsRef.current).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
+
+  // Leaving kinematics (or the app) must not cancel the server job.
+  useEffect(() => {
+    leaveAbortRef.current = false;
+    return () => {
+      leaveAbortRef.current = true;
+      Object.values(abortRef.current).forEach((controller) => {
+        try { controller.abort(); } catch { /* ignore */ }
+      });
     };
   }, []);
 
@@ -4104,7 +4130,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       delete abortRef.current[phase];
     }
     if (status === "analyzing") {
-      onChange({ ...data, [statusKey(phase)]: "uploaded" });
+      const ui = readAnalyzeUi();
+      if (!ui?.phase || ui.phase === phase) clearAnalyzeUi();
+      const nextJobs = { ...(data.analyzeJobs || {}) };
+      delete nextJobs[phase];
+      onChange({ ...data, [statusKey(phase)]: "uploaded", analyzeJobs: nextJobs });
       showToast(`Analysis cancelled for ${phase}`);
       return;
     }
@@ -4145,6 +4175,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
       upd[statusKey(ph.k)] = "idle";
     });
     upd.analysisResults = {};
+    upd.analyzeJobs = {};
+    clearAnalyzeUi();
     setKinematicsResults({});
     setExpandedResults({});
     setOverlayData({});
@@ -4522,6 +4554,151 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     });
   }, [originalVideoBlobs]);
 
+  const applyAnalyzeSuccess = async (phase, result, file) => {
+    const resultError = analysisResultErrorMessage(result);
+    if (resultError) {
+      throw new Error(resultError);
+    }
+
+    const { unified_validation_video_b64: _, ...resultWithoutB64 } = result;
+    const videoFilename = result.video_filename || file?.name;
+
+    if (videoFilename && !(file?.name || "").toLowerCase().endsWith(".csv")) {
+      await ensureOriginalVideoBlob(phase, file, videoFilename);
+    }
+
+    const phasePayload = {
+      ...resultWithoutB64,
+      video_filename: videoFilename,
+    };
+
+    const nextResults = { ...kinematicsResults, [phase]: phasePayload };
+    const cur = dataRef.current || data;
+    const nextJobs = { ...(cur.analyzeJobs || {}) };
+    delete nextJobs[phase];
+    setKinematicsResults(nextResults);
+    onChange({
+      ...cur,
+      analysisResults: stripKinResultsForStorage(nextResults),
+      [resultKey(phase)]: stripKinPhaseForSync(resultWithoutB64),
+      [statusKey(phase)]: "completed",
+      analyzeJobs: nextJobs,
+    });
+    showToast(`Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials — mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
+    setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
+    clearAnalyzeUi();
+
+    if (result.csv_filename && !(file?.name || "").toLowerCase().endsWith(".csv")) {
+      setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Loading validation overlay…" } }));
+      fetchOverlayDataWithRetry(phase, result.csv_filename, { syncResults: true }, 8).catch(() => {
+        showToast("Validation overlay could not be loaded", "error");
+      });
+    }
+  };
+
+  const followAnalyzeJob = async (phase, jobId, controller) => {
+    setKinAnalyzeActive(true);
+    writeAnalyzeUi({ phase, jobId, pct: 5, step: "Analyzing…" });
+    const pollMs = ANALYZE_POLL_MS;
+    let attempts = 0;
+    let transient = 0;
+    for (;;) {
+      attempts += 1;
+      if (analyzePollExceeded(attempts)) {
+        throw new Error("Analysis is taking too long. Please retry.");
+      }
+      if (controller.signal.aborted) {
+        const abortErr = new Error("Analysis cancelled");
+        abortErr.name = "AbortError";
+        throw abortErr;
+      }
+      try {
+        const pr = await fetch(`${API_BASE}/analyze-progress/${encodeURIComponent(jobId)}`, {
+          signal: controller.signal,
+        });
+        if (!pr.ok) throw new Error(`Progress poll failed (${pr.status})`);
+        const prog = await pr.json();
+        transient = 0;
+        startTransition(() => {
+          setAnalysisProgress((prev) => ({
+            ...prev,
+            [phase]: {
+              pct: typeof prog.pct === "number" ? prog.pct : 5,
+              step: prog.step || "Analyzing…",
+            },
+          }));
+        });
+        writeAnalyzeUi({
+          phase,
+          jobId,
+          pct: prog.pct,
+          step: prog.step || "Analyzing…",
+        });
+        if (prog.done) {
+          if (prog.error) throw new Error(prog.error);
+          break;
+        }
+      } catch (err) {
+        if (isAnalyzeLeaveAbort(err, leaveAbortRef.current) || (err?.name === "AbortError" && controller.signal.aborted && leaveAbortRef.current)) {
+          throw err;
+        }
+        if (err?.name === "AbortError" && controller.signal.aborted) {
+          throw err;
+        }
+        if (isTransientAnalyzePollError(err, controller.signal) && transient < ANALYZE_POLL_TRANSIENT_RETRIES) {
+          transient += 1;
+          await new Promise((resolve) => setTimeout(resolve, pollMs * transient));
+          continue;
+        }
+        throw err;
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+    const rr = await fetch(`${API_BASE}/analyze-result/${encodeURIComponent(jobId)}`, {
+      signal: controller.signal,
+    });
+    if (!rr.ok) {
+      let detail = `Server error ${rr.status}`;
+      try { const e = await rr.json(); if (e.error) detail += `: ${e.error}`; } catch (_) {}
+      throw new Error(detail);
+    }
+    return rr.json();
+  };
+
+  const resumeAnalyzeJob = async (phase, jobId) => {
+    if (!phase || !jobId || abortRef.current[phase]) return;
+    const controller = new AbortController();
+    abortRef.current[phase] = controller;
+    leaveAbortRef.current = false;
+    setKinAnalyzeActive(true);
+    try {
+      const result = await followAnalyzeJob(phase, jobId, controller);
+      await applyAnalyzeSuccess(phase, result, dataRef.current?.[`${vidKey(phase)}_file`]);
+    } catch (err) {
+      if (isAnalyzeLeaveAbort(err, leaveAbortRef.current) || (err?.name === "AbortError" && leaveAbortRef.current)) {
+        setKinAnalyzeActive(true);
+        return;
+      }
+      if (err.name === "AbortError") {
+        showToast(`Analysis cancelled for ${phase}`, "info");
+      } else {
+        showToast(err.message || "Analysis failed", "error");
+        console.error("ANALYSIS ERROR:", err);
+      }
+      const cur = dataRef.current || data;
+      const nextJobs = { ...(cur.analyzeJobs || {}) };
+      delete nextJobs[phase];
+      onChange({ ...cur, [statusKey(phase)]: "uploaded", analyzeJobs: nextJobs });
+      clearAnalyzeUi();
+      setKinAnalyzeActive(false);
+    } finally {
+      delete abortRef.current[phase];
+      if (!leaveAbortRef.current) {
+        setKinAnalyzeActive(false);
+      }
+    }
+  };
+
   const analyzeVideo = async (phase) => {
     const file = data[`${vidKey(phase)}_file`];
     if (!file) {
@@ -4531,6 +4708,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
     const controller = new AbortController();
     abortRef.current[phase] = controller;
+    leaveAbortRef.current = false;
     setKinAnalyzeActive(true);
     setOverlayMountReady((prev) => ({ ...prev, [phase]: false }));
     setDriveBakeDone((prev) => ({ ...prev, [phase]: false }));
@@ -4551,12 +4729,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     });
     onChange({ ...data, [statusKey(phase)]: "analyzing" });
     setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 5, step: "Uploading…" } }));
-    try {
-      sessionStorage.setItem(
-        "neuro_kin_analyze_ui",
-        JSON.stringify({ phase, pct: 5, step: "Uploading…" }),
-      );
-    } catch { /* ignore */ }
+    writeAnalyzeUi({ phase, pct: 5, step: "Uploading…" });
 
     const isCsv = file.name.endsWith(".csv");
 
@@ -4600,98 +4773,30 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
 
       if (result.job_id && result.async && !isCsv) {
         const jobId = result.job_id;
-        const pollMs = ANALYZE_POLL_MS;
-        let attempts = 0;
-        for (;;) {
-          attempts += 1;
-          if (analyzePollExceeded(attempts)) {
-            throw new Error("Analysis is taking too long. Please retry.");
-          }
-          if (controller.signal.aborted) {
-            const abortErr = new Error("Analysis cancelled");
-            abortErr.name = "AbortError";
-            throw abortErr;
-          }
-          const pr = await fetch(`${API_BASE}/analyze-progress/${encodeURIComponent(jobId)}`, {
-            signal: controller.signal,
-          });
-          if (!pr.ok) throw new Error(`Progress poll failed (${pr.status})`);
-          const prog = await pr.json();
-          startTransition(() => {
-            setAnalysisProgress((prev) => ({
-              ...prev,
-              [phase]: {
-                pct: typeof prog.pct === "number" ? prog.pct : 5,
-                step: prog.step || "Analyzing…",
-              },
-            }));
-          });
-          try {
-            sessionStorage.setItem(
-              "neuro_kin_analyze_ui",
-              JSON.stringify({
-                phase,
-                pct: prog.pct,
-                step: prog.step || "Analyzing…",
-              }),
-            );
-          } catch { /* ignore */ }
-          if (prog.done) {
-            if (prog.error) throw new Error(prog.error);
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, pollMs));
-        }
-        const rr = await fetch(`${API_BASE}/analyze-result/${encodeURIComponent(jobId)}`, {
-          signal: controller.signal,
+        const cur = dataRef.current || data;
+        onChange({
+          ...cur,
+          [statusKey(phase)]: "analyzing",
+          analyzeJobs: { ...(cur.analyzeJobs || {}), [phase]: { jobId } },
         });
-        if (!rr.ok) {
-          let detail = `Server error ${rr.status}`;
-          try { const e = await rr.json(); if (e.error) detail += `: ${e.error}`; } catch (_) {}
-          throw new Error(detail);
-        }
-        result = await rr.json();
+        writeAnalyzeUi({ phase, jobId, pct: 8, step: "Analyzing…" });
+        result = await followAnalyzeJob(phase, jobId, controller);
       }
 
-      const resultError = analysisResultErrorMessage(result);
-      if (resultError) {
-        throw new Error(resultError);
-      }
-
-      // Strip the huge base64 payload before persisting; keep only the filename.
-      const { unified_validation_video_b64: _, ...resultWithoutB64 } = result;
-      const videoFilename = result.video_filename || file.name;
-
-      if (!isCsv && videoFilename) {
-        await ensureOriginalVideoBlob(phase, file, videoFilename);
-      }
-
-      const phasePayload = {
-        ...resultWithoutB64,
-        video_filename: videoFilename,
-      };
-
-      const nextResults = { ...kinematicsResults, [phase]: phasePayload };
-      setKinematicsResults(nextResults);
-      onChange({
-        ...data,
-        analysisResults: stripKinResultsForStorage(nextResults),
-        [resultKey(phase)]: stripKinPhaseForSync(resultWithoutB64),
-        [statusKey(phase)]: "completed",
-      });
-      showToast(`Analysis complete for ${phase}${result.trials_detected > 1 ? ` (${result.trials_detected} trials — mean)` : ""}${(result.warnings || []).length ? " — see warnings" : ""}`);
-      setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Done" } }));
-      try {
-        sessionStorage.removeItem("neuro_kin_analyze_ui");
-      } catch { /* ignore */ }
-
-      if (!isCsv && result.csv_filename) {
-        setAnalysisProgress((prev) => ({ ...prev, [phase]: { pct: 100, step: "Loading validation overlay…" } }));
-        fetchOverlayDataWithRetry(phase, result.csv_filename, { syncResults: true }, 8).catch(() => {
-          showToast("Validation overlay could not be loaded", "error");
-        });
-      }
+      await applyAnalyzeSuccess(phase, result, file);
     } catch (err) {
+      if (isAnalyzeLeaveAbort(err, leaveAbortRef.current) || (err?.name === "AbortError" && leaveAbortRef.current)) {
+        const jobId = analyzeJobIdForPhase(phase, readAnalyzeUi(), dataRef.current?.analyzeJobs);
+        if (jobId) {
+          setKinAnalyzeActive(true);
+          return;
+        }
+        const cur = dataRef.current || data;
+        onChange({ ...cur, [statusKey(phase)]: "uploaded" });
+        clearAnalyzeUi();
+        setKinAnalyzeActive(false);
+        return;
+      }
       if (err.name === "AbortError") {
         showToast(`Analysis cancelled for ${phase}`, "info");
       } else {
@@ -4699,15 +4804,45 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
         showToast(errorMsg, "error");
         console.error("ANALYSIS ERROR:", err);
       }
-      onChange({ ...data, [statusKey(phase)]: "uploaded" });
+      const cur = dataRef.current || data;
+      const nextJobs = { ...(cur.analyzeJobs || {}) };
+      delete nextJobs[phase];
+      onChange({ ...cur, [statusKey(phase)]: "uploaded", analyzeJobs: nextJobs });
+      clearAnalyzeUi();
     } finally {
       delete abortRef.current[phase];
-      setKinAnalyzeActive(false);
-      try {
-        sessionStorage.removeItem("neuro_kin_analyze_ui");
-      } catch { /* ignore */ }
+      if (!leaveAbortRef.current) {
+        setKinAnalyzeActive(false);
+      }
     }
   };
+
+  const resumeAnalyzeJobRef = useRef(resumeAnalyzeJob);
+  resumeAnalyzeJobRef.current = resumeAnalyzeJob;
+
+  useEffect(() => {
+    const kick = () => {
+      const ui = readAnalyzeUi();
+      const cur = dataRef.current || {};
+      phases.forEach((ph) => {
+        const status = cur[statusKey(ph.k)] || "";
+        const jobId = analyzeJobIdForPhase(ph.k, ui, cur.analyzeJobs);
+        if (!shouldResumeAnalyze(status, jobId)) return;
+        resumeAnalyzeJobRef.current(ph.k, jobId);
+      });
+    };
+    kick();
+    const onVis = () => {
+      if (typeof document !== "undefined" && document.visibilityState && document.visibilityState !== "visible") return;
+      kick();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("pageshow", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pageshow", onVis);
+    };
+  }, []);
 
   const downloadFile = async (phase, type) => {
     const result = kinematicsResults[phase];
