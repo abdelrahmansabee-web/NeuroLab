@@ -1,0 +1,8 @@
+{
+  "patient_id": "zeyneb",
+  "affected_side": "LEFT",
+  "shoulder_width_cm": 36.0,
+  "camera_side": "LEFT",
+  "video_rotation_degrees": -90,
+  "notes": "Video recorded with -90 degree rotation; corrected by rotating 90 degrees clockwise."
+}

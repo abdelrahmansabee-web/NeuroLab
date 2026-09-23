@@ -1,0 +1,34 @@
+{
+  "healthy": {
+    "video": "D:\\Thesis app\\participants\\murat\\healthy side.mp4",
+    "side": "left",
+    "sparc": -1.932,
+    "reach_amplitude_sw": 0.276,
+    "movement_time_sec": 0.55,
+    "peak_velocity_pct": 100.0,
+    "trunk_ratio": 0.1828,
+    "shoulder_elevation_cm": 0.56,
+    "elbow_angle_deg": 133.0,
+    "sparc_rating": "good"
+  },
+  "post": {
+    "video": "D:\\Thesis app\\participants\\murat\\post.mp4",
+    "side": "right",
+    "sparc": -2.833,
+    "reach_amplitude_sw": 0.172,
+    "movement_time_sec": 0.75,
+    "peak_velocity_pct": 85.6,
+    "trunk_ratio": 0.3976,
+    "shoulder_elevation_cm": 0.54,
+    "elbow_angle_deg": 41.7,
+    "sparc_rating": "moderate"
+  },
+  "relative_to_healthy_percent": {
+    "reach_amplitude_sw": 62.3,
+    "movement_time_sec": 136.4,
+    "peak_velocity_pct": 85.6,
+    "trunk_ratio": 217.5,
+    "shoulder_elevation_cm": 96.4,
+    "elbow_angle_deg": 31.4
+  }
+}
