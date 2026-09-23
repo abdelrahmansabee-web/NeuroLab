@@ -1,0 +1,27 @@
+diff --git a/overlay_data.py b/overlay_data.py
+index f4b4f68..00ee9b2 100644
+--- a/overlay_data.py
++++ b/overlay_data.py
+@@ -17,9 +17,9 @@ import cv2
+ 
+ from unified_kinematics import _interpolate_small_gaps, _butter_lowpass_filter
+ from table_calibrator import find_video_for_csv
+-from hl_overlay_resample import MAX_HL_POSE_WRIST, resample_with_max_gap
++from hl_overlay_resample import HL_SMOOTH_ALPHA, MAX_HL_POSE_WRIST, resample_with_max_gap
+ 
+-OVERLAY_VERSION = 40
++OVERLAY_VERSION = 41
+ 
+ # Shown on validation overlay (reach window + optional ADL transport phase).
+ OVERLAY_JOINT_METRIC_KEYS = (
+@@ -785,8 +785,8 @@ def _direct_hl_joint(
+     *,
+     joint_kind: str = "tip",
+     max_hl_anchor_dist: float = MAX_HL_POSE_WRIST,
+-    ema_alpha: float = 0.72,
+-    max_hold: int = 8,
++    ema_alpha: float = HL_SMOOTH_ALPHA,
++    max_hold: int = 12,
+ ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+     """HL joints in absolute image space (no pose-wrist re-anchor).
+ 

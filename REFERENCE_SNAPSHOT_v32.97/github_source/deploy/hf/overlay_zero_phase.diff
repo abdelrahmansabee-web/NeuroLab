@@ -1,0 +1,24 @@
+diff --git a/overlay_data.py b/overlay_data.py
+index d26774e..242b68f 100644
+--- a/overlay_data.py
++++ b/overlay_data.py
+@@ -17,9 +17,9 @@ import cv2
+ 
+ from unified_kinematics import _interpolate_small_gaps, _butter_lowpass_filter
+ from table_calibrator import find_video_for_csv
+-from hl_overlay_resample import MAX_HL_POSE_WRIST, resample_with_max_gap
++from hl_overlay_resample import MAX_HL_POSE_WRIST, resample_with_max_gap, smooth_xy_zero_phase
+ 
+-OVERLAY_VERSION = 43
++OVERLAY_VERSION = 44
+ 
+ # Shown on validation overlay (reach window + optional ADL transport phase).
+ OVERLAY_JOINT_METRIC_KEYS = (
+@@ -845,6 +845,7 @@ def _direct_hl_joint(
+             prev_x = np.nan
+             prev_y = np.nan
+             hold = 0
++    out_x, out_y = smooth_xy_zero_phase(out_x, out_y)
+     return out_x, out_y, conf
+ 
+ 
