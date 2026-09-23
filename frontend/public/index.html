@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.307" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.306" />
+    <meta name="nl-version" content="32.307" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -25,12 +26,48 @@
         v = v && v.content;
         if (!v) return;
         var k = "nl_app_v";
+        var bustKey = "nl_app_bust";
         try {
           var prev = localStorage.getItem(k);
           localStorage.setItem(k, v);
-          if (prev && prev !== v && location.search.indexOf("_v=") === -1) {
-            location.replace(location.pathname + "?_v=" + encodeURIComponent(v) + location.hash);
-          }
+          var ua = navigator.userAgent || "";
+          var isiOS = /iPad|iPhone|iPod/.test(ua)
+            || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+          var standalone = navigator.standalone === true
+            || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+          var versionChanged = Boolean(prev && prev !== v);
+          var iosNeedsBust = (isiOS || standalone) && localStorage.getItem(bustKey) !== v;
+          if (!versionChanged && !iosNeedsBust) return;
+          localStorage.setItem(bustKey, v);
+          var go = function () {
+            location.replace(
+              location.pathname
+              + "?_v=" + encodeURIComponent(v)
+              + "&_r=" + encodeURIComponent(String(Date.now()))
+              + location.hash
+            );
+          };
+          var ready = Promise.resolve();
+          try {
+            if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+              ready = ready.then(function () {
+                return navigator.serviceWorker.getRegistrations().then(function (regs) {
+                  return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+                });
+              });
+            }
+          } catch (e) {}
+          try {
+            if (window.caches && caches.keys) {
+              ready = ready.then(function () {
+                return caches.keys().then(function (keys) {
+                  return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+                });
+              });
+            }
+          } catch (e) {}
+          var t = setTimeout(go, 600);
+          ready.then(function () { clearTimeout(t); go(); }, function () { clearTimeout(t); go(); });
         } catch (e) {}
       })();
     </script>
@@ -38,5 +75,6 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.307"></script>
   </body>
 </html>

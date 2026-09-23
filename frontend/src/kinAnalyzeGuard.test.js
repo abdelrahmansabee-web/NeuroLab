@@ -7,6 +7,8 @@ import {
   isKinAnalyzeActive,
   isTransientAnalyzePollError,
   readAnalyzeUi,
+  isStaleAnalyzing,
+  resetStaleAnalyzeStatuses,
   setKinAnalyzeActive,
   shouldResumeAnalyze,
   writeAnalyzeUi,
@@ -40,6 +42,25 @@ test("analyze UI keeps the server job id across section changes", () => {
   expect(shouldResumeAnalyze("analyzing", "job-her")).toBe(true);
   expect(shouldResumeAnalyze("uploaded", "job-her")).toBe(false);
   expect(shouldResumeAnalyze("analyzing", "")).toBe(false);
+  expect(isStaleAnalyzing("analyzing", "")).toBe(true);
+  expect(isStaleAnalyzing("analyzing", "job-her")).toBe(false);
+  expect(isStaleAnalyzing("analyzing", "", true)).toBe(false);
+  expect(isStaleAnalyzing("uploaded", "")).toBe(false);
+  const stuck = resetStaleAnalyzeStatuses(
+    { status_pre: "analyzing", status_post: "analyzing", analyzeJobs: { post: { jobId: "job-live" } } },
+    ["pre", "post"],
+    null,
+    (phase) => phase === "baseline",
+  );
+  expect(stuck.status_pre).toBe("uploaded");
+  expect(stuck.status_post).toBe("analyzing");
+  expect(stuck.analyzeJobs.post.jobId).toBe("job-live");
+  expect(resetStaleAnalyzeStatuses(
+    { status_pre: "analyzing" },
+    ["pre"],
+    null,
+    (phase) => phase === "pre",
+  )).toBe(null);
   clearAnalyzeUi();
 });
 

@@ -77,6 +77,32 @@ export function shouldResumeAnalyze(status, jobId) {
   return String(status || "") === "analyzing" && Boolean(String(jobId || "").trim());
 }
 
+/** Analyzing with no server job and no in-flight upload — leftover card, not a live run. */
+export function isStaleAnalyzing(status, jobId, hasLocalController = false) {
+  return String(status || "") === "analyzing"
+    && !String(jobId || "").trim()
+    && !hasLocalController;
+}
+
+export function resetStaleAnalyzeStatuses(data, phaseKeys, ui, hasLocalControllerForPhase) {
+  const cur = data && typeof data === "object" ? data : {};
+  const jobs = { ...(cur.analyzeJobs || {}) };
+  const next = { ...cur, analyzeJobs: jobs };
+  let changed = false;
+  for (const phase of phaseKeys || []) {
+    const ph = String(phase || "").trim();
+    if (!ph) continue;
+    const status = cur[`status_${ph}`] || "";
+    const jobId = analyzeJobIdForPhase(ph, ui, cur.analyzeJobs);
+    const local = Boolean(hasLocalControllerForPhase?.(ph));
+    if (!isStaleAnalyzing(status, jobId, local)) continue;
+    next[`status_${ph}`] = "uploaded";
+    delete jobs[ph];
+    changed = true;
+  }
+  return changed ? next : null;
+}
+
 /** Browser/background fetch drops — keep the server job, do not fail the clinic card. */
 export function isTransientAnalyzePollError(err, signal) {
   if (signal?.aborted) return false;

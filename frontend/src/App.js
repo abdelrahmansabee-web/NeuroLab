@@ -78,8 +78,10 @@ import {
   clearAnalyzeUi,
   isAnalyzeLeaveAbort,
   isKinAnalyzeActive,
+  isStaleAnalyzing,
   isTransientAnalyzePollError,
   readAnalyzeUi,
+  resetStaleAnalyzeStatuses,
   setKinAnalyzeActive,
   shouldResumeAnalyze,
   writeAnalyzeUi,
@@ -4824,9 +4826,28 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     const kick = () => {
       const ui = readAnalyzeUi();
       const cur = dataRef.current || {};
+      const cleaned = resetStaleAnalyzeStatuses(
+        cur,
+        phases.map((ph) => ph.k),
+        ui,
+        (phase) => Boolean(abortRef.current[phase]),
+      );
+      const live = cleaned || cur;
+      if (cleaned) {
+        onChange(cleaned);
+        const uiPhase = String(ui?.phase || "").trim();
+        const uiLive = uiPhase && shouldResumeAnalyze(
+          live[statusKey(uiPhase)] || "",
+          analyzeJobIdForPhase(uiPhase, ui, live.analyzeJobs),
+        );
+        if (!uiLive && uiPhase && isStaleAnalyzing(cur[statusKey(uiPhase)] || "", analyzeJobIdForPhase(uiPhase, ui, cur.analyzeJobs))) {
+          clearAnalyzeUi();
+        }
+        if (!uiLive) setKinAnalyzeActive(false);
+      }
       phases.forEach((ph) => {
-        const status = cur[statusKey(ph.k)] || "";
-        const jobId = analyzeJobIdForPhase(ph.k, ui, cur.analyzeJobs);
+        const status = live[statusKey(ph.k)] || "";
+        const jobId = analyzeJobIdForPhase(ph.k, ui, live.analyzeJobs);
         if (!shouldResumeAnalyze(status, jobId)) return;
         resumeAnalyzeJobRef.current(ph.k, jobId);
       });
