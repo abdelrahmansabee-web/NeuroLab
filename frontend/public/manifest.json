@@ -26,7 +26,7 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "./",
+  "start_url": "./?_v=32.344",
   "scope": ".",
   "display": "browser",
   "theme_color": "#121820",
