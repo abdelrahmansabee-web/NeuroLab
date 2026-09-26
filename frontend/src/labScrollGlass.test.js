@@ -71,8 +71,12 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   const sync = fs.readFileSync(path.join(__dirname, "..", "public", "pwa_ipad_sync.js"), "utf8");
   const auth = fs.readFileSync(path.join(__dirname, "AuthGate.jsx"), "utf8");
   expect(auth).toMatch(/\.catch\(\(\) => setState\("locked"\)\)/);
-  expect(html).toMatch(/nl-version" content="32\.372i"/);
+  expect(html).toMatch(/nl-version" content="32\.372j"/);
   expect(html).toMatch(/nl_app_bust/);
+  expect(html).not.toMatch(/location\.replace/);
+  expect(html).not.toMatch(/_r="\+Date\.now\(\)/);
+  expect(html).toMatch(/static\/js\/main\.48f76699\.js\?v=32\.372b/);
+  expect(html).toMatch(/static\/css\/main\.2c1ebbfb\.css/);
   expect(html).toMatch(/function pin\(\)/);
   expect(html).toMatch(/new MutationObserver\(pin\)\.observe\(document\.documentElement/);
   expect(html).toMatch(/function ensureCradle/);
@@ -89,7 +93,38 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(html).not.toMatch(/__nlAuthMeTimeout/);
   expect(html).not.toMatch(/function ensureOrbit/);
   expect(sync).not.toMatch(/_iosbust=/);
-  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.372i"/);
+  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.372j"/);
+});
+
+test("Home Screen boot records the version and never reloads the page", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+  const match = html.match(
+    /<script>\s*(\(function \(\) \{\s*var v = document\.querySelector\('meta\[name="nl-version"\]'[\s\S]*?\}\)\(\);)\s*<\/script>/,
+  );
+  expect(match).toBeTruthy();
+  const vm = require("vm");
+  const store = {};
+  const replaced = [];
+  vm.runInNewContext(match[1], {
+    document: { querySelector: () => ({ content: "32.372j" }) },
+    localStorage: {
+      getItem: (k) => (Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null),
+      setItem: (k, v) => {
+        store[k] = String(v);
+      },
+    },
+    location: {
+      pathname: "/",
+      search: "",
+      hash: "",
+      replace: (url) => {
+        replaced.push(url);
+      },
+    },
+  });
+  expect(replaced).toEqual([]);
+  expect(store.nl_app_v).toBe("32.372j");
+  expect(store.nl_app_bust).toBe("32.372j");
 });
 
 test("validation video chrome uses muted glass bars and panels", () => {

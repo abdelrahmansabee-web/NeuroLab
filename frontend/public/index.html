@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.372i" />
-    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.372i" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.372j" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.372j" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.372i" />
+    <meta name="nl-version" content="32.372j" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -26,30 +26,22 @@
         var v = document.querySelector('meta[name="nl-version"]');
         v = v && v.content;
         if (!v) return;
-        var k = "nl_app_v";
-        var bustKey = "nl_app_bust";
         try {
-          var prev = localStorage.getItem(k);
-          localStorage.setItem(k, v);
-          var ua = navigator.userAgent || "";
-          var ios = /iPad|iPhone|iPod/.test(ua)
-            || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-          var stand = navigator.standalone === true
-            || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
-          if (!(prev && prev !== v) && !((ios || stand) && localStorage.getItem(bustKey) !== v)) return;
-          localStorage.setItem(bustKey, v);
-          location.replace(location.pathname + "?_v=" + encodeURIComponent(v) + "&_r=" + Date.now() + location.hash);
+          localStorage.setItem("nl_app_v", v);
+          localStorage.setItem("nl_app_bust", v);
         } catch (e) {}
       })();
     </script>
+    <script defer="defer" src="%PUBLIC_URL%/static/js/main.48f76699.js?v=32.372b"></script>
+    <link href="%PUBLIC_URL%/static/css/main.2c1ebbfb.css" rel="stylesheet" />
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
-    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.372i"></script>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.372j"></script>
     <script>
       (function () {
-        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.372i";
+        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.372j";
         function pin() {
           var el = document.getElementById("nl-liquid-glass-link");
           if (!el) {
@@ -120,7 +112,7 @@
           host = document.createElement("div");
           host.className = "nl-cradle";
           host.setAttribute("aria-hidden", "true");
-          host.innerHTML = '<img class="nl-cradle__gif" src="/static/kin-run/cradle.gif?v=32.372i" alt="" />'
+          host.innerHTML = '<img class="nl-cradle__gif" src="/static/kin-run/cradle.gif?v=32.372j" alt="" />'
             + '<span class="kin-run__pct is-empty"><svg class="kin-run__pct-svg" viewBox="0 0 36 36" aria-hidden="true">'
             + '<circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.2"/>'
             + '<circle class="kin-run__pct-arc" cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.88)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0.4 94.2" transform="rotate(-90 18 18)"/>'
