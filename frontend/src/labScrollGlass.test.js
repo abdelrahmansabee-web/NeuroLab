@@ -65,15 +65,14 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(overlay).toMatch(/\.kin-analyze-track/);
   expect(overlay).toMatch(/\.nl-cradle__gif/);
   expect(overlay).toMatch(/object-fit: contain/);
-  expect(overlay).toMatch(/right:\s*58px/);
-  expect(overlay).toMatch(/height:\s*112px/);
+  expect(overlay).toMatch(/\.nl-stage__pct/);
   expect(overlay).toMatch(/min-height: 228px/);
   expect(overlay).not.toMatch(/logo192-white\.png/);
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const sync = fs.readFileSync(path.join(__dirname, "..", "public", "pwa_ipad_sync.js"), "utf8");
   const auth = fs.readFileSync(path.join(__dirname, "AuthGate.jsx"), "utf8");
   expect(auth).toMatch(/\.catch\(\(\) => setState\("locked"\)\)/);
-  expect(html).toMatch(/nl-version" content="32\.372k"/);
+  expect(html).toMatch(/nl-version" content="32\.372l"/);
   expect(html).toMatch(/nl_app_bust/);
   expect(html).not.toMatch(/location\.replace/);
   expect(html).not.toMatch(/_r="\+Date\.now\(\)/);
@@ -82,10 +81,15 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(html).toMatch(/function pin\(\)/);
   expect(html).toMatch(/new MutationObserver\(pin\)\.observe\(document\.documentElement/);
   expect(html).toMatch(/function ensureCradle/);
+  expect(html).toMatch(/function ensureStage/);
   expect(html).toMatch(/function enhanceAnalyzeCapsule/);
   expect(html).toMatch(/nl-cradle__gif/);
+  expect(html).toMatch(/nl-stage__step/);
+  expect(html).toMatch(/nl-stage__pct-num/);
   expect(html).toMatch(/static\/kin-run\/cradle\.gif/);
+  expect(html).not.toMatch(/kin-run__pct-arc/);
   expect(html).toMatch(/strip\.appendChild\(host\)/);
+  expect(html).toMatch(/strip\.appendChild\(row\)/);
   expect(html).not.toMatch(/document\.documentElement\.appendChild\(host\)/);
   expect(html).not.toMatch(/insertBefore\(host, strip\)/);
   expect(html).not.toMatch(/cap\.appendChild\(strip\)/);
@@ -95,7 +99,7 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(html).not.toMatch(/__nlAuthMeTimeout/);
   expect(html).not.toMatch(/function ensureOrbit/);
   expect(sync).not.toMatch(/_iosbust=/);
-  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.372k"/);
+  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.372l"/);
 });
 
 test("Home Screen boot records the version and never reloads the page", () => {
@@ -108,7 +112,7 @@ test("Home Screen boot records the version and never reloads the page", () => {
   const store = {};
   const replaced = [];
   vm.runInNewContext(match[1], {
-    document: { querySelector: () => ({ content: "32.372k" }) },
+    document: { querySelector: () => ({ content: "32.372l" }) },
     localStorage: {
       getItem: (k) => (Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null),
       setItem: (k, v) => {
@@ -125,8 +129,8 @@ test("Home Screen boot records the version and never reloads the page", () => {
     },
   });
   expect(replaced).toEqual([]);
-  expect(store.nl_app_v).toBe("32.372k");
-  expect(store.nl_app_bust).toBe("32.372k");
+  expect(store.nl_app_v).toBe("32.372l");
+  expect(store.nl_app_bust).toBe("32.372l");
 });
 
 test("validation video chrome uses muted glass bars and panels", () => {
