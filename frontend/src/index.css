@@ -687,15 +687,15 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   position: relative;
   overflow: visible;
   width: 100%;
-  height: 208px;
+  height: 228px;
 }
 
 .kin-run__figure {
   position: absolute;
   left: 50%;
   bottom: 24px;
-  width: 168px;
-  height: 148px;
+  width: 176px;
+  height: 168px;
   opacity: 0;
   pointer-events: none;
   -webkit-touch-callout: none;
