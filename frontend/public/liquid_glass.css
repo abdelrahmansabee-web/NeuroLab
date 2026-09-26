@@ -23,8 +23,8 @@ textarea {
   border-radius: 24px !important;
 }
 
-.sidebar-shell,
-.glass-float:not(.nl-lens-menu):not([role="dialog"]),
+.sidebar-shell:not(.mobile-actions-sheet),
+.glass-float:not(.nl-lens-menu):not([role="dialog"]):not(.mobile-actions-sheet),
 .app-topbar-glass:not(.gselect-menu-portal):not(.nl-lens-menu):not([role="dialog"]),
 .gselect-menu-portal:not(.nl-lens-menu):not([role="dialog"]) {
   position: relative;
@@ -59,14 +59,14 @@ textarea {
   border-radius: 24px !important;
 }
 
-.sidebar-shell::after,
+.sidebar-shell:not(.mobile-actions-sheet)::after,
 .glass-float::after,
 .gselect-menu-portal::after {
   content: none !important;
 }
 
-html.nl-touch .sidebar-shell,
-html.nl-touch .glass-float:not(.nl-lens-menu):not([role="dialog"]) {
+html.nl-touch .sidebar-shell:not(.mobile-actions-sheet),
+html.nl-touch .glass-float:not(.nl-lens-menu):not([role="dialog"]):not(.mobile-actions-sheet) {
   backdrop-filter: blur(22px) saturate(3.25) !important;
   -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
   background-color: rgba(255, 255, 255, 0.008) !important;
@@ -113,9 +113,13 @@ button[class*="bg-teal-500"] {
   z-index: 99999 !important;
 }
 html.nl-overlay-expanded .content-shell .content-panel-glass:not(.validation-metrics-gutter),
-html.nl-overlay-expanded .content-shell .glass-float:not(.validation-player-topbar):not(.validation-player-controls):not(.validation-metrics-gutter):not(.nl-overlay-escape) {
+html.nl-overlay-expanded .content-shell .glass-float:not(.validation-player-topbar):not(.validation-player-controls):not(.validation-metrics-gutter):not(.nl-overlay-escape),
+html.nl-overlay-expanded.nl-touch .content-shell .content-panel-glass:not(.validation-metrics-gutter),
+html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-player-topbar):not(.validation-player-controls):not(.validation-metrics-gutter):not(.nl-overlay-escape) {
   isolation: auto !important;
   z-index: auto !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 .validation-control-btn,
 .validation-control-icon,
@@ -202,10 +206,13 @@ html.nl-overlay-expanded .content-shell .glass-float:not(.validation-player-topb
   animation: gselect-body-out 0.28s cubic-bezier(0.22, 1, 0.36, 1) both !important;
 }
 
-button[aria-label="Close menu"] {
+button[aria-label="Close menu"],
+.fixed.inset-0 [aria-label="Close menu"] {
   background: transparent !important;
+  background-color: transparent !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
 }
 
 [role="dialog"][aria-label="Actions menu"] {
@@ -218,6 +225,7 @@ button[aria-label="Close menu"] {
   will-change: auto !important;
   contain: none !important;
   background: transparent !important;
+  background-color: transparent !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
@@ -228,6 +236,8 @@ button[aria-label="Close menu"] {
 [role="dialog"][aria-label="Actions menu"] > .nl-lens-menu,
 [role="dialog"][aria-label="Actions menu"] > .gselect-menu-portal,
 [role="dialog"][aria-label="Actions menu"] > .app-topbar-glass,
+[role="dialog"][aria-label="Actions menu"] > .mobile-actions-sheet,
+.mobile-actions-sheet.sidebar-shell,
 .nl-lens-menu,
 [role="dialog"][aria-label="Loaded sessions"],
 [role="dialog"][aria-label="Sessions recalled from Drive"] {
@@ -235,6 +245,7 @@ button[aria-label="Close menu"] {
   filter: none !important;
   will-change: auto !important;
   contain: none !important;
+  isolation: isolate;
   border-radius: 28px !important;
   border-color: rgba(255, 255, 255, 0.05) !important;
   background-color: rgba(255, 255, 255, 0.028) !important;
@@ -255,7 +266,8 @@ button[aria-label="Close menu"] {
 [role="dialog"][aria-label="Loaded sessions"] .gselect-menu-body:not(.gselect-menu-body--animate-out),
 [role="dialog"][aria-label="Sessions recalled from Drive"] .gselect-menu-body:not(.gselect-menu-body--animate-out),
 [role="dialog"][aria-label="Actions menu"].gselect-menu-portal > div:not(.gselect-menu-body--animate-out),
-[role="dialog"][aria-label="Actions menu"] .gselect-menu-portal > div:not(.gselect-menu-body--animate-out) {
+[role="dialog"][aria-label="Actions menu"] .gselect-menu-portal > div:not(.gselect-menu-body--animate-out),
+[role="dialog"][aria-label="Actions menu"] > .mobile-actions-sheet > nav {
   animation: gselect-body-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -265,12 +277,15 @@ button[aria-label="Close menu"] {
   [role="dialog"][aria-label="Loaded sessions"] .gselect-menu-body,
   [role="dialog"][aria-label="Sessions recalled from Drive"] .gselect-menu-body,
   [role="dialog"][aria-label="Actions menu"].gselect-menu-portal > div,
-  [role="dialog"][aria-label="Actions menu"] .gselect-menu-portal > div {
+  [role="dialog"][aria-label="Actions menu"] .gselect-menu-portal > div,
+  [role="dialog"][aria-label="Actions menu"] > .mobile-actions-sheet > nav {
     animation: none !important;
   }
 }
 
 html.nl-touch .nl-lens-menu,
+html.nl-touch .mobile-actions-sheet.sidebar-shell,
+html.nl-touch [role="dialog"][aria-label="Actions menu"] > .mobile-actions-sheet,
 html.nl-touch [role="dialog"][aria-label="Actions menu"].nl-lens-menu,
 html.nl-touch [role="dialog"][aria-label="Actions menu"].gselect-menu-portal,
 html.nl-touch [role="dialog"][aria-label="Loaded sessions"],
@@ -281,15 +296,11 @@ html.nl-touch [role="dialog"][aria-label="Sessions recalled from Drive"] {
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .sidebar-shell,
-  .glass-float,
+  .sidebar-shell:not(.mobile-actions-sheet),
+  .glass-float:not(.nl-lens-menu):not(.mobile-actions-sheet),
   .app-topbar-glass,
   .content-panel-glass,
-  .gselect-menu-portal,
-  .nl-lens-menu,
-  [role="dialog"][aria-label="Actions menu"],
-  [role="dialog"][aria-label="Loaded sessions"],
-  [role="dialog"][aria-label="Sessions recalled from Drive"],
+  .gselect-menu-portal:not(.nl-lens-menu),
   .validation-metrics-gutter,
   .validation-player-controls,
   .validation-player-topbar,

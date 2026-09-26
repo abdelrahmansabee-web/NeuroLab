@@ -46,6 +46,7 @@ test("validation video chrome uses muted glass bars and panels", () => {
   expect(css).toMatch(/\.validation-control-icon[\s\S]*?height:\s*32px/);
   expect(css).toMatch(/\.validation-player-fullscreen[\s\S]*?z-index:\s*99999/);
   expect(css).toMatch(/html\.nl-overlay-expanded \.content-shell \.content-panel-glass:not\(\.validation-metrics-gutter\)/);
+  expect(css).toMatch(/html\.nl-overlay-expanded \.content-shell \.content-panel-glass:not\(\.validation-metrics-gutter\)[\s\S]*?backdrop-filter:\s*none/);
   expect(css).toMatch(/\.validation-player-topbar[\s\S]*?border-radius:\s*28px/);
 });
 
@@ -73,6 +74,10 @@ test("Recalling and GSelect keep liquid-glass motion on the inner body only", ()
   expect(status).not.toMatch(/NL_SPRING_SHEET/);
   expect(overlay).toMatch(/@keyframes gselect-body-out/);
   expect(overlay).toMatch(/\[role="dialog"\]\[aria-label="Actions menu"\]/);
+  expect(overlay).toMatch(/\.mobile-actions-sheet\.sidebar-shell/);
+  expect(overlay).toMatch(/\[role="dialog"\]\[aria-label="Actions menu"\] > \.mobile-actions-sheet/);
+  expect(overlay).toMatch(/html\.nl-overlay-expanded \.content-shell \.content-panel-glass:not\(\.validation-metrics-gutter\)[\s\S]*?backdrop-filter:\s*none/);
+  expect(overlay).not.toMatch(/\[role="dialog"\]\[aria-label="Actions menu"\],\s*\[role="dialog"\]\[aria-label="Loaded sessions"\]/);
   expect(overlay).not.toMatch(/\.app-topbar-glass,\s*\.section-header \{\s*border-radius:\s*999px/);
 });
 
