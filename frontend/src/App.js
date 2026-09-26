@@ -3525,22 +3525,14 @@ function kinAnalyzeStageIndex(step, pct) {
   return 0;
 }
 
-const KIN_RUN_FRAMES = ["a", "b", "c"].map(
-  (id) => `${process.env.PUBLIC_URL || ""}/static/kin-run/pose-${id}.png`,
-);
+const KIN_RUN_SRC = `${process.env.PUBLIC_URL || ""}/static/kin-run/pose-a.png`;
 
 function KinRunMark() {
   const pips = Array.from({ length: 11 });
   return (
     <div className="kin-run" aria-hidden>
       <div className="kin-run__stage">
-        {KIN_RUN_FRAMES.map((src) => (
-          <span
-            key={src}
-            className="kin-run__figure"
-            style={{ backgroundImage: `url("${src}")` }}
-          />
-        ))}
+        <span className="kin-run__figure" style={{ backgroundImage: `url("${KIN_RUN_SRC}")` }} />
         <span className="kin-run__ground" />
       </div>
       <div className="kin-run__pips">

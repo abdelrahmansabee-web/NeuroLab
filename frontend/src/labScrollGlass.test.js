@@ -47,8 +47,8 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(app).toMatch(/function KinAnalyzeStageCapsule/);
   expect(app).toMatch(/function KinRunMark/);
   expect(app).toMatch(/<KinRunMark \/>/);
-  expect(app).toMatch(/static\/kin-run\/pose-\$\{id\}\.png/);
-  expect(app).toMatch(/backgroundImage: `url\("\$\{src\}"\)`/);
+  expect(app).toMatch(/static\/kin-run\/pose-a\.png/);
+  expect(app).toMatch(/backgroundImage: `url\("\$\{KIN_RUN_SRC\}"\)`/);
   expect(app).not.toMatch(/<img key=\{src\} className="kin-run__figure"/);
   expect(app).toMatch(/kin-analyze-stage__stepper/);
   expect(app).toMatch(/kinAnalyzeStageIndex\(step, pctRounded\)/);

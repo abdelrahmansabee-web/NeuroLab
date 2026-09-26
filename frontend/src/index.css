@@ -696,7 +696,7 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   bottom: 24px;
   width: 176px;
   height: 168px;
-  opacity: 0;
+  opacity: 1;
   pointer-events: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -705,14 +705,8 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   background-position: center bottom;
   background-size: contain;
   transform: translateX(-50%);
-  animation:
-    kin-run-pose 0.66s steps(1) infinite,
-    kin-run-stride 0.66s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  animation: kin-run-stride 0.66s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
-
-.kin-run__figure:nth-of-type(1) { animation-delay: 0s; }
-.kin-run__figure:nth-of-type(2) { animation-delay: -0.44s; }
-.kin-run__figure:nth-of-type(3) { animation-delay: -0.22s; }
 
 .kin-run__ground {
   position: absolute;
