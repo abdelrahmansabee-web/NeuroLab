@@ -54,7 +54,9 @@ export default function AuthGate({ children }) {
   const [totpCode, setTotpCode] = useState("");
 
   useEffect(() => {
-    fetch("/auth/me", { credentials: "same-origin", headers: authHeaders() })
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 6000);
+    fetch("/auth/me", { credentials: "same-origin", headers: authHeaders(), signal: ac.signal })
       .then((r) => {
         if (r.ok) return r.json();
         throw new Error("not authenticated");
@@ -66,7 +68,15 @@ export default function AuthGate({ children }) {
         setState("unlocked");
         plantAuthCookie(data?.token || getAuthToken());
       })
-      .catch(() => setState("locked"));
+      .catch(() => {
+        if (getAuthToken()) setState("unlocked");
+        else setState("locked");
+      })
+      .finally(() => clearTimeout(timer));
+    return () => {
+      clearTimeout(timer);
+      ac.abort();
+    };
   }, []);
 
   const resetForm = () => {

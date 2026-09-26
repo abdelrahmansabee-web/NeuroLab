@@ -7,12 +7,20 @@
   if (isIOS && (location.search || "").indexOf("_iosbust=") === -1) {
     var meta = document.querySelector('meta[name="nl-version"]');
     var here = meta && meta.content;
+    var qsNow = location.search || "";
+    if (here && (qsNow.indexOf("_v=" + encodeURIComponent(here)) !== -1 || qsNow.indexOf("_v=" + here) !== -1)) {
+      /* already on this document's version URL — do not reload-loop the Home Screen icon */
+    } else {
     fetch("/?_v=check&_r=" + Date.now(), { cache: "reload", credentials: "same-origin" })
-      .then(function (res) { return res.text(); })
+      .then(function (res) {
+        if (!res || !res.ok) return "";
+        return res.text();
+      })
       .then(function (html) {
         var match = /nl-version" content="([^"]+)"/.exec(html || "");
         var live = match && match[1];
         if (!live || !here || live === here) return;
+        if ((location.search || "").indexOf("_v=" + encodeURIComponent(live)) !== -1) return;
         location.replace(
           "/?_v=" + encodeURIComponent(live)
           + "&_r=" + Date.now()
@@ -21,6 +29,7 @@
         );
       })
       .catch(function () {});
+    }
   }
 })();
 
