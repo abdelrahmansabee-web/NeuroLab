@@ -662,20 +662,20 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
 
 @keyframes kin-liquid-morph {
   0% {
-    border-radius: 62% 38% 48% 52% / 52% 48% 52% 48%;
-    transform: rotate(-10deg) scale(1.04, 0.94);
+    border-radius: 72% 28% 58% 42% / 38% 64% 32% 68%;
+    transform: rotate(-16deg) scale(1.10, 0.84);
   }
   35% {
-    border-radius: 40% 60% 54% 46% / 46% 56% 44% 54%;
-    transform: rotate(12deg) scale(0.94, 1.08);
+    border-radius: 30% 70% 40% 60% / 66% 34% 70% 30%;
+    transform: rotate(18deg) scale(0.86, 1.16);
   }
   68% {
-    border-radius: 56% 44% 38% 62% / 60% 40% 58% 42%;
-    transform: rotate(-6deg) scale(1.08, 0.92);
+    border-radius: 60% 40% 28% 72% / 70% 30% 62% 38%;
+    transform: rotate(-8deg) scale(1.12, 0.86);
   }
   100% {
-    border-radius: 62% 38% 48% 52% / 52% 48% 52% 48%;
-    transform: rotate(-10deg) scale(1.04, 0.94);
+    border-radius: 72% 28% 58% 42% / 38% 64% 32% 68%;
+    transform: rotate(-16deg) scale(1.10, 0.84);
   }
 }
 
@@ -698,29 +698,30 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
 .kin-liquid-orb__blob {
   position: relative;
   display: block;
-  width: 82px;
-  height: 58px;
+  width: 92px;
+  height: 64px;
   background:
-    radial-gradient(ellipse 72% 58% at 30% 26%, rgba(255, 255, 255, 0.58), transparent 48%),
-    radial-gradient(ellipse 90% 80% at 62% 72%, rgba(126, 142, 158, 0.30), rgba(22, 28, 36, 0.38));
+    radial-gradient(ellipse 52% 42% at 28% 22%, rgba(255, 255, 255, 0.92), transparent 46%),
+    radial-gradient(ellipse 80% 70% at 68% 78%, rgba(168, 184, 200, 0.55), rgba(110, 124, 138, 0.72));
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
-    inset -12px -14px 18px rgba(36, 48, 62, 0.20),
-    0 12px 24px rgba(0, 0, 0, 0.22);
-  filter: saturate(1.35);
+    inset 0 0 0 1px rgba(230, 238, 246, 0.28),
+    inset -14px -16px 20px rgba(60, 74, 90, 0.22),
+    0 0 0 1px rgba(186, 214, 232, 0.18),
+    0 14px 26px rgba(0, 0, 0, 0.24);
+  filter: saturate(1.2);
   animation: kin-liquid-morph 5.2s ease-in-out infinite;
 }
 
 .kin-liquid-orb__blob::before {
   content: "";
   position: absolute;
-  left: 22%;
-  top: 16%;
-  width: 34%;
-  height: 26%;
+  left: 20%;
+  top: 14%;
+  width: 38%;
+  height: 30%;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.38);
-  filter: blur(2.4px);
+  background: rgba(255, 255, 255, 0.62);
+  filter: blur(2.2px);
   pointer-events: none;
 }
 
