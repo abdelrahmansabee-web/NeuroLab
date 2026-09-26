@@ -7,7 +7,6 @@ import {
   isClinicFileLocked,
   isKinAnalyzeActive,
   isRecallingBlocked,
-  resolveClinicVideoFile,
   setClinicFileLock,
   isTransientAnalyzePollError,
   readAnalyzeUi,
@@ -23,20 +22,6 @@ test("analyze-active flag turns off after an explicit clear", () => {
   expect(isKinAnalyzeActive()).toBe(true);
   setKinAnalyzeActive(false);
   expect(isKinAnalyzeActive()).toBe(false);
-});
-
-test("Analyze uses the staged input File when recall left only a filename", () => {
-  const phase = "baseline";
-  const input = document.createElement("input");
-  input.type = "file";
-  input.id = `kin-file-${phase}`;
-  const staged = new File(["probe"], "probe.mp4", { type: "video/mp4" });
-  Object.defineProperty(input, "files", { value: [staged] });
-  document.body.appendChild(input);
-  const nameOnly = { video_baseline: "probe.mp4" };
-  expect(resolveClinicVideoFile(phase, nameOnly, { current: nameOnly })).toBe(staged);
-  document.body.removeChild(input);
-  expect(resolveClinicVideoFile(phase, nameOnly, { current: nameOnly })).toBe(null);
 });
 
 test("Recalling law blocks Drive recall while a local file is staged or Analyze runs", () => {

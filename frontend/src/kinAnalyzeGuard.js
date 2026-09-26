@@ -44,27 +44,6 @@ export function isRecallingBlocked() {
   return isKinAnalyzeActive() || isClinicFileLocked();
 }
 
-function fileFromInput(phase) {
-  try {
-    const input = typeof document !== "undefined"
-      ? document.getElementById(`kin-file-${phase}`)
-      : null;
-    const file = input && input.files && input.files[0];
-    return file && file.size > 0 ? file : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Prefer the live File over a name-only recall row so Analyze never hangs on Drive. */
-export function resolveClinicVideoFile(phase, data, dataRef) {
-  const key = `video_${phase}_file`;
-  const fromRef = dataRef && dataRef.current ? dataRef.current[key] : null;
-  const fromData = data ? data[key] : null;
-  const picked = fromRef || fromData || fileFromInput(phase);
-  return picked && picked.size > 0 ? picked : null;
-}
-
 export function analyzePollExceeded(attempt, max = ANALYZE_POLL_MAX_ATTEMPTS) {
   return Number(attempt) >= max;
 }

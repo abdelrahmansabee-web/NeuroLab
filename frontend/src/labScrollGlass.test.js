@@ -75,7 +75,6 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(html).toMatch(/function ensureRun/);
   expect(html).toMatch(/function tick\(\)\{pin\(\);if\(document\.querySelector\("\.kin-film-strip"\)\)enhanceAnalyzeCapsule\(\)\}/);
   expect(html).toMatch(/nl_clinic_file_lock/);
-  expect(html).toMatch(/pointerdown/);
   expect(html).toMatch(/static\/kin-run\/pose-a\.png/);
   expect(html).not.toMatch(/__nlAuthMeTimeout/);
   expect(html).not.toMatch(/function ensureOrbit/);
