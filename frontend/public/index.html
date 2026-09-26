@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.372n" />
-    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.372n" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.372o" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.372o" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.372n" />
+    <meta name="nl-version" content="32.372o" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -23,12 +23,20 @@
     <title>NeuroLab</title>
     <script>
       (function () {
-        var v = document.querySelector('meta[name="nl-version"]');
-        v = v && v.content;
-        if (!v) return;
+        var a = document.querySelector('meta[name="nl-version"]');
+        a = a && a.content;
+        if (!a) return;
+        var t = "nl_app_v";
+        var b = "nl_app_bust";
         try {
-          localStorage.setItem("nl_app_v", v);
-          localStorage.setItem("nl_app_bust", v);
+          var p = localStorage.getItem(t);
+          localStorage.setItem(t, a);
+          var ua = navigator.userAgent || "";
+          var ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+          var stand = navigator.standalone === true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+          if (!(p && p !== a) && !((ios || stand) && localStorage.getItem(b) !== a)) return;
+          localStorage.setItem(b, a);
+          location.replace(location.pathname + "?_v=" + encodeURIComponent(a) + "&_r=" + Date.now() + location.hash);
         } catch (e) {}
       })();
     </script>
@@ -38,11 +46,10 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
-    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.372n"></script>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.372o"></script>
     <script>
       (function () {
-        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.372n";
-        var cradleSrc = "/static/kin-run/cradle.gif?v=32.372n";
+        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.372o";
         function pin() {
           var el = document.getElementById("nl-liquid-glass-link");
           if (!el) {
@@ -108,7 +115,7 @@
             strip.appendChild(host);
           }
           if (!host.querySelector(".nl-cradle__gif")) {
-            host.innerHTML = '<img class="nl-cradle__gif" src="' + cradleSrc + '" alt="" />';
+            host.innerHTML = '<img class="nl-cradle__gif" src="/static/kin-run/cradle.gif?v=32.372o" alt="" />';
           } else {
             var stalePct = host.querySelector(".kin-run__pct");
             if (stalePct && stalePct.parentNode) stalePct.parentNode.removeChild(stalePct);
@@ -146,26 +153,16 @@
             if (step || pct != null) syncAnalyzeSteps(strip, step, pct);
           }
         }
+        pin();
+        if (window.MutationObserver) {
+          new MutationObserver(pin).observe(document.documentElement, { childList: true, subtree: true });
+        }
         function placeAll() {
           if (document.querySelector(".kin-film-strip")) enhanceAnalyzeCapsule();
-        }
-        function boot() {
-          pin();
-          placeAll();
-        }
-        boot();
-        if (window.MutationObserver) {
-          new MutationObserver(boot).observe(document.documentElement, { childList: true, subtree: true });
         }
         setInterval(placeAll, 320);
         window.addEventListener("scroll", placeAll, true);
         window.addEventListener("resize", placeAll);
-        window.addEventListener("load", function () {
-          try {
-            var pre = new Image();
-            pre.src = cradleSrc;
-          } catch (e) {}
-        });
         function clinicLock() {
           try {
             sessionStorage.setItem("neuro_kin_analyze_active", "1");
