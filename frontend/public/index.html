@@ -141,4 +141,5 @@ if (step || pct != null) syncAnalyzeSteps(host, step, pct);
 function tick(){pin();if(document.querySelector(".kin-film-strip"))enhanceAnalyzeCapsule()}tick();window.MutationObserver&&new MutationObserver(tick).observe(document.documentElement,{childList:true,subtree:true});
 function clinicLock(){try{sessionStorage.setItem("neuro_kin_analyze_active","1");sessionStorage.setItem("nl_clinic_file_lock","1")}catch(e){}}
 document.addEventListener("change",function(e){var t=e.target;if(!t||!t.id||t.id.indexOf("kin-file-")!==0)return;if(t.files&&t.files[0])clinicLock()},true);
+document.addEventListener("pointerdown",function(e){var b=e.target&&e.target.closest&&e.target.closest("button");if(!b||b.disabled)return;if(b.getBoundingClientRect().width<140)return;var host=b.parentElement;for(var i=0;i<8&&host;i++){var inp=host.querySelector&&host.querySelector('input[id^="kin-file-"]');if(inp&&inp.files&&inp.files[0]){inp.dispatchEvent(new Event("change",{bubbles:true}));return;}host=host.parentElement;}},true);
 }()</script></body></html>
