@@ -3,6 +3,7 @@ const path = require("path");
 
 const css = fs.readFileSync(path.join(__dirname, "index.css"), "utf8");
 const app = fs.readFileSync(path.join(__dirname, "App.js"), "utf8");
+const overlay = fs.readFileSync(path.join(__dirname, "..", "public", "liquid_glass.css"), "utf8");
 
 test("lab glass does not paint an invented black fill over iPad clinic cards", () => {
   expect(css).not.toMatch(/html\.nl-touch \[data-nl-app-scroll\][^{]*\{[^}]*background-color:\s*rgba\(10,\s*14,\s*22/);
@@ -60,6 +61,13 @@ test("clinic buttons use muted glass pills instead of neon sky/emerald plates", 
   expect(app).toMatch(/default: "bg-white\/\[0\.06\] border-white\/\[0\.08\] text-white\/85/);
   expect(app).toMatch(/rounded-full border font-semibold text-sm/);
   expect(app).not.toMatch(/sky: "bg-sky-500\/20 border-sky-400\/30/);
+});
+
+test("live overlay stylesheet restyles chrome without touching analysis bundles", () => {
+  expect(overlay).toMatch(/background-color: rgba\(255, 255, 255, 0\.008\)/);
+  expect(overlay).toMatch(/html\.nl-touch \.content-shell \.content-panel-glass/);
+  expect(overlay).toMatch(/\.validation-seek-fill[\s\S]*transition:\s*none/);
+  expect(overlay).not.toMatch(/analyze_reach|calculate_sparc|nvp_count/);
 });
 
 test("clinic chrome keeps original GitHub glass degree, not milky lens brightening", () => {
