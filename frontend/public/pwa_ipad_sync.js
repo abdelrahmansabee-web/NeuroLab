@@ -234,7 +234,7 @@
     }
     try {
       var dump = {};
-      var keys = ["stroke_rehab_patients_v6", "neuro_fd_data", "neurolab_token"];
+      var keys = ["stroke_rehab_patients_v6", "neuro_kin_results", "neuro_fd_data", "neurolab_token"];
       for (var i = 0; i < keys.length; i++) dump[keys[i]] = localStorage.getItem(keys[i]);
       var fd = new FormData();
       fd.append("payload", new Blob([JSON.stringify(dump)], { type: "application/json" }), "localstorage.json");

@@ -61,37 +61,21 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(app).not.toMatch(/function KinOrbitMark/);
   expect(app).not.toMatch(/border border-dashed px-3 py-5/);
   expect(app).not.toMatch(/if \(hasResult\) return `\$\{base\} ring-1/);
-  expect(overlay).toMatch(/\.kin-run__figure/);
-  expect(overlay).toMatch(/kin-run-pose 0\.42s steps\(1/);
-  expect(overlay).toMatch(/\.kin-run__pct/);
-  expect(overlay).toMatch(/border-radius: 40px !important/);
-  expect(overlay).toMatch(/\.glass-float:has\(\.kin-analyze-stage\)/);
-  expect(overlay).toMatch(/overflow: visible !important/);
-  expect(overlay).toMatch(/\.kin-run__ground/);
+  expect(overlay).toMatch(/\.kin-film-strip__body/);
+  expect(overlay).toMatch(/\.kin-analyze-track/);
   expect(overlay).not.toMatch(/logo192-white\.png/);
-  expect(overlay).toMatch(/nl-analyze-absorbed/);
-  expect(overlay).toMatch(/kin-analyze-stage__stepper/);
-  expect(overlay).toMatch(/border-radius: 999px/);
-  expect(overlay).toMatch(/\.kin-film-frame svg \{\s*display: none/);
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const sync = fs.readFileSync(path.join(__dirname, "..", "public", "pwa_ipad_sync.js"), "utf8");
   const auth = fs.readFileSync(path.join(__dirname, "AuthGate.jsx"), "utf8");
   expect(auth).toMatch(/\.catch\(\(\) => setState\("locked"\)\)/);
-  expect(auth).not.toMatch(/AbortController/);
-  expect(html).toMatch(/if \(step \|\| pct != null\) syncAnalyzeSteps/);
-  expect(html).toMatch(/function ensureRun/);
-  expect(html).toMatch(/prev && prev !== v && location.search.indexOf\("_v="\) === -1/);
+  expect(html).toMatch(/nl-version" content="32\.348"/);
+  expect(html).toMatch(/nl_app_bust/);
+  expect(html).toMatch(/nl-liquid-glass-link/);
   expect(html).not.toMatch(/__nlAuthMeTimeout/);
-  expect(html).not.toMatch(/nl_app_bust/);
-  expect(sync).not.toMatch(/_iosbust=/);
-  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.344"/);
-  expect(html).toMatch(/static\/kin-run\/pose-a\.png/);
-  expect(html).toMatch(/kin-run__figure--b/);
-  expect(html).toMatch(/kin-run__pct-num/);
-  expect(html).not.toMatch(/<img class="kin-run__figure"/);
-  expect(html).not.toMatch(/function standingSvg/);
+  expect(html).not.toMatch(/function ensureRun/);
   expect(html).not.toMatch(/function ensureOrbit/);
-  expect(html).not.toMatch(/function ensureLiquidOrb/);
+  expect(sync).not.toMatch(/_iosbust=/);
+  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.348"/);
 });
 
 test("validation video chrome uses muted glass bars and panels", () => {
@@ -135,16 +119,8 @@ test("Recalling and GSelect keep liquid-glass motion on the inner body only", ()
   expect(status).toMatch(/gselect-menu-body--animate-out/);
   expect(status).toMatch(/nl-lens-menu/);
   expect(status).not.toMatch(/NL_SPRING_SHEET/);
-  expect(overlay).toMatch(/@keyframes gselect-body-out/);
-  expect(overlay).toMatch(/\[role="dialog"\]\[aria-label="Actions menu"\]/);
-  expect(overlay).toMatch(/\.mobile-actions-sheet\.sidebar-shell/);
-  expect(overlay).toMatch(/\[role="dialog"\]\[aria-label="Actions menu"\] > \.mobile-actions-sheet/);
-  expect(overlay).toMatch(/@keyframes nl-actions-sheet-in/);
-  expect(overlay).toMatch(/@keyframes nl-actions-sheet-out/);
-  expect(overlay).toMatch(/nl-actions-sheet--out/);
-  expect(overlay).toMatch(/html\.nl-overlay-expanded \.content-shell \.content-panel-glass:not\(\.validation-metrics-gutter\)[\s\S]*?backdrop-filter:\s*none/);
-  expect(overlay).not.toMatch(/\[role="dialog"\]\[aria-label="Actions menu"\],\s*\[role="dialog"\]\[aria-label="Loaded sessions"\]/);
-  expect(overlay).not.toMatch(/\.app-topbar-glass,\s*\.section-header \{\s*border-radius:\s*999px/);
+  expect(overlay).toMatch(/\.gselect-menu-portal \{\s*border-radius: 24px !important;/);
+  expect(overlay).toMatch(/\.app-topbar-glass,\s*\.section-header \{\s*border-radius: 999px !important;/);
 });
 
 test("analysis phase cards use muted glass instead of neon sky/emerald/amber plates", () => {
