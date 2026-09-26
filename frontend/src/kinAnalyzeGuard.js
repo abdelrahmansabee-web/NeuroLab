@@ -1,6 +1,8 @@
 /** Session flag so Drive/patient sync waits while kinematics analysis is running. */
 
 export const KIN_ANALYZE_ACTIVE_KEY = "neuro_kin_analyze_active";
+/** Staged kinematics file — Recalling must not wipe it or race Analyze. */
+export const KIN_CLINIC_FILE_LOCK_KEY = "nl_clinic_file_lock";
 export const KIN_ANALYZE_UI_KEY = "neuro_kin_analyze_ui";
 export const ANALYZE_POLL_MS = 1400;
 /** ~20 min at ANALYZE_POLL_MS — clinic pose jobs can run several minutes. */
@@ -20,6 +22,26 @@ export function isKinAnalyzeActive() {
   } catch {
     return false;
   }
+}
+
+export function setClinicFileLock(locked) {
+  try {
+    if (locked) sessionStorage.setItem(KIN_CLINIC_FILE_LOCK_KEY, "1");
+    else sessionStorage.removeItem(KIN_CLINIC_FILE_LOCK_KEY);
+  } catch { /* ignore */ }
+}
+
+export function isClinicFileLocked() {
+  try {
+    return sessionStorage.getItem(KIN_CLINIC_FILE_LOCK_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Recalling law: Drive recall waits while a local file is staged or Analyze is running. */
+export function isRecallingBlocked() {
+  return isKinAnalyzeActive() || isClinicFileLocked();
 }
 
 export function analyzePollExceeded(attempt, max = ANALYZE_POLL_MAX_ATTEMPTS) {

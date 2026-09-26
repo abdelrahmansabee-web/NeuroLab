@@ -21,10 +21,13 @@
   var AUTO_SYNC_GAP_MS = 120000;
   /** Must match kinAnalyzeGuard.KIN_ANALYZE_ACTIVE_KEY — set by React while Analyze runs. */
   var ANALYZE_ACTIVE_KEY = "neuro_kin_analyze_active";
+  /** Must match kinAnalyzeGuard.KIN_CLINIC_FILE_LOCK_KEY — staged local video. */
+  var CLINIC_FILE_LOCK_KEY = "nl_clinic_file_lock";
 
   function analyzeActive() {
     try {
-      return sessionStorage.getItem(ANALYZE_ACTIVE_KEY) === "1";
+      return sessionStorage.getItem(ANALYZE_ACTIVE_KEY) === "1"
+        || sessionStorage.getItem(CLINIC_FILE_LOCK_KEY) === "1";
     } catch (e) {
       return false;
     }

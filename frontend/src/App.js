@@ -80,6 +80,8 @@ import {
   clearAnalyzeUi,
   isAnalyzeLeaveAbort,
   isKinAnalyzeActive,
+  isRecallingBlocked,
+  setClinicFileLock,
   isStaleAnalyzing,
   isTransientAnalyzePollError,
   readAnalyzeUi,
@@ -822,6 +824,7 @@ let driveRecallThisVisit = false;
 
 function startDriveSessionRecall(patients, { showToast, force = false, allowRepeat = false } = {}) {
   return (async () => {
+    if (isRecallingBlocked()) return null;
     if (driveRecallKickoff || isDriveRecallRunning()) return null;
     if (!allowRepeat && !force && driveRecallThisVisit) return null;
     driveRecallKickoff = true;
@@ -4176,6 +4179,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     }
     upd[statusKey(phase)] = "uploaded";
     onChange(upd);
+    setClinicFileLock(true);
+    setKinAnalyzeActive(true);
     showToast(`\u2713 File uploaded for ${phase}`);
   };
 
@@ -4211,6 +4216,13 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
     });
     onChange({ ...upd, analysisResults: nextResults });
     setExpandedResults((prev) => { const n = { ...prev }; delete n[phase]; return n; });
+    const stillHasFile = phases.some((ph) => ph.k !== phase && upd[`${vidKey(ph.k)}_file`]);
+    if (!stillHasFile) {
+      setClinicFileLock(false);
+      if (!isKinAnalyzeActive() || !phases.some((ph) => (upd[statusKey(ph.k)] || "") === "analyzing")) {
+        setKinAnalyzeActive(false);
+      }
+    }
     showToast(`Cleared ${phase}`);
   };
 
@@ -4756,7 +4768,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   };
 
   const analyzeVideo = async (phase) => {
-    const file = data[`${vidKey(phase)}_file`];
+    const file = dataRef.current?.[`${vidKey(phase)}_file`] || data[`${vidKey(phase)}_file`];
     if (!file) {
       showToast("Please select a file first", "error");
       return;
@@ -9255,7 +9267,7 @@ export default function App() {
       } catch { /* ignore */ }
     }
     const run = () => {
-      if (cancelled || isKinAnalyzeActive()) return;
+      if (cancelled || isRecallingBlocked()) return;
       if (!justConnected && shouldDeferBootRecallUntilEmailRestore(loadPatients())) return;
       startDriveSessionRecall(loadPatients(), {
         showToast,
@@ -9266,7 +9278,7 @@ export default function App() {
     const t = setTimeout(run, justConnected ? 600 : isStandalonePWA() ? 400 : 2800);
     const onSynced = (ev) => {
       if (ev?.detail?.skipDriveRecall) return;
-      if (cancelled || isKinAnalyzeActive()) return;
+      if (cancelled || isRecallingBlocked()) return;
       startDriveSessionRecall(loadPatients(), { showToast });
     };
     window.addEventListener(PATIENTS_SYNC_EVENT, onSynced);
