@@ -3,7 +3,7 @@
 // ============================================================
 /* eslint-disable no-undef */
 
-import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo, startTransition } from "react";
+import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo, useId, startTransition } from "react";
 import ReactDOM from "react-dom";
 import { motion, AnimatePresence, animate, useMotionValue, useReducedMotion } from "framer-motion";
 import {
@@ -3525,16 +3525,44 @@ function kinAnalyzeStageIndex(step, pct) {
   return 0;
 }
 
-function KinLiquidOrb() {
-  const pips = Array.from({ length: 11 });
+function KinOrbitMark() {
+  const uid = useId().replace(/:/g, "");
   return (
-    <div className="kin-liquid-stage" aria-hidden>
-      <div className="kin-liquid-orb">
-        <span className="kin-liquid-orb__blob" />
-      </div>
-      <div className="kin-film-strip__pips">
-        {pips.map((_, i) => <span key={`p-${i}`} className="kin-film-strip__pip" />)}
-      </div>
+    <div className="kin-orbit" aria-hidden>
+      <svg className="kin-orbit__svg" viewBox="0 0 200 80">
+        <defs>
+          <radialGradient id={`kin-orbit-planet-${uid}`} cx="34%" cy="30%" r="70%">
+            <stop offset="0%" stopColor="#e7edf3" />
+            <stop offset="42%" stopColor="#9aa3ad" />
+            <stop offset="100%" stopColor="#5a636c" />
+          </radialGradient>
+          <radialGradient id={`kin-orbit-moon-${uid}`} cx="34%" cy="30%" r="70%">
+            <stop offset="0%" stopColor="#f3f6f9" />
+            <stop offset="100%" stopColor="#a7afb7" />
+          </radialGradient>
+        </defs>
+        <ellipse
+          className="kin-orbit__ring"
+          cx="100"
+          cy="40"
+          rx="76"
+          ry="12"
+          fill="none"
+          stroke="rgba(226,232,240,0.38)"
+          strokeWidth="1.15"
+        />
+        <circle className="kin-orbit__planet" cx="100" cy="40" r="10.5" fill={`url(#kin-orbit-planet-${uid})`} />
+        <circle className="kin-orbit__moon" r="2.7" fill={`url(#kin-orbit-moon-${uid})`}>
+          <animateMotion dur="6.8s" repeatCount="indefinite" rotate="0">
+            <mpath href={`#kin-orbit-path-${uid}`} xlinkHref={`#kin-orbit-path-${uid}`} />
+          </animateMotion>
+        </circle>
+        <path
+          id={`kin-orbit-path-${uid}`}
+          d="M24,40 a76,12 0 1,1 152,0 a76,12 0 1,1 -152,0"
+          fill="none"
+        />
+      </svg>
     </div>
   );
 }
@@ -3547,7 +3575,7 @@ function KinAnalyzeStageCapsule({ accent = "amber", pct = null, step = "Analyzin
   return (
     <div className="kin-analyze-stage" data-nl-stadium="1">
       <div className="kin-analyze-stage__capsule">
-        <KinLiquidOrb />
+        <KinOrbitMark />
       </div>
       <div className="kin-analyze-stage__stepper" aria-label="Analysis stages">
         <span className="kin-analyze-stage__rail" aria-hidden />

@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.330" />
-    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.330" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.331" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.331" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.330" />
+    <meta name="nl-version" content="32.331" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -76,10 +76,10 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
-    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.330"></script>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.331"></script>
     <script>
       (function () {
-        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.330";
+        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.331";
         function pin() {
           var el = document.getElementById("nl-liquid-glass-link");
           if (!el) {
@@ -119,30 +119,35 @@
             chips[i].classList.toggle("is-done", i < active);
           }
         }
-        function ensureLiquidOrb(host) {
+        function ensureOrbit(host) {
           var cap = host.querySelector(".kin-analyze-stage__capsule") || host;
-          if (cap.querySelector(".kin-liquid-orb")) return;
-          var stage = document.createElement("div");
-          stage.className = "kin-liquid-stage";
-          stage.setAttribute("aria-hidden", "true");
-          var orb = document.createElement("div");
-          orb.className = "kin-liquid-orb";
-          var blob = document.createElement("span");
-          blob.className = "kin-liquid-orb__blob";
-          orb.appendChild(blob);
-          stage.appendChild(orb);
-          cap.insertBefore(stage, cap.firstChild);
-        }
-        function ensurePips(strip) {
-          if (strip.querySelector(".kin-film-strip__pips")) return;
-          var pips = document.createElement("div");
-          pips.className = "kin-film-strip__pips";
-          for (var p = 0; p < 11; p += 1) {
-            var dot = document.createElement("span");
-            dot.className = "kin-film-strip__pip";
-            pips.appendChild(dot);
-          }
-          strip.appendChild(pips);
+          if (cap.querySelector(".kin-orbit")) return;
+          var id = "o" + Math.random().toString(36).slice(2, 8);
+          var wrap = document.createElement("div");
+          wrap.className = "kin-orbit";
+          wrap.setAttribute("aria-hidden", "true");
+          wrap.innerHTML = '<svg class="kin-orbit__svg" viewBox="0 0 200 80">'
+            + '<defs>'
+            + '<radialGradient id="p-' + id + '" cx="34%" cy="30%" r="70%">'
+            + '<stop offset="0%" stop-color="#e7edf3"/>'
+            + '<stop offset="42%" stop-color="#9aa3ad"/>'
+            + '<stop offset="100%" stop-color="#5a636c"/>'
+            + '</radialGradient>'
+            + '<radialGradient id="m-' + id + '" cx="34%" cy="30%" r="70%">'
+            + '<stop offset="0%" stop-color="#f3f6f9"/>'
+            + '<stop offset="100%" stop-color="#a7afb7"/>'
+            + '</radialGradient>'
+            + '</defs>'
+            + '<ellipse cx="100" cy="40" rx="76" ry="12" fill="none" stroke="rgba(226,232,240,0.38)" stroke-width="1.15"/>'
+            + '<circle cx="100" cy="40" r="10.5" fill="url(#p-' + id + ')"/>'
+            + '<circle r="2.7" fill="url(#m-' + id + ')">'
+            + '<animateMotion dur="6.8s" repeatCount="indefinite" rotate="0">'
+            + '<mpath href="#path-' + id + '"/>'
+            + '</animateMotion>'
+            + '</circle>'
+            + '<path id="path-' + id + '" d="M24,40 a76,12 0 1,1 152,0 a76,12 0 1,1 -152,0" fill="none"/>'
+            + '</svg>';
+          cap.insertBefore(wrap, cap.firstChild);
         }
         function stepperIcon(name) {
           var icons = {
@@ -188,15 +193,7 @@
               host.appendChild(cap);
               cap.appendChild(strip);
             }
-            ensureLiquidOrb(host);
-            var liquid = host.querySelector(".kin-liquid-stage");
-            if (liquid && !liquid.querySelector(".kin-film-strip__pips")) {
-              var existingPips = strip.querySelector(".kin-film-strip__pips");
-              if (existingPips) liquid.appendChild(existingPips);
-              else ensurePips(liquid);
-            } else if (!host.querySelector(".kin-film-strip__pips")) {
-              ensurePips(strip);
-            }
+            ensureOrbit(host);
             if (!host.querySelector(".kin-analyze-stage__stepper")) {
               var stepper = document.createElement("div");
               stepper.className = "kin-analyze-stage__stepper";

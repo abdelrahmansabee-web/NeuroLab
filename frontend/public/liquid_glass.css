@@ -153,26 +153,7 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   to { transform: translateX(-50%); }
 }
 
-@keyframes kin-liquid-morph {
-  0% {
-    border-radius: 72% 28% 58% 42% / 38% 64% 32% 68%;
-    transform: rotate(-16deg) scale(1.10, 0.84);
-  }
-  35% {
-    border-radius: 30% 70% 40% 60% / 66% 34% 70% 30%;
-    transform: rotate(18deg) scale(0.86, 1.16);
-  }
-  68% {
-    border-radius: 60% 40% 28% 72% / 70% 30% 62% 38%;
-    transform: rotate(-8deg) scale(1.12, 0.86);
-  }
-  100% {
-    border-radius: 72% 28% 58% 42% / 38% 64% 32% 68%;
-    transform: rotate(-16deg) scale(1.10, 0.84);
-  }
-}
-
-/* Option A: one liquid orb in the stadium capsule. Film and skeletons stay hidden. */
+/* Option A orbit: planet + thin ring + moon. Film, skeletons, and the liquid blob stay hidden. */
 .kin-analyze-stage {
   width: 100% !important;
   max-width: none !important;
@@ -203,66 +184,29 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
 .kin-film-strip__holes {
   display: none !important;
 }
-.kin-film-strip__pips {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 10px 0;
-}
-.kin-film-strip__pip {
-  width: 4px;
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  flex-shrink: 0;
+.kin-film-strip__pips,
+.kin-film-strip__pip,
+.kin-liquid-stage,
+.kin-liquid-orb,
+.kin-liquid-orb__blob {
+  display: none !important;
 }
 .kin-analyze-stage__row,
 .kin-analyze-stage__film {
   display: block;
   min-width: 0;
 }
-.kin-liquid-stage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-}
-.kin-liquid-orb {
+.kin-orbit {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   height: 88px;
 }
-.kin-liquid-orb__blob {
-  position: relative;
+.kin-orbit__svg {
   display: block;
-  width: 92px;
-  height: 64px;
-  background:
-    radial-gradient(ellipse 52% 42% at 28% 22%, rgba(255, 255, 255, 0.92), transparent 46%),
-    radial-gradient(ellipse 80% 70% at 68% 78%, rgba(168, 184, 200, 0.55), rgba(110, 124, 138, 0.72));
-  box-shadow:
-    inset 0 0 0 1px rgba(230, 238, 246, 0.28),
-    inset -14px -16px 20px rgba(60, 74, 90, 0.22),
-    0 0 0 1px rgba(186, 214, 232, 0.18),
-    0 14px 26px rgba(0, 0, 0, 0.24);
-  filter: saturate(1.2);
-  animation: kin-liquid-morph 5.2s ease-in-out infinite;
-}
-.kin-liquid-orb__blob::before {
-  content: "";
-  position: absolute;
-  left: 20%;
-  top: 14%;
-  width: 38%;
-  height: 30%;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.62);
-  filter: blur(2.2px);
-  pointer-events: none;
+  width: min(200px, 92%);
+  height: 80px;
 }
 .kin-film-strip__body,
 .kin-film-strip__track,
