@@ -124,15 +124,15 @@ const SIDEBAR_CLS = "bg-white/70 backdrop-blur-2xl backdrop-saturate-150 border 
 const INPUT_CLS = "bg-white/65 border border-black/5";
 
 const GSELECT_MENU_BOX = {
-  borderRadius: "12px",
+  borderRadius: "24px",
 };
 
 /** Same class stack as DesktopUnifiedTopBar / app top chrome */
 const GLASS_TOPBAR_SHELL = `relative overflow-hidden app-topbar-glass glass-float ${GLASS_CLS}`;
 
-const BG_FILTER = "blur(52px) brightness(1.7) saturate(0.45) contrast(0.78)";
+const BG_FILTER = "blur(36px) brightness(1.12) saturate(0.9) contrast(0.92)";
 const BG_SCALE = "scale(1.08)";
-const BG_OVERLAY = "linear-gradient(180deg, rgba(247,249,252,0.58) 0%, rgba(232,238,244,0.72) 100%)";
+const BG_OVERLAY = "rgba(247,249,252,0.22)";
 
 function isIOSDevice() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -1433,7 +1433,7 @@ async function restorePatientsFromDriveNow({ showToast } = {}) {
 
 const Glass = ({ children, className = "", style = {}, soft = false, ...r }) => (
   <div
-    className={`glass-float content-panel-glass rounded-2xl ${GLASS_PANEL_CLS} ${className}`}
+    className={`glass-float content-panel-glass rounded-[32px] ${GLASS_PANEL_CLS} ${className}`}
     style={{ overflow: "visible", boxShadow: soft ? FLOAT_M : FLOAT_M, ...style }}
     {...r}
   >
@@ -1448,9 +1448,9 @@ const BL = ({ en, tr, className = "" }) => (
 );
 
 const SH = ({ icon: Icon, en, tr, badge }) => (
-  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 mb-5 sm:mb-6 rounded-2xl p-4 glass-float section-header">
+  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 mb-5 sm:mb-6 rounded-full px-4 py-3 glass-float section-header">
     <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
-      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={GLASS_FIELD}>
+      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center flex-shrink-0" style={GLASS_FIELD}>
       <Icon className="w-5 h-5 text-white/80" />
     </div>
     <div className="min-w-0 flex-1">
@@ -9725,7 +9725,7 @@ export default function App() {
     return (
       <div
         ref={shellRef}
-        className={`relative w-full overflow-hidden app-topbar-glass glass-float ${GLASS_CLS}`}
+        className={`relative w-full overflow-hidden app-topbar-glass glass-float rounded-full ${GLASS_CLS}`}
         style={{ boxShadow: FLOAT_M }}
       >
         <div className="relative z-[1] flex items-start w-full min-w-0 flex-nowrap">
@@ -9757,7 +9757,7 @@ export default function App() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={nlMotionTap(0.95)}
                 onClick={() => setMobileTopMenuOpen((p) => !p)}
-                className={`w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
+                className={`w-9 h-9 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
                 style={GLASS_FIELD}
                 title="More actions"
                 aria-label="More actions"
@@ -9779,7 +9779,7 @@ export default function App() {
     <DesktopUnifiedTopBar />
   ) : (
     <div
-      className={`app-topbar-glass glass-float relative flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl overflow-visible ${sidebar && !isDesktop ? "" : "pr-[10.75rem]"} ${GLASS_CLS}`}
+      className={`app-topbar-glass glass-float relative flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-full overflow-visible ${sidebar && !isDesktop ? "" : "pr-[10.75rem]"} ${GLASS_CLS}`}
       style={{ boxShadow: FLOAT_M }}
     >
       {topBarMenuBtn}
@@ -10195,7 +10195,7 @@ export default function App() {
       )}
 
       <aside
-        className={`fixed left-0 top-0 h-full ${isDesktop ? "z-50" : "z-[100]"} flex flex-col px-3 pb-3`}
+        className={`fixed left-0 top-0 h-full ${isDesktop ? "z-50" : "z-[100]"} flex flex-col px-4 pb-4`}
         style={{
           width: isDesktop ? sidebarPush : MOBILE_SIDEBAR_W,
           paddingTop: SAFE_TOP,
@@ -10206,8 +10206,8 @@ export default function App() {
           isolation: undefined,
         }}
       >
-            <div className={`sidebar-shell flex-1 flex flex-col min-h-0 rounded-[28px] overflow-hidden ${SIDEBAR_CLS}`} style={{ boxShadow: FLOAT_M }}>
-              <div className="px-5 pt-7 pb-5 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+            <div className={`sidebar-shell flex-1 flex flex-col min-h-0 rounded-[36px] overflow-hidden ${SIDEBAR_CLS}`} style={{ boxShadow: FLOAT_M }}>
+              <div className="px-5 pt-7 pb-5 flex-shrink-0">
                   <div className="relative flex flex-col items-center text-center gap-2 mb-4">
                     {!isDesktop && (
                       <button
@@ -10227,13 +10227,13 @@ export default function App() {
                     />
                     <p className="text-base font-extrabold text-white leading-tight tracking-wide">RA.ED AI</p>
                   </div>
-                <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl" style={GLASS_FIELD}>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={GLASS_FIELD}>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
                   <span className="text-xs font-light text-white/50 truncate">Pre / Post Longitudinal</span>
               </div>
             </div>
 
-              <nav className="flex-1 min-h-0 p-3 space-y-0.5 overflow-y-auto">
+              <nav className="flex-1 min-h-0 p-3 space-y-2 overflow-y-auto">
                 {NAV_ITEMS.filter((item) => !item.topBarOnly && (!item.adminOnly || user?.is_admin)).map((item) => {
                   const on = sidebarActiveId === item.id;
                   const Icon = item.icon;
@@ -10244,12 +10244,12 @@ export default function App() {
                       whileTap={sectionNavLocked ? undefined : nlMotionTap(0.97)}
                       onClick={() => { goToSection(item.id); if (!isDesktop) setSidebar(false); }}
                       disabled={sectionNavLocked}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-colors duration-200 relative group ${
-                        on ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-full text-left transition-colors duration-200 relative group ${
+                        on ? "bg-white/80" : "hover:bg-white/35"
                       }${sectionNavLocked ? " pointer-events-none" : ""}`}
-                      style={on ? { backgroundColor: "rgba(255,255,255,0.86)", border: "1px solid rgba(255,255,255,0.95)", boxShadow: "inset 0 1px 0 rgba(255,255,255,1), 0 10px 22px -16px rgba(15,23,42,0.16)" } : { border: "1px solid transparent" }}
+                      style={on ? { backgroundColor: "rgba(255,255,255,0.72)", border: "1px solid rgba(255,255,255,0.95)", boxShadow: "inset 0 1px 0 rgba(255,255,255,1), 0 10px 22px -16px rgba(15,23,42,0.16)" } : { border: "1px solid rgba(255,255,255,0.35)" }}
                     >
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 relative z-10 transition-all ${
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 relative z-10 transition-all ${
                         on ? "bg-white/10" : "bg-white/[0.04] group-hover:bg-white/[0.07]"
                       }`} style={GLASS_FIELD}>
                         <Icon className={`w-4 h-4 ${on ? "text-white" : "text-white/45 group-hover:text-white/70"}`} />
@@ -10339,6 +10339,26 @@ export default function App() {
           border-color: rgba(255,255,255,0.62) !important;
         }
 
+        .sidebar-shell {
+          border-radius: 36px !important;
+        }
+        .app-topbar-glass,
+        .section-header {
+          border-radius: 999px !important;
+        }
+        .content-panel-glass {
+          border-radius: 32px !important;
+        }
+        .gselect-trigger-shell,
+        .glass-field,
+        input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+        select {
+          border-radius: 999px !important;
+        }
+        textarea {
+          border-radius: 24px !important;
+        }
+
         .sidebar-shell,
         .glass-float {
           position: relative;
@@ -10346,7 +10366,7 @@ export default function App() {
           border-color: rgba(255,255,255,0.86) !important;
           backdrop-filter: blur(42px) saturate(1.55) brightness(1.08) !important;
           -webkit-backdrop-filter: blur(42px) saturate(1.55) brightness(1.08) !important;
-          background-color: rgba(255,255,255,0.52) !important;
+          background-color: rgba(255,255,255,0.34) !important;
           box-shadow:
             inset 0 1px 0 rgba(255,255,255,0.98),
             inset 0 -14px 32px rgba(170, 196, 220, 0.14),
@@ -10409,7 +10429,7 @@ export default function App() {
         .content-shell .glass-float:not(.section-header):not(.app-topbar-glass) {
           backdrop-filter: blur(42px) saturate(1.5) brightness(1.08) !important;
           -webkit-backdrop-filter: blur(42px) saturate(1.5) brightness(1.08) !important;
-          background-color: rgba(255,255,255,0.58) !important;
+          background-color: rgba(255,255,255,0.38) !important;
           border-color: rgba(255,255,255,0.88) !important;
           box-shadow:
             inset 0 1px 0 rgba(255,255,255,0.98),
@@ -10440,7 +10460,7 @@ export default function App() {
         .section-header {
           backdrop-filter: blur(46px) saturate(1.55) brightness(1.08) !important;
           -webkit-backdrop-filter: blur(46px) saturate(1.55) brightness(1.08) !important;
-          background-color: rgba(255,255,255,0.62) !important;
+          background-color: rgba(255,255,255,0.4) !important;
         }
 
         .glass-field,
@@ -10591,6 +10611,9 @@ export default function App() {
           border-color: rgba(255,255,255,0.95) !important;
         }
 
+        .gselect-menu-portal {
+          border-radius: 24px !important;
+        }
         .gselect-menu-portal.glass-float {
           border-color: rgba(255,255,255,0.88) !important;
           backdrop-filter: blur(42px) saturate(1.55) brightness(1.08) !important;
@@ -10649,7 +10672,7 @@ export default function App() {
         html.nl-touch .glass-float {
           backdrop-filter: blur(24px) saturate(1.4) brightness(1.06) !important;
           -webkit-backdrop-filter: blur(24px) saturate(1.4) brightness(1.06) !important;
-          background-color: rgba(255,255,255,0.64) !important;
+          background-color: rgba(255,255,255,0.42) !important;
         }
         html.nl-touch .content-shell {
           backdrop-filter: none !important;
@@ -10660,7 +10683,7 @@ export default function App() {
         html.nl-touch .content-shell .content-panel-glass {
           backdrop-filter: blur(22px) saturate(1.35) brightness(1.06) !important;
           -webkit-backdrop-filter: blur(22px) saturate(1.35) brightness(1.06) !important;
-          background-color: rgba(255,255,255,0.68) !important;
+          background-color: rgba(255,255,255,0.44) !important;
         }
         html.nl-touch .sidebar-shell::before,
         html.nl-touch .sidebar-shell::after,
