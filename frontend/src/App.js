@@ -3508,34 +3508,25 @@ function KinSkeletonFigure({ view, stroke }) {
   return <KinSkeletonFront stroke={stroke} />;
 }
 
-function KinFilmFrame({ viewIndex, accent = "amber" }) {
-  const col = KIN_FILM_ACCENT[accent] || KIN_FILM_ACCENT.amber;
-  const view = KIN_SKELETON_VIEWS[viewIndex % KIN_SKELETON_VIEWS.length];
+const KIN_FILM_LOGO = `${process.env.PUBLIC_URL || ""}/logo192-white.png?v=32.86`;
+
+function KinFilmFrame() {
   return (
     <div className="kin-film-frame">
-      <svg viewBox="0 0 32 24" aria-hidden>
-        <KinSkeletonFigure view={view} stroke={col.stroke} />
-      </svg>
+      <img src={KIN_FILM_LOGO} alt="" className="kin-film-frame__logo" />
     </div>
   );
 }
 
-function KinFilmStripLoop({ accent = "amber" }) {
-  const holes = Array.from({ length: 11 });
+function KinFilmStripLoop() {
   const frames = Array.from({ length: 8 }, (_, i) => i);
   return (
     <div className="kin-film-strip" aria-hidden>
-      <div className="kin-film-strip__holes">
-        {holes.map((_, i) => <span key={`t-${i}`} className="kin-film-strip__hole" />)}
-      </div>
       <div className="kin-film-strip__body">
         <div className="kin-film-strip__track">
-          {frames.map((i) => <KinFilmFrame key={`a-${i}`} viewIndex={i} accent={accent} />)}
-          {frames.map((i) => <KinFilmFrame key={`b-${i}`} viewIndex={i} accent={accent} />)}
+          {frames.map((i) => <KinFilmFrame key={`a-${i}`} />)}
+          {frames.map((i) => <KinFilmFrame key={`b-${i}`} />)}
         </div>
-      </div>
-      <div className="kin-film-strip__holes">
-        {holes.map((_, i) => <span key={`b-${i}`} className="kin-film-strip__hole" />)}
       </div>
     </div>
   );
@@ -3569,7 +3560,7 @@ function KinAnalyzeStageCapsule({ accent = "amber", pct = null, step = "Analyzin
     <div className="kin-analyze-stage" aria-hidden>
       <div className="kin-analyze-stage__capsule">
         <div className="kin-analyze-stage__fill" style={{ width: `${Math.max(8, barPct)}%` }} />
-        <KinFilmStripLoop accent={accent} />
+        <KinFilmStripLoop />
         <div className="kin-analyze-stage__steps">
           {KIN_ANALYZE_STAGES.map((s, i) => (
             <span
@@ -3764,7 +3755,7 @@ const kinPhaseCardCls = (c, status, hasResult) => {
 };
 
 const kinUploadZoneCls = (c, hasFile) => {
-  const base = "group relative flex flex-col items-center justify-center gap-1.5 rounded-[22px] border border-dashed px-3 py-5 cursor-pointer transition-all duration-200";
+  const base = "group relative flex flex-col items-center justify-center gap-1.5 rounded-[24px] border border-solid px-3 py-5 cursor-pointer transition-all duration-200";
   if (hasFile) return `${base} border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.06]`;
   return `${base} border-white/[0.08] bg-white/[0.015] hover:border-white/[0.14] hover:bg-white/[0.04]`;
 };

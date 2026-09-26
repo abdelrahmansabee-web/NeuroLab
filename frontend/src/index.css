@@ -746,10 +746,7 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
 }
 
 .kin-film-strip__holes {
-  display: flex;
-  justify-content: space-between;
-  gap: 5px;
-  padding: 0 8px;
+  display: none;
 }
 
 .kin-film-strip__hole {
@@ -803,9 +800,16 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   width: 52px;
   height: 40px;
   margin: 0 4px;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.05);
+}
+
+.kin-film-frame__logo {
+  display: block;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
 }
 
 .kin-analyze-panel {
