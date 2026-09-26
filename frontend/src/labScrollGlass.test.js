@@ -82,7 +82,10 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(html).toMatch(/if \(step \|\| pct != null\) syncAnalyzeSteps/);
   expect(html).toMatch(/function ensureRun/);
   expect(html).toMatch(/alreadyOnV/);
+  expect(html).toMatch(/if \(standalone\) return;/);
   expect(html).toMatch(/__nlAuthMeTimeout/);
+  expect(sync).toMatch(/isIOS && !standalone/);
+  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/"/);
   expect(html).toMatch(/auth\\\/me/);
   expect(html).toMatch(/static\/kin-run\/pose-a\.png/);
   expect(html).toMatch(/kin-run__figure--b/);

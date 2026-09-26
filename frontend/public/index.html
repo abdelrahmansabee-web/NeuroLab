@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.342" />
-    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.342" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.343" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.343" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.342" />
+    <meta name="nl-version" content="32.343" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -31,21 +31,16 @@
         try {
           var prev = localStorage.getItem(k);
           localStorage.setItem(k, v);
-          var ua = navigator.userAgent || "";
-          var isiOS = /iPad|iPhone|iPod/.test(ua)
-            || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
           var standalone = navigator.standalone === true
             || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+          localStorage.setItem(bustKey, v);
+          /* Home Screen start_url is /. Never navigate away — iOS standalone
+             cannot follow a query-string replace and stays on AuthGate Loading. */
+          if (standalone) return;
           var versionChanged = Boolean(prev && prev !== v);
-          var iosNeedsBust = (isiOS || standalone) && localStorage.getItem(bustKey) !== v;
           var qs = location.search || "";
           var alreadyOnV = qs.indexOf("_v=" + encodeURIComponent(v)) !== -1 || qs.indexOf("_v=" + v) !== -1;
-          if (alreadyOnV) {
-            localStorage.setItem(bustKey, v);
-            return;
-          }
-          if (!versionChanged && !iosNeedsBust) return;
-          localStorage.setItem(bustKey, v);
+          if (alreadyOnV || !versionChanged) return;
           var go = function () {
             location.replace(
               location.pathname
@@ -118,10 +113,10 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
-    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.342"></script>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.343"></script>
     <script>
       (function () {
-        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.342";
+        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.343";
         function pin() {
           var el = document.getElementById("nl-liquid-glass-link");
           if (!el) {
@@ -186,9 +181,9 @@
           }
           if (cap.querySelector(".kin-run")) return;
           var html = '<div class="kin-run__stage">'
-            + '<span class="kin-run__figure kin-run__figure--a" style="background-image:url(\'./static/kin-run/pose-a.png?v=32.342\')"></span>'
-            + '<span class="kin-run__figure kin-run__figure--b" style="background-image:url(\'./static/kin-run/pose-b.png?v=32.342\')"></span>'
-            + '<span class="kin-run__figure kin-run__figure--c" style="background-image:url(\'./static/kin-run/pose-c.png?v=32.342\')"></span>'
+            + '<span class="kin-run__figure kin-run__figure--a" style="background-image:url(\'./static/kin-run/pose-a.png?v=32.343\')"></span>'
+            + '<span class="kin-run__figure kin-run__figure--b" style="background-image:url(\'./static/kin-run/pose-b.png?v=32.343\')"></span>'
+            + '<span class="kin-run__figure kin-run__figure--c" style="background-image:url(\'./static/kin-run/pose-c.png?v=32.343\')"></span>'
             + '<span class="kin-run__ground"></span>'
             + '<span class="kin-run__pct is-empty"><svg class="kin-run__pct-svg" viewBox="0 0 36 36" aria-hidden="true">'
             + '<circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.2"/>'

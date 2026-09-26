@@ -4,12 +4,15 @@
   var ua = navigator.userAgent || "";
   var isIOS = /iPad|iPhone|iPod/.test(ua)
     || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  if (isIOS && (location.search || "").indexOf("_iosbust=") === -1) {
+  var standalone = navigator.standalone === true
+    || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  /* Home Screen start_url is /. Do not location.replace — that is the Loading loop. */
+  if (isIOS && !standalone && (location.search || "").indexOf("_iosbust=") === -1) {
     var meta = document.querySelector('meta[name="nl-version"]');
     var here = meta && meta.content;
     var qsNow = location.search || "";
     if (here && (qsNow.indexOf("_v=" + encodeURIComponent(here)) !== -1 || qsNow.indexOf("_v=" + here) !== -1)) {
-      /* already on this document's version URL — do not reload-loop the Home Screen icon */
+      /* already on this document's version URL — do not reload-loop Safari */
     } else {
     fetch("/?_v=check&_r=" + Date.now(), { cache: "reload", credentials: "same-origin" })
       .then(function (res) {
