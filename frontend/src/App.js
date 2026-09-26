@@ -81,6 +81,7 @@ import {
   isAnalyzeLeaveAbort,
   isKinAnalyzeActive,
   isRecallingBlocked,
+  resolveClinicVideoFile,
   setClinicFileLock,
   isStaleAnalyzing,
   isTransientAnalyzePollError,
@@ -4768,7 +4769,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   };
 
   const analyzeVideo = async (phase) => {
-    const file = dataRef.current?.[`${vidKey(phase)}_file`] || data[`${vidKey(phase)}_file`];
+    const file = resolveClinicVideoFile(phase, data, dataRef);
     if (!file) {
       showToast("Please select a file first", "error");
       return;
