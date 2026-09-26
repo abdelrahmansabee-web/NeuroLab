@@ -254,14 +254,13 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   box-sizing: border-box;
   border-radius: 16px;
   overflow: hidden;
-  backdrop-filter: blur(24px) saturate(1.7) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.7) !important;
-  background-color: rgba(255, 255, 255, 0.12) !important;
-  border: 1px solid rgba(255, 255, 255, 0.20) !important;
+  backdrop-filter: blur(36px) saturate(1.5) brightness(1.08) !important;
+  -webkit-backdrop-filter: blur(36px) saturate(1.5) brightness(1.08) !important;
+  background-color: rgba(255, 255, 255, 0.58) !important;
+  border: 1px solid rgba(255, 255, 255, 0.86) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.38),
-    0 10px 28px -6px rgba(0, 0, 0, 0.28),
-    0 22px 52px -14px rgba(0, 0, 0, 0.16) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 12px 28px -16px rgba(15, 23, 42, 0.2) !important;
 }
 
 .validation-metrics-gutter .validation-metric-card {
@@ -307,8 +306,8 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   gap: 8px;
   padding: 10px 10px 12px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.20);
-  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.55);
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;

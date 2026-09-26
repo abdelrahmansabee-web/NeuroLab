@@ -26,10 +26,10 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "./?_v=32.308",
+  "start_url": "./?_v=32.309",
   "scope": ".",
   "display": "browser",
-  "theme_color": "#121820",
-  "background_color": "#121820",
+  "theme_color": "#e8eef4",
+  "background_color": "#e8eef4",
   "orientation": "any"
 }

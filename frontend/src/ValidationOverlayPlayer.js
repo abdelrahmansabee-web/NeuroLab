@@ -247,9 +247,9 @@ const PANEL_CARD_STROKE = "rgba(255,255,255,0.04)";
 const PANEL_CARD_INSET = "rgba(255,255,255,0.018)";
 
 /** App.js .glass-float / top bar tokens (canvas approximation; blur from CSS on gutter). */
-const APP_GLASS_FILL = "rgba(255,255,255,0.12)";
-const APP_GLASS_STROKE = "rgba(255,255,255,0.22)";
-const APP_GLASS_INSET = "rgba(255,255,255,0.38)";
+const APP_GLASS_FILL = "rgba(255,255,255,0.58)";
+const APP_GLASS_STROKE = "rgba(255,255,255,0.86)";
+const APP_GLASS_INSET = "rgba(255,255,255,0.95)";
 
 function glassRoundPath(ctx, x, y, w, h, radius) {
   const rr = Math.min(radius, w / 2, h / 2);
@@ -2632,7 +2632,7 @@ export function ValidationOverlayPlayer({
       {isExpanded && <AppShellBackground className="z-0" />}
       <div className="validation-player-chrome relative z-[1] flex flex-col flex-1 min-h-0 w-full">
       {isExpanded && (
-        <div className="validation-player-topbar flex items-center justify-between px-4 pb-2.5 pt-[max(10px,env(safe-area-inset-top,0px))] flex-shrink-0 glass-float app-topbar-glass bg-white/[0.10] backdrop-blur-xl backdrop-saturate-150 border-b border-white/20">
+        <div className="validation-player-topbar flex items-center justify-between px-4 pb-2.5 pt-[max(10px,env(safe-area-inset-top,0px))] flex-shrink-0 glass-float app-topbar-glass bg-white/70 backdrop-blur-2xl backdrop-saturate-150 border-b border-white/80">
           <p className="text-sm font-bold text-white/90 truncate pr-3">{phaseLabel || "Validation"} — Validation</p>
           <button
             type="button"
