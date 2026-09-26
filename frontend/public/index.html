@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.372g" />
-    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.372g" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.372o" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.372o" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.372g" />
+    <meta name="nl-version" content="32.372o" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -23,33 +23,33 @@
     <title>NeuroLab</title>
     <script>
       (function () {
-        var v = document.querySelector('meta[name="nl-version"]');
-        v = v && v.content;
-        if (!v) return;
-        var k = "nl_app_v";
-        var bustKey = "nl_app_bust";
+        var a = document.querySelector('meta[name="nl-version"]');
+        a = a && a.content;
+        if (!a) return;
+        var t = "nl_app_v";
+        var b = "nl_app_bust";
         try {
-          var prev = localStorage.getItem(k);
-          localStorage.setItem(k, v);
+          var p = localStorage.getItem(t);
+          localStorage.setItem(t, a);
           var ua = navigator.userAgent || "";
-          var ios = /iPad|iPhone|iPod/.test(ua)
-            || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-          var stand = navigator.standalone === true
-            || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
-          if (!(prev && prev !== v) && !((ios || stand) && localStorage.getItem(bustKey) !== v)) return;
-          localStorage.setItem(bustKey, v);
-          location.replace(location.pathname + "?_v=" + encodeURIComponent(v) + "&_r=" + Date.now() + location.hash);
+          var ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+          var stand = navigator.standalone === true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+          if (!(p && p !== a) && !((ios || stand) && localStorage.getItem(b) !== a)) return;
+          localStorage.setItem(b, a);
+          location.replace(location.pathname + "?_v=" + encodeURIComponent(a) + "&_r=" + Date.now() + location.hash);
         } catch (e) {}
       })();
     </script>
+    <script defer="defer" src="%PUBLIC_URL%/static/js/main.48f76699.js?v=32.372b"></script>
+    <link href="%PUBLIC_URL%/static/css/main.2c1ebbfb.css" rel="stylesheet" />
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
-    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.372g"></script>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.372o"></script>
     <script>
       (function () {
-        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.372g";
+        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.372o";
         function pin() {
           var el = document.getElementById("nl-liquid-glass-link");
           if (!el) {
@@ -96,105 +96,53 @@
           return 0;
         }
         function syncAnalyzeSteps(host, step, pct) {
+          var labels = ["Upload", "Detect", "Analyze", "Done"];
           var active = kinStageIndex(step, pct);
-          var chips = host.querySelectorAll(".kin-analyze-stage__step");
-          for (var i = 0; i < chips.length; i += 1) {
-            chips[i].classList.toggle("is-active", i === active);
-            chips[i].classList.toggle("is-done", i < active);
-          }
+          var stepEl = host.querySelector(".nl-stage__step");
+          if (stepEl) stepEl.textContent = labels[active] || "Analyze";
           var n = pct != null && !isNaN(Number(pct)) ? Math.max(0, Math.min(100, Math.round(Number(pct)))) : null;
-          var num = host.querySelector(".kin-run__pct-num");
+          var num = host.querySelector(".nl-stage__pct-num");
           if (num) num.textContent = n == null ? "–" : String(n);
-          var ring = host.querySelector(".kin-run__pct-arc");
-          if (ring) {
-            var c = 2 * Math.PI * 15;
-            var dash = n == null ? 0 : (n / 100) * c;
-            ring.setAttribute("stroke-dasharray", Math.max(0.4, dash) + " " + c);
-          }
-          var pctEl = host.querySelector(".kin-run__pct");
+          var pctEl = host.querySelector(".nl-stage__pct");
           if (pctEl) pctEl.classList.toggle("is-empty", n == null);
         }
-        var runHosts = {};
-        function ensureRun(strip) {
-          var lab = strip.closest("label");
-          var id = lab && lab.htmlFor ? lab.htmlFor : "kin-run";
-          var host = runHosts[id];
+        function ensureCradle(strip) {
+          var host = strip.querySelector(".nl-cradle");
           if (!host) {
             host = document.createElement("div");
-            host.className = "kin-run nl-kin-run-float";
+            host.className = "nl-cradle";
             host.setAttribute("aria-hidden", "true");
-            host.innerHTML = '<div class="kin-run__stage">'
-              + '<span class="kin-run__figure kin-run__figure--a" style="background-image:url(\'/static/kin-run/pose-a.png?v=32.372\')"></span>'
-              + '<span class="kin-run__figure kin-run__figure--b" style="background-image:url(\'/static/kin-run/pose-b.png?v=32.372\')"></span>'
-              + '<span class="kin-run__figure kin-run__figure--c" style="background-image:url(\'/static/kin-run/pose-c.png?v=32.372\')"></span>'
-              + '<span class="kin-run__ground"></span>'
-              + '<span class="kin-run__pct is-empty"><svg class="kin-run__pct-svg" viewBox="0 0 36 36" aria-hidden="true">'
-              + '<circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.2"/>'
-              + '<circle class="kin-run__pct-arc" cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.88)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0.4 94.2" transform="rotate(-90 18 18)"/>'
-              + '</svg><span class="kin-run__pct-num">–</span></span></div>';
-            document.documentElement.appendChild(host);
-            runHosts[id] = host;
+            strip.appendChild(host);
           }
-          host.hidden = false;
-          var r = strip.getBoundingClientRect();
-          host.style.left = Math.round(r.left) + "px";
-          host.style.top = Math.round(r.top) + "px";
-          host.style.width = Math.round(r.width) + "px";
-          host.style.height = Math.round(Math.max(148, r.height - 52)) + "px";
+          if (!host.querySelector(".nl-cradle__gif")) {
+            host.innerHTML = '<img class="nl-cradle__gif" src="/static/kin-run/cradle.gif?v=32.372o" alt="" />';
+          } else {
+            var stalePct = host.querySelector(".kin-run__pct");
+            if (stalePct && stalePct.parentNode) stalePct.parentNode.removeChild(stalePct);
+          }
+          return host;
         }
-        function hideSpareRuns(liveIds) {
-          Object.keys(runHosts).forEach(function (id) {
-            if (!liveIds[id]) runHosts[id].hidden = true;
-          });
-        }
-        function stepperIcon(name) {
-          var icons = {
-            upload: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
-            detect: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/></svg>',
-            analyze: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>',
-            done: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-          };
-          return icons[name] || "";
+        function ensureStage(strip) {
+          var old = strip.querySelector(".kin-analyze-stage__stepper");
+          if (old && old.parentNode) old.parentNode.removeChild(old);
+          var row = strip.querySelector(".nl-stage");
+          if (row) return row;
+          row = document.createElement("div");
+          row.className = "nl-stage";
+          row.setAttribute("aria-hidden", "true");
+          row.innerHTML = '<span class="nl-stage__step">Analyze</span>'
+            + '<span class="nl-stage__pct is-empty"><span class="nl-stage__pct-num">–</span></span>';
+          strip.appendChild(row);
+          return row;
         }
         function enhanceAnalyzeCapsule() {
           var strips = document.querySelectorAll(".kin-film-strip");
-          var liveIds = {};
           for (var i = 0; i < strips.length; i += 1) {
             var strip = strips[i];
             if (!strip.isConnected) continue;
             strip.classList.add("nl-stadium-film");
-            var lab = strip.closest("label");
-            if (lab && lab.htmlFor) liveIds[lab.htmlFor] = true;
-            ensureRun(strip);
-            if (!strip.querySelector(".kin-analyze-stage__stepper")) {
-              var stepper = document.createElement("div");
-              stepper.className = "kin-analyze-stage__stepper";
-              stepper.setAttribute("aria-label", "Analysis stages");
-              var rail = document.createElement("span");
-              rail.className = "kin-analyze-stage__rail";
-              rail.setAttribute("aria-hidden", "true");
-              stepper.appendChild(rail);
-              var labels = [
-                { id: "upload", label: "Upload" },
-                { id: "detect", label: "Detect" },
-                { id: "analyze", label: "Analyze" },
-                { id: "done", label: "Done" }
-              ];
-              for (var j = 0; j < labels.length; j += 1) {
-                var chip = document.createElement("span");
-                chip.className = "kin-analyze-stage__step";
-                var icon = document.createElement("span");
-                icon.className = "kin-analyze-stage__icon";
-                icon.innerHTML = stepperIcon(labels[j].id);
-                var lab = document.createElement("span");
-                lab.className = "kin-analyze-stage__label";
-                lab.textContent = labels[j].label;
-                chip.appendChild(icon);
-                chip.appendChild(lab);
-                stepper.appendChild(chip);
-              }
-              strip.appendChild(stepper);
-            }
+            ensureCradle(strip);
+            ensureStage(strip);
             var card = strip.closest("label") && strip.closest("label").parentElement;
             var panel = card ? card.querySelector(".kin-analyze-panel") : null;
             var stepEl = panel ? panel.querySelector("p") : null;
@@ -202,9 +150,8 @@
             var pctMatch = panel && (panel.textContent || "").match(/(\d+)\s*%/);
             var pct = pctMatch ? Number(pctMatch[1]) : null;
             if (panel) panel.classList.add("nl-analyze-absorbed");
-            if (step || pct != null) syncAnalyzeSteps(runHosts[lab && lab.htmlFor ? lab.htmlFor : "kin-run"] || strip, step, pct);
+            if (step || pct != null) syncAnalyzeSteps(strip, step, pct);
           }
-          hideSpareRuns(liveIds);
         }
         pin();
         if (window.MutationObserver) {
@@ -212,7 +159,6 @@
         }
         function placeAll() {
           if (document.querySelector(".kin-film-strip")) enhanceAnalyzeCapsule();
-          else hideSpareRuns({});
         }
         setInterval(placeAll, 320);
         window.addEventListener("scroll", placeAll, true);
