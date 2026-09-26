@@ -693,10 +693,16 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   position: absolute;
   left: 50%;
   bottom: 16px;
+  width: 86px;
   height: 104px;
-  width: auto;
   opacity: 0;
   pointer-events: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: contain;
   transform: translateX(-50%);
   animation:
     kin-run-pose 0.66s steps(1) infinite,
@@ -778,7 +784,7 @@ label[for^="kin-file-"]:has(.kin-film-strip) {
 
 .kin-analyze-stage__capsule {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 10px;

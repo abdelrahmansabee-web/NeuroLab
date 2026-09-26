@@ -3535,7 +3535,11 @@ function KinRunMark() {
     <div className="kin-run" aria-hidden>
       <div className="kin-run__stage">
         {KIN_RUN_FRAMES.map((src) => (
-          <img key={src} className="kin-run__figure" src={src} alt="" draggable={false} />
+          <span
+            key={src}
+            className="kin-run__figure"
+            style={{ backgroundImage: `url("${src}")` }}
+          />
         ))}
         <span className="kin-run__ground" />
       </div>

@@ -162,6 +162,7 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
 .kin-analyze-stage[data-nl-stadium="1"] .kin-film-strip,
 .kin-film-strip.nl-stadium-film {
   max-width: none !important;
+  overflow: visible !important;
   border-radius: 999px !important;
   border: 1px solid rgba(255, 255, 255, 0.06) !important;
   background: rgba(255, 255, 255, 0.028) !important;
@@ -221,10 +222,16 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   position: absolute;
   left: 50%;
   bottom: 16px;
+  width: 86px;
   height: 104px;
-  width: auto;
   opacity: 0;
   pointer-events: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: contain;
   transform: translateX(-50%);
   animation:
     kin-run-pose 0.66s steps(1) infinite,

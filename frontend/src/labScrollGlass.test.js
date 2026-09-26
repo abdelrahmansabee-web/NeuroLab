@@ -33,6 +33,7 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(css).toMatch(/\.kin-analyze-track-fill/);
   expect(css).not.toMatch(/rgba\(8,\s*10,\s*18,\s*0\.82\)/);
   expect(css).toMatch(/\.kin-analyze-stage__capsule[\s\S]*?rgba\(255,\s*255,\s*255,\s*0\.028\)/);
+  expect(css).toMatch(/\.kin-analyze-stage__capsule[\s\S]*?overflow:\s*visible/);
   expect(css).toMatch(/\.kin-analyze-stage__capsule[\s\S]*?border-radius:\s*999px/);
   expect(css).toMatch(/\.kin-analyze-stage__stepper/);
   expect(css).toMatch(/\.kin-analyze-stage__rail/);
@@ -42,6 +43,8 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(app).toMatch(/function KinRunMark/);
   expect(app).toMatch(/<KinRunMark \/>/);
   expect(app).toMatch(/static\/kin-run\/pose-\$\{id\}\.png/);
+  expect(app).toMatch(/backgroundImage: `url\("\$\{src\}"\)`/);
+  expect(app).not.toMatch(/<img key=\{src\} className="kin-run__figure"/);
   expect(app).toMatch(/kin-analyze-stage__stepper/);
   expect(app).toMatch(/kinAnalyzeStageIndex\(step, pctRounded\)/);
   expect(app).not.toMatch(/logo192-white\.png/);
@@ -49,6 +52,7 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(app).not.toMatch(/border border-dashed px-3 py-5/);
   expect(app).not.toMatch(/if \(hasResult\) return `\$\{base\} ring-1/);
   expect(overlay).toMatch(/\.kin-run__figure/);
+  expect(overlay).toMatch(/overflow: visible !important/);
   expect(overlay).toMatch(/\.kin-run__ground/);
   expect(overlay).not.toMatch(/logo192-white\.png/);
   expect(overlay).toMatch(/nl-analyze-absorbed/);
@@ -58,7 +62,9 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   expect(html).toMatch(/if \(step \|\| pct != null\) syncAnalyzeSteps/);
   expect(html).toMatch(/function ensureRun/);
+  expect(html).toMatch(/background-image:url\(/);
   expect(html).toMatch(/static\/kin-run\/pose-a\.png/);
+  expect(html).not.toMatch(/<img class="kin-run__figure"/);
   expect(html).not.toMatch(/function standingSvg/);
   expect(html).not.toMatch(/function ensureOrbit/);
   expect(html).not.toMatch(/function ensureLiquidOrb/);
