@@ -17,6 +17,13 @@ test("iPad inner lab cards keep a light glass blur instead of a black plate", ()
   );
 });
 
+test("analysis phase cards use muted glass instead of neon sky/emerald/amber plates", () => {
+  expect(app).not.toMatch(/border-t-\[3px\] bg-gradient-to-b \$\{a\.top\}/);
+  expect(app).not.toMatch(/from-sky-500\/14/);
+  expect(app).toMatch(/KIN_PHASE_PIP/);
+  expect(app).toMatch(/rounded-\[28px\] border border-white\/\[0\.06\] bg-white\/\[0\.028\]/);
+});
+
 test("clinic chrome keeps original GitHub glass degree, not milky lens brightening", () => {
   expect(app).toMatch(
     /const GLASS_CLS = "bg-white\/\[0\.008\] backdrop-blur-md backdrop-saturate-\[2\.25\] border border-white\/\[0\.03\]"/,

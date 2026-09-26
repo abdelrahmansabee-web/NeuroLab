@@ -3388,15 +3388,22 @@ const KIN_LS_KEY = KIN_RESULTS_LS_KEY;
 const KIN_LS_EXP_KEY = "neuro_kin_expanded";
 
 const KIN_PHASE_ACCENT = {
-  sky: { bar: "bg-sky-400", ring: "border-t-sky-400", glow: "shadow-sky-500/10", top: "border-t-sky-400/80 from-sky-500/14" },
-  emerald: { bar: "bg-emerald-400", ring: "border-t-emerald-400", glow: "shadow-emerald-500/10", top: "border-t-emerald-400/80 from-emerald-500/14" },
-  amber: { bar: "bg-amber-400", ring: "border-t-amber-400", glow: "shadow-amber-500/10", top: "border-t-amber-400/80 from-amber-500/14" },
+  sky: { bar: "bg-white/45", ring: "border-white/15", glow: "", top: "" },
+  emerald: { bar: "bg-white/45", ring: "border-white/15", glow: "", top: "" },
+  amber: { bar: "bg-white/45", ring: "border-white/15", glow: "", top: "" },
+};
+
+const KIN_PHASE_PIP = {
+  sky: "bg-sky-200/55",
+  emerald: "bg-emerald-200/50",
+  amber: "bg-amber-200/50",
+  violet: "bg-violet-200/50",
 };
 
 const KIN_FILM_ACCENT = {
-  sky: { stroke: "#38bdf8", glow: "rgba(56,189,248,0.45)" },
-  emerald: { stroke: "#34d399", glow: "rgba(52,211,153,0.45)" },
-  amber: { stroke: "#fbbf24", glow: "rgba(251,191,36,0.45)" },
+  sky: { stroke: "rgba(186,230,253,0.82)", glow: "rgba(186,230,253,0.16)" },
+  emerald: { stroke: "rgba(187,247,208,0.78)", glow: "rgba(187,247,208,0.14)" },
+  amber: { stroke: "rgba(253,230,188,0.78)", glow: "rgba(253,230,188,0.14)" },
 };
 
 function kinBone(stroke, w = 1.35) {
@@ -3690,7 +3697,7 @@ function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyz
   const barPct = pctRounded != null ? Math.max(0, Math.min(100, pctRounded)) : 8;
 
   return (
-    <div className={`w-full rounded-xl kin-analyze-panel px-3 py-2.5 flex items-center gap-2.5 border-t-[2px] ${a.ring}`}>
+    <div className="w-full rounded-2xl kin-analyze-panel px-3 py-2.5 flex items-center gap-2.5 border border-white/[0.06] bg-white/[0.03]">
       <KinAnalyzeProgressGlyph
         pct={pct}
         stroke={film.stroke}
@@ -3706,7 +3713,6 @@ function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyz
             initial={false}
             animate={{ width: `${Math.max(5, barPct)}%` }}
             transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-            style={{ boxShadow: `0 0 10px ${film.glow}` }}
           />
         </div>
         <p className="text-[8px] text-white/35 mt-1">Server processing — you can change sections</p>
@@ -3716,21 +3722,16 @@ function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyz
 }
 
 const kinPhaseCardCls = (c, status, hasResult) => {
-  const a = KIN_PHASE_ACCENT[c] || KIN_PHASE_ACCENT.amber;
-  const base = `relative flex flex-col rounded-2xl border border-t-[3px] bg-gradient-to-b ${a.top} to-white/[0.02] min-h-[240px] transition-all duration-300 overflow-hidden`;
-  if (status === "analyzing") return `${base} border-white/[0.12] ring-1 ring-white/[0.06]`;
-  if (hasResult) return `${base} border-emerald-400/35 ring-1 ring-emerald-400/20`;
-  return `${base} border-white/[0.07] hover:border-white/12`;
+  const base = "glass-float relative flex flex-col rounded-[28px] border border-white/[0.06] bg-white/[0.028] min-h-[240px] transition-all duration-300 overflow-hidden";
+  if (status === "analyzing") return `${base} ring-1 ring-white/[0.06]`;
+  if (hasResult) return `${base} ring-1 ring-white/[0.08]`;
+  return `${base} hover:border-white/[0.10]`;
 };
 
 const kinUploadZoneCls = (c, hasFile) => {
-  const base = "group relative flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed px-3 py-5 cursor-pointer transition-all duration-200";
-  if (hasFile) {
-    if (c === "sky") return `${base} border-sky-400/30 bg-sky-400/[0.06] hover:bg-sky-400/10`;
-    if (c === "emerald") return `${base} border-emerald-400/30 bg-emerald-400/[0.06] hover:bg-emerald-400/10`;
-    return `${base} border-amber-400/30 bg-amber-400/[0.06] hover:bg-amber-400/10`;
-  }
-  return `${base} border-white/10 bg-white/[0.02] hover:border-white/18 hover:bg-white/[0.04]`;
+  const base = "group relative flex flex-col items-center justify-center gap-1.5 rounded-[22px] border border-dashed px-3 py-5 cursor-pointer transition-all duration-200";
+  if (hasFile) return `${base} border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.06]`;
+  return `${base} border-white/[0.08] bg-white/[0.015] hover:border-white/[0.14] hover:bg-white/[0.04]`;
 };
 
 const kinShortFileName = (name, max = 22) => {
@@ -5282,20 +5283,13 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   })();
   const hasKinTriple =
     kinematicsResults.pre && kinematicsResults.post && kinematicsResults.baseline;
-  const phaseChipCls = (c, on) => {
-    if (c === "sky") return on ? "bg-sky-400/20 border-sky-400/40 text-sky-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
-    if (c === "violet") return on ? "bg-violet-400/20 border-violet-400/40 text-violet-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
-    if (c === "emerald") return on ? "bg-emerald-400/20 border-emerald-400/40 text-emerald-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
-    return on ? "bg-amber-400/20 border-amber-400/40 text-amber-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
-  };
-  const phaseValueCls = (c) =>
-    c === "sky" ? "border-sky-400/25 bg-sky-400/10" :
-    c === "violet" ? "border-violet-400/25 bg-violet-400/10" :
-    c === "emerald" ? "border-emerald-400/25 bg-emerald-400/10" :
-    "border-amber-400/25 bg-amber-400/10";
-  const phaseLabelCls = (c) =>
-    c === "sky" ? "text-sky-300" : c === "violet" ? "text-violet-300" :
-    c === "emerald" ? "text-emerald-300" : "text-amber-300";
+  const phaseChipCls = (c, on) => (
+    on
+      ? "bg-white/[0.08] border-white/[0.12] text-white/85"
+      : "bg-white/[0.03] border-white/[0.06] text-white/50"
+  );
+  const phaseValueCls = (c) => "border-white/[0.06] bg-white/[0.04]";
+  const phaseLabelCls = (c) => "text-white/70";
 
   const kinDirArrow = (dir) => {
     if (dir === "higher") return { sym: "\u2191", tip: "Higher is better" };
@@ -5421,12 +5415,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                     key={domain}
                     type="button"
                     onClick={() => selectKinematicDomain(domain)}
-                    className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                    className={`rounded-full border px-3 py-2.5 text-left transition-colors ${
                       active
-                        ? domain === "ue"
-                          ? "bg-sky-500/20 border-sky-400/40 text-sky-100"
-                          : "bg-violet-500/20 border-violet-400/40 text-violet-100"
-                        : "bg-white/[0.03] border-white/[0.08] text-white/55 hover:bg-white/[0.06]"
+                        ? "bg-white/[0.08] border-white/[0.12] text-white"
+                        : "bg-white/[0.03] border-white/[0.06] text-white/55 hover:bg-white/[0.06]"
                     }`}
                   >
                     <span className="block text-xs font-extrabold tracking-wide">{meta.en}</span>
@@ -5455,7 +5447,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
             return (
               <div key={ph.k} className={kinPhaseCardCls(ph.c, status, hasResult)}>
                 <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-2">
-                  <span className={`text-xs font-extrabold uppercase tracking-widest ${phaseLabelCls(ph.c)}`}>{ph.l}</span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full ${KIN_PHASE_PIP[ph.c] || KIN_PHASE_PIP.amber}`} />
+                    <span className={`text-xs font-extrabold uppercase tracking-widest ${phaseLabelCls(ph.c)}`}>{ph.l}</span>
+                  </span>
                   <div className="flex items-center gap-2 shrink-0">
                     {(hasResult || status === "analyzing") && (
                       <button
@@ -5519,7 +5514,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                         step={analysisProgress[ph.k]?.step || "Analyzing video…"}
                       />
                     ) : (
-                    <GBtn variant={ph.c} onClick={() => analyzeVideo(ph.k)} disabled={!data[vidKey(ph.k)]} className="w-full text-xs py-2.5" title="Analyze">
+                    <GBtn variant="default" onClick={() => analyzeVideo(ph.k)} disabled={!data[vidKey(ph.k)]} className="w-full text-xs py-2.5 !rounded-full bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]" title="Analyze">
                         <Play className="w-4 h-4 mx-auto" />
                   </GBtn>
                     )}
@@ -5611,9 +5606,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {phases.filter((ph) => kinematicsResults[ph.k]).map((ph) => (
-              <div key={ph.k} className="rounded-xl border border-white/10 bg-black/20 p-3 overflow-hidden">
+              <div key={ph.k} className="rounded-[24px] border border-white/[0.06] bg-white/[0.028] p-3 overflow-hidden">
                 <div className="flex items-center justify-between mb-2 gap-2">
-                  <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>{`${ph.l} \u00b7 Validation`}</p>
+                  <p className={`inline-flex items-center gap-2 text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${KIN_PHASE_PIP[ph.c] || KIN_PHASE_PIP.amber}`} />
+                    {`${ph.l} \u00b7 Validation`}
+                  </p>
                 </div>
                 {overlaySourceBad[ph.k] && originalVideoBlobs[ph.k] ? (
                     <InlineValidationVideo
@@ -5829,27 +5827,19 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                   {phases.filter((ph) => kinematicsResults[ph.k]).map((ph) => (
                     <th
                       key={ph.k}
-                      className={`text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap ${
-                        ph.c === "sky"
-                          ? "text-sky-300"
-                          : ph.c === "violet"
-                          ? "text-violet-300"
-                          : ph.c === "emerald"
-                          ? "text-emerald-300"
-                          : "text-amber-300"
-                      }`}
+                      className="text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap text-white/60"
                     >
                       {ph.l}
                     </th>
                   ))}
                   {kinematicsResults.pre && kinematicsResults.post && (
                     <th className="text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap">
-                      <span className="text-sky-300">Pre</span> <span className="text-white/60">→</span> <span className="text-emerald-300">Post</span>
+                      <span className="text-white/65">Pre</span> <span className="text-white/40">→</span> <span className="text-white/65">Post</span>
                     </th>
                   )}
                   {kinematicsResults.post && kinematicsResults.baseline && (
                     <th className="text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap">
-                      <span className="text-emerald-300">Post</span> <span className="text-white/60">→</span> <span className="text-amber-300">Healthy</span>
+                      <span className="text-white/65">Post</span> <span className="text-white/40">→</span> <span className="text-white/65">Healthy</span>
                     </th>
                   )}
                 </tr>
