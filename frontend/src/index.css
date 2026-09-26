@@ -641,10 +641,12 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   .kin-film-strip__track,
   .kin-liquid-orb__blob,
   .kin-run__figure,
+  .kin-run__svg,
   .kin-analyzing-ring {
     animation: none !important;
   }
-  .kin-run__figure:nth-of-type(1) {
+  .kin-run__figure,
+  .kin-run__svg {
     opacity: 1 !important;
     transform: translateX(-50%) !important;
   }
@@ -687,16 +689,16 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   position: relative;
   overflow: visible;
   width: 100%;
-  height: 228px;
+  height: 276px;
 }
 
 .kin-run__figure {
   position: absolute;
   left: 50%;
-  bottom: 24px;
-  width: 176px;
-  height: 168px;
-  opacity: 1;
+  bottom: 16px;
+  width: 248px;
+  height: 260px;
+  overflow: visible;
   pointer-events: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -791,7 +793,7 @@ label[for^="kin-file-"]:has(.kin-film-strip) {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border-radius: 999px;
+  border-radius: 40px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.028);
   backdrop-filter: blur(22px) saturate(3.25);
@@ -799,7 +801,7 @@ label[for^="kin-file-"]:has(.kin-film-strip) {
   box-shadow:
     inset 0 -14px 26px rgba(70, 130, 180, 0.05),
     0 12px 32px -16px rgba(0, 0, 0, 0.22);
-  padding: 36px 32px 16px;
+  padding: 32px 24px 14px;
 }
 
 .kin-analyze-stage__row {

@@ -170,7 +170,7 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
 .kin-film-strip.nl-stadium-film {
   max-width: none !important;
   overflow: visible !important;
-  border-radius: 999px !important;
+  border-radius: 40px !important;
   border: 1px solid rgba(255, 255, 255, 0.06) !important;
   background: rgba(255, 255, 255, 0.028) !important;
   backdrop-filter: blur(22px) saturate(3.25) !important;
@@ -178,7 +178,7 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   box-shadow:
     inset 0 -14px 26px rgba(70, 130, 180, 0.05),
     0 12px 32px -16px rgba(0, 0, 0, 0.22) !important;
-  padding: 36px 32px 16px !important;
+  padding: 32px 24px 14px !important;
 }
 .kin-analyze-stage__capsule .kin-film-strip,
 .kin-analyze-stage[data-nl-stadium="1"] .kin-film-strip {
@@ -224,15 +224,15 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   position: relative;
   overflow: visible;
   width: 100%;
-  height: 228px;
+  height: 276px;
 }
 .kin-run__figure {
   position: absolute;
   left: 50%;
-  bottom: 24px;
-  width: 176px;
-  height: 168px;
-  opacity: 1;
+  bottom: 16px;
+  width: 248px;
+  height: 260px;
+  overflow: visible !important;
   pointer-events: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -371,10 +371,9 @@ label[for^="kin-file-"]:has(.kin-film-strip) {
 @media (prefers-reduced-motion: reduce) {
   .kin-film-strip__track,
   .kin-liquid-orb__blob,
-  .kin-run__figure {
+  .kin-run__figure,
+  .kin-run__svg {
     animation: none !important;
-  }
-  .kin-run__figure:nth-of-type(1) {
     opacity: 1 !important;
     transform: translateX(-50%) !important;
   }
