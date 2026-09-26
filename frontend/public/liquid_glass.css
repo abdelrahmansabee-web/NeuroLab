@@ -222,10 +222,10 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
 /* Ready cropped Newton cradle GIF from the LottieFiles clip the user marked 100%. iPad plays <img> GIFs. */
 .nl-cradle {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 8px;
-  height: 148px;
+  left: 18px;
+  right: 58px;
+  top: 18px;
+  height: 124px;
   pointer-events: none;
   z-index: 2;
   display: flex;
@@ -235,9 +235,9 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
 }
 .nl-cradle__gif {
   display: block;
-  height: 140px;
+  height: 112px;
   width: auto;
-  max-width: 94%;
+  max-width: 100%;
   object-fit: contain;
   background: transparent;
 }
@@ -407,7 +407,7 @@ label[for^="kin-file-"]:has(.kin-film-strip) {
 }
 @media (prefers-reduced-motion: reduce) {
   .nl-cradle__gif {
-    content: url("/static/kin-run/cradle-still.png?v=32.372j");
+    content: url("/static/kin-run/cradle-still.png?v=32.372k");
   }
   .kin-film-strip__track,
   .kin-liquid-orb__blob,
