@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.372g" />
-    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.372g" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.372h" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.372h" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.372g" />
+    <meta name="nl-version" content="32.372h" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -46,10 +46,10 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
-    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.372g"></script>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.372h"></script>
     <script>
       (function () {
-        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.372g";
+        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.372h";
         function pin() {
           var el = document.getElementById("nl-liquid-glass-link");
           if (!el) {
@@ -114,38 +114,28 @@
           var pctEl = host.querySelector(".kin-run__pct");
           if (pctEl) pctEl.classList.toggle("is-empty", n == null);
         }
-        var runHosts = {};
-        function ensureRun(strip) {
-          var lab = strip.closest("label");
-          var id = lab && lab.htmlFor ? lab.htmlFor : "kin-run";
-          var host = runHosts[id];
-          if (!host) {
-            host = document.createElement("div");
-            host.className = "kin-run nl-kin-run-float";
-            host.setAttribute("aria-hidden", "true");
-            host.innerHTML = '<div class="kin-run__stage">'
-              + '<span class="kin-run__figure kin-run__figure--a" style="background-image:url(\'/static/kin-run/pose-a.png?v=32.372\')"></span>'
-              + '<span class="kin-run__figure kin-run__figure--b" style="background-image:url(\'/static/kin-run/pose-b.png?v=32.372\')"></span>'
-              + '<span class="kin-run__figure kin-run__figure--c" style="background-image:url(\'/static/kin-run/pose-c.png?v=32.372\')"></span>'
-              + '<span class="kin-run__ground"></span>'
-              + '<span class="kin-run__pct is-empty"><svg class="kin-run__pct-svg" viewBox="0 0 36 36" aria-hidden="true">'
-              + '<circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.2"/>'
-              + '<circle class="kin-run__pct-arc" cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.88)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0.4 94.2" transform="rotate(-90 18 18)"/>'
-              + '</svg><span class="kin-run__pct-num">–</span></span></div>';
-            document.documentElement.appendChild(host);
-            runHosts[id] = host;
+        function ensureCradle(strip) {
+          var host = strip.querySelector(".nl-cradle");
+          if (host) return host;
+          host = document.createElement("div");
+          host.className = "nl-cradle";
+          host.setAttribute("aria-hidden", "true");
+          var bobs = "";
+          for (var i = 0; i < 5; i += 1) {
+            var end = i === 0 ? " nl-cradle__bob--a" : i === 4 ? " nl-cradle__bob--e" : "";
+            bobs += '<span class="nl-cradle__bob nl-cradle__bob--' + i + end + '">'
+              + '<span class="nl-cradle__string"></span>'
+              + '<span class="nl-cradle__ball"></span>'
+              + '</span>';
           }
-          host.hidden = false;
-          var r = strip.getBoundingClientRect();
-          host.style.left = Math.round(r.left) + "px";
-          host.style.top = Math.round(r.top) + "px";
-          host.style.width = Math.round(r.width) + "px";
-          host.style.height = Math.round(Math.max(148, r.height - 52)) + "px";
-        }
-        function hideSpareRuns(liveIds) {
-          Object.keys(runHosts).forEach(function (id) {
-            if (!liveIds[id]) runHosts[id].hidden = true;
-          });
+          host.innerHTML = '<span class="nl-cradle__bar"></span>'
+            + '<span class="nl-cradle__row">' + bobs + '</span>'
+            + '<span class="kin-run__pct is-empty"><svg class="kin-run__pct-svg" viewBox="0 0 36 36" aria-hidden="true">'
+            + '<circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.2"/>'
+            + '<circle class="kin-run__pct-arc" cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.88)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0.4 94.2" transform="rotate(-90 18 18)"/>'
+            + '</svg><span class="kin-run__pct-num">–</span></span>';
+          strip.appendChild(host);
+          return host;
         }
         function stepperIcon(name) {
           var icons = {
@@ -158,14 +148,12 @@
         }
         function enhanceAnalyzeCapsule() {
           var strips = document.querySelectorAll(".kin-film-strip");
-          var liveIds = {};
           for (var i = 0; i < strips.length; i += 1) {
             var strip = strips[i];
             if (!strip.isConnected) continue;
             strip.classList.add("nl-stadium-film");
             var lab = strip.closest("label");
-            if (lab && lab.htmlFor) liveIds[lab.htmlFor] = true;
-            ensureRun(strip);
+            ensureCradle(strip);
             if (!strip.querySelector(".kin-analyze-stage__stepper")) {
               var stepper = document.createElement("div");
               stepper.className = "kin-analyze-stage__stepper";
@@ -202,9 +190,8 @@
             var pctMatch = panel && (panel.textContent || "").match(/(\d+)\s*%/);
             var pct = pctMatch ? Number(pctMatch[1]) : null;
             if (panel) panel.classList.add("nl-analyze-absorbed");
-            if (step || pct != null) syncAnalyzeSteps(runHosts[lab && lab.htmlFor ? lab.htmlFor : "kin-run"] || strip, step, pct);
+            if (step || pct != null) syncAnalyzeSteps(strip, step, pct);
           }
-          hideSpareRuns(liveIds);
         }
         pin();
         if (window.MutationObserver) {
@@ -212,7 +199,6 @@
         }
         function placeAll() {
           if (document.querySelector(".kin-film-strip")) enhanceAnalyzeCapsule();
-          else hideSpareRuns({});
         }
         setInterval(placeAll, 320);
         window.addEventListener("scroll", placeAll, true);
