@@ -214,9 +214,8 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   33%, 100% { opacity: 0; }
 }
 @keyframes kin-run-sprite {
-  0%, 32.99% { background-image: url("/static/kin-run/pose-a.png?v=32.372"); }
-  33%, 65.99% { background-image: url("/static/kin-run/pose-b.png?v=32.372"); }
-  66%, 100% { background-image: url("/static/kin-run/pose-c.png?v=32.372"); }
+  from { background-position: 0 0; }
+  to { background-position: -324px 0; }
 }
 .kin-film-strip::before {
   content: "" !important;
@@ -225,10 +224,11 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   height: 124px !important;
   margin: 6px auto 0 !important;
   pointer-events: none !important;
+  background-image: url("/static/kin-run/pose-sheet.png?v=32.372f") !important;
   background-repeat: no-repeat !important;
-  background-position: center bottom !important;
-  background-size: 108px 124px !important;
-  animation: kin-run-sprite 0.48s steps(1, end) infinite !important;
+  background-position: 0 0 !important;
+  background-size: 324px 124px !important;
+  animation: kin-run-sprite 0.48s steps(3) infinite !important;
 }
 .kin-film-strip::after {
   content: "" !important;
@@ -421,7 +421,7 @@ label[for^="kin-file-"]:has(.kin-film-strip) {
 @media (prefers-reduced-motion: reduce) {
   .kin-film-strip::before {
     animation: none !important;
-    background-image: url("/static/kin-run/pose-b.png?v=32.372") !important;
+    background-position: -108px 0 !important;
   }
   .kin-film-strip__track,
   .kin-liquid-orb__blob,
