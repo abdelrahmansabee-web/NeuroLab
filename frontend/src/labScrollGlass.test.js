@@ -65,24 +65,22 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(overlay).toMatch(/\.kin-analyze-track/);
   expect(overlay).toMatch(/\.kin-run__figure/);
   expect(overlay).toMatch(/@keyframes kin-run-pose/);
-  expect(overlay).toMatch(/@keyframes kin-run-sprite/);
-  expect(overlay).toMatch(/\.kin-film-strip::before/);
-  expect(overlay).toMatch(/pose-sheet\.png/);
-  expect(overlay).toMatch(/background-size: 324px 124px/);
-  expect(overlay).toMatch(/steps\(3\)/);
+  expect(overlay).toMatch(/\.kin-run\.nl-kin-run-float \.kin-run__figure/);
+  expect(overlay).toMatch(/kin-run-pose 0\.42s steps\(1, end\) infinite/);
   expect(overlay).toMatch(/min-height: 228px/);
   expect(overlay).not.toMatch(/logo192-white\.png/);
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const sync = fs.readFileSync(path.join(__dirname, "..", "public", "pwa_ipad_sync.js"), "utf8");
   const auth = fs.readFileSync(path.join(__dirname, "AuthGate.jsx"), "utf8");
   expect(auth).toMatch(/\.catch\(\(\) => setState\("locked"\)\)/);
-  expect(html).toMatch(/nl-version" content="32\.372f"/);
+  expect(html).toMatch(/nl-version" content="32\.372g"/);
   expect(html).toMatch(/nl_app_bust/);
   expect(html).toMatch(/function pin\(\)/);
   expect(html).toMatch(/new MutationObserver\(pin\)\.observe\(document\.documentElement/);
   expect(html).toMatch(/function ensureRun/);
   expect(html).toMatch(/function enhanceAnalyzeCapsule/);
-  expect(html).toMatch(/host\.appendChild\(wrap\)/);
+  expect(html).toMatch(/nl-kin-run-float/);
+  expect(html).toMatch(/document\.documentElement\.appendChild\(host\)/);
   expect(html).not.toMatch(/insertBefore\(host, strip\)/);
   expect(html).not.toMatch(/cap\.appendChild\(strip\)/);
   expect(html).not.toMatch(/function tick\(/);
@@ -90,7 +88,7 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(html).not.toMatch(/__nlAuthMeTimeout/);
   expect(html).not.toMatch(/function ensureOrbit/);
   expect(sync).not.toMatch(/_iosbust=/);
-  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.372f"/);
+  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.372g"/);
 });
 
 test("validation video chrome uses muted glass bars and panels", () => {
