@@ -3526,7 +3526,7 @@ function kinAnalyzeStageIndex(step, pct) {
 }
 
 const KIN_RUN_FRAMES = ["a", "b", "c"].map(
-  (id) => `${process.env.PUBLIC_URL || ""}/kin-run/pose-${id}.png`,
+  (id) => `${process.env.PUBLIC_URL || ""}/static/kin-run/pose-${id}.png`,
 );
 
 function KinRunMark() {

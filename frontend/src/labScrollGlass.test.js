@@ -41,7 +41,7 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(app).toMatch(/function KinAnalyzeStageCapsule/);
   expect(app).toMatch(/function KinRunMark/);
   expect(app).toMatch(/<KinRunMark \/>/);
-  expect(app).toMatch(/kin-run\/pose-\$\{id\}\.png/);
+  expect(app).toMatch(/static\/kin-run\/pose-\$\{id\}\.png/);
   expect(app).toMatch(/kin-analyze-stage__stepper/);
   expect(app).toMatch(/kinAnalyzeStageIndex\(step, pctRounded\)/);
   expect(app).not.toMatch(/logo192-white\.png/);
@@ -58,7 +58,7 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   expect(html).toMatch(/if \(step \|\| pct != null\) syncAnalyzeSteps/);
   expect(html).toMatch(/function ensureRun/);
-  expect(html).toMatch(/kin-run\/pose-a\.png/);
+  expect(html).toMatch(/static\/kin-run\/pose-a\.png/);
   expect(html).not.toMatch(/function standingSvg/);
   expect(html).not.toMatch(/function ensureOrbit/);
   expect(html).not.toMatch(/function ensureLiquidOrb/);
