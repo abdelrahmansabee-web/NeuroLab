@@ -11,8 +11,8 @@ test("lab glass does not paint an invented black fill over iPad clinic cards", (
   expect(app).not.toMatch(/html\.nl-touch \[data-nl-app-scroll\][^{]*\{[^}]*background-color:\s*rgba\(16,\s*22,\s*32/);
 });
 
-test("iPad inner lab cards keep the 32.88 glass blur instead of a black plate", () => {
+test("iPad inner lab cards keep a light glass blur instead of a black plate", () => {
   expect(app).toMatch(
-    /html\.nl-touch \.content-shell \.content-panel-glass[\s\S]*?backdrop-filter:\s*blur\(6px\)/,
+    /html\.nl-touch \.content-shell \.content-panel-glass[\s\S]*?backdrop-filter:\s*blur\(14px\)/,
   );
 });
