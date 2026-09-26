@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.325" />
-    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.325" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.326" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.326" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.325" />
+    <meta name="nl-version" content="32.326" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -76,10 +76,10 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
-    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.325"></script>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.326"></script>
     <script>
       (function () {
-        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.325";
+        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.326";
         function pin() {
           var el = document.getElementById("nl-liquid-glass-link");
           if (!el) {
@@ -99,23 +99,67 @@
           var dlg = actionsDialog();
           if (dlg) dlg.classList.add("nl-actions-sheet--out");
         }
+        function kinStageIndex(step, pct) {
+          var text = String(step || "");
+          if (/upload|send|transfer/i.test(text)) return 0;
+          if (/detect|pose|hand|track|overlay|media/i.test(text)) return 1;
+          if (/analy|kinem|sparc|nvp|metric|filter/i.test(text)) return 2;
+          if (/done|complete|ready|finish/i.test(text)) return 3;
+          var n = pct != null && !isNaN(Number(pct)) ? Number(pct) : 0;
+          if (n >= 92) return 3;
+          if (n >= 55) return 2;
+          if (n >= 22) return 1;
+          return 0;
+        }
+        function syncAnalyzeSteps(host, step, pct) {
+          var active = kinStageIndex(step, pct);
+          var chips = host.querySelectorAll(".kin-analyze-stage__step");
+          for (var i = 0; i < chips.length; i += 1) {
+            chips[i].classList.toggle("is-active", i === active);
+            chips[i].classList.toggle("is-done", i < active);
+          }
+        }
         function enhanceAnalyzeCapsule() {
           var strips = document.querySelectorAll(".kin-film-strip");
           for (var i = 0; i < strips.length; i += 1) {
-            var el = strips[i];
-            if (el.getAttribute("data-nl-stages") === "1") continue;
-            if (el.closest(".kin-analyze-stage")) continue;
-            el.setAttribute("data-nl-stages", "1");
-            var row = document.createElement("div");
-            row.className = "kin-analyze-stage__steps";
-            var labels = ["Upload", "Detect", "Analyze", "Done"];
-            for (var j = 0; j < labels.length; j += 1) {
-              var step = document.createElement("span");
-              step.className = "kin-analyze-stage__step" + (labels[j] === "Analyze" ? " is-active" : "");
-              step.textContent = labels[j];
-              row.appendChild(step);
+            var strip = strips[i];
+            var card = strip.closest("label") && strip.closest("label").parentElement;
+            var panel = card ? card.querySelector(".kin-analyze-panel") : null;
+            var stepEl = panel ? panel.querySelector("p") : null;
+            var step = stepEl ? stepEl.textContent : "";
+            var pctMatch = panel && (panel.textContent || "").match(/(\d+)\s*%/);
+            var pct = pctMatch ? Number(pctMatch[1]) : null;
+            var host = strip.closest(".kin-analyze-stage");
+            if (!host) {
+              host = document.createElement("div");
+              host.className = "kin-analyze-stage";
+              var cap = document.createElement("div");
+              cap.className = "kin-analyze-stage__capsule";
+              var row = document.createElement("div");
+              row.className = "kin-analyze-stage__row";
+              var film = document.createElement("div");
+              film.className = "kin-analyze-stage__film";
+              var glyph = panel ? panel.querySelector(".kin-analyze-glyph-ring") : null;
+              var glyphBox = glyph && glyph.parentElement ? glyph.parentElement.parentElement : null;
+              strip.parentNode.insertBefore(host, strip);
+              host.appendChild(cap);
+              cap.appendChild(row);
+              if (glyphBox) row.appendChild(glyphBox);
+              film.appendChild(strip);
+              row.appendChild(film);
+              var steps = document.createElement("div");
+              steps.className = "kin-analyze-stage__steps";
+              var labels = ["Upload", "Detect", "Analyze", "Done"];
+              for (var j = 0; j < labels.length; j += 1) {
+                var chip = document.createElement("span");
+                chip.className = "kin-analyze-stage__step";
+                chip.textContent = labels[j];
+                steps.appendChild(chip);
+              }
+              cap.appendChild(steps);
+              if (panel) panel.classList.add("nl-analyze-absorbed");
             }
-            el.appendChild(row);
+            syncAnalyzeSteps(host, step, pct);
           }
         }
         document.addEventListener("click", function (e) {

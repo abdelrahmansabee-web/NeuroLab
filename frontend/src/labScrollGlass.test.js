@@ -35,13 +35,16 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(css).toMatch(/\.kin-analyze-stage__capsule[\s\S]*?rgba\(255,\s*255,\s*255,\s*0\.028\)/);
   expect(app).toMatch(/function KinAnalyzeStageCapsule/);
   expect(app).toMatch(/function KinFilmStripLoop/);
-  expect(app).toMatch(/<KinFilmStripLoop \/>/);
-  expect(app).toMatch(/logo192-white\.png/);
+  expect(app).toMatch(/<KinFilmStripLoop accent=\{accent\} \/>/);
+  expect(app).toMatch(/KinAnalyzeProgressGlyph/);
+  expect(app).toMatch(/kinAnalyzeStageIndex\(step, pctRounded\)/);
+  expect(app).not.toMatch(/logo192-white\.png/);
   expect(app).not.toMatch(/border border-dashed px-3 py-5/);
+  expect(app).not.toMatch(/if \(hasResult\) return `\$\{base\} ring-1/);
   expect(overlay).toMatch(/animation: kin-film-scroll 5\.6s linear infinite/);
-  expect(overlay).toMatch(/logo192-white\.png/);
+  expect(overlay).not.toMatch(/logo192-white\.png/);
   expect(overlay).toMatch(/\.kin-film-strip__holes \{\s*display:\s*none/);
-  expect(overlay).toMatch(/label\[for\^="kin-file-"\]/);
+  expect(overlay).toMatch(/nl-analyze-absorbed/);
 });
 
 test("validation video chrome uses muted glass bars and panels", () => {

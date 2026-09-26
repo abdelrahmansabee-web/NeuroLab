@@ -683,6 +683,18 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   padding: 8px 10px 10px;
 }
 
+.kin-analyze-stage__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kin-analyze-stage__film {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .kin-analyze-stage__fill {
   position: absolute;
   inset: 0 auto 0 0;
@@ -749,6 +761,21 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   display: none;
 }
 
+.kin-film-strip__pips {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 8px 2px;
+}
+
+.kin-film-strip__pip {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  flex-shrink: 0;
+}
+
 .kin-film-strip__hole {
   width: 7px;
   height: 7px;
@@ -805,11 +832,10 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   background: rgba(255, 255, 255, 0.05);
 }
 
-.kin-film-frame__logo {
+.kin-film-frame svg {
   display: block;
-  width: 34px;
-  height: 34px;
-  object-fit: contain;
+  width: 40px;
+  height: 30px;
 }
 
 .kin-analyze-panel {

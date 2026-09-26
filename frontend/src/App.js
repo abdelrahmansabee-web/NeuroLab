@@ -3508,24 +3508,30 @@ function KinSkeletonFigure({ view, stroke }) {
   return <KinSkeletonFront stroke={stroke} />;
 }
 
-const KIN_FILM_LOGO = `${process.env.PUBLIC_URL || ""}/logo192-white.png?v=32.86`;
-
-function KinFilmFrame() {
+function KinFilmFrame({ viewIndex, accent = "amber" }) {
+  const col = KIN_FILM_ACCENT[accent] || KIN_FILM_ACCENT.amber;
+  const view = KIN_SKELETON_VIEWS[viewIndex % KIN_SKELETON_VIEWS.length];
   return (
     <div className="kin-film-frame">
-      <img src={KIN_FILM_LOGO} alt="" className="kin-film-frame__logo" />
+      <svg viewBox="0 0 32 24" aria-hidden>
+        <KinSkeletonFigure view={view} stroke={col.stroke} />
+      </svg>
     </div>
   );
 }
 
-function KinFilmStripLoop() {
+function KinFilmStripLoop({ accent = "amber" }) {
+  const pips = Array.from({ length: 9 });
   const frames = Array.from({ length: 8 }, (_, i) => i);
   return (
     <div className="kin-film-strip" aria-hidden>
+      <div className="kin-film-strip__pips">
+        {pips.map((_, i) => <span key={`p-${i}`} className="kin-film-strip__pip" />)}
+      </div>
       <div className="kin-film-strip__body">
         <div className="kin-film-strip__track">
-          {frames.map((i) => <KinFilmFrame key={`a-${i}`} />)}
-          {frames.map((i) => <KinFilmFrame key={`b-${i}`} />)}
+          {frames.map((i) => <KinFilmFrame key={`a-${i}`} viewIndex={i} accent={accent} />)}
+          {frames.map((i) => <KinFilmFrame key={`b-${i}`} viewIndex={i} accent={accent} />)}
         </div>
       </div>
     </div>
@@ -3552,15 +3558,26 @@ function kinAnalyzeStageIndex(step, pct) {
 
 function KinAnalyzeStageCapsule({ accent = "amber", pct = null, step = "Analyzing video…" }) {
   const pip = KIN_PHASE_PIP[accent] || KIN_PHASE_PIP.amber;
+  const film = KIN_FILM_ACCENT[accent] || KIN_FILM_ACCENT.amber;
   const pctRounded = pct != null && !Number.isNaN(Number(pct)) ? Math.round(Number(pct)) : null;
-  const barPct = pctRounded != null ? Math.max(0, Math.min(100, pctRounded)) : 8;
   const active = kinAnalyzeStageIndex(step, pctRounded);
 
   return (
-    <div className="kin-analyze-stage" aria-hidden>
+    <div className="kin-analyze-stage">
       <div className="kin-analyze-stage__capsule">
-        <div className="kin-analyze-stage__fill" style={{ width: `${Math.max(8, barPct)}%` }} />
-        <KinFilmStripLoop />
+        <div className="kin-analyze-stage__row">
+          <KinAnalyzeProgressGlyph
+            pct={pctRounded}
+            stroke={film.stroke}
+            glow={film.glow}
+            sizeClass="w-11 h-11"
+            labelClass="text-[9px]"
+            indeterminate={pctRounded == null}
+          />
+          <div className="kin-analyze-stage__film">
+            <KinFilmStripLoop accent={accent} />
+          </div>
+        </div>
         <div className="kin-analyze-stage__steps">
           {KIN_ANALYZE_STAGES.map((s, i) => (
             <span
@@ -3750,7 +3767,7 @@ function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyz
 const kinPhaseCardCls = (c, status, hasResult) => {
   const base = "glass-float relative flex flex-col rounded-[28px] border border-white/[0.06] bg-white/[0.028] min-h-[240px] transition-all duration-300 overflow-hidden";
   if (status === "analyzing") return `${base} ring-1 ring-white/[0.06]`;
-  if (hasResult) return `${base} ring-1 ring-white/[0.08]`;
+  if (hasResult) return base;
   return `${base} hover:border-white/[0.10]`;
 };
 
@@ -5537,13 +5554,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                   </label>
 
                   <div className="mt-auto flex flex-col gap-2">
-                    {status === "analyzing" ? (
-                      <KinPhaseAnalyzeProgressBar
-                        accent={ph.c}
-                        pct={analysisProgress[ph.k]?.pct}
-                        step={analysisProgress[ph.k]?.step || "Analyzing video…"}
-                      />
-                    ) : (
+                    {status === "analyzing" ? null : (
                     <GBtn variant="default" onClick={() => analyzeVideo(ph.k)} disabled={!data[vidKey(ph.k)]} className="w-full text-xs py-2.5 !rounded-full bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]" title="Analyze">
                         <Play className="w-4 h-4 mx-auto" />
                   </GBtn>
