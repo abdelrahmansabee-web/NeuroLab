@@ -1,4 +1,4 @@
-/* Fast iPad taps. Does not change glass colors, blur, or fills. */
+/* Fast iPad taps. Same liquid-glass tokens as desktop — do not dilute blur/fill. */
 
 button,
 a,
@@ -10,4 +10,19 @@ label,
 summary,
 .gselect-trigger {
   touch-action: manipulation;
+}
+
+html,
+body {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.sidebar-shell,
+.glass-float,
+.app-topbar-glass,
+.content-panel-glass,
+.gselect-menu-portal {
+  -webkit-backdrop-filter: blur(22px) saturate(3.25);
+  backdrop-filter: blur(22px) saturate(3.25);
 }

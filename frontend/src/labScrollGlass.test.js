@@ -11,10 +11,13 @@ test("lab glass does not paint an invented black fill over iPad clinic cards", (
   expect(app).not.toMatch(/html\.nl-touch \[data-nl-app-scroll\][^{]*\{[^}]*background-color:\s*rgba\(16,\s*22,\s*32/);
 });
 
-test("iPad inner lab cards keep a light glass blur instead of a black plate", () => {
+test("iPad and touch keep the same liquid glass degree as desktop, not a diluted blur", () => {
   expect(app).toMatch(
-    /html\.nl-touch \.content-shell \.content-panel-glass[\s\S]*?backdrop-filter:\s*blur\(6px\)/,
+    /html\.nl-touch \.content-shell \.content-panel-glass[\s\S]*?backdrop-filter:\s*blur\(24px\) saturate\(2\.85\)/,
   );
+  expect(app).not.toMatch(/html\.nl-touch \.content-shell \.content-panel-glass[\s\S]*?backdrop-filter:\s*blur\(6px\)/);
+  expect(app).not.toMatch(/html\.nl-touch \.glass-float \{[\s\S]*?blur\(8px\)/);
+  expect(css).toMatch(/@supports not \(\(backdrop-filter: blur\(1px\)\) or \(-webkit-backdrop-filter: blur\(1px\)\)\)/);
 });
 
 test("clinic chrome uses shared liquid section motion instead of a missing bounce", () => {
@@ -51,6 +54,12 @@ test("analysis phase cards use muted glass instead of neon sky/emerald/amber pla
   expect(app).not.toMatch(/from-sky-500\/14/);
   expect(app).toMatch(/KIN_PHASE_PIP/);
   expect(app).toMatch(/rounded-\[28px\] border border-white\/\[0\.06\] bg-white\/\[0\.028\]/);
+});
+
+test("clinic buttons use muted glass pills instead of neon sky/emerald plates", () => {
+  expect(app).toMatch(/default: "bg-white\/\[0\.06\] border-white\/\[0\.08\] text-white\/85/);
+  expect(app).toMatch(/rounded-full border font-semibold text-sm/);
+  expect(app).not.toMatch(/sky: "bg-sky-500\/20 border-sky-400\/30/);
 });
 
 test("clinic chrome keeps original GitHub glass degree, not milky lens brightening", () => {

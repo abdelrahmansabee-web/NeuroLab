@@ -20,8 +20,8 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  border-color: rgba(139, 92, 246, 0.45) !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 input[type="range"] {
@@ -725,4 +725,24 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* Firefox / older browsers without backdrop-filter: keep the same dark glass read, not a clear hole. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .sidebar-shell,
+  .glass-float,
+  .app-topbar-glass,
+  .content-panel-glass,
+  .gselect-menu-portal,
+  .validation-metrics-gutter,
+  .validation-player-controls,
+  .validation-player-topbar,
+  .kin-film-strip__body,
+  .kin-analyze-panel {
+    background-color: rgba(18, 24, 32, 0.78) !important;
+  }
+  .content-shell .content-panel-glass,
+  .content-shell .glass-float:not(.section-header):not(.app-topbar-glass) {
+    background-color: rgba(18, 24, 32, 0.72) !important;
+  }
 }

@@ -1620,13 +1620,13 @@ const GSelect = ({ en, tr, value, onChange, options, className = "" }) => {
 
 const GBtn = ({ children, onClick, disabled, className = "", variant = "default" }) => {
   const v = {
-    default: "bg-white/10 border-white/20 text-white hover:bg-white/15",
-    sky: "bg-sky-500/20 border-sky-400/30 text-sky-200 hover:bg-sky-500/30",
-    emerald: "bg-emerald-500/20 border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/30",
-    amber: "bg-amber-500/20 border-amber-400/30 text-amber-200 hover:bg-amber-500/30",
-    violet: "bg-violet-500/20 border-violet-400/30 text-violet-200 hover:bg-violet-500/30",
-    rose: "bg-rose-500/20 border-rose-400/30 text-rose-200 hover:bg-rose-500/30",
-    danger: "bg-rose-500/20 border-rose-400/30 text-rose-200 hover:bg-rose-500/30",
+    default: "bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]",
+    sky: "bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]",
+    emerald: "bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]",
+    amber: "bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]",
+    violet: "bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]",
+    rose: "bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]",
+    danger: "bg-white/[0.06] border-white/[0.10] text-white/80 hover:bg-white/[0.10]",
   };
 
   return (
@@ -1635,7 +1635,7 @@ const GBtn = ({ children, onClick, disabled, className = "", variant = "default"
       whileTap={nlMotionTap(0.97)}
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed ${v[variant]} ${className}`}
+      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-full border font-semibold text-sm transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] disabled:opacity-40 disabled:cursor-not-allowed ${v[variant]} ${className}`}
     >
       {children}
     </motion.button>
@@ -1645,7 +1645,7 @@ const GBtn = ({ children, onClick, disabled, className = "", variant = "default"
 function TopBarSessionCapsule({ onNew, onSave, dirty }) {
   return (
     <div
-      className="flex items-stretch rounded-xl overflow-hidden border border-white/[0.06] bg-white/[0.04] backdrop-blur-sm flex-shrink-0"
+      className="flex items-stretch rounded-full overflow-hidden border border-white/[0.06] bg-white/[0.04] backdrop-blur-md backdrop-saturate-[2.25] flex-shrink-0"
       style={GLASS_FIELD}
       role="group"
       aria-label="Session actions"
@@ -1874,12 +1874,12 @@ const Toast = ({ msg, visible, variant = "success" }) => (
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -8, scale: 0.98 }}
         transition={NL_SPRING_TOAST}
-        className={`fixed bottom-8 right-8 z-[99999] flex items-center gap-2.5 px-5 py-3 rounded-2xl backdrop-blur-2xl border text-sm font-semibold shadow-2xl ${
+        className={`fixed bottom-8 right-8 z-[99999] flex items-center gap-2.5 px-5 py-3 rounded-full glass-float app-topbar-glass border text-sm font-semibold ${
           variant === "success"
-            ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+            ? "bg-white/[0.008] border-white/[0.08] text-white/90"
             : variant === "info"
-            ? "bg-sky-500/20 border-sky-400/30 text-sky-200"
-            : "bg-rose-500/20 border-rose-400/30 text-rose-200"
+            ? "bg-white/[0.008] border-white/[0.08] text-white/90"
+            : "bg-white/[0.008] border-white/[0.08] text-white/90"
         }`}
       >
         <Check className="w-4 h-4" /> {formatUserMessage(msg)}
@@ -10671,10 +10671,12 @@ export default function App() {
 
         html.nl-touch .sidebar-shell,
         html.nl-touch .glass-float {
-          backdrop-filter: blur(8px) saturate(1.85) !important;
-          -webkit-backdrop-filter: blur(8px) saturate(1.85) !important;
+          backdrop-filter: blur(22px) saturate(3.25) !important;
+          -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
           background-color: rgba(255,255,255,0.008) !important;
-          box-shadow: 0 16px 36px -20px rgba(0,0,0,0.22) !important;
+          box-shadow:
+            inset 0 -18px 32px rgba(70, 130, 180, 0.06),
+            0 22px 52px -26px rgba(0,0,0,0.28) !important;
         }
         html.nl-touch .content-shell {
           backdrop-filter: none !important;
@@ -10683,19 +10685,19 @@ export default function App() {
         }
         html.nl-touch .content-shell .glass-float:not(.section-header):not(.app-topbar-glass),
         html.nl-touch .content-shell .content-panel-glass {
-          backdrop-filter: blur(6px) saturate(1.55) !important;
-          -webkit-backdrop-filter: blur(6px) saturate(1.55) !important;
+          backdrop-filter: blur(24px) saturate(2.85) !important;
+          -webkit-backdrop-filter: blur(24px) saturate(2.85) !important;
           background-color: rgba(255,255,255,0.028) !important;
         }
-        html.nl-touch .sidebar-shell::before,
-        html.nl-touch .sidebar-shell::after,
         html.nl-touch .content-shell::before,
-        html.nl-touch .content-shell::after,
-        html.nl-touch .content-shell .glass-float::before,
-        html.nl-touch .content-shell .glass-float::after,
-        html.nl-touch .content-shell .content-panel-glass::before,
-        html.nl-touch .content-shell .content-panel-glass::after {
+        html.nl-touch .content-shell::after {
           display: none !important;
+        }
+        html.nl-touch .content-shell .glass-float.rounded-xl,
+        html.nl-touch .content-shell .glass-float.rounded-2xl,
+        .content-shell .glass-float.rounded-xl,
+        .content-shell .glass-float.rounded-2xl {
+          border-radius: 24px !important;
         }
         html.nl-touch h1,
         html.nl-touch h2,
