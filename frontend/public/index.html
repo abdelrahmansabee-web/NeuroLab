@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.331" />
-    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.331" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.332" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.332" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.331" />
+    <meta name="nl-version" content="32.332" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -76,10 +76,10 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
-    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.331"></script>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.332"></script>
     <script>
       (function () {
-        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.331";
+        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.332";
         function pin() {
           var el = document.getElementById("nl-liquid-glass-link");
           if (!el) {
@@ -119,34 +119,26 @@
             chips[i].classList.toggle("is-done", i < active);
           }
         }
-        function ensureOrbit(host) {
+        function ensureRun(host) {
           var cap = host.querySelector(".kin-analyze-stage__capsule") || host;
-          if (cap.querySelector(".kin-orbit")) return;
-          var id = "o" + Math.random().toString(36).slice(2, 8);
+          var leftover = cap.querySelector(".kin-orbit, .kin-liquid-orb, .kin-run__svg");
+          if (leftover && leftover.parentNode) leftover.parentNode.removeChild(leftover);
+          var stale = cap.querySelector(".kin-run");
+          if (stale && !stale.querySelector(".kin-run__figure")) {
+            stale.parentNode.removeChild(stale);
+          }
+          if (cap.querySelector(".kin-run")) return;
+          var html = '<div class="kin-run__stage">'
+            + '<img class="kin-run__figure" src="./kin-run/pose-a.png" alt="" draggable="false"/>'
+            + '<img class="kin-run__figure" src="./kin-run/pose-b.png" alt="" draggable="false"/>'
+            + '<img class="kin-run__figure" src="./kin-run/pose-c.png" alt="" draggable="false"/>'
+            + '<span class="kin-run__ground"></span></div><div class="kin-run__pips">';
+          for (var d = 0; d < 11; d += 1) html += '<span class="kin-run__pip"></span>';
+          html += '</div>';
           var wrap = document.createElement("div");
-          wrap.className = "kin-orbit";
+          wrap.className = "kin-run";
           wrap.setAttribute("aria-hidden", "true");
-          wrap.innerHTML = '<svg class="kin-orbit__svg" viewBox="0 0 200 80">'
-            + '<defs>'
-            + '<radialGradient id="p-' + id + '" cx="34%" cy="30%" r="70%">'
-            + '<stop offset="0%" stop-color="#e7edf3"/>'
-            + '<stop offset="42%" stop-color="#9aa3ad"/>'
-            + '<stop offset="100%" stop-color="#5a636c"/>'
-            + '</radialGradient>'
-            + '<radialGradient id="m-' + id + '" cx="34%" cy="30%" r="70%">'
-            + '<stop offset="0%" stop-color="#f3f6f9"/>'
-            + '<stop offset="100%" stop-color="#a7afb7"/>'
-            + '</radialGradient>'
-            + '</defs>'
-            + '<ellipse cx="100" cy="40" rx="76" ry="12" fill="none" stroke="rgba(226,232,240,0.38)" stroke-width="1.15"/>'
-            + '<circle cx="100" cy="40" r="10.5" fill="url(#p-' + id + ')"/>'
-            + '<circle r="2.7" fill="url(#m-' + id + ')">'
-            + '<animateMotion dur="6.8s" repeatCount="indefinite" rotate="0">'
-            + '<mpath href="#path-' + id + '"/>'
-            + '</animateMotion>'
-            + '</circle>'
-            + '<path id="path-' + id + '" d="M24,40 a76,12 0 1,1 152,0 a76,12 0 1,1 -152,0" fill="none"/>'
-            + '</svg>';
+          wrap.innerHTML = html;
           cap.insertBefore(wrap, cap.firstChild);
         }
         function stepperIcon(name) {
@@ -193,7 +185,7 @@
               host.appendChild(cap);
               cap.appendChild(strip);
             }
-            ensureOrbit(host);
+            ensureRun(host);
             if (!host.querySelector(".kin-analyze-stage__stepper")) {
               var stepper = document.createElement("div");
               stepper.className = "kin-analyze-stage__stepper";
