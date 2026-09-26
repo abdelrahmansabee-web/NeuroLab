@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.372l" />
-    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.372l" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.372m" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.372m" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.372l" />
+    <meta name="nl-version" content="32.372m" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -20,6 +20,7 @@
     <meta name="apple-mobile-web-app-title" content="NeuroLab" />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png?v=32.86" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <link rel="preload" href="%PUBLIC_URL%/static/kin-run/cradle.gif?v=32.372m" as="image" />
     <title>NeuroLab</title>
     <script>
       (function () {
@@ -38,10 +39,15 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
-    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.372l"></script>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.372m"></script>
     <script>
       (function () {
-        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.372l";
+        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.372m";
+        var cradleSrc = "/static/kin-run/cradle.gif?v=32.372m";
+        try {
+          var pre = new Image();
+          pre.src = cradleSrc;
+        } catch (e) {}
         function pin() {
           var el = document.getElementById("nl-liquid-glass-link");
           if (!el) {
@@ -107,7 +113,7 @@
             strip.appendChild(host);
           }
           if (!host.querySelector(".nl-cradle__gif")) {
-            host.innerHTML = '<img class="nl-cradle__gif" src="/static/kin-run/cradle.gif?v=32.372l" alt="" />';
+            host.innerHTML = '<img class="nl-cradle__gif" src="' + cradleSrc + '" alt="" />';
           } else {
             var stalePct = host.querySelector(".kin-run__pct");
             if (stalePct && stalePct.parentNode) stalePct.parentNode.removeChild(stalePct);
@@ -145,12 +151,16 @@
             if (step || pct != null) syncAnalyzeSteps(strip, step, pct);
           }
         }
-        pin();
-        if (window.MutationObserver) {
-          new MutationObserver(pin).observe(document.documentElement, { childList: true, subtree: true });
-        }
         function placeAll() {
           if (document.querySelector(".kin-film-strip")) enhanceAnalyzeCapsule();
+        }
+        function boot() {
+          pin();
+          placeAll();
+        }
+        boot();
+        if (window.MutationObserver) {
+          new MutationObserver(boot).observe(document.documentElement, { childList: true, subtree: true });
         }
         setInterval(placeAll, 320);
         window.addEventListener("scroll", placeAll, true);
