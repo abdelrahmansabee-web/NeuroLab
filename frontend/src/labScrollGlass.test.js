@@ -28,18 +28,24 @@ test("clinic chrome uses shared liquid section motion instead of a missing bounc
   expect(app).toMatch(/const BOUNCE_IN_MS = 520/);
 });
 
-test("analysis film strip and progress use muted glass instead of dark plastic", () => {
+test("analysis stage capsule uses muted glass instead of a film-strip reel", () => {
   expect(css).toMatch(/\.kin-analyze-track/);
   expect(css).toMatch(/\.kin-analyze-track-fill/);
   expect(css).not.toMatch(/rgba\(8,\s*10,\s*18,\s*0\.82\)/);
-  expect(css).toMatch(/\.kin-film-strip__body[\s\S]*?rgba\(255,\s*255,\s*255,\s*0\.028\)/);
+  expect(css).toMatch(/\.kin-analyze-stage__capsule[\s\S]*?rgba\(255,\s*255,\s*255,\s*0\.028\)/);
+  expect(app).toMatch(/function KinAnalyzeStageCapsule/);
+  expect(app).not.toMatch(/function KinFilmStripLoop/);
 });
 
 test("validation video chrome uses muted glass bars and panels", () => {
   expect(css).toMatch(/\.validation-metrics-gutter[\s\S]*?rgba\(255,\s*255,\s*255,\s*0\.028\)/);
   expect(css).toMatch(/\.validation-seek-bar[\s\S]*?border-radius:\s*999px/);
   expect(css).toMatch(/\.validation-seek-fill[\s\S]*?transition:\s*none/);
-  expect(css).toMatch(/\.validation-player-controls[\s\S]*?border-radius:\s*24px/);
+  expect(css).toMatch(/\.validation-player-controls[\s\S]*?border-radius:\s*28px/);
+  expect(css).toMatch(/\.validation-control-icon[\s\S]*?min-width:\s*44px/);
+  expect(css).toMatch(/\.validation-control-icon[\s\S]*?height:\s*32px/);
+  expect(css).toMatch(/\.validation-player-fullscreen[\s\S]*?z-index:\s*2147483646/);
+  expect(css).toMatch(/\.validation-player-topbar[\s\S]*?border-radius:\s*28px/);
 });
 
 test("three-dot menu is a compact glass lens, not a stadium plate", () => {
@@ -48,9 +54,10 @@ test("three-dot menu is a compact glass lens, not a stadium plate", () => {
   expect(app).toMatch(/transformOrigin: "top right"/);
   expect(app).toMatch(/desktop-more-menu[\s\S]*?position: "absolute"/);
   expect(app).toMatch(/nl-lens-menu gselect-menu-portal glass-float/);
-  expect(app).toMatch(/gselect-menu-body gselect-menu-body--animate/);
+  expect(app).toMatch(/gselect-menu-body--animate-out/);
   expect(app).toMatch(/w-\[min\(320px,calc\(100vw-24px\)\)\]/);
   expect(app).not.toMatch(/className=\{`rounded-\[28px\] sidebar-shell \$\{SIDEBAR_CLS\}`\}/);
+  expect(app).not.toMatch(/bg-black\/40 backdrop-blur-\[2px\]/);
 });
 
 test("Recalling and GSelect keep liquid-glass motion on the inner body only", () => {
@@ -101,5 +108,5 @@ test("clinic chrome keeps original GitHub glass degree, not milky lens brighteni
   expect(app).not.toMatch(/brightness\(1\.08\)/);
   expect(app).not.toMatch(/bg-white\/70/);
   expect(app).toMatch(/\.sidebar-shell \{\s*border-radius: 36px !important;/);
-  expect(app).toMatch(/\.app-topbar-glass:not\(\.gselect-menu-portal\):not\(\.nl-lens-menu\):not\(\[role="dialog"\]\),\s*\.section-header \{\s*border-radius: 999px !important;/);
+  expect(app).toMatch(/\.app-topbar-glass:not\(\.gselect-menu-portal\):not\(\.nl-lens-menu\):not\(\[role="dialog"\]\):not\(\.validation-player-topbar\):not\(\.validation-player-controls\),\s*\.section-header \{\s*border-radius: 999px !important;/);
 });

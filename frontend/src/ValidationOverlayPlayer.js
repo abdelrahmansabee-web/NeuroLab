@@ -2632,7 +2632,7 @@ export function ValidationOverlayPlayer({
       {isExpanded && <AppShellBackground className="z-0" />}
       <div className="validation-player-chrome relative z-[1] flex flex-col flex-1 min-h-0 w-full">
       {isExpanded && (
-        <div className="validation-player-topbar flex items-center justify-between px-4 flex-shrink-0 glass-float app-topbar-glass bg-white/[0.028] backdrop-blur-md backdrop-saturate-[2.25]">
+        <div className="validation-player-topbar flex items-center justify-between flex-shrink-0 glass-float bg-white/[0.028] backdrop-blur-md backdrop-saturate-[2.25]">
           <p className="text-sm font-bold text-white/90 truncate pr-3">{phaseLabel || "Validation"} — Validation</p>
           <button
             type="button"
@@ -2759,7 +2759,7 @@ export function ValidationOverlayPlayer({
           controlsVisible ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         }`}
       >
-        <div className="validation-player-controls glass-float app-topbar-glass pointer-events-auto touch-manipulation">
+        <div className={`validation-player-controls glass-float pointer-events-auto touch-manipulation ${isExpanded ? "is-expanded" : "is-compact"}`}>
           <div className="validation-controls-row validation-controls-transport">
             <button
               type="button"

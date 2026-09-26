@@ -3520,29 +3520,45 @@ function KinFilmFrame({ viewIndex, accent = "amber" }) {
   );
 }
 
-function KinFilmStripLoop({ accent = "amber" }) {
-  // Keep 8 frames (4? front/back pairs) so scroll distance matches the original 4-view strip speed.
-  const frameCount = 8;
-  const holes = Array.from({ length: 11 });
+const KIN_ANALYZE_STAGES = [
+  { id: "upload", label: "Upload", re: /upload|send|transfer/i },
+  { id: "detect", label: "Detect", re: /detect|pose|hand|track|overlay|media/i },
+  { id: "analyze", label: "Analyze", re: /analy|kinem|sparc|nvp|metric|filter/i },
+  { id: "done", label: "Done", re: /done|complete|ready|finish/i },
+];
+
+function kinAnalyzeStageIndex(step, pct) {
+  const text = String(step || "");
+  const fromText = KIN_ANALYZE_STAGES.findIndex((s) => s.re.test(text));
+  if (fromText >= 0) return fromText;
+  const n = pct != null && !Number.isNaN(Number(pct)) ? Number(pct) : 0;
+  if (n >= 92) return 3;
+  if (n >= 55) return 2;
+  if (n >= 22) return 1;
+  return 0;
+}
+
+function KinAnalyzeStageCapsule({ accent = "amber", pct = null, step = "Analyzing video…" }) {
+  const pip = KIN_PHASE_PIP[accent] || KIN_PHASE_PIP.amber;
+  const pctRounded = pct != null && !Number.isNaN(Number(pct)) ? Math.round(Number(pct)) : null;
+  const barPct = pctRounded != null ? Math.max(0, Math.min(100, pctRounded)) : 8;
+  const active = kinAnalyzeStageIndex(step, pctRounded);
 
   return (
-    <div className="kin-film-strip" aria-hidden>
-      <div className="kin-film-strip__holes">
-        {holes.map((_, i) => (
-          <span key={`t-${i}`} className="kin-film-strip__hole" />
-        ))}
-      </div>
-      <div className="kin-film-strip__body">
-        <div className="kin-film-strip__track">
-          {Array.from({ length: frameCount }, (_, i) => (
-            <KinFilmFrame key={i} viewIndex={i} accent={accent} />
+    <div className="kin-analyze-stage" aria-hidden>
+      <div className="kin-analyze-stage__capsule">
+        <div className="kin-analyze-stage__fill" style={{ width: `${Math.max(8, barPct)}%` }} />
+        <div className="kin-analyze-stage__steps">
+          {KIN_ANALYZE_STAGES.map((s, i) => (
+            <span
+              key={s.id}
+              className={`kin-analyze-stage__step ${i === active ? "is-active" : ""} ${i < active ? "is-done" : ""}`}
+            >
+              <span className={`kin-analyze-stage__pip ${pip}`} />
+              {s.label}
+            </span>
           ))}
         </div>
-      </div>
-      <div className="kin-film-strip__holes">
-        {holes.map((_, i) => (
-          <span key={`b-${i}`} className="kin-film-strip__hole" />
-        ))}
       </div>
     </div>
   );
@@ -3694,30 +3710,25 @@ function KinAnalyzeProgressGlyph({
 
 function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyzing video…" }) {
   const a = KIN_PHASE_ACCENT[accent] || KIN_PHASE_ACCENT.sky;
-  const film = KIN_FILM_ACCENT[accent] || KIN_FILM_ACCENT.sky;
   const pctRounded = pct != null && !Number.isNaN(Number(pct)) ? Math.round(Number(pct)) : null;
   const barPct = pctRounded != null ? Math.max(0, Math.min(100, pctRounded)) : 8;
+  const shown = pctRounded != null ? `${pctRounded}%` : "";
 
   return (
-    <div className="w-full rounded-[22px] kin-analyze-panel px-3 py-2.5 flex items-center gap-2.5 border border-white/[0.06]">
-      <KinAnalyzeProgressGlyph
-        pct={pct}
-        stroke={film.stroke}
-        glow={film.glow}
-        sizeClass="w-10 h-10 shrink-0"
-        labelClass="text-[9px]"
-      />
+    <div className="w-full rounded-[999px] kin-analyze-panel px-3.5 py-2 flex items-center gap-2.5 border border-white/[0.06]">
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-semibold text-white/90 truncate">{step}</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold text-white/90 truncate">{step}</p>
+          {shown ? <p className="text-[10px] font-bold tabular-nums text-white/55 shrink-0">{shown}</p> : null}
+        </div>
         <div className="mt-1.5 kin-analyze-track">
           <motion.div
             className={`kin-analyze-track-fill ${a.bar}`}
             initial={false}
             animate={{ width: `${Math.max(5, barPct)}%` }}
-            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
           />
         </div>
-        <p className="text-[8px] text-white/35 mt-1">Server processing — you can change sections</p>
       </div>
     </div>
   );
@@ -5480,7 +5491,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                     />
                     {status === "analyzing" ? (
                       <>
-                        <KinFilmStripLoop accent={ph.c} />
+                        <KinAnalyzeStageCapsule
+                          accent={ph.c}
+                          pct={analysisProgress[ph.k]?.pct}
+                          step={analysisProgress[ph.k]?.step || "Analyzing video…"}
+                        />
                         {data[vidKey(ph.k)] && (
                           <span className="text-[10px] font-medium text-white/55 truncate max-w-full px-1" title={data[vidKey(ph.k)]}>
                             {kinShortFileName(data[vidKey(ph.k)])}
@@ -8897,6 +8912,9 @@ export default function App() {
   const [importPreview, setImportPreview] = useState(null);
   const [user, setUser] = useState(null);
   const [mobileTopMenuOpen, setMobileTopMenuOpen] = useState(false);
+  const [menuBodyOut, setMenuBodyOut] = useState(false);
+  const reduceMenuMotion = useReducedMotion();
+  const menuLeaveTimer = useRef(null);
   const [moreMenuPos, setMoreMenuPos] = useState({ top: 56, left: null, width: 300 });
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
   const [originRestoreBanner, setOriginRestoreBanner] = useState("");
@@ -9059,7 +9077,7 @@ export default function App() {
   useEffect(() => {
     if (!mobileTopMenuOpen) return undefined;
     const onKey = (e) => {
-      if (e.key === "Escape") setMobileTopMenuOpen(false);
+      if (e.key === "Escape") closeMobileTopMenu();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -9546,7 +9564,36 @@ export default function App() {
     setImportPreview(null);
   };
 
-  const closeMobileTopMenu = () => setMobileTopMenuOpen(false);
+  const closeMobileTopMenu = () => {
+    if (!mobileTopMenuOpen || menuBodyOut) return;
+    if (reduceMenuMotion) {
+      setMobileTopMenuOpen(false);
+      setMenuBodyOut(false);
+      return;
+    }
+    setMenuBodyOut(true);
+    if (menuLeaveTimer.current) clearTimeout(menuLeaveTimer.current);
+    menuLeaveTimer.current = setTimeout(() => {
+      setMobileTopMenuOpen(false);
+      setMenuBodyOut(false);
+      menuLeaveTimer.current = null;
+    }, 280);
+  };
+
+  const openMobileTopMenu = () => {
+    if (menuLeaveTimer.current) {
+      clearTimeout(menuLeaveTimer.current);
+      menuLeaveTimer.current = null;
+    }
+    setMenuBodyOut(false);
+    placeMoreMenu();
+    setMobileTopMenuOpen(true);
+  };
+
+  const toggleMobileTopMenu = () => {
+    if (mobileTopMenuOpen) closeMobileTopMenu();
+    else openMobileTopMenu();
+  };
 
   function TopBarActions({ inMenu }) {
     const btnBase = inMenu
@@ -9774,10 +9821,7 @@ export default function App() {
               <motion.button
                 whileHover={nlMotionHover(1.05)}
                 whileTap={nlMotionTap(0.95)}
-                onClick={() => {
-                  placeMoreMenu();
-                  setMobileTopMenuOpen((p) => !p);
-                }}
+                onClick={toggleMobileTopMenu}
                 className={`w-9 h-9 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
                 style={GLASS_FIELD}
                 title="More actions"
@@ -9826,10 +9870,7 @@ export default function App() {
           <motion.button
             whileHover={nlMotionHover(1.08)}
             whileTap={nlMotionTap(0.92)}
-            onClick={() => {
-              placeMoreMenu();
-              setMobileTopMenuOpen((p) => !p);
-            }}
+            onClick={toggleMobileTopMenu}
             className={`w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
             style={GLASS_FIELD}
             title="Menu"
@@ -10355,7 +10396,7 @@ export default function App() {
         .sidebar-shell {
           border-radius: 36px !important;
         }
-        .app-topbar-glass:not(.gselect-menu-portal):not(.nl-lens-menu):not([role="dialog"]),
+        .app-topbar-glass:not(.gselect-menu-portal):not(.nl-lens-menu):not([role="dialog"]):not(.validation-player-topbar):not(.validation-player-controls),
         .section-header {
           border-radius: 999px !important;
         }
@@ -10790,33 +10831,25 @@ export default function App() {
                     zIndex: 1,
                   }}
                 >
-                  <div className="gselect-menu-body gselect-menu-body--animate flex flex-col max-h-full overflow-y-auto overscroll-contain px-2 py-1">
+                  <div className={`gselect-menu-body flex flex-col max-h-full overflow-y-auto overscroll-contain px-2 py-1${reduceMenuMotion ? "" : menuBodyOut ? " gselect-menu-body--animate-out" : " gselect-menu-body--animate"}`}>
                     <TopBarActions inMenu={true} />
                   </div>
                 </motion.div>
               </div>
             ) : (
               <div key="mobile-top-menu" className="fixed inset-0 z-[200]">
-                <motion.button
+                <button
                   type="button"
                   aria-label="Close menu"
-                  className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={NL_TWEEN_MENU}
+                  className="absolute inset-0 bg-transparent"
                   onClick={closeMobileTopMenu}
                 />
-                <motion.div
+                <div
                   ref={mobileMenuRef}
                   role="dialog"
                   aria-modal="true"
                   aria-label="Actions menu"
                   className="absolute right-3 bottom-0 w-[min(320px,calc(100vw-24px))]"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={NL_TWEEN_OVERLAY}
                   style={{
                     maxHeight: "min(78vh, calc(100dvh - env(safe-area-inset-top, 0px) - 72px))",
                     paddingBottom: "max(12px, env(safe-area-inset-bottom, 0px))",
@@ -10824,10 +10857,10 @@ export default function App() {
                 >
                   <div
                     className={`nl-lens-menu gselect-menu-portal glass-float flex flex-col max-h-full overflow-hidden ${GLASS_PANEL_CLS}`}
-                    style={{ borderRadius: 28, boxShadow: FLOAT_M }}
+                    style={{ borderRadius: 28, boxShadow: FLOAT_M, transform: "translateZ(0)", WebkitTransform: "translateZ(0)" }}
                   >
                     <div
-                      className="gselect-menu-body gselect-menu-body--animate flex-1 min-h-0 px-2 pt-2 pb-2 overflow-y-auto overscroll-contain"
+                      className={`gselect-menu-body flex-1 min-h-0 px-2 pt-2 pb-2 overflow-y-auto overscroll-contain${reduceMenuMotion ? "" : menuBodyOut ? " gselect-menu-body--animate-out" : " gselect-menu-body--animate"}`}
                       style={{
                         paddingBottom: "max(12px, calc(12px + env(safe-area-inset-bottom, 0px) * 0.35))",
                       }}
@@ -10835,7 +10868,7 @@ export default function App() {
                       <TopBarActions inMenu={true} />
                     </div>
                   </div>
-                </motion.div>
+                </div>
               </div>
             )
           )}

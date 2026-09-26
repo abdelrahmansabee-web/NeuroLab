@@ -3,7 +3,7 @@
 .sidebar-shell {
   border-radius: 36px !important;
 }
-.app-topbar-glass:not(.gselect-menu-portal):not(.nl-lens-menu):not([role="dialog"]),
+.app-topbar-glass:not(.gselect-menu-portal):not(.nl-lens-menu):not([role="dialog"]):not(.validation-player-topbar):not(.validation-player-controls),
 .section-header {
   border-radius: 999px !important;
 }
@@ -103,11 +103,26 @@ button[class*="bg-teal-500"] {
 }
 .validation-player-controls,
 .validation-player-topbar {
-  border-radius: 24px !important;
+  border-radius: 28px !important;
   backdrop-filter: blur(22px) saturate(3.25) !important;
   -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
   background: rgba(255, 255, 255, 0.028) !important;
   border: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+.validation-player-fullscreen {
+  z-index: 2147483646 !important;
+}
+.validation-control-btn,
+.validation-control-icon,
+.validation-control-chip {
+  min-height: 32px !important;
+  height: 32px;
+  border-radius: 999px !important;
+  padding: 0 12px !important;
+}
+.validation-control-icon {
+  width: auto !important;
+  min-width: 44px !important;
 }
 .validation-seek-bar {
   height: 8px;
@@ -124,12 +139,21 @@ button[class*="bg-teal-500"] {
   border-radius: 999px !important;
 }
 
-.kin-film-strip__body {
-  border-radius: 16px !important;
+.kin-film-strip__holes {
+  display: none !important;
+}
+.kin-film-strip__body,
+.kin-analyze-stage__capsule {
+  border-radius: 999px !important;
   border: 1px solid rgba(255, 255, 255, 0.06) !important;
   background: rgba(255, 255, 255, 0.028) !important;
   backdrop-filter: blur(18px) saturate(2.8) !important;
   -webkit-backdrop-filter: blur(18px) saturate(2.8) !important;
+}
+.kin-film-strip__track {
+  animation: none !important;
+  justify-content: center;
+  width: 100%;
 }
 .kin-analyze-track {
   height: 6px;
@@ -173,8 +197,30 @@ button[class*="bg-teal-500"] {
   animation: gselect-body-out 0.28s cubic-bezier(0.22, 1, 0.36, 1) both !important;
 }
 
+button[aria-label="Close menu"] {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[role="dialog"][aria-label="Actions menu"] {
+  left: auto !important;
+  right: 12px !important;
+  width: min(320px, calc(100vw - 24px)) !important;
+  max-width: min(320px, calc(100vw - 24px)) !important;
+  transform: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[role="dialog"][aria-label="Actions menu"].nl-lens-menu,
+[role="dialog"][aria-label="Actions menu"].gselect-menu-portal,
+[role="dialog"][aria-label="Actions menu"] > .nl-lens-menu,
+[role="dialog"][aria-label="Actions menu"] > .gselect-menu-portal,
+[role="dialog"][aria-label="Actions menu"] > .app-topbar-glass,
 .nl-lens-menu,
-[role="dialog"][aria-label="Actions menu"],
 [role="dialog"][aria-label="Loaded sessions"],
 [role="dialog"][aria-label="Sessions recalled from Drive"] {
   border-radius: 28px !important;
@@ -187,26 +233,6 @@ button[class*="bg-teal-500"] {
     inset 0 -16px 28px rgba(70, 130, 180, 0.045),
     0 12px 32px -10px rgba(0, 0, 0, 0.14),
     0 24px 56px -18px rgba(0, 0, 0, 0.10) !important;
-}
-
-[role="dialog"][aria-label="Actions menu"] {
-  left: auto !important;
-  right: 12px !important;
-  width: min(320px, calc(100vw - 24px)) !important;
-  max-width: min(320px, calc(100vw - 24px)) !important;
-  transform: none !important;
-}
-
-[role="dialog"][aria-label="Actions menu"] .app-topbar-glass,
-[role="dialog"][aria-label="Actions menu"] .gselect-menu-portal,
-[role="dialog"][aria-label="Actions menu"] .glass-float,
-[role="dialog"][aria-label="Actions menu"] .nl-lens-menu {
-  border-radius: 28px !important;
-  background-color: rgba(255, 255, 255, 0.028) !important;
-  backdrop-filter: blur(24px) saturate(2.85) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(2.85) !important;
-  width: 100% !important;
-  max-width: 100% !important;
 }
 
 [role="dialog"][aria-label="Loaded sessions"],
@@ -233,7 +259,8 @@ button[class*="bg-teal-500"] {
 }
 
 html.nl-touch .nl-lens-menu,
-html.nl-touch [role="dialog"][aria-label="Actions menu"],
+html.nl-touch [role="dialog"][aria-label="Actions menu"].nl-lens-menu,
+html.nl-touch [role="dialog"][aria-label="Actions menu"].gselect-menu-portal,
 html.nl-touch [role="dialog"][aria-label="Loaded sessions"],
 html.nl-touch [role="dialog"][aria-label="Sessions recalled from Drive"] {
   backdrop-filter: blur(24px) saturate(2.85) !important;

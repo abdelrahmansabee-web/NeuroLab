@@ -69,7 +69,7 @@ input[type="range"]::-webkit-slider-runnable-track {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   box-shadow: none !important;
-  z-index: 99999 !important;
+  z-index: 2147483646 !important;
 }
 
 /* In-card player home: compact video stays in the group while the page scrolls. */
@@ -302,19 +302,20 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
 }
 
 .validation-player-topbar {
-  margin: 8px 12px 0;
-  padding-top: 10px;
-  padding-bottom: 10px;
+  margin: 8px 8px 0;
+  padding: 8px 12px;
+  min-height: 48px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.028);
+  border-radius: 28px !important;
 }
 
 .validation-player-controls {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 10px 12px;
-  border-radius: 24px;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 28px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.028);
   width: 100%;
@@ -326,8 +327,32 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
 }
 
 .validation-player-fullscreen .validation-player-controls {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
   background: rgba(255, 255, 255, 0.028);
   border-color: rgba(255, 255, 255, 0.08);
+}
+
+.validation-player-fullscreen .validation-seek-bar {
+  flex: 1 1 auto;
+  min-width: 96px;
+  order: 2;
+}
+
+.validation-player-fullscreen .validation-controls-transport {
+  order: 1;
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.validation-player-fullscreen .validation-controls-tools {
+  order: 3;
+  width: auto;
+  flex: 0 1 auto;
+  justify-content: flex-end;
 }
 
 .validation-controls-row {
@@ -336,7 +361,7 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   gap: 6px;
   width: 100%;
   min-width: 0;
-  min-height: 40px;
+  min-height: 32px;
 }
 
 .validation-controls-transport {
@@ -353,7 +378,7 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
 .validation-controls-tools > .validation-control-btn,
 .validation-controls-tools > .validation-control-busy {
   flex: 0 0 auto;
-  min-width: 40px;
+  min-width: 44px;
   max-width: 100%;
 }
 
@@ -371,6 +396,7 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  min-height: 32px !important;
   transition: background-color 0.32s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.32s cubic-bezier(0.22, 1, 0.36, 1), color 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -378,11 +404,11 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  min-height: 40px;
-  padding: 0;
+  width: auto;
+  height: 32px;
+  min-width: 44px;
+  min-height: 32px !important;
+  padding: 0 12px;
   border-radius: 999px;
   color: rgba(255, 255, 255, 0.9);
   background: rgba(255, 255, 255, 0.06);
@@ -390,8 +416,8 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
 }
 
 .validation-controls-tools > .validation-control-icon {
-  width: 40px;
-  min-width: 40px;
+  width: auto;
+  min-width: 44px;
 }
 
 .validation-control-icon:hover,
@@ -405,8 +431,9 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 40px;
-  padding: 0 8px;
+  height: 32px;
+  min-height: 32px !important;
+  padding: 0 12px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
@@ -502,10 +529,10 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
     display: none;
   }
   .validation-controls-tools > .validation-control-download {
-    flex: 0 0 40px;
-    width: 40px;
-    min-width: 40px;
-    padding: 0;
+    flex: 0 0 44px;
+    width: auto;
+    min-width: 44px;
+    padding: 0 12px;
   }
 }
 
@@ -515,10 +542,10 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
     display: none;
   }
   .validation-controls-tools > .validation-control-download {
-    flex: 0 0 40px;
-    width: 40px;
-    min-width: 40px;
-    padding: 0;
+    flex: 0 0 44px;
+    width: auto;
+    min-width: 44px;
+    padding: 0 12px;
   }
 }
 
@@ -621,6 +648,77 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
 @keyframes kin-film-scroll {
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }
+}
+
+.kin-analyze-stage {
+  width: 100%;
+  max-width: 280px;
+  position: relative;
+  z-index: 2;
+}
+
+.kin-analyze-stage__capsule {
+  position: relative;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.028);
+  backdrop-filter: blur(18px) saturate(2.8);
+  -webkit-backdrop-filter: blur(18px) saturate(2.8);
+  box-shadow:
+    inset 0 -12px 22px rgba(70, 130, 180, 0.04),
+    0 10px 28px -16px rgba(0, 0, 0, 0.28);
+  padding: 8px 10px;
+}
+
+.kin-analyze-stage__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  transition: width 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.kin-analyze-stage__steps {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.kin-analyze-stage__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.38);
+  transition: color 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.kin-analyze-stage__step.is-done {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.kin-analyze-stage__step.is-active {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.kin-analyze-stage__pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  flex-shrink: 0;
+}
+
+.kin-analyze-stage__step.is-active .kin-analyze-stage__pip {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
 }
 
 .kin-film-strip {
