@@ -26,12 +26,3 @@ body {
   -webkit-backdrop-filter: blur(22px) saturate(3.25);
   backdrop-filter: blur(22px) saturate(3.25);
 }
-
-.nl-lens-menu,
-.mobile-actions-sheet,
-[role="dialog"][aria-label="Actions menu"] > .mobile-actions-sheet,
-[role="dialog"][aria-label="Loaded sessions"],
-[role="dialog"][aria-label="Sessions recalled from Drive"] {
-  -webkit-backdrop-filter: blur(24px) saturate(2.85);
-  backdrop-filter: blur(24px) saturate(2.85);
-}
