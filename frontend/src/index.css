@@ -69,7 +69,14 @@ input[type="range"]::-webkit-slider-runnable-track {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   box-shadow: none !important;
-  z-index: 2147483646 !important;
+  z-index: 99999 !important;
+}
+
+/* Backup expand: keep later clinic cards from stacking above the fixed player. */
+html.nl-overlay-expanded .content-shell .content-panel-glass:not(.validation-metrics-gutter),
+html.nl-overlay-expanded .content-shell .glass-float:not(.validation-player-topbar):not(.validation-player-controls):not(.validation-metrics-gutter):not(.nl-overlay-escape) {
+  isolation: auto !important;
+  z-index: auto !important;
 }
 
 /* In-card player home: compact video stays in the group while the page scrolls. */

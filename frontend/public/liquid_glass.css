@@ -110,7 +110,12 @@ button[class*="bg-teal-500"] {
   border: 1px solid rgba(255, 255, 255, 0.06) !important;
 }
 .validation-player-fullscreen {
-  z-index: 2147483646 !important;
+  z-index: 99999 !important;
+}
+html.nl-overlay-expanded .content-shell .content-panel-glass:not(.validation-metrics-gutter),
+html.nl-overlay-expanded .content-shell .glass-float:not(.validation-player-topbar):not(.validation-player-controls):not(.validation-metrics-gutter):not(.nl-overlay-escape) {
+  isolation: auto !important;
+  z-index: auto !important;
 }
 .validation-control-btn,
 .validation-control-icon,
@@ -209,6 +214,9 @@ button[aria-label="Close menu"] {
   width: min(320px, calc(100vw - 24px)) !important;
   max-width: min(320px, calc(100vw - 24px)) !important;
   transform: none !important;
+  filter: none !important;
+  will-change: auto !important;
+  contain: none !important;
   background: transparent !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
@@ -223,6 +231,10 @@ button[aria-label="Close menu"] {
 .nl-lens-menu,
 [role="dialog"][aria-label="Loaded sessions"],
 [role="dialog"][aria-label="Sessions recalled from Drive"] {
+  transform: none !important;
+  filter: none !important;
+  will-change: auto !important;
+  contain: none !important;
   border-radius: 28px !important;
   border-color: rgba(255, 255, 255, 0.05) !important;
   background-color: rgba(255, 255, 255, 0.028) !important;

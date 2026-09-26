@@ -10697,6 +10697,9 @@ export default function App() {
         .nl-lens-menu.glass-float {
           position: relative;
           isolation: isolate;
+          transform: none !important;
+          will-change: auto !important;
+          contain: none !important;
           border-radius: 28px !important;
           border-color: rgba(255,255,255,0.05) !important;
           backdrop-filter: blur(24px) saturate(2.85) !important;

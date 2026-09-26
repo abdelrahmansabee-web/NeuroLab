@@ -44,7 +44,8 @@ test("validation video chrome uses muted glass bars and panels", () => {
   expect(css).toMatch(/\.validation-player-controls[\s\S]*?border-radius:\s*28px/);
   expect(css).toMatch(/\.validation-control-icon[\s\S]*?min-width:\s*44px/);
   expect(css).toMatch(/\.validation-control-icon[\s\S]*?height:\s*32px/);
-  expect(css).toMatch(/\.validation-player-fullscreen[\s\S]*?z-index:\s*2147483646/);
+  expect(css).toMatch(/\.validation-player-fullscreen[\s\S]*?z-index:\s*99999/);
+  expect(css).toMatch(/html\.nl-overlay-expanded \.content-shell \.content-panel-glass:not\(\.validation-metrics-gutter\)/);
   expect(css).toMatch(/\.validation-player-topbar[\s\S]*?border-radius:\s*28px/);
 });
 
