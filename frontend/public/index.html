@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.372c" />
-    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.372c" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.372d" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.372d" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.372c" />
+    <meta name="nl-version" content="32.372d" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -46,10 +46,10 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
-    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.372c"></script>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.372d"></script>
     <script>
       (function () {
-        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.372c";
+        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.372d";
         function pin() {
           var el = document.getElementById("nl-liquid-glass-link");
           if (!el) {
@@ -83,10 +83,118 @@
         document.addEventListener("keydown", function (e) {
           if (e.key === "Escape") markActionsOut();
         }, true);
+        function kinStageIndex(step, pct) {
+          var text = String(step || "");
+          if (/upload|send|transfer/i.test(text)) return 0;
+          if (/detect|pose|hand|track|overlay|media/i.test(text)) return 1;
+          if (/analy|kinem|sparc|nvp|metric|filter/i.test(text)) return 2;
+          if (/done|complete|ready|finish/i.test(text)) return 3;
+          var n = pct != null && !isNaN(Number(pct)) ? Number(pct) : 0;
+          if (n >= 92) return 3;
+          if (n >= 55) return 2;
+          if (n >= 22) return 1;
+          return 0;
+        }
+        function syncAnalyzeSteps(host, step, pct) {
+          var active = kinStageIndex(step, pct);
+          var chips = host.querySelectorAll(".kin-analyze-stage__step");
+          for (var i = 0; i < chips.length; i += 1) {
+            chips[i].classList.toggle("is-active", i === active);
+            chips[i].classList.toggle("is-done", i < active);
+          }
+          var n = pct != null && !isNaN(Number(pct)) ? Math.max(0, Math.min(100, Math.round(Number(pct)))) : null;
+          var num = host.querySelector(".kin-run__pct-num");
+          if (num) num.textContent = n == null ? "–" : String(n);
+          var ring = host.querySelector(".kin-run__pct-arc");
+          if (ring) {
+            var c = 2 * Math.PI * 15;
+            var dash = n == null ? 0 : (n / 100) * c;
+            ring.setAttribute("stroke-dasharray", Math.max(0.4, dash) + " " + c);
+          }
+          var pctEl = host.querySelector(".kin-run__pct");
+          if (pctEl) pctEl.classList.toggle("is-empty", n == null);
+        }
+        function ensureRun(host) {
+          if (host.querySelector(".kin-run")) return;
+          var html = '<div class="kin-run__stage">'
+            + '<span class="kin-run__figure kin-run__figure--a" style="background-image:url(\'./static/kin-run/pose-a.png?v=32.372\')"></span>'
+            + '<span class="kin-run__figure kin-run__figure--b" style="background-image:url(\'./static/kin-run/pose-b.png?v=32.372\')"></span>'
+            + '<span class="kin-run__figure kin-run__figure--c" style="background-image:url(\'./static/kin-run/pose-c.png?v=32.372\')"></span>'
+            + '<span class="kin-run__ground"></span>'
+            + '<span class="kin-run__pct is-empty"><svg class="kin-run__pct-svg" viewBox="0 0 36 36" aria-hidden="true">'
+            + '<circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.2"/>'
+            + '<circle class="kin-run__pct-arc" cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.88)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0.4 94.2" transform="rotate(-90 18 18)"/>'
+            + '</svg><span class="kin-run__pct-num">–</span></span></div><div class="kin-run__pips">';
+          for (var d = 0; d < 11; d += 1) html += '<span class="kin-run__pip"></span>';
+          html += '</div>';
+          var wrap = document.createElement("div");
+          wrap.className = "kin-run";
+          wrap.setAttribute("aria-hidden", "true");
+          wrap.innerHTML = html;
+          host.appendChild(wrap);
+        }
+        function stepperIcon(name) {
+          var icons = {
+            upload: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
+            detect: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/></svg>',
+            analyze: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>',
+            done: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+          };
+          return icons[name] || "";
+        }
+        function enhanceAnalyzeCapsule() {
+          var strips = document.querySelectorAll(".kin-film-strip");
+          for (var i = 0; i < strips.length; i += 1) {
+            var strip = strips[i];
+            if (!strip.isConnected) continue;
+            strip.classList.add("nl-stadium-film");
+            ensureRun(strip);
+            if (!strip.querySelector(".kin-analyze-stage__stepper")) {
+              var stepper = document.createElement("div");
+              stepper.className = "kin-analyze-stage__stepper";
+              stepper.setAttribute("aria-label", "Analysis stages");
+              var rail = document.createElement("span");
+              rail.className = "kin-analyze-stage__rail";
+              rail.setAttribute("aria-hidden", "true");
+              stepper.appendChild(rail);
+              var labels = [
+                { id: "upload", label: "Upload" },
+                { id: "detect", label: "Detect" },
+                { id: "analyze", label: "Analyze" },
+                { id: "done", label: "Done" }
+              ];
+              for (var j = 0; j < labels.length; j += 1) {
+                var chip = document.createElement("span");
+                chip.className = "kin-analyze-stage__step";
+                var icon = document.createElement("span");
+                icon.className = "kin-analyze-stage__icon";
+                icon.innerHTML = stepperIcon(labels[j].id);
+                var lab = document.createElement("span");
+                lab.className = "kin-analyze-stage__label";
+                lab.textContent = labels[j].label;
+                chip.appendChild(icon);
+                chip.appendChild(lab);
+                stepper.appendChild(chip);
+              }
+              strip.appendChild(stepper);
+            }
+            var card = strip.closest("label") && strip.closest("label").parentElement;
+            var panel = card ? card.querySelector(".kin-analyze-panel") : null;
+            var stepEl = panel ? panel.querySelector("p") : null;
+            var step = stepEl ? stepEl.textContent : "";
+            var pctMatch = panel && (panel.textContent || "").match(/(\d+)\s*%/);
+            var pct = pctMatch ? Number(pctMatch[1]) : null;
+            if (panel) panel.classList.add("nl-analyze-absorbed");
+            if (step || pct != null) syncAnalyzeSteps(strip, step, pct);
+          }
+        }
         pin();
         if (window.MutationObserver) {
           new MutationObserver(pin).observe(document.documentElement, { childList: true, subtree: true });
         }
+        setInterval(function () {
+          if (document.querySelector(".kin-film-strip")) enhanceAnalyzeCapsule();
+        }, 320);
         function clinicLock() {
           try {
             sessionStorage.setItem("neuro_kin_analyze_active", "1");
