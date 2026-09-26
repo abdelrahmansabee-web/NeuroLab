@@ -117,11 +117,11 @@ const showVal = (x) => (isMissing(x) ? NA : String(x));
 
 const BG = "/bg.jpg";
 
-/* Approximate iOS 26 Liquid Glass — chrome only; analysis numbers stay untouched */
-const GLASS_CLS = "bg-white/70 backdrop-blur-2xl backdrop-saturate-150 border border-white/80";
-const GLASS_PANEL_CLS = "bg-white/75 backdrop-blur-2xl backdrop-saturate-150 border border-white/80";
-const SIDEBAR_CLS = "bg-white/70 backdrop-blur-2xl backdrop-saturate-150 border border-white/80";
-const INPUT_CLS = "bg-white/65 border border-black/5";
+/* Capsule shapes stay; glass degree matches original GitHub tokens */
+const GLASS_CLS = "bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
+const GLASS_PANEL_CLS = "bg-white/[0.028] backdrop-blur-lg backdrop-saturate-[1.85] border border-white/[0.05]";
+const SIDEBAR_CLS = "bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
+const INPUT_CLS = "bg-[rgba(220,235,255,0.04)] border border-white/[0.03]";
 
 const GSELECT_MENU_BOX = {
   borderRadius: "24px",
@@ -130,9 +130,9 @@ const GSELECT_MENU_BOX = {
 /** Same class stack as DesktopUnifiedTopBar / app top chrome */
 const GLASS_TOPBAR_SHELL = `relative overflow-hidden app-topbar-glass glass-float ${GLASS_CLS}`;
 
-const BG_FILTER = "blur(36px) brightness(1.12) saturate(0.9) contrast(0.92)";
+const BG_FILTER = "blur(24px) brightness(0.55) saturate(0.80)";
 const BG_SCALE = "scale(1.08)";
-const BG_OVERLAY = "rgba(247,249,252,0.22)";
+const BG_OVERLAY = "rgba(8, 8, 8, 0.18)";
 
 function isIOSDevice() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -197,8 +197,8 @@ const MOBILE_TOPBAR_PT = "4.75rem";
 const PTR_THRESHOLD = 72;
 const PTR_MAX_PULL = 118;
 
-const FLOAT_L = "0 22px 48px -22px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.92)";
-const FLOAT_M = "0 14px 36px -18px rgba(15,23,42,0.14), inset 0 1px 0 rgba(255,255,255,0.95)";
+const FLOAT_L = "0 36px 90px -40px rgba(0,0,0,0.20)";
+const FLOAT_M = "0 24px 60px -30px rgba(0,0,0,0.18)";
 
 const TOPBAR_ROW_H = 52;
 const TOPBAR_FILLET_R = 18;
@@ -245,11 +245,11 @@ function buildTopBarClipPath(w, rowH, menuLeft, menuExtraH, maxFillet = TOPBAR_F
 }
 
 const GLASS_FIELD = {
-  backgroundColor: "rgba(255,255,255,0.55)",
-  border: "1px solid rgba(255,255,255,0.85)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.95)",
-  backdropFilter: "blur(28px) saturate(1.45) brightness(1.06)",
-  WebkitBackdropFilter: "blur(28px) saturate(1.45) brightness(1.06)",
+  backgroundColor: "rgba(220,235,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.03)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.02)",
+  backdropFilter: "blur(12px) saturate(2.25)",
+  WebkitBackdropFilter: "blur(12px) saturate(2.25)",
 };
 
 const SLIDER_GRAD = {
@@ -8925,11 +8925,6 @@ export default function App() {
   }, [touchUi]);
 
   useEffect(() => {
-    document.documentElement.classList.add("nl-liquid-light");
-    return () => document.documentElement.classList.remove("nl-liquid-light");
-  }, []);
-
-  useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const syncLayout = () => {
       setIsDesktop(mq.matches);
@@ -10245,9 +10240,9 @@ export default function App() {
                       onClick={() => { goToSection(item.id); if (!isDesktop) setSidebar(false); }}
                       disabled={sectionNavLocked}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-full text-left transition-colors duration-200 relative group ${
-                        on ? "bg-white/80" : "hover:bg-white/35"
+                        on ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
                       }${sectionNavLocked ? " pointer-events-none" : ""}`}
-                      style={on ? { backgroundColor: "rgba(255,255,255,0.72)", border: "1px solid rgba(255,255,255,0.95)", boxShadow: "inset 0 1px 0 rgba(255,255,255,1), 0 10px 22px -16px rgba(15,23,42,0.16)" } : { border: "1px solid rgba(255,255,255,0.35)" }}
+                      style={on ? { backgroundColor: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.06)", boxShadow: "none" } : { border: "1px solid transparent" }}
                     >
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 relative z-10 transition-all ${
                         on ? "bg-white/10" : "bg-white/[0.04] group-hover:bg-white/[0.07]"
@@ -10320,25 +10315,7 @@ export default function App() {
           text-shadow: 0 1px 2px rgba(0,0,0,0.12);
         }
 
-        /* iOS 26 Liquid Glass lens — not the old muted frost */
-        html.nl-liquid-light h1,
-        html.nl-liquid-light h2,
-        html.nl-liquid-light h3,
-        html.nl-liquid-light p,
-        html.nl-liquid-light span,
-        html.nl-liquid-light label,
-        html.nl-liquid-light button {
-          text-shadow: none;
-        }
-
-        [class*="border-white"] {
-          border-color: rgba(255,255,255,0.78) !important;
-        }
-        .border-b[class*="border-white"],
-        .border-t[class*="border-white"] {
-          border-color: rgba(255,255,255,0.62) !important;
-        }
-
+        /* Capsule geometry on original GitHub glass degree */
         .sidebar-shell {
           border-radius: 36px !important;
         }
@@ -10359,25 +10336,30 @@ export default function App() {
           border-radius: 24px !important;
         }
 
+        [class*="border-white"] {
+          border-color: rgba(255,255,255,0.03) !important;
+        }
+        .border-b[class*="border-white"],
+        .border-t[class*="border-white"] {
+          border-color: rgba(255,255,255,0.02) !important;
+          box-shadow: none !important;
+        }
+
         .sidebar-shell,
         .glass-float {
           position: relative;
-          isolation: isolate;
-          border-color: rgba(255,255,255,0.86) !important;
-          backdrop-filter: blur(42px) saturate(1.55) brightness(1.08) !important;
-          -webkit-backdrop-filter: blur(42px) saturate(1.55) brightness(1.08) !important;
-          background-color: rgba(255,255,255,0.34) !important;
-          box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.98),
-            inset 0 -14px 32px rgba(170, 196, 220, 0.14),
-            inset 0 0 0 0.5px rgba(255,255,255,0.55),
-            0 1px 1px rgba(255,255,255,0.65),
-            0 18px 42px -22px rgba(15, 23, 42, 0.26) !important;
+          border-color: rgba(255,255,255,0.03) !important;
+          backdrop-filter: blur(12px) saturate(2.25) !important;
+          -webkit-backdrop-filter: blur(12px) saturate(2.25) !important;
+          background-color: rgba(255,255,255,0.008) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
           background-image:
-            radial-gradient(120% 80% at 10% -18%, rgba(255,255,255,1) 0%, rgba(255,255,255,0.22) 38%, transparent 68%),
-            radial-gradient(90% 55% at 92% 118%, rgba(168, 198, 228, 0.18) 0%, transparent 58%),
-            linear-gradient(180deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.16) 46%, rgba(255,255,255,0.28) 100%) !important;
-          transition: background-color 0.36s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.36s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+            radial-gradient(ellipse 150% 60% at 50% 0%, rgba(255,255,255,0.015) 0%, transparent 65%),
+            radial-gradient(ellipse 150% 70% at 50% 100%, rgba(200,230,255,0.015) 0%, transparent 60%),
+            radial-gradient(circle at 0% 25%, rgba(255,255,255,0.008) 0%, transparent 40%),
+            radial-gradient(circle at 100% 75%, rgba(255,255,255,0.008) 0%, transparent 40%),
+            linear-gradient(175deg, rgba(255,255,255,0.005) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.00) 65%, rgba(255,255,255,0.004) 100%) !important;
+          background-blend-mode: overlay, overlay, overlay, overlay, normal;
         }
 
         .sidebar-shell::before,
@@ -10387,13 +10369,26 @@ export default function App() {
           position: absolute;
           inset: 0;
           border-radius: inherit;
+          padding: 2px;
+          background: conic-gradient(
+            from 180deg at 50% 50%,
+            rgba(255,255,255,0.25) 0deg,
+            rgba(160,225,255,0.12) 45deg,
+            rgba(210,190,255,0.08) 90deg,
+            rgba(255,255,255,0.03) 135deg,
+            rgba(160,225,255,0.12) 180deg,
+            rgba(255,255,255,0.03) 225deg,
+            rgba(210,190,255,0.08) 270deg,
+            rgba(160,225,255,0.12) 315deg,
+            rgba(255,255,255,0.25) 360deg
+          );
+          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          mask-composite: exclude;
           pointer-events: none;
           z-index: 0;
-          background:
-            linear-gradient(118deg, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.05) 34%, transparent 48%),
-            radial-gradient(ellipse 70% 36% at 18% 0%, rgba(255,255,255,0.9), transparent 62%);
-          opacity: 0.9;
-          mix-blend-mode: screen;
+          opacity: 0.05;
         }
 
         .sidebar-shell::after,
@@ -10405,9 +10400,8 @@ export default function App() {
           border-radius: inherit;
           pointer-events: none;
           z-index: 0;
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.38);
-          background: linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 42%);
-          opacity: 0.85;
+          background:
+            linear-gradient(180deg, rgba(255,255,255,0.008) 0%, rgba(255,255,255,0.00) 40%, rgba(255,255,255,0.00) 70%, rgba(255,255,255,0.005) 100%);
           mix-blend-mode: overlay;
         }
 
@@ -10424,27 +10418,25 @@ export default function App() {
           display: none !important;
         }
 
-        /* Inner section panels — same lens, slightly milkier */
         .content-shell .content-panel-glass,
         .content-shell .glass-float:not(.section-header):not(.app-topbar-glass) {
-          backdrop-filter: blur(42px) saturate(1.5) brightness(1.08) !important;
-          -webkit-backdrop-filter: blur(42px) saturate(1.5) brightness(1.08) !important;
-          background-color: rgba(255,255,255,0.38) !important;
-          border-color: rgba(255,255,255,0.88) !important;
-          box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.98),
-            inset 0 -12px 28px rgba(170, 196, 220, 0.12),
-            0 16px 36px -20px rgba(15, 23, 42, 0.18) !important;
+          backdrop-filter: blur(16px) saturate(1.85) !important;
+          -webkit-backdrop-filter: blur(16px) saturate(1.85) !important;
+          background-color: rgba(255,255,255,0.028) !important;
+          border-color: rgba(255,255,255,0.05) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.018), 0 10px 28px -6px rgba(0,0,0,0.12), 0 22px 52px -14px rgba(0,0,0,0.10), 0 36px 72px -24px rgba(0,0,0,0.07) !important;
         }
 
         .content-shell .content-panel-glass::before,
         .content-shell .glass-float:not(.section-header)::before {
-          opacity: 0.88;
+          opacity: 0.025;
         }
 
         .content-shell .content-panel-glass::after,
         .content-shell .glass-float:not(.section-header)::after {
-          opacity: 0.8;
+          opacity: 0.35;
+          background:
+            linear-gradient(180deg, rgba(255,255,255,0.006) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.00) 100%);
         }
 
         .app-main-inner {
@@ -10452,35 +10444,31 @@ export default function App() {
         }
 
         .glass-float .glass-float {
-          box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.95),
-            0 10px 24px -16px rgba(15, 23, 42, 0.14) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
         }
 
         .section-header {
-          backdrop-filter: blur(46px) saturate(1.55) brightness(1.08) !important;
-          -webkit-backdrop-filter: blur(46px) saturate(1.55) brightness(1.08) !important;
-          background-color: rgba(255,255,255,0.4) !important;
+          backdrop-filter: blur(24px) saturate(2.25) !important;
+          -webkit-backdrop-filter: blur(24px) saturate(2.25) !important;
         }
 
         .glass-field,
         input, select, textarea {
-          color: #1c2430 !important;
-          background-color: rgba(255,255,255,0.62) !important;
-          border-color: rgba(15,23,42,0.06) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.95) !important;
-          transition: background-color 0.28s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+          color: rgba(255,255,255,0.92) !important;
+          background-color: rgba(255,255,255,0.06) !important;
+          border-color: rgba(255,255,255,0.04) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02) !important;
         }
         .glass-field::placeholder,
         input::placeholder,
         textarea::placeholder {
-          color: rgba(28,36,48,0.38) !important;
+          color: rgba(255,255,255,0.30) !important;
         }
         .glass-float input,
         .glass-float select,
         .glass-float textarea,
         .glass-float .glass-field {
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.96) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
         }
 
         .shadow-lg, .shadow-xl, .shadow-2xl {
@@ -10489,23 +10477,23 @@ export default function App() {
 
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(15,23,42,0.16); border-radius: 99px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 99px; }
         input[type=number]::-webkit-inner-spin-button { opacity: 0; }
         select option {
-          background-color: #f7f9fc;
-          color: #1c2430;
+          background-color: rgba(255, 255, 255, 0.08);
+          color: rgba(255, 255, 255, 0.92);
         }
         input, select, textarea, button { -webkit-tap-highlight-color: transparent; }
         input[type=date] {
           -webkit-appearance: none;
           appearance: none;
-          color-scheme: light;
+          color-scheme: dark;
           min-height: 44px;
         }
         input[type=date]::-webkit-calendar-picker-indicator {
-          filter: none;
+          filter: invert(0.7);
           cursor: pointer;
-          opacity: 0.55;
+          opacity: 0.6;
         }
         input[type=date]::-webkit-date-and-time-value { text-align: left; }
         .app-topbar-glass button[aria-label="Refresh"],
@@ -10608,25 +10596,26 @@ export default function App() {
           transition: border-color 0.36s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.36s cubic-bezier(0.22, 1, 0.36, 1);
         }
         .gselect-trigger-shell.glass-float[aria-expanded="true"] {
-          border-color: rgba(255,255,255,0.95) !important;
+          border-color: rgba(255,255,255,0.05) !important;
         }
 
         .gselect-menu-portal {
           border-radius: 24px !important;
         }
         .gselect-menu-portal.glass-float {
-          border-color: rgba(255,255,255,0.88) !important;
-          backdrop-filter: blur(42px) saturate(1.55) brightness(1.08) !important;
-          -webkit-backdrop-filter: blur(42px) saturate(1.55) brightness(1.08) !important;
-          background-color: rgba(255,255,255,0.62) !important;
+          border-color: rgba(255,255,255,0.03) !important;
+          backdrop-filter: blur(12px) saturate(2.25) !important;
+          -webkit-backdrop-filter: blur(12px) saturate(2.25) !important;
+          background-color: rgba(255,255,255,0.008) !important;
           background-image:
-            radial-gradient(120% 80% at 10% -18%, rgba(255,255,255,1) 0%, rgba(255,255,255,0.22) 38%, transparent 68%),
-            linear-gradient(180deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.2) 100%) !important;
+            radial-gradient(ellipse 150% 60% at 50% 0%, rgba(255,255,255,0.015) 0%, transparent 65%),
+            radial-gradient(ellipse 150% 70% at 50% 100%, rgba(200,230,255,0.015) 0%, transparent 60%),
+            linear-gradient(175deg, rgba(255,255,255,0.005) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.004) 100%) !important;
         }
 
         .gselect-menu-portal .gselect-option {
-          transition: background-color 0.18s cubic-bezier(0.22, 1, 0.36, 1), color 0.18s cubic-bezier(0.22, 1, 0.36, 1);
-          color: #1c2430 !important;
+          transition: background-color 0.12s, color 0.12s;
+          color: rgba(255,255,255,0.85) !important;
           background-color: transparent !important;
           box-shadow: none !important;
           border: none !important;
@@ -10634,7 +10623,7 @@ export default function App() {
           -webkit-backdrop-filter: none !important;
         }
         .gselect-menu-portal .gselect-option:hover {
-          background-color: rgba(15,23,42,0.05) !important;
+          background-color: rgba(255,255,255,0.06) !important;
         }
 
         /* GSelect portal ? identical liquid glass tokens as .app-topbar-glass (transform anim on inner body only ? keeps backdrop-filter) */
@@ -10646,33 +10635,11 @@ export default function App() {
           }
         }
 
-        html.nl-liquid-light .sidebar-shell,
-        html.nl-liquid-light .glass-float,
-        html.nl-liquid-light .content-panel-glass,
-        html.nl-liquid-light .section-header,
-        html.nl-liquid-light .gselect-menu-portal {
-          color: #1c2430;
-        }
-        html.nl-liquid-light .sidebar-shell [class*="text-white"],
-        html.nl-liquid-light .glass-float [class*="text-white"],
-        html.nl-liquid-light .content-panel-glass [class*="text-white"],
-        html.nl-liquid-light .section-header [class*="text-white"],
-        html.nl-liquid-light .gselect-menu-portal [class*="text-white"] {
-          color: rgba(28, 36, 48, 0.9) !important;
-        }
-        html.nl-liquid-light .sidebar-shell [class*="text-white/3"],
-        html.nl-liquid-light .sidebar-shell [class*="text-white/4"],
-        html.nl-liquid-light .sidebar-shell [class*="text-white/5"],
-        html.nl-liquid-light .glass-float [class*="text-white/3"],
-        html.nl-liquid-light .glass-float [class*="text-white/4"],
-        html.nl-liquid-light .glass-float [class*="text-white/5"] {
-          color: rgba(28, 36, 48, 0.46) !important;
-        }
         html.nl-touch .sidebar-shell,
         html.nl-touch .glass-float {
-          backdrop-filter: blur(24px) saturate(1.4) brightness(1.06) !important;
-          -webkit-backdrop-filter: blur(24px) saturate(1.4) brightness(1.06) !important;
-          background-color: rgba(255,255,255,0.42) !important;
+          backdrop-filter: blur(8px) saturate(1.45) !important;
+          -webkit-backdrop-filter: blur(8px) saturate(1.45) !important;
+          background-color: rgba(255,255,255,0.008) !important;
         }
         html.nl-touch .content-shell {
           backdrop-filter: none !important;
@@ -10681,9 +10648,9 @@ export default function App() {
         }
         html.nl-touch .content-shell .glass-float:not(.section-header):not(.app-topbar-glass),
         html.nl-touch .content-shell .content-panel-glass {
-          backdrop-filter: blur(22px) saturate(1.35) brightness(1.06) !important;
-          -webkit-backdrop-filter: blur(22px) saturate(1.35) brightness(1.06) !important;
-          background-color: rgba(255,255,255,0.44) !important;
+          backdrop-filter: blur(6px) saturate(1.25) !important;
+          -webkit-backdrop-filter: blur(6px) saturate(1.25) !important;
+          background-color: rgba(255,255,255,0.028) !important;
         }
         html.nl-touch .sidebar-shell::before,
         html.nl-touch .sidebar-shell::after,

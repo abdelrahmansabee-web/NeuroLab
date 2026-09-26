@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-const GLASS = "glass-float bg-white/70 backdrop-blur-2xl backdrop-saturate-150 border border-white/80";
-const INPUT = "w-full bg-white/65 border border-black/5 rounded-2xl px-3 py-2.5 text-sm text-[#1c2430] placeholder-[#1c2430]/40 focus:outline-none focus:border-black/10 focus:ring-1 focus:ring-black/10";
+const GLASS = "glass-float bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
+const INPUT = "w-full bg-[rgba(220,235,255,0.04)] border border-white/[0.03] rounded-full px-3 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/30";
 const BUTTON = "w-full rounded-lg px-4 py-3 text-sm font-medium text-white bg-white/15 hover:bg-white/25 active:bg-white/20 transition border border-white/30";
 const LINK = "text-xs text-white/50 hover:text-white/80 transition";
 
@@ -153,11 +153,11 @@ export default function AuthGate({ children }) {
   const title = mfaRequired ? "Two-factor authentication" : mode === "login" ? "Sign in" : mode === "register" ? "Create account" : "Reset password";
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#e8eef4] relative overflow-hidden px-4">
-      <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[#f7f9fc] to-[#e4ebf2]" />
+    <div className="min-h-screen flex items-center justify-center bg-[#121820] relative overflow-hidden px-4">
+      <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[#1a2533] to-[#121820]" />
       <form onSubmit={handleSubmit} className={`w-full max-w-sm rounded-[28px] p-6 ${GLASS}`}>
-        <h1 className="text-xl font-semibold mb-1 text-center text-[#1c2430]">NeuroLab</h1>
-        <p className="text-sm text-[#1c2430]/70 mb-5 text-center">{title} to continue.</p>
+        <h1 className="text-xl font-semibold mb-1 text-center text-white">NeuroLab</h1>
+        <p className="text-sm text-white/70 mb-5 text-center">{title} to continue.</p>
 
         {error && (
           <p className="text-red-300 text-sm mb-3 text-center">{error}</p>

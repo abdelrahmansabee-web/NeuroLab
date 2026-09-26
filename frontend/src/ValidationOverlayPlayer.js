@@ -247,9 +247,9 @@ const PANEL_CARD_STROKE = "rgba(255,255,255,0.04)";
 const PANEL_CARD_INSET = "rgba(255,255,255,0.018)";
 
 /** App.js .glass-float / top bar tokens (canvas approximation; blur from CSS on gutter). */
-const APP_GLASS_FILL = "rgba(255,255,255,0.58)";
-const APP_GLASS_STROKE = "rgba(255,255,255,0.86)";
-const APP_GLASS_INSET = "rgba(255,255,255,0.95)";
+const APP_GLASS_FILL = "rgba(255,255,255,0.008)";
+const APP_GLASS_STROKE = "rgba(255,255,255,0.03)";
+const APP_GLASS_INSET = "rgba(255,255,255,0.02)";
 
 function glassRoundPath(ctx, x, y, w, h, radius) {
   const rr = Math.min(radius, w / 2, h / 2);
@@ -315,24 +315,24 @@ function drawAppGlassRect(ctx, x, y, w, h, radius, opts = {}) {
   ctx.shadowBlur = 0;
 
   const topGlow = ctx.createRadialGradient(x + w / 2, y, 0, x + w / 2, y, w * 0.75);
-  topGlow.addColorStop(0, "rgba(255,255,255,0.22)");
+  topGlow.addColorStop(0, "rgba(255,255,255,0.015)");
   topGlow.addColorStop(1, "rgba(255,255,255,0)");
   glassRoundPath(ctx, x, y, w, h, radius);
   ctx.fillStyle = topGlow;
   ctx.fill();
 
   const bottomGlow = ctx.createRadialGradient(x + w / 2, y + h, 0, x + w / 2, y + h, w * 0.7);
-  bottomGlow.addColorStop(0, "rgba(180,215,255,0.10)");
+  bottomGlow.addColorStop(0, "rgba(200,230,255,0.015)");
   bottomGlow.addColorStop(1, "rgba(200,230,255,0)");
   glassRoundPath(ctx, x, y, w, h, radius);
   ctx.fillStyle = bottomGlow;
   ctx.fill();
 
   const sheen = ctx.createLinearGradient(x, y, x, y + h);
-  sheen.addColorStop(0, "rgba(255,255,255,0.14)");
+  sheen.addColorStop(0, "rgba(255,255,255,0.008)");
   sheen.addColorStop(0.4, "rgba(255,255,255,0)");
   sheen.addColorStop(0.7, "rgba(255,255,255,0)");
-  sheen.addColorStop(1, "rgba(255,255,255,0.05)");
+  sheen.addColorStop(1, "rgba(255,255,255,0.005)");
   glassRoundPath(ctx, x, y, w, h, radius);
   ctx.fillStyle = sheen;
   ctx.fill();
@@ -2632,7 +2632,7 @@ export function ValidationOverlayPlayer({
       {isExpanded && <AppShellBackground className="z-0" />}
       <div className="validation-player-chrome relative z-[1] flex flex-col flex-1 min-h-0 w-full">
       {isExpanded && (
-        <div className="validation-player-topbar flex items-center justify-between px-4 pb-2.5 pt-[max(10px,env(safe-area-inset-top,0px))] flex-shrink-0 glass-float app-topbar-glass bg-white/70 backdrop-blur-2xl backdrop-saturate-150 border-b border-white/80">
+        <div className="validation-player-topbar flex items-center justify-between px-4 pb-2.5 pt-[max(10px,env(safe-area-inset-top,0px))] flex-shrink-0 glass-float app-topbar-glass bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border-b border-white/[0.03]">
           <p className="text-sm font-bold text-white/90 truncate pr-3">{phaseLabel || "Validation"} — Validation</p>
           <button
             type="button"

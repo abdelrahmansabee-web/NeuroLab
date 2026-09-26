@@ -27,8 +27,8 @@ const PATIENTS_SYNC_EVENT = "neurolab-patients-synced";
 
 /** Same liquid-glass shell as GSelect dropdown menus in App.js. */
 const MENU_GLASS_CLS =
-  "gselect-menu-portal relative overflow-hidden app-topbar-glass glass-float bg-white/[0.10] backdrop-blur-xl backdrop-saturate-150 border border-white/20";
-const MENU_GLASS_SHADOW = "0 18px 44px -20px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.32)";
+  "gselect-menu-portal relative overflow-hidden app-topbar-glass glass-float bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
+const MENU_GLASS_SHADOW = "0 24px 60px -30px rgba(0,0,0,0.18)";
 
 const TONE_DOT = {
   ready: "bg-emerald-400",

@@ -13,6 +13,19 @@ test("lab glass does not paint an invented black fill over iPad clinic cards", (
 
 test("iPad inner lab cards keep a light glass blur instead of a black plate", () => {
   expect(app).toMatch(
-    /html\.nl-touch \.content-shell \.content-panel-glass[\s\S]*?backdrop-filter:\s*blur\(22px\)/,
+    /html\.nl-touch \.content-shell \.content-panel-glass[\s\S]*?backdrop-filter:\s*blur\(6px\)/,
   );
+});
+
+test("clinic chrome keeps original GitHub glass degree, not milky lens brightening", () => {
+  expect(app).toMatch(
+    /const GLASS_CLS = "bg-white\/\[0\.008\] backdrop-blur-md backdrop-saturate-\[2\.25\] border border-white\/\[0\.03\]"/,
+  );
+  expect(app).toMatch(/background-color: rgba\(255,255,255,0\.008\)/);
+  expect(app).toMatch(/background-color: rgba\(255,255,255,0\.028\)/);
+  expect(app).toMatch(/backdrop-filter: blur\(12px\) saturate\(2\.25\)/);
+  expect(app).not.toMatch(/brightness\(1\.08\)/);
+  expect(app).not.toMatch(/bg-white\/70/);
+  expect(app).toMatch(/\.sidebar-shell \{\s*border-radius: 36px !important;/);
+  expect(app).toMatch(/\.app-topbar-glass,\s*\.section-header \{\s*border-radius: 999px !important;/);
 });
