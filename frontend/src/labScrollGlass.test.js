@@ -71,16 +71,16 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const sync = fs.readFileSync(path.join(__dirname, "..", "public", "pwa_ipad_sync.js"), "utf8");
   const auth = fs.readFileSync(path.join(__dirname, "AuthGate.jsx"), "utf8");
-  expect(auth).toMatch(/\.catch\(\(\) => setState\("locked"\)\)/);
-  expect(html).toMatch(/nl-version" content="32\.372m"/);
+  expect(auth).toMatch(/setTimeout\(\(\) => ac\.abort\(\), 6000\)/);
+  expect(auth).toMatch(/if \(getAuthToken\(\)\) setState\("unlocked"\)/);
+  expect(html).toMatch(/nl-version" content="32\.372n"/);
   expect(html).toMatch(/nl_app_bust/);
   expect(html).not.toMatch(/location\.replace/);
   expect(html).not.toMatch(/_r="\+Date\.now\(\)/);
   expect(html).toMatch(/static\/js\/main\.48f76699\.js\?v=32\.372b/);
   expect(html).toMatch(/static\/css\/main\.2c1ebbfb\.css/);
   expect(html).toMatch(/function pin\(\)/);
-  expect(html).toMatch(/rel="preload"/);
-  expect(html).toMatch(/new Image\(\)/);
+  expect(html).not.toMatch(/rel="preload"/);
   expect(html).toMatch(/function boot\(\)/);
   expect(html).toMatch(/new MutationObserver\(boot\)\.observe\(document\.documentElement/);
   expect(html).toMatch(/function ensureCradle/);
@@ -102,7 +102,7 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(html).not.toMatch(/__nlAuthMeTimeout/);
   expect(html).not.toMatch(/function ensureOrbit/);
   expect(sync).not.toMatch(/_iosbust=/);
-  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.372m"/);
+  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.372n"/);
 });
 
 test("Home Screen boot records the version and never reloads the page", () => {
@@ -115,7 +115,7 @@ test("Home Screen boot records the version and never reloads the page", () => {
   const store = {};
   const replaced = [];
   vm.runInNewContext(match[1], {
-    document: { querySelector: () => ({ content: "32.372m" }) },
+    document: { querySelector: () => ({ content: "32.372n" }) },
     localStorage: {
       getItem: (k) => (Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null),
       setItem: (k, v) => {
@@ -132,8 +132,8 @@ test("Home Screen boot records the version and never reloads the page", () => {
     },
   });
   expect(replaced).toEqual([]);
-  expect(store.nl_app_v).toBe("32.372m");
-  expect(store.nl_app_bust).toBe("32.372m");
+  expect(store.nl_app_v).toBe("32.372n");
+  expect(store.nl_app_bust).toBe("32.372n");
 });
 
 test("validation video chrome uses muted glass bars and panels", () => {
