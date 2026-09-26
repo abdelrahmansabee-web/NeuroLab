@@ -28,13 +28,16 @@ test("clinic chrome uses shared liquid section motion instead of a missing bounc
   expect(app).toMatch(/const BOUNCE_IN_MS = 520/);
 });
 
-test("analysis stage capsule uses muted glass instead of a film-strip reel", () => {
+test("analysis stage capsule is muted glass and keeps the film-strip motion", () => {
   expect(css).toMatch(/\.kin-analyze-track/);
   expect(css).toMatch(/\.kin-analyze-track-fill/);
   expect(css).not.toMatch(/rgba\(8,\s*10,\s*18,\s*0\.82\)/);
   expect(css).toMatch(/\.kin-analyze-stage__capsule[\s\S]*?rgba\(255,\s*255,\s*255,\s*0\.028\)/);
   expect(app).toMatch(/function KinAnalyzeStageCapsule/);
-  expect(app).not.toMatch(/function KinFilmStripLoop/);
+  expect(app).toMatch(/function KinFilmStripLoop/);
+  expect(app).toMatch(/<KinFilmStripLoop accent=\{accent\} \/>/);
+  expect(overlay).toMatch(/animation: kin-film-scroll 5\.6s linear infinite/);
+  expect(overlay).not.toMatch(/\.kin-film-strip__holes \{\s*display:\s*none/);
 });
 
 test("validation video chrome uses muted glass bars and panels", () => {

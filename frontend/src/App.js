@@ -3520,6 +3520,27 @@ function KinFilmFrame({ viewIndex, accent = "amber" }) {
   );
 }
 
+function KinFilmStripLoop({ accent = "amber" }) {
+  const holes = Array.from({ length: 11 });
+  const frames = Array.from({ length: 8 }, (_, i) => i);
+  return (
+    <div className="kin-film-strip" aria-hidden>
+      <div className="kin-film-strip__holes">
+        {holes.map((_, i) => <span key={`t-${i}`} className="kin-film-strip__hole" />)}
+      </div>
+      <div className="kin-film-strip__body">
+        <div className="kin-film-strip__track">
+          {frames.map((i) => <KinFilmFrame key={`a-${i}`} viewIndex={i} accent={accent} />)}
+          {frames.map((i) => <KinFilmFrame key={`b-${i}`} viewIndex={i} accent={accent} />)}
+        </div>
+      </div>
+      <div className="kin-film-strip__holes">
+        {holes.map((_, i) => <span key={`b-${i}`} className="kin-film-strip__hole" />)}
+      </div>
+    </div>
+  );
+}
+
 const KIN_ANALYZE_STAGES = [
   { id: "upload", label: "Upload", re: /upload|send|transfer/i },
   { id: "detect", label: "Detect", re: /detect|pose|hand|track|overlay|media/i },
@@ -3548,6 +3569,7 @@ function KinAnalyzeStageCapsule({ accent = "amber", pct = null, step = "Analyzin
     <div className="kin-analyze-stage" aria-hidden>
       <div className="kin-analyze-stage__capsule">
         <div className="kin-analyze-stage__fill" style={{ width: `${Math.max(8, barPct)}%` }} />
+        <KinFilmStripLoop accent={accent} />
         <div className="kin-analyze-stage__steps">
           {KIN_ANALYZE_STAGES.map((s, i) => (
             <span

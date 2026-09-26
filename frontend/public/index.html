@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.323" />
-    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.323" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.324" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.324" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.323" />
+    <meta name="nl-version" content="32.324" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -76,10 +76,10 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
-    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.323"></script>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.324"></script>
     <script>
       (function () {
-        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.323";
+        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.324";
         function pin() {
           var el = document.getElementById("nl-liquid-glass-link");
           if (!el) {
@@ -99,6 +99,25 @@
           var dlg = actionsDialog();
           if (dlg) dlg.classList.add("nl-actions-sheet--out");
         }
+        function enhanceAnalyzeCapsule() {
+          var strips = document.querySelectorAll(".kin-film-strip");
+          for (var i = 0; i < strips.length; i += 1) {
+            var el = strips[i];
+            if (el.getAttribute("data-nl-stages") === "1") continue;
+            if (el.closest(".kin-analyze-stage")) continue;
+            el.setAttribute("data-nl-stages", "1");
+            var row = document.createElement("div");
+            row.className = "kin-analyze-stage__steps";
+            var labels = ["Upload", "Detect", "Analyze", "Done"];
+            for (var j = 0; j < labels.length; j += 1) {
+              var step = document.createElement("span");
+              step.className = "kin-analyze-stage__step" + (labels[j] === "Analyze" ? " is-active" : "");
+              step.textContent = labels[j];
+              row.appendChild(step);
+            }
+            el.appendChild(row);
+          }
+        }
         document.addEventListener("click", function (e) {
           var dlg = actionsDialog();
           if (!dlg) return;
@@ -114,8 +133,12 @@
           if (e.key === "Escape") markActionsOut();
         }, true);
         pin();
+        enhanceAnalyzeCapsule();
         if (window.MutationObserver) {
-          new MutationObserver(pin).observe(document.documentElement, { childList: true, subtree: true });
+          new MutationObserver(function () {
+            pin();
+            enhanceAnalyzeCapsule();
+          }).observe(document.documentElement, { childList: true, subtree: true });
         }
       })();
     </script>
