@@ -158,6 +158,13 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   width: 100% !important;
   max-width: none !important;
 }
+.glass-float:has(.kin-analyze-stage),
+.kin-analyze-zone,
+.kin-analyze-stage,
+.kin-run,
+.kin-run__stage {
+  overflow: visible !important;
+}
 .kin-analyze-stage__capsule,
 .kin-analyze-stage[data-nl-stadium="1"] .kin-film-strip,
 .kin-film-strip.nl-stadium-film {
@@ -171,7 +178,7 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   box-shadow:
     inset 0 -14px 26px rgba(70, 130, 180, 0.05),
     0 12px 32px -16px rgba(0, 0, 0, 0.22) !important;
-  padding: 22px 24px 14px !important;
+  padding: 36px 32px 16px !important;
 }
 .kin-analyze-stage__capsule .kin-film-strip,
 .kin-analyze-stage[data-nl-stadium="1"] .kin-film-strip {
@@ -204,7 +211,7 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
 }
 @keyframes kin-run-stride {
   0%, 100% { transform: translateX(-50%) translateY(0); }
-  50% { transform: translateX(-50%) translateY(-3px); }
+  50% { transform: translateX(-50%) translateY(2px); }
 }
 .kin-run {
   display: flex;
@@ -215,15 +222,16 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
 }
 .kin-run__stage {
   position: relative;
+  overflow: visible;
   width: 100%;
-  height: 178px;
+  height: 208px;
 }
 .kin-run__figure {
   position: absolute;
   left: 50%;
-  bottom: 18px;
-  width: 210px;
-  height: 158px;
+  bottom: 24px;
+  width: 168px;
+  height: 148px;
   opacity: 0;
   pointer-events: none;
   -webkit-touch-callout: none;

@@ -3752,10 +3752,10 @@ function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyz
 }
 
 const kinPhaseCardCls = (c, status, hasResult) => {
-  const base = "glass-float relative flex flex-col rounded-[28px] border border-white/[0.06] bg-white/[0.028] min-h-[240px] transition-all duration-300 overflow-hidden";
-  if (status === "analyzing") return `${base} ring-1 ring-white/[0.06]`;
-  if (hasResult) return base;
-  return `${base} hover:border-white/[0.10]`;
+  const base = "glass-float relative flex flex-col rounded-[28px] border border-white/[0.06] bg-white/[0.028] min-h-[240px] transition-all duration-300";
+  if (status === "analyzing") return `${base} overflow-visible ring-1 ring-white/[0.06]`;
+  if (hasResult) return `${base} overflow-hidden`;
+  return `${base} overflow-hidden hover:border-white/[0.10]`;
 };
 
 const kinUploadZoneCls = (c, hasFile) => {

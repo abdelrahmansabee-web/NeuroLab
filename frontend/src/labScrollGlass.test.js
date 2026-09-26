@@ -38,9 +38,11 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(css).toMatch(/\.kin-analyze-stage__stepper/);
   expect(css).toMatch(/\.kin-analyze-stage__rail/);
   expect(css).toMatch(/\.kin-run__figure/);
-  expect(css).toMatch(/\.kin-run__figure[\s\S]*?width:\s*210px/);
-  expect(css).toMatch(/\.kin-run__figure[\s\S]*?height:\s*158px/);
+  expect(css).toMatch(/\.kin-run__figure[\s\S]*?width:\s*168px/);
+  expect(css).toMatch(/\.kin-run__figure[\s\S]*?height:\s*148px/);
+  expect(css).toMatch(/\.kin-run__stage[\s\S]*?height:\s*208px/);
   expect(css).not.toMatch(/\.kin-run__figure[\s\S]*?width:\s*86px/);
+  expect(app).toMatch(/status === "analyzing"\) return `\$\{base\} overflow-visible/);
   expect(css).toMatch(/\.kin-run__ground/);
   expect(app).toMatch(/function KinAnalyzeStageCapsule/);
   expect(app).toMatch(/function KinRunMark/);
@@ -55,7 +57,8 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(app).not.toMatch(/border border-dashed px-3 py-5/);
   expect(app).not.toMatch(/if \(hasResult\) return `\$\{base\} ring-1/);
   expect(overlay).toMatch(/\.kin-run__figure/);
-  expect(overlay).toMatch(/\.kin-run__figure[\s\S]*?width:\s*210px/);
+  expect(overlay).toMatch(/\.kin-run__figure[\s\S]*?width:\s*168px/);
+  expect(overlay).toMatch(/\.glass-float:has\(\.kin-analyze-stage\)/);
   expect(overlay).toMatch(/overflow: visible !important/);
   expect(overlay).toMatch(/\.kin-run__ground/);
   expect(overlay).not.toMatch(/logo192-white\.png/);

@@ -672,7 +672,7 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
 
 @keyframes kin-run-stride {
   0%, 100% { transform: translateX(-50%) translateY(0); }
-  50% { transform: translateX(-50%) translateY(-3px); }
+  50% { transform: translateX(-50%) translateY(2px); }
 }
 
 .kin-run {
@@ -685,16 +685,17 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
 
 .kin-run__stage {
   position: relative;
+  overflow: visible;
   width: 100%;
-  height: 178px;
+  height: 208px;
 }
 
 .kin-run__figure {
   position: absolute;
   left: 50%;
-  bottom: 18px;
-  width: 210px;
-  height: 158px;
+  bottom: 24px;
+  width: 168px;
+  height: 148px;
   opacity: 0;
   pointer-events: none;
   -webkit-touch-callout: none;
@@ -782,6 +783,14 @@ label[for^="kin-file-"]:has(.kin-film-strip) {
   z-index: 2;
 }
 
+.glass-float:has(.kin-analyze-stage),
+.kin-analyze-zone,
+.kin-analyze-stage,
+.kin-run,
+.kin-run__stage {
+  overflow: visible;
+}
+
 .kin-analyze-stage__capsule {
   position: relative;
   overflow: visible;
@@ -796,7 +805,7 @@ label[for^="kin-file-"]:has(.kin-film-strip) {
   box-shadow:
     inset 0 -14px 26px rgba(70, 130, 180, 0.05),
     0 12px 32px -16px rgba(0, 0, 0, 0.22);
-  padding: 22px 24px 14px;
+  padding: 36px 32px 16px;
 }
 
 .kin-analyze-stage__row {
