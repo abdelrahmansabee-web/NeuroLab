@@ -24,6 +24,27 @@ test("clinic chrome uses shared liquid section motion instead of a missing bounc
   expect(app).toMatch(/const BOUNCE_IN_MS = 520/);
 });
 
+test("analysis film strip and progress use muted glass instead of dark plastic", () => {
+  expect(css).toMatch(/\.kin-analyze-track/);
+  expect(css).toMatch(/\.kin-analyze-track-fill/);
+  expect(css).not.toMatch(/rgba\(8,\s*10,\s*18,\s*0\.82\)/);
+  expect(css).toMatch(/\.kin-film-strip__body[\s\S]*?rgba\(255,\s*255,\s*255,\s*0\.028\)/);
+});
+
+test("validation video chrome uses muted glass bars and panels", () => {
+  expect(css).toMatch(/\.validation-metrics-gutter[\s\S]*?rgba\(255,\s*255,\s*255,\s*0\.028\)/);
+  expect(css).toMatch(/\.validation-seek-bar[\s\S]*?border-radius:\s*999px/);
+  expect(css).toMatch(/\.validation-seek-fill[\s\S]*?transition:\s*none/);
+  expect(css).toMatch(/\.validation-player-controls[\s\S]*?border-radius:\s*24px/);
+});
+
+test("three-dot menu is a desktop popover from the button, not only a bottom sheet", () => {
+  expect(app).toMatch(/moreMenuBtnRef/);
+  expect(app).toMatch(/desktop-more-menu/);
+  expect(app).toMatch(/transformOrigin: "top right"/);
+  expect(app).not.toMatch(/className=\{`rounded-\[28px\] sidebar-shell \$\{SIDEBAR_CLS\}`\}/);
+});
+
 test("analysis phase cards use muted glass instead of neon sky/emerald/amber plates", () => {
   expect(app).not.toMatch(/border-t-\[3px\] bg-gradient-to-b \$\{a\.top\}/);
   expect(app).not.toMatch(/from-sky-500\/14/);

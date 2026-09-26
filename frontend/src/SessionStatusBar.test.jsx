@@ -28,5 +28,6 @@ describe("SessionStatusBar", () => {
     expect(panel.className).toMatch(/gselect-menu-portal/);
     expect(panel.className).toMatch(/app-topbar-glass/);
     expect(panel.className).toMatch(/glass-float/);
+    expect(panel.className).toMatch(/rounded-\[24px\]/);
   });
 });

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { NL_SPRING_SHEET } from "./motionPresets";
 import {
   AlertCircle,
   Check,
@@ -91,7 +92,7 @@ function PhasePills({ phases }) {
 
 function SessionRow({ row, expanded, onToggle, onOpen }) {
   return (
-    <div className="rounded-xl overflow-hidden">
+    <div className="rounded-2xl overflow-hidden">
       <div className="flex items-stretch">
         <button
           type="button"
@@ -328,7 +329,7 @@ export default function SessionStatusBar({
         ref={chipRef}
         type="button"
         onClick={() => (open ? setOpen(false) : openPanel())}
-        className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 min-h-[36px] rounded-xl border text-xs font-semibold flex-shrink-0 transition-colors ${
+        className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 min-h-[36px] rounded-full border text-xs font-semibold flex-shrink-0 transition-colors duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
           open
             ? "bg-white/[0.10] border-white/15 text-white"
             : "bg-white/[0.04] border-white/[0.06] text-white/75 hover:bg-white/[0.07]"
@@ -343,7 +344,7 @@ export default function SessionStatusBar({
         aria-haspopup="dialog"
       >
         {busy ? (
-          <span className="w-3.5 h-3.5 rounded-full border border-white/30 border-t-sky-300 animate-spin flex-shrink-0" />
+          <span className="w-3.5 h-3.5 rounded-full border border-white/25 border-t-white/65 animate-spin flex-shrink-0" />
         ) : issueCount > 0 ? (
           <AlertCircle className="w-3.5 h-3.5 text-amber-300 flex-shrink-0" />
         ) : (
@@ -359,13 +360,18 @@ export default function SessionStatusBar({
       </button>
 
       {typeof document !== "undefined" &&
-        open &&
         createPortal(
-          <div
+          <AnimatePresence>
+            {open && (
+          <motion.div
             ref={panelRef}
             role="dialog"
             aria-label={inventory.fromDrive ? "Sessions recalled from Drive" : "Loaded sessions"}
-            className={MENU_GLASS_CLS}
+            className={`${MENU_GLASS_CLS} rounded-[24px]`}
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -10, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.97 }}
+            transition={reduceMotion ? { duration: 0.12 } : NL_SPRING_SHEET}
             style={{
               position: "fixed",
               top: panelPos.top,
@@ -373,17 +379,17 @@ export default function SessionStatusBar({
               width: panelPos.width || 360,
               maxHeight: "min(70vh, calc(100dvh - 72px))",
               zIndex: 999999,
-              borderRadius: 12,
+              borderRadius: 24,
               boxShadow: MENU_GLASS_SHADOW,
-              transform: "translateZ(0)",
-              WebkitTransform: "translateZ(0)",
+              transformOrigin: "top right",
               isolation: "isolate",
               display: "flex",
               flexDirection: "column",
+              willChange: "transform, opacity",
             }}
           >
             <div
-              className={`gselect-menu-body relative z-[1] flex min-h-0 flex-1 flex-col overflow-hidden${reduceMotion ? "" : " gselect-menu-body--animate"}`}
+              className="gselect-menu-body relative z-[1] flex min-h-0 flex-1 flex-col overflow-hidden"
             >
                 <div className="flex items-start justify-between gap-2 px-3 pt-3 pb-2">
                   <div>
@@ -399,7 +405,7 @@ export default function SessionStatusBar({
                   <button
                     type="button"
                     onClick={hideList}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/[0.06]"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white/45 hover:text-white hover:bg-white/[0.06]"
                     aria-label="Close session list"
                   >
                     <X className="w-4 h-4" />
@@ -417,7 +423,7 @@ export default function SessionStatusBar({
                       key={f.id}
                       type="button"
                       onClick={() => setFilter(f.id)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                         filter === f.id
                           ? "bg-white/[0.12] text-white"
                           : "text-white/45 hover:text-white/70"
@@ -474,7 +480,9 @@ export default function SessionStatusBar({
                   </div>
                 </div>
             </div>
-          </div>,
+          </motion.div>
+            )}
+          </AnimatePresence>,
           document.body,
         )}
     </>

@@ -3638,11 +3638,11 @@ function InlineValidationVideo({ src, phaseLabel, autoPlay = false, onEnded, onE
           </button>
         </div>
         <div
-          className="mt-1 h-1 bg-white/20 rounded cursor-pointer pointer-events-auto"
+          className="mt-1 h-1.5 bg-white/15 rounded-full cursor-pointer pointer-events-auto"
           onClick={handleSeek}
         >
           <div
-            className="h-full bg-sky-400 rounded"
+            className="h-full bg-white/45 rounded-full"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -3680,10 +3680,10 @@ function KinAnalyzeProgressGlyph({
           strokeWidth="2.75"
           strokeLinecap="round"
           strokeDasharray={`${Math.max(0.5, dash)} ${circumference}`}
-          className={`kin-analyze-glyph-ring transition-[stroke-dasharray] duration-700 ease-out ${
+          className={`kin-analyze-glyph-ring ${
             indeterminate && pctClamped == null ? "is-indeterminate" : ""
           }`}
-          style={{ filter: `drop-shadow(0 0 10px ${glow})` }}
+          style={glow ? { filter: `drop-shadow(0 0 5px ${glow})` } : undefined}
         />
       </svg>
       <span className={`relative z-[1] ${labelClass} font-extrabold tabular-nums text-white tracking-tight`}>
@@ -3700,7 +3700,7 @@ function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyz
   const barPct = pctRounded != null ? Math.max(0, Math.min(100, pctRounded)) : 8;
 
   return (
-    <div className="w-full rounded-2xl kin-analyze-panel px-3 py-2.5 flex items-center gap-2.5 border border-white/[0.06] bg-white/[0.03]">
+    <div className="w-full rounded-[22px] kin-analyze-panel px-3 py-2.5 flex items-center gap-2.5 border border-white/[0.06]">
       <KinAnalyzeProgressGlyph
         pct={pct}
         stroke={film.stroke}
@@ -8898,6 +8898,7 @@ export default function App() {
   const [importPreview, setImportPreview] = useState(null);
   const [user, setUser] = useState(null);
   const [mobileTopMenuOpen, setMobileTopMenuOpen] = useState(false);
+  const [moreMenuPos, setMoreMenuPos] = useState({ top: 56, right: 12, width: 300 });
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
   const [originRestoreBanner, setOriginRestoreBanner] = useState("");
   const bgRef = useRef(null);
@@ -8907,6 +8908,7 @@ export default function App() {
   const appScrollRef = useRef(null);
   const ptrSpinnerAnchorRef = useRef(null);
   const mobileMenuRef = useRef(null);
+  const moreMenuBtnRef = useRef(null);
   const iosPullScroll =
     typeof window !== "undefined" && (isIOSDevice() || isStandalonePWA());
   const touchUi = typeof window !== "undefined" && isTouchUi();
@@ -9007,8 +9009,22 @@ export default function App() {
     };
   }, [isDesktop, sidebar]);
 
+  const placeMoreMenu = useCallback(() => {
+    const el = moreMenuBtnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = Math.min(320, window.innerWidth - 16);
+    let right = window.innerWidth - r.right;
+    if (right + width > window.innerWidth - 8) right = 8;
+    setMoreMenuPos({
+      top: Math.round(r.bottom + 8),
+      right: Math.round(Math.max(8, right)),
+      width,
+    });
+  }, []);
+
   useEffect(() => {
-    if (!mobileTopMenuOpen || !useMobileMenuPortal) return;
+    if (!mobileTopMenuOpen || !useMobileMenuPortal || isDesktop) return undefined;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const scroller = appScrollRef.current;
@@ -9024,7 +9040,28 @@ export default function App() {
         scroller.style.touchAction = "";
       }
     };
-  }, [mobileTopMenuOpen, useMobileMenuPortal]);
+  }, [mobileTopMenuOpen, useMobileMenuPortal, isDesktop]);
+
+  useEffect(() => {
+    if (!mobileTopMenuOpen || !isDesktop) return undefined;
+    placeMoreMenu();
+    const onWin = () => placeMoreMenu();
+    window.addEventListener("resize", onWin);
+    window.addEventListener("scroll", onWin, true);
+    return () => {
+      window.removeEventListener("resize", onWin);
+      window.removeEventListener("scroll", onWin, true);
+    };
+  }, [mobileTopMenuOpen, isDesktop, placeMoreMenu]);
+
+  useEffect(() => {
+    if (!mobileTopMenuOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") setMobileTopMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mobileTopMenuOpen]);
 
   useEffect(() => {
     if (active === "bbt") goToSection("demographics", { force: true });
@@ -9555,21 +9592,11 @@ export default function App() {
     if (!inMenu) return null;
 
     return (
-      <>
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={NL_TWEEN_MENU}
-          className={`rounded-[28px] sidebar-shell ${SIDEBAR_CLS}`}
-          style={{ boxShadow: FLOAT_M }}
-        >
-          <nav className="py-3 px-1 flex flex-col">
-            {menuItems.map((item) => (
-              <Action key={item.label} onClick={item.onClick} icon={item.icon} label={item.label} colorClass={item.colorClass} />
-            ))}
-          </nav>
-        </motion.div>
-      </>
+      <nav className="py-2 px-1 flex flex-col">
+        {menuItems.map((item) => (
+          <Action key={item.label} onClick={item.onClick} icon={item.icon} label={item.label} colorClass={item.colorClass} />
+        ))}
+      </nav>
     );
   }
 
@@ -9742,6 +9769,7 @@ export default function App() {
               {topBarHardRefreshBtn}
 
               <motion.button
+                ref={moreMenuBtnRef}
                 whileHover={nlMotionHover(1.05)}
                 whileTap={nlMotionTap(0.95)}
                 onClick={() => setMobileTopMenuOpen((p) => !p)}
@@ -9789,13 +9817,18 @@ export default function App() {
           />
           {topBarHardRefreshBtn}
           <motion.button
+            ref={moreMenuBtnRef}
             whileHover={nlMotionHover(1.08)}
             whileTap={nlMotionTap(0.92)}
             onClick={() => setMobileTopMenuOpen((p) => !p)}
-            className="w-9 h-9 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
+            className={`w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
             style={GLASS_FIELD}
             title="Menu"
             aria-label="Menu"
+            aria-expanded={mobileTopMenuOpen}
+            aria-haspopup="dialog"
+            animate={{ rotate: mobileTopMenuOpen ? 90 : 0 }}
+            transition={NL_TWEEN_MENU}
           >
             <MoreHorizontal className="w-4 h-4" />
           </motion.button>
@@ -10678,48 +10711,85 @@ export default function App() {
       {useMobileMenuPortal && typeof document !== "undefined" && ReactDOM.createPortal(
         <AnimatePresence>
           {mobileTopMenuOpen && (
-            <div key="mobile-top-menu" className="fixed inset-0 z-[200]">
-              <motion.button
-                type="button"
-                aria-label="Close menu"
-                className="absolute inset-0 bg-black/50 backdrop-blur-[3px]"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={NL_TWEEN_MENU}
-                onClick={closeMobileTopMenu}
-              />
-              <motion.div
-                ref={mobileMenuRef}
-                role="dialog"
-                aria-modal="true"
-                aria-label="Actions menu"
-                className="absolute left-0 right-0 bottom-0 px-3"
-                initial={{ y: "50vh" }}
-                animate={{ y: 0 }}
-                exit={{ y: "50vh" }}
-                transition={NL_SPRING_SHEET}
-                style={{
-                  maxHeight: "min(78vh, calc(100dvh - env(safe-area-inset-top, 0px) - 72px))",
-                  paddingBottom: "max(12px, env(safe-area-inset-bottom, 0px))",
-                  willChange: "transform",
-                }}
-              >
-                <div
-                  className={`sidebar-shell flex flex-col max-h-full rounded-[28px] overflow-hidden ${SIDEBAR_CLS}`}
-                  style={{ boxShadow: FLOAT_M }}
+            isDesktop ? (
+              <div key="desktop-more-menu" className="fixed inset-0 z-[200]">
+                <button
+                  type="button"
+                  aria-label="Close menu"
+                  className="absolute inset-0 bg-transparent"
+                  onClick={closeMobileTopMenu}
+                />
+                <motion.div
+                  ref={mobileMenuRef}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Actions menu"
+                  className={`absolute gselect-menu-portal app-topbar-glass glass-float overflow-hidden ${SIDEBAR_CLS}`}
+                  initial={{ opacity: 0, y: -10, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                  transition={NL_SPRING_SNAPPY}
+                  style={{
+                    top: moreMenuPos.top,
+                    right: moreMenuPos.right,
+                    width: moreMenuPos.width,
+                    maxHeight: "min(78vh, calc(100dvh - 72px))",
+                    borderRadius: 24,
+                    boxShadow: FLOAT_M,
+                    transformOrigin: "top right",
+                    willChange: "transform, opacity",
+                    zIndex: 1,
+                  }}
                 >
-                  <nav
-                    className="flex-1 min-h-0 px-3 pt-3 pb-3 flex flex-col gap-3 overflow-y-auto overscroll-contain"
-                    style={{
-                      paddingBottom: "max(12px, calc(12px + env(safe-area-inset-bottom, 0px) * 0.35))",
-                    }}
-                  >
+                  <div className="flex flex-col max-h-full overflow-y-auto overscroll-contain px-2 py-1">
                     <TopBarActions inMenu={true} />
-                  </nav>
-                </div>
-              </motion.div>
-            </div>
+                  </div>
+                </motion.div>
+              </div>
+            ) : (
+              <div key="mobile-top-menu" className="fixed inset-0 z-[200]">
+                <motion.button
+                  type="button"
+                  aria-label="Close menu"
+                  className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={NL_TWEEN_MENU}
+                  onClick={closeMobileTopMenu}
+                />
+                <motion.div
+                  ref={mobileMenuRef}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Actions menu"
+                  className="absolute left-0 right-0 bottom-0 px-3"
+                  initial={{ y: "42vh" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "42vh" }}
+                  transition={NL_SPRING_SHEET}
+                  style={{
+                    maxHeight: "min(78vh, calc(100dvh - env(safe-area-inset-top, 0px) - 72px))",
+                    paddingBottom: "max(12px, env(safe-area-inset-bottom, 0px))",
+                    willChange: "transform",
+                  }}
+                >
+                  <div
+                    className={`gselect-menu-portal app-topbar-glass glass-float flex flex-col max-h-full overflow-hidden ${SIDEBAR_CLS}`}
+                    style={{ borderRadius: 28, boxShadow: FLOAT_M }}
+                  >
+                    <div
+                      className="flex-1 min-h-0 px-2 pt-2 pb-2 overflow-y-auto overscroll-contain"
+                      style={{
+                        paddingBottom: "max(12px, calc(12px + env(safe-area-inset-bottom, 0px) * 0.35))",
+                      }}
+                    >
+                      <TopBarActions inMenu={true} />
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            )
           )}
         </AnimatePresence>,
         document.body

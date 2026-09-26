@@ -2632,12 +2632,12 @@ export function ValidationOverlayPlayer({
       {isExpanded && <AppShellBackground className="z-0" />}
       <div className="validation-player-chrome relative z-[1] flex flex-col flex-1 min-h-0 w-full">
       {isExpanded && (
-        <div className="validation-player-topbar flex items-center justify-between px-4 pb-2.5 pt-[max(10px,env(safe-area-inset-top,0px))] flex-shrink-0 glass-float app-topbar-glass bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border-b border-white/[0.03]">
+        <div className="validation-player-topbar flex items-center justify-between px-4 flex-shrink-0 glass-float app-topbar-glass bg-white/[0.028] backdrop-blur-md backdrop-saturate-[2.25]">
           <p className="text-sm font-bold text-white/90 truncate pr-3">{phaseLabel || "Validation"} — Validation</p>
           <button
             type="button"
             onPointerDown={controlTap(exitExpanded)}
-            className="validation-control-btn flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white text-xs font-semibold hover:bg-white/[0.10] active:bg-white/[0.14] transition touch-manipulation"
+            className="validation-control-btn flex items-center gap-1.5 px-3 py-2.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-white text-xs font-semibold hover:bg-white/[0.10] active:bg-white/[0.14] transition touch-manipulation"
             aria-label="Close fullscreen"
           >
             <X className="w-4 h-4" />
@@ -2656,7 +2656,7 @@ export function ValidationOverlayPlayer({
           <AppShellBackground className="z-0 rounded-[inherit]" />
           <canvas ref={ambientCanvasRef} className="validation-ambient-canvas" aria-hidden="true" />
           <div ref={gutterLeftRef} className="validation-gutter-pane validation-gutter-fill" aria-hidden="true" />
-          <div ref={gutterRightRef} className="validation-gutter-pane validation-metrics-gutter glass-float content-panel-glass rounded-2xl overflow-hidden">
+          <div ref={gutterRightRef} className="validation-gutter-pane validation-metrics-gutter glass-float content-panel-glass rounded-[24px] overflow-hidden">
             <div ref={panelDomRef} className="absolute inset-0 hidden flex flex-col p-3 gap-2 min-h-0 pointer-events-none">
               <div className="flex items-center justify-between flex-shrink-0 px-0.5">
                 <span ref={panelPhaseRef} className="text-[13px] font-bold text-white leading-none">
@@ -2670,7 +2670,7 @@ export function ValidationOverlayPlayer({
                 {panelRowDefs.map((row, i) => (
                   <div
                     key={row.id}
-                    className="validation-metric-card flex-1 min-h-[28px] flex items-center justify-between px-3 py-1.5 rounded-xl bg-white/[0.05] border border-white/[0.04]"
+                    className="validation-metric-card flex-1 min-h-[28px] flex items-center justify-between px-3 py-1.5 rounded-2xl bg-white/[0.04] border border-white/[0.06]"
                   >
                     <span className="text-[11px] font-semibold text-white/50 leading-tight">{row.label}</span>
                     <span
@@ -2685,15 +2685,15 @@ export function ValidationOverlayPlayer({
                 ))}
               </div>
               <div className="flex flex-col gap-2 flex-shrink-0">
-                <div ref={chartHandWrapRef} className="validation-metric-card h-11 rounded-xl bg-white/[0.05] border border-white/[0.04] relative overflow-hidden">
+                <div ref={chartHandWrapRef} className="validation-metric-card h-11 rounded-2xl bg-white/[0.04] border border-white/[0.06] relative overflow-hidden">
                   <span className="absolute top-1.5 left-2.5 text-[10px] font-semibold text-white/50 z-[1] pointer-events-none">Hand speed</span>
                   <canvas ref={chartHandRef} className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true" />
                 </div>
-                <div ref={chartElbowWrapRef} className="validation-metric-card h-11 rounded-xl bg-white/[0.05] border border-white/[0.04] relative overflow-hidden">
+                <div ref={chartElbowWrapRef} className="validation-metric-card h-11 rounded-2xl bg-white/[0.04] border border-white/[0.06] relative overflow-hidden">
                   <span className="absolute top-1.5 left-2.5 text-[10px] font-semibold text-white/50 z-[1] pointer-events-none">Elbow angle</span>
                   <canvas ref={chartElbowRef} className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true" />
                 </div>
-                <div ref={chartTrunkWrapRef} className="validation-metric-card h-11 rounded-xl bg-white/[0.05] border border-white/[0.04] relative overflow-hidden">
+                <div ref={chartTrunkWrapRef} className="validation-metric-card h-11 rounded-2xl bg-white/[0.04] border border-white/[0.06] relative overflow-hidden">
                   <span className="absolute top-1.5 left-2.5 text-[10px] font-semibold text-white/50 z-[1] pointer-events-none">Trunk X</span>
                   <canvas ref={chartTrunkRef} className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true" />
                 </div>
