@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.328" />
-    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.328" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.329" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.329" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.328" />
+    <meta name="nl-version" content="32.329" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -76,10 +76,10 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
-    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.328"></script>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.329"></script>
     <script>
       (function () {
-        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.328";
+        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.329";
         function pin() {
           var el = document.getElementById("nl-liquid-glass-link");
           if (!el) {
@@ -119,48 +119,19 @@
             chips[i].classList.toggle("is-done", i < active);
           }
         }
-        function standingSvg(view) {
-          var s = 'stroke="rgba(226,232,240,0.86)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none"';
-          if (view === "right" || view === "left") {
-            var g = '<circle cx="16" cy="5" r="2.55" ' + s + '/>'
-              + '<line x1="16" y1="7.55" x2="16.5" y2="21.8" ' + s + '/>'
-              + '<line x1="16.2" y1="10.5" x2="23.8" y2="16.9" ' + s + '/>'
-              + '<line x1="16.2" y1="10.7" x2="8.6" y2="16.4" ' + s + '/>'
-              + '<line x1="16.5" y1="21.8" x2="22.4" y2="36.8" ' + s + '/>'
-              + '<line x1="16.5" y1="21.8" x2="10.8" y2="36.8" ' + s + '/>';
-            return view === "left" ? '<g transform="translate(32,0) scale(-1,1)">' + g + '</g>' : g;
-          }
-          if (view === "posterior") {
-            return '<circle cx="16" cy="5" r="2.55" ' + s + '/>'
-              + '<line x1="16" y1="7.55" x2="16" y2="9.5" ' + s + '/>'
-              + '<line x1="9.4" y1="9.85" x2="22.6" y2="9.85" ' + s + '/>'
-              + '<line x1="16" y1="9.5" x2="16" y2="21.8" ' + s + '/>'
-              + '<line x1="9.4" y1="9.85" x2="8.8" y2="20.6" ' + s + '/>'
-              + '<line x1="22.6" y1="9.85" x2="23.2" y2="20.6" ' + s + '/>'
-              + '<line x1="13.2" y1="21.8" x2="18.8" y2="21.8" ' + s + '/>'
-              + '<line x1="13.7" y1="21.8" x2="13" y2="36.8" ' + s + '/>'
-              + '<line x1="18.3" y1="21.8" x2="19" y2="36.8" ' + s + '/>';
-          }
-          return '<circle cx="16" cy="5" r="2.55" ' + s + '/>'
-            + '<line x1="16" y1="7.55" x2="16" y2="9.5" ' + s + '/>'
-            + '<line x1="8.6" y1="9.85" x2="23.4" y2="9.85" ' + s + '/>'
-            + '<line x1="16" y1="9.5" x2="16" y2="21.8" ' + s + '/>'
-            + '<line x1="8.6" y1="9.85" x2="7.5" y2="21.1" ' + s + '/>'
-            + '<line x1="23.4" y1="9.85" x2="24.5" y2="21.1" ' + s + '/>'
-            + '<line x1="13.2" y1="21.8" x2="18.8" y2="21.8" ' + s + '/>'
-            + '<line x1="13.7" y1="21.8" x2="12.2" y2="36.8" ' + s + '/>'
-            + '<line x1="18.3" y1="21.8" x2="19.8" y2="36.8" ' + s + '/>';
-        }
-        function paintStandingFrames(strip) {
-          var views = ["front", "posterior", "right", "posterior", "left"];
-          var frames = strip.querySelectorAll(".kin-film-frame");
-          for (var f = 0; f < frames.length; f += 1) {
-            var svg = frames[f].querySelector("svg");
-            if (!svg || svg.getAttribute("data-nl-stand") === "1") continue;
-            svg.setAttribute("viewBox", "0 0 32 40");
-            svg.setAttribute("data-nl-stand", "1");
-            svg.innerHTML = standingSvg(views[f % 5]);
-          }
+        function ensureLiquidOrb(host) {
+          var cap = host.querySelector(".kin-analyze-stage__capsule") || host;
+          if (cap.querySelector(".kin-liquid-orb")) return;
+          var stage = document.createElement("div");
+          stage.className = "kin-liquid-stage";
+          stage.setAttribute("aria-hidden", "true");
+          var orb = document.createElement("div");
+          orb.className = "kin-liquid-orb";
+          var blob = document.createElement("span");
+          blob.className = "kin-liquid-orb__blob";
+          orb.appendChild(blob);
+          stage.appendChild(orb);
+          cap.insertBefore(stage, cap.firstChild);
         }
         function ensurePips(strip) {
           if (strip.querySelector(".kin-film-strip__pips")) return;
@@ -206,12 +177,6 @@
                 host.setAttribute("data-nl-stadium", "1");
               }
             }
-            var track = strip.querySelector(".kin-film-strip__track");
-            var n = strip.querySelectorAll(".kin-film-frame").length || 8;
-            strip.style.setProperty("--nl-film-n", String(n));
-            if (track) track.style.setProperty("--nl-film-n", String(n));
-            paintStandingFrames(strip);
-            ensurePips(strip);
             if (!host) {
               host = document.createElement("div");
               host.className = "kin-analyze-stage";
@@ -222,6 +187,15 @@
               strip.parentNode.insertBefore(host, strip);
               host.appendChild(cap);
               cap.appendChild(strip);
+            }
+            ensureLiquidOrb(host);
+            var liquid = host.querySelector(".kin-liquid-stage");
+            if (liquid && !liquid.querySelector(".kin-film-strip__pips")) {
+              var existingPips = strip.querySelector(".kin-film-strip__pips");
+              if (existingPips) liquid.appendChild(existingPips);
+              else ensurePips(liquid);
+            } else if (!host.querySelector(".kin-film-strip__pips")) {
+              ensurePips(strip);
             }
             if (!host.querySelector(".kin-analyze-stage__stepper")) {
               var stepper = document.createElement("div");

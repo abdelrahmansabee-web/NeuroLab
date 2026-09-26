@@ -3525,6 +3525,20 @@ function kinAnalyzeStageIndex(step, pct) {
   return 0;
 }
 
+function KinLiquidOrb() {
+  const pips = Array.from({ length: 11 });
+  return (
+    <div className="kin-liquid-stage" aria-hidden>
+      <div className="kin-liquid-orb">
+        <span className="kin-liquid-orb__blob" />
+      </div>
+      <div className="kin-film-strip__pips">
+        {pips.map((_, i) => <span key={`p-${i}`} className="kin-film-strip__pip" />)}
+      </div>
+    </div>
+  );
+}
+
 function KinAnalyzeStageCapsule({ accent = "amber", pct = null, step = "Analyzing video…" }) {
   void accent;
   const pctRounded = pct != null && !Number.isNaN(Number(pct)) ? Math.round(Number(pct)) : null;
@@ -3533,7 +3547,7 @@ function KinAnalyzeStageCapsule({ accent = "amber", pct = null, step = "Analyzin
   return (
     <div className="kin-analyze-stage" data-nl-stadium="1">
       <div className="kin-analyze-stage__capsule">
-        <KinFilmStripLoop />
+        <KinLiquidOrb />
       </div>
       <div className="kin-analyze-stage__stepper" aria-label="Analysis stages">
         <span className="kin-analyze-stage__rail" aria-hidden />
