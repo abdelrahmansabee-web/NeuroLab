@@ -52,6 +52,8 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(overlay).toMatch(/nl-analyze-absorbed/);
   expect(overlay).toMatch(/kin-analyze-stage__stepper/);
   expect(overlay).toMatch(/border-radius: 999px/);
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+  expect(html).toMatch(/if \(step \|\| pct != null\) syncAnalyzeSteps/);
 });
 
 test("validation video chrome uses muted glass bars and panels", () => {

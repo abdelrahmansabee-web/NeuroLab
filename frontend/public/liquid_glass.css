@@ -227,9 +227,9 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   position: relative !important;
   flex: 0 0 calc(100% / var(--nl-film-n, 8)) !important;
   width: auto !important;
-  height: 52px !important;
+  height: 56px !important;
   margin: 0 !important;
-  padding: 0 4px !important;
+  padding: 0 !important;
   border: none !important;
   background: transparent !important;
   background-image: none !important;
@@ -239,10 +239,15 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
 .kin-film-frame::after {
   content: "";
   position: absolute;
-  inset: 2px 6px;
+  left: 50%;
+  top: 50%;
+  width: min(48px, calc(100% - 8px));
+  height: min(48px, calc(100% - 8px));
+  aspect-ratio: 1;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   background: rgba(255, 255, 255, 0.045);
+  transform: translate(-50%, -50%);
   pointer-events: none;
 }
 .kin-film-frame svg {
