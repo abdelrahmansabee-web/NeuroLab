@@ -7,18 +7,18 @@ export const NL_IOS_EASE = [0.22, 1, 0.36, 1];
 
 export const NL_SPRING_SNAPPY = {
   type: "spring",
-  stiffness: 320,
-  damping: 30,
-  mass: 0.78,
+  stiffness: 240,
+  damping: 24,
+  mass: 0.9,
   restDelta: 0.001,
   restSpeed: 0.001,
 };
 
 export const NL_SPRING_SHEET = {
   type: "spring",
-  stiffness: 260,
-  damping: 28,
-  mass: 0.92,
+  stiffness: 210,
+  damping: 24,
+  mass: 1.02,
   restDelta: 0.001,
   restSpeed: 0.001,
 };

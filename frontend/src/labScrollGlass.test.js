@@ -23,7 +23,8 @@ test("clinic chrome keeps original GitHub glass degree, not milky lens brighteni
   );
   expect(app).toMatch(/background-color: rgba\(255,255,255,0\.008\)/);
   expect(app).toMatch(/background-color: rgba\(255,255,255,0\.028\)/);
-  expect(app).toMatch(/backdrop-filter: blur\(12px\) saturate\(2\.25\)/);
+  expect(app).toMatch(/@keyframes nl-liquid-orbit/);
+  expect(app).toMatch(/animation: nl-liquid-orbit 20s linear infinite/);
   expect(app).not.toMatch(/brightness\(1\.08\)/);
   expect(app).not.toMatch(/bg-white\/70/);
   expect(app).toMatch(/\.sidebar-shell \{\s*border-radius: 36px !important;/);

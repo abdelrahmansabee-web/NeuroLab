@@ -117,7 +117,7 @@ const showVal = (x) => (isMissing(x) ? NA : String(x));
 
 const BG = "/bg.jpg";
 
-/* Capsule shapes stay; glass degree matches original GitHub tokens */
+/* Capsule shapes + original GitHub fill; liquidity comes from rim/sheen, not milky paint */
 const GLASS_CLS = "bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
 const GLASS_PANEL_CLS = "bg-white/[0.028] backdrop-blur-lg backdrop-saturate-[1.85] border border-white/[0.05]";
 const SIDEBAR_CLS = "bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
@@ -10345,21 +10345,32 @@ export default function App() {
           box-shadow: none !important;
         }
 
+        @keyframes nl-liquid-orbit {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes nl-liquid-sheen {
+          0%, 100% { opacity: 0.28; }
+          50% { opacity: 0.62; }
+        }
+
         .sidebar-shell,
         .glass-float {
           position: relative;
-          border-color: rgba(255,255,255,0.03) !important;
-          backdrop-filter: blur(12px) saturate(2.25) !important;
-          -webkit-backdrop-filter: blur(12px) saturate(2.25) !important;
+          isolation: isolate;
+          border-color: rgba(255,255,255,0.08) !important;
+          backdrop-filter: blur(16px) saturate(2.7) !important;
+          -webkit-backdrop-filter: blur(16px) saturate(2.7) !important;
           background-color: rgba(255,255,255,0.008) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.28),
+            inset 0 -12px 24px rgba(140, 190, 230, 0.045),
+            inset 0 0 0 0.5px rgba(255,255,255,0.14),
+            0 18px 44px -22px rgba(0,0,0,0.26) !important;
           background-image:
-            radial-gradient(ellipse 150% 60% at 50% 0%, rgba(255,255,255,0.015) 0%, transparent 65%),
-            radial-gradient(ellipse 150% 70% at 50% 100%, rgba(200,230,255,0.015) 0%, transparent 60%),
-            radial-gradient(circle at 0% 25%, rgba(255,255,255,0.008) 0%, transparent 40%),
-            radial-gradient(circle at 100% 75%, rgba(255,255,255,0.008) 0%, transparent 40%),
-            linear-gradient(175deg, rgba(255,255,255,0.005) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.00) 65%, rgba(255,255,255,0.004) 100%) !important;
-          background-blend-mode: overlay, overlay, overlay, overlay, normal;
+            radial-gradient(92% 58% at 14% -10%, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.03) 30%, transparent 54%),
+            radial-gradient(80% 52% at 90% 118%, rgba(160,210,255,0.055) 0%, transparent 58%),
+            linear-gradient(165deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.00) 40%, rgba(255,255,255,0.00) 68%, rgba(255,255,255,0.028) 100%) !important;
+          background-blend-mode: screen, overlay, normal;
         }
 
         .sidebar-shell::before,
@@ -10369,18 +10380,18 @@ export default function App() {
           position: absolute;
           inset: 0;
           border-radius: inherit;
-          padding: 2px;
+          padding: 1.5px;
           background: conic-gradient(
             from 180deg at 50% 50%,
-            rgba(255,255,255,0.25) 0deg,
-            rgba(160,225,255,0.12) 45deg,
-            rgba(210,190,255,0.08) 90deg,
-            rgba(255,255,255,0.03) 135deg,
-            rgba(160,225,255,0.12) 180deg,
-            rgba(255,255,255,0.03) 225deg,
-            rgba(210,190,255,0.08) 270deg,
-            rgba(160,225,255,0.12) 315deg,
-            rgba(255,255,255,0.25) 360deg
+            rgba(255,255,255,0.85) 0deg,
+            rgba(160,225,255,0.38) 50deg,
+            rgba(210,190,255,0.16) 95deg,
+            rgba(255,255,255,0.04) 140deg,
+            rgba(160,225,255,0.32) 190deg,
+            rgba(255,255,255,0.04) 235deg,
+            rgba(210,190,255,0.2) 285deg,
+            rgba(160,225,255,0.4) 330deg,
+            rgba(255,255,255,0.85) 360deg
           );
           -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
           -webkit-mask-composite: xor;
@@ -10388,7 +10399,8 @@ export default function App() {
           mask-composite: exclude;
           pointer-events: none;
           z-index: 0;
-          opacity: 0.05;
+          opacity: 0.42;
+          animation: nl-liquid-orbit 20s linear infinite;
         }
 
         .sidebar-shell::after,
@@ -10401,8 +10413,11 @@ export default function App() {
           pointer-events: none;
           z-index: 0;
           background:
-            linear-gradient(180deg, rgba(255,255,255,0.008) 0%, rgba(255,255,255,0.00) 40%, rgba(255,255,255,0.00) 70%, rgba(255,255,255,0.005) 100%);
-          mix-blend-mode: overlay;
+            linear-gradient(118deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.03) 26%, transparent 46%),
+            linear-gradient(180deg, rgba(255,255,255,0.07) 0%, transparent 42%, rgba(255,255,255,0.03) 100%);
+          mix-blend-mode: screen;
+          opacity: 0.55;
+          animation: nl-liquid-sheen 7.5s ease-in-out infinite;
         }
 
         .content-shell {
@@ -10420,23 +10435,28 @@ export default function App() {
 
         .content-shell .content-panel-glass,
         .content-shell .glass-float:not(.section-header):not(.app-topbar-glass) {
-          backdrop-filter: blur(16px) saturate(1.85) !important;
-          -webkit-backdrop-filter: blur(16px) saturate(1.85) !important;
+          backdrop-filter: blur(18px) saturate(2.35) !important;
+          -webkit-backdrop-filter: blur(18px) saturate(2.35) !important;
           background-color: rgba(255,255,255,0.028) !important;
-          border-color: rgba(255,255,255,0.05) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.018), 0 10px 28px -6px rgba(0,0,0,0.12), 0 22px 52px -14px rgba(0,0,0,0.10), 0 36px 72px -24px rgba(0,0,0,0.07) !important;
+          border-color: rgba(255,255,255,0.1) !important;
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.22),
+            inset 0 -10px 20px rgba(140, 190, 230, 0.035),
+            0 10px 28px -6px rgba(0,0,0,0.14),
+            0 22px 52px -14px rgba(0,0,0,0.10) !important;
         }
 
         .content-shell .content-panel-glass::before,
         .content-shell .glass-float:not(.section-header)::before {
-          opacity: 0.025;
+          opacity: 0.34;
         }
 
         .content-shell .content-panel-glass::after,
         .content-shell .glass-float:not(.section-header)::after {
-          opacity: 0.35;
+          opacity: 0.5;
           background:
-            linear-gradient(180deg, rgba(255,255,255,0.006) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.00) 100%);
+            linear-gradient(118deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.02) 30%, transparent 48%),
+            linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 44%);
         }
 
         .app-main-inner {
@@ -10444,20 +10464,23 @@ export default function App() {
         }
 
         .glass-float .glass-float {
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.2),
+            inset 0 0 0 0.5px rgba(255,255,255,0.1),
+            0 14px 32px -20px rgba(0,0,0,0.18) !important;
         }
 
         .section-header {
-          backdrop-filter: blur(24px) saturate(2.25) !important;
-          -webkit-backdrop-filter: blur(24px) saturate(2.25) !important;
+          backdrop-filter: blur(22px) saturate(2.7) !important;
+          -webkit-backdrop-filter: blur(22px) saturate(2.7) !important;
         }
 
         .glass-field,
         input, select, textarea {
           color: rgba(255,255,255,0.92) !important;
           background-color: rgba(255,255,255,0.06) !important;
-          border-color: rgba(255,255,255,0.04) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02) !important;
+          border-color: rgba(255,255,255,0.08) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 0 0 0.5px rgba(255,255,255,0.06) !important;
         }
         .glass-field::placeholder,
         input::placeholder,
@@ -10603,14 +10626,14 @@ export default function App() {
           border-radius: 24px !important;
         }
         .gselect-menu-portal.glass-float {
-          border-color: rgba(255,255,255,0.03) !important;
-          backdrop-filter: blur(12px) saturate(2.25) !important;
-          -webkit-backdrop-filter: blur(12px) saturate(2.25) !important;
+          border-color: rgba(255,255,255,0.08) !important;
+          backdrop-filter: blur(16px) saturate(2.7) !important;
+          -webkit-backdrop-filter: blur(16px) saturate(2.7) !important;
           background-color: rgba(255,255,255,0.008) !important;
           background-image:
-            radial-gradient(ellipse 150% 60% at 50% 0%, rgba(255,255,255,0.015) 0%, transparent 65%),
-            radial-gradient(ellipse 150% 70% at 50% 100%, rgba(200,230,255,0.015) 0%, transparent 60%),
-            linear-gradient(175deg, rgba(255,255,255,0.005) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.004) 100%) !important;
+            radial-gradient(92% 58% at 14% -10%, rgba(255,255,255,0.16) 0%, transparent 52%),
+            radial-gradient(80% 52% at 90% 118%, rgba(160,210,255,0.05) 0%, transparent 58%),
+            linear-gradient(165deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.00) 42%, rgba(255,255,255,0.025) 100%) !important;
         }
 
         .gselect-menu-portal .gselect-option {
@@ -10629,7 +10652,13 @@ export default function App() {
         /* GSelect portal ? identical liquid glass tokens as .app-topbar-glass (transform anim on inner body only ? keeps backdrop-filter) */
         @media (prefers-reduced-motion: reduce) {
           .gselect-menu-body--animate,
-          .gselect-chevron {
+          .gselect-chevron,
+          .sidebar-shell::before,
+          .glass-float::before,
+          .gselect-menu-portal::before,
+          .sidebar-shell::after,
+          .glass-float::after,
+          .gselect-menu-portal::after {
             animation: none !important;
             transition: none !important;
           }
@@ -10637,9 +10666,13 @@ export default function App() {
 
         html.nl-touch .sidebar-shell,
         html.nl-touch .glass-float {
-          backdrop-filter: blur(8px) saturate(1.45) !important;
-          -webkit-backdrop-filter: blur(8px) saturate(1.45) !important;
+          backdrop-filter: blur(8px) saturate(1.7) !important;
+          -webkit-backdrop-filter: blur(8px) saturate(1.7) !important;
           background-color: rgba(255,255,255,0.008) !important;
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.2),
+            inset 0 0 0 0.5px rgba(255,255,255,0.1),
+            0 16px 36px -20px rgba(0,0,0,0.22) !important;
         }
         html.nl-touch .content-shell {
           backdrop-filter: none !important;
