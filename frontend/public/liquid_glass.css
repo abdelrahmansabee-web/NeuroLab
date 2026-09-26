@@ -3,14 +3,14 @@
 .sidebar-shell {
   border-radius: 36px !important;
 }
-.app-topbar-glass:not(.gselect-menu-portal):not(.nl-lens-menu):not([role="dialog"]):not(.validation-player-topbar):not(.validation-player-controls),
+.app-topbar-glass,
 .section-header {
   border-radius: 999px !important;
 }
 .content-panel-glass {
   border-radius: 32px !important;
 }
-.gselect-menu-portal:not(.nl-lens-menu):not([role="dialog"]) {
+.gselect-menu-portal {
   border-radius: 24px !important;
 }
 .gselect-trigger-shell,
@@ -23,10 +23,10 @@ textarea {
   border-radius: 24px !important;
 }
 
-.sidebar-shell:not(.mobile-actions-sheet),
-.glass-float:not(.nl-lens-menu):not([role="dialog"]):not(.mobile-actions-sheet),
-.app-topbar-glass:not(.gselect-menu-portal):not(.nl-lens-menu):not([role="dialog"]),
-.gselect-menu-portal:not(.nl-lens-menu):not([role="dialog"]) {
+.sidebar-shell,
+.glass-float,
+.app-topbar-glass,
+.gselect-menu-portal {
   position: relative;
   isolation: isolate;
   border-color: rgba(255, 255, 255, 0.04) !important;
@@ -59,14 +59,14 @@ textarea {
   border-radius: 24px !important;
 }
 
-.sidebar-shell:not(.mobile-actions-sheet)::after,
+.sidebar-shell::after,
 .glass-float::after,
 .gselect-menu-portal::after {
   content: none !important;
 }
 
-html.nl-touch .sidebar-shell:not(.mobile-actions-sheet),
-html.nl-touch .glass-float:not(.nl-lens-menu):not([role="dialog"]):not(.mobile-actions-sheet) {
+html.nl-touch .sidebar-shell,
+html.nl-touch .glass-float {
   backdrop-filter: blur(22px) saturate(3.25) !important;
   -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
   background-color: rgba(255, 255, 255, 0.008) !important;
@@ -103,35 +103,11 @@ button[class*="bg-teal-500"] {
 }
 .validation-player-controls,
 .validation-player-topbar {
-  border-radius: 28px !important;
+  border-radius: 24px !important;
   backdrop-filter: blur(22px) saturate(3.25) !important;
   -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
   background: rgba(255, 255, 255, 0.028) !important;
   border: 1px solid rgba(255, 255, 255, 0.06) !important;
-}
-.validation-player-fullscreen {
-  z-index: 99999 !important;
-}
-html.nl-overlay-expanded .content-shell .content-panel-glass:not(.validation-metrics-gutter),
-html.nl-overlay-expanded .content-shell .glass-float:not(.validation-player-topbar):not(.validation-player-controls):not(.validation-metrics-gutter):not(.nl-overlay-escape),
-html.nl-overlay-expanded.nl-touch .content-shell .content-panel-glass:not(.validation-metrics-gutter),
-html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-player-topbar):not(.validation-player-controls):not(.validation-metrics-gutter):not(.nl-overlay-escape) {
-  isolation: auto !important;
-  z-index: auto !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-.validation-control-btn,
-.validation-control-icon,
-.validation-control-chip {
-  min-height: 32px !important;
-  height: 32px;
-  border-radius: 999px !important;
-  padding: 0 12px !important;
-}
-.validation-control-icon {
-  width: auto !important;
-  min-width: 44px !important;
 }
 .validation-seek-bar {
   height: 8px;
@@ -148,245 +124,12 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   border-radius: 999px !important;
 }
 
-@keyframes kin-film-scroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
-/* Option A orbit: planet + thin ring + moon. Film, skeletons, and the liquid blob stay hidden. */
-.kin-analyze-stage {
-  width: 100% !important;
-  max-width: none !important;
-}
-.glass-float:has(.kin-analyze-stage),
-.kin-analyze-zone,
-.kin-analyze-stage,
-.kin-run,
-.kin-run__stage {
-  overflow: visible !important;
-}
-.kin-analyze-stage__capsule,
-.kin-analyze-stage[data-nl-stadium="1"] .kin-film-strip,
-.kin-film-strip.nl-stadium-film {
-  max-width: none !important;
-  overflow: visible !important;
-  border-radius: 40px !important;
+.kin-film-strip__body {
+  border-radius: 16px !important;
   border: 1px solid rgba(255, 255, 255, 0.06) !important;
   background: rgba(255, 255, 255, 0.028) !important;
-  backdrop-filter: blur(22px) saturate(3.25) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
-  box-shadow:
-    inset 0 -14px 26px rgba(70, 130, 180, 0.05),
-    0 12px 32px -16px rgba(0, 0, 0, 0.22) !important;
-  padding: 32px 24px 14px !important;
-}
-.kin-analyze-stage__capsule .kin-film-strip,
-.kin-analyze-stage[data-nl-stadium="1"] .kin-film-strip {
-  padding: 0 !important;
-  border: none !important;
-  background: transparent !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  box-shadow: none !important;
-}
-.kin-film-strip__holes {
-  display: none !important;
-}
-.kin-film-strip__pips,
-.kin-film-strip__pip,
-.kin-liquid-stage,
-.kin-liquid-orb,
-.kin-liquid-orb__blob,
-.kin-orbit {
-  display: none !important;
-}
-.kin-analyze-stage__row,
-.kin-analyze-stage__film {
-  display: block;
-  min-width: 0;
-}
-@keyframes kin-run-pose {
-  0%, 32.9% { opacity: 1; }
-  33%, 100% { opacity: 0; }
-}
-.kin-run {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-  gap: 6px;
-}
-.kin-run__stage {
-  position: relative;
-  overflow: visible;
-  width: 100%;
-  height: 148px;
-}
-.kin-run__figure {
-  position: absolute;
-  left: 50%;
-  bottom: 10px;
-  width: 124px;
-  height: 130px;
-  overflow: visible !important;
-  pointer-events: none;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-  background-repeat: no-repeat;
-  background-position: center bottom;
-  background-size: contain;
-  transform: translateX(-50%);
-  opacity: 0;
-  animation: kin-run-pose 0.42s steps(1, end) infinite;
-}
-.kin-run__figure--a { animation-delay: 0s; }
-.kin-run__figure--b { animation-delay: -0.14s; }
-.kin-run__figure--c { animation-delay: -0.28s; }
-.kin-run__pct {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  background: rgba(255, 255, 255, 0.028);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  box-shadow: inset 0 -8px 14px rgba(70, 130, 180, 0.05);
-}
-.kin-run__pct-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-.kin-run__pct-num {
-  position: relative;
-  z-index: 1;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: rgba(255, 255, 255, 0.92);
-  font-variant-numeric: tabular-nums;
-}
-.kin-run__ground {
-  position: absolute;
-  left: 16%;
-  right: 16%;
-  bottom: 16px;
-  height: 1px;
-  background: rgba(226, 232, 240, 0.3);
-}
-.kin-run__pips {
-  display: flex !important;
-  justify-content: center;
-  align-items: center;
-  gap: 7px;
-  padding: 0 10px 2px;
-}
-.kin-run__pip {
-  width: 4px;
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  flex-shrink: 0;
-}
-.kin-film-strip__body,
-.kin-film-strip__track,
-.kin-film-frame,
-.kin-film-frame::after,
-.kin-film-frame svg {
-  display: none !important;
-}
-label[for^="kin-file-"] {
-  border-style: solid !important;
-  border-radius: 24px !important;
-}
-label[for^="kin-file-"]:has(.kin-analyze-stage),
-label[for^="kin-file-"]:has(.kin-film-strip) {
-  border-color: transparent !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  padding: 2px 0 0 !important;
-  min-height: 0 !important;
-  overflow: visible !important;
-}
-.kin-analyze-panel,
-.kin-analyze-panel.nl-analyze-absorbed {
-  display: none !important;
-}
-[class*="ring-emerald-400"],
-[class*="border-emerald-400/35"] {
-  --tw-ring-shadow: 0 0 #0000 !important;
-  box-shadow: none !important;
-  border-color: rgba(255, 255, 255, 0.06) !important;
-}
-.relative.flex.flex-col[class*="border-t-"] {
-  border-top-width: 1px !important;
-}
-.kin-analyze-stage__steps,
-.kin-analyze-stage__stepper {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 18px;
-  padding: 0 6px;
-}
-.kin-analyze-stage__rail {
-  position: absolute;
-  top: 14px;
-  left: 28px;
-  right: 28px;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.16);
-  pointer-events: none;
-}
-.kin-analyze-stage__step {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  flex: 1 1 0;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: rgba(255, 255, 255, 0.42);
-}
-.kin-analyze-stage__step.is-done {
-  color: rgba(255, 255, 255, 0.62);
-}
-.kin-analyze-stage__step.is-active {
-  color: rgba(255, 255, 255, 0.92);
-}
-.kin-analyze-stage__icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(8, 10, 16, 0.55);
-  color: rgba(255, 255, 255, 0.72);
-}
-.kin-analyze-stage__step.is-active .kin-analyze-stage__icon {
-  background: #ffffff;
-  border-color: #ffffff;
-  color: #0a0c12;
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.06);
-}
-.kin-analyze-stage__label {
-  line-height: 1;
-  white-space: nowrap;
+  backdrop-filter: blur(18px) saturate(2.8) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(2.8) !important;
 }
 .kin-analyze-track {
   height: 6px;
@@ -398,169 +141,17 @@ label[for^="kin-file-"]:has(.kin-film-strip) {
   height: 100%;
   border-radius: 999px;
 }
-@media (prefers-reduced-motion: reduce) {
-  .kin-film-strip__track,
-  .kin-liquid-orb__blob,
-  .kin-run__figure,
-  .kin-run__svg {
-    animation: none !important;
-    opacity: 0 !important;
-    transform: translateX(-50%) !important;
-  }
-  .kin-run__figure--a {
-    opacity: 1 !important;
-  }
-}
-
-/* 3-dot sheet slides with bottom, not transform, so the lens stays unflattened. */
-@keyframes nl-actions-sheet-in {
-  from { bottom: -100vh; }
-  to { bottom: 0px; }
-}
-@keyframes nl-actions-sheet-out {
-  from { bottom: 0px; }
-  to { bottom: -100vh; }
-}
-
-/* Compact glass lens — 3-dot Actions + Recalling. Transform stays off the glass. */
-@keyframes gselect-body-in {
-  from {
-    opacity: 0;
-    transform: translate3d(0, -10px, 0) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-}
-@keyframes gselect-body-out {
-  from {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translate3d(0, -8px, 0) scale(0.97);
-  }
-}
-.gselect-menu-body--animate {
-  animation: gselect-body-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-.gselect-menu-body--animate-out {
-  animation: gselect-body-out 0.28s cubic-bezier(0.22, 1, 0.36, 1) both !important;
-}
-
-button[aria-label="Close menu"],
-.fixed.inset-0 [aria-label="Close menu"] {
-  background: transparent !important;
-  background-color: transparent !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  box-shadow: none !important;
-}
-
-[role="dialog"][aria-label="Actions menu"] {
-  left: auto !important;
-  right: 12px !important;
-  width: min(320px, calc(100vw - 24px)) !important;
-  max-width: min(320px, calc(100vw - 24px)) !important;
-  top: auto !important;
-  bottom: 0;
-  transform: none !important;
-  filter: none !important;
-  will-change: auto !important;
-  contain: none !important;
-  background: transparent !important;
-  background-color: transparent !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  animation: nl-actions-sheet-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-[role="dialog"][aria-label="Actions menu"].nl-actions-sheet--out {
-  animation: nl-actions-sheet-out 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-[role="dialog"][aria-label="Actions menu"].nl-lens-menu,
-[role="dialog"][aria-label="Actions menu"].gselect-menu-portal,
-[role="dialog"][aria-label="Actions menu"] > .nl-lens-menu,
-[role="dialog"][aria-label="Actions menu"] > .gselect-menu-portal,
-[role="dialog"][aria-label="Actions menu"] > .app-topbar-glass,
-[role="dialog"][aria-label="Actions menu"] > .mobile-actions-sheet,
-.mobile-actions-sheet.sidebar-shell,
-.nl-lens-menu,
-[role="dialog"][aria-label="Loaded sessions"],
-[role="dialog"][aria-label="Sessions recalled from Drive"] {
-  transform: none !important;
-  filter: none !important;
-  will-change: auto !important;
-  contain: none !important;
-  isolation: isolate;
-  border-radius: 28px !important;
-  border-color: rgba(255, 255, 255, 0.05) !important;
-  background-color: rgba(255, 255, 255, 0.028) !important;
-  background-image: none !important;
-  backdrop-filter: blur(24px) saturate(2.85) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(2.85) !important;
-  box-shadow:
-    inset 0 -16px 28px rgba(70, 130, 180, 0.045),
-    0 12px 32px -10px rgba(0, 0, 0, 0.14),
-    0 24px 56px -18px rgba(0, 0, 0, 0.10) !important;
-}
-
-[role="dialog"][aria-label="Loaded sessions"],
-[role="dialog"][aria-label="Sessions recalled from Drive"] {
-  transform: none !important;
-}
-
-[role="dialog"][aria-label="Loaded sessions"] .gselect-menu-body:not(.gselect-menu-body--animate-out),
-[role="dialog"][aria-label="Sessions recalled from Drive"] .gselect-menu-body:not(.gselect-menu-body--animate-out),
-[role="dialog"][aria-label="Actions menu"].gselect-menu-portal > div:not(.gselect-menu-body--animate-out),
-[role="dialog"][aria-label="Actions menu"] .gselect-menu-portal > div:not(.gselect-menu-body--animate-out) {
-  animation: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .gselect-menu-body--animate,
-  .gselect-menu-body--animate-out,
-  [role="dialog"][aria-label="Loaded sessions"] .gselect-menu-body,
-  [role="dialog"][aria-label="Sessions recalled from Drive"] .gselect-menu-body,
-  [role="dialog"][aria-label="Actions menu"].gselect-menu-portal > div,
-  [role="dialog"][aria-label="Actions menu"] .gselect-menu-portal > div,
-  [role="dialog"][aria-label="Actions menu"],
-  [role="dialog"][aria-label="Actions menu"].nl-actions-sheet--out {
-    animation: none !important;
-  }
-}
-
-html.nl-touch .nl-lens-menu,
-html.nl-touch .mobile-actions-sheet.sidebar-shell,
-html.nl-touch [role="dialog"][aria-label="Actions menu"] > .mobile-actions-sheet,
-html.nl-touch [role="dialog"][aria-label="Actions menu"].nl-lens-menu,
-html.nl-touch [role="dialog"][aria-label="Actions menu"].gselect-menu-portal,
-html.nl-touch [role="dialog"][aria-label="Loaded sessions"],
-html.nl-touch [role="dialog"][aria-label="Sessions recalled from Drive"] {
-  backdrop-filter: blur(24px) saturate(2.85) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(2.85) !important;
-  background-color: rgba(255, 255, 255, 0.028) !important;
-}
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .sidebar-shell:not(.mobile-actions-sheet),
-  .glass-float:not(.nl-lens-menu):not(.mobile-actions-sheet),
+  .sidebar-shell,
+  .glass-float,
   .app-topbar-glass,
   .content-panel-glass,
-  .gselect-menu-portal:not(.nl-lens-menu),
+  .gselect-menu-portal,
   .validation-metrics-gutter,
   .validation-player-controls,
   .validation-player-topbar,
-  .kin-film-strip__body,
-  .kin-analyze-stage__capsule,
-  .kin-analyze-stage[data-nl-stadium="1"] .kin-film-strip,
-  .kin-film-strip.nl-stadium-film {
+  .kin-film-strip__body {
     background-color: rgba(18, 24, 32, 0.78) !important;
   }
 }

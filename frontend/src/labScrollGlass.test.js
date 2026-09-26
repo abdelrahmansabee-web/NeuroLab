@@ -63,21 +63,19 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(app).not.toMatch(/if \(hasResult\) return `\$\{base\} ring-1/);
   expect(overlay).toMatch(/\.kin-film-strip__body/);
   expect(overlay).toMatch(/\.kin-analyze-track/);
-  expect(overlay).toMatch(/\.kin-run__figure/);
-  expect(overlay).toMatch(/kin-run-pose 0\.42s steps\(1/);
   expect(overlay).not.toMatch(/logo192-white\.png/);
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const sync = fs.readFileSync(path.join(__dirname, "..", "public", "pwa_ipad_sync.js"), "utf8");
   const auth = fs.readFileSync(path.join(__dirname, "AuthGate.jsx"), "utf8");
   expect(auth).toMatch(/\.catch\(\(\) => setState\("locked"\)\)/);
-  expect(html).toMatch(/nl-version" content="32\.372"/);
+  expect(html).toMatch(/nl-version" content="32\.348"/);
   expect(html).toMatch(/nl_app_bust/);
-  expect(html).toMatch(/function ensureRun/);
-  expect(html).toMatch(/static\/kin-run\/pose-a\.png/);
+  expect(html).toMatch(/nl-liquid-glass-link/);
   expect(html).not.toMatch(/__nlAuthMeTimeout/);
+  expect(html).not.toMatch(/function ensureRun/);
   expect(html).not.toMatch(/function ensureOrbit/);
   expect(sync).not.toMatch(/_iosbust=/);
-  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.372"/);
+  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.348"/);
 });
 
 test("validation video chrome uses muted glass bars and panels", () => {
@@ -121,8 +119,8 @@ test("Recalling and GSelect keep liquid-glass motion on the inner body only", ()
   expect(status).toMatch(/gselect-menu-body--animate-out/);
   expect(status).toMatch(/nl-lens-menu/);
   expect(status).not.toMatch(/NL_SPRING_SHEET/);
-  expect(overlay).toMatch(/\.gselect-menu-portal:not\(\.nl-lens-menu\):not\(\[role="dialog"\]\) \{\s*border-radius: 24px !important;/);
-  expect(overlay).toMatch(/\.app-topbar-glass:not\(\.gselect-menu-portal\):not\(\.nl-lens-menu\):not\(\[role="dialog"\]\):not\(\.validation-player-topbar\):not\(\.validation-player-controls\),\s*\.section-header \{\s*border-radius: 999px !important;/);
+  expect(overlay).toMatch(/\.gselect-menu-portal \{\s*border-radius: 24px !important;/);
+  expect(overlay).toMatch(/\.app-topbar-glass,\s*\.section-header \{\s*border-radius: 999px !important;/);
 });
 
 test("analysis phase cards use muted glass instead of neon sky/emerald/amber plates", () => {
