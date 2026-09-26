@@ -259,14 +259,15 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   height: 128px;
   pointer-events: none;
   z-index: 2;
+  overflow: visible;
 }
 .nl-cradle__bar {
   position: absolute;
   left: 50%;
   top: 8px;
-  width: 132px;
+  width: 142px;
   height: 3px;
-  margin-left: -66px;
+  margin-left: -71px;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.12));
   box-shadow: 0 1px 0 rgba(255,255,255,0.2);
@@ -275,39 +276,41 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   position: absolute;
   left: 50%;
   top: 8px;
-  width: 130px;
+  width: 140px;
   height: 112px;
-  margin-left: -65px;
+  margin-left: -70px;
+  overflow: visible;
 }
 .nl-cradle__bob {
   position: absolute;
   top: 0;
-  width: 26px;
+  width: 28px;
   height: 112px;
-  transform-origin: 13px 3px;
-  -webkit-transform-origin: 13px 3px;
+  transform-origin: 14px 3px;
+  -webkit-transform-origin: 14px 3px;
+  overflow: visible;
 }
 .nl-cradle__bob--0 { left: 0; }
-.nl-cradle__bob--1 { left: 26px; }
-.nl-cradle__bob--2 { left: 52px; }
-.nl-cradle__bob--3 { left: 78px; }
-.nl-cradle__bob--4 { left: 104px; }
+.nl-cradle__bob--1 { left: 28px; }
+.nl-cradle__bob--2 { left: 56px; }
+.nl-cradle__bob--3 { left: 84px; }
+.nl-cradle__bob--4 { left: 112px; }
 .nl-cradle__string {
   position: absolute;
-  left: 12px;
+  left: 13px;
   top: 3px;
   width: 1px;
   height: 78px;
-  background: rgba(255,255,255,0.42);
+  background: rgba(255,255,255,0.62);
 }
 .nl-cradle__ball {
   position: absolute;
   left: 0;
   top: 76px;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.28);
+  border: 1px solid rgba(255,255,255,0.34);
   background:
     radial-gradient(circle at 33% 28%, rgba(255,255,255,0.96) 0 2px, rgba(236,242,248,0.55) 14%, rgba(168,178,192,0.32) 46%, rgba(58,64,76,0.72) 78%, rgba(18,20,26,0.92) 100%);
   box-shadow:

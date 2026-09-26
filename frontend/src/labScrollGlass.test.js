@@ -68,7 +68,7 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(overlay).toMatch(/\.nl-cradle__bob--a/);
   expect(overlay).toMatch(/\.nl-cradle__bob--e/);
   expect(overlay).toMatch(/nl-cradle-a 1\.6s infinite/);
-  expect(overlay).toMatch(/transform-origin: 13px 3px/);
+  expect(overlay).toMatch(/transform-origin: 14px 3px/);
   expect(overlay).toMatch(/min-height: 228px/);
   expect(overlay).not.toMatch(/logo192-white\.png/);
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
