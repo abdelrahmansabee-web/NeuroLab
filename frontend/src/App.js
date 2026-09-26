@@ -3525,15 +3525,44 @@ function kinAnalyzeStageIndex(step, pct) {
   return 0;
 }
 
-const KIN_RUN_SRC = `${process.env.PUBLIC_URL || ""}/static/kin-run/pose-a.png`;
+const KIN_RUN_BASE = `${process.env.PUBLIC_URL || ""}/static/kin-run`;
+const KIN_RUN_FRAMES = ["a", "b", "c"];
 
-function KinRunMark() {
+function KinRunMark({ pct = null }) {
   const pips = Array.from({ length: 11 });
+  const pctRounded = pct != null && !Number.isNaN(Number(pct)) ? Math.max(0, Math.min(100, Math.round(Number(pct)))) : null;
+  const r = 15;
+  const circ = 2 * Math.PI * r;
+  const dash = pctRounded == null ? 0 : (pctRounded / 100) * circ;
   return (
     <div className="kin-run" aria-hidden>
       <div className="kin-run__stage">
-        <span className="kin-run__figure" style={{ backgroundImage: `url("${KIN_RUN_SRC}")` }} />
+        {KIN_RUN_FRAMES.map((id) => (
+          <span
+            key={id}
+            className={`kin-run__figure kin-run__figure--${id}`}
+            style={{ backgroundImage: `url("${KIN_RUN_BASE}/pose-${id}.png")` }}
+          />
+        ))}
         <span className="kin-run__ground" />
+        <span className={`kin-run__pct${pctRounded == null ? " is-empty" : ""}`}>
+          <svg className="kin-run__pct-svg" viewBox="0 0 36 36" aria-hidden>
+            <circle cx="18" cy="18" r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="2.2" />
+            <circle
+              className="kin-run__pct-arc"
+              cx="18"
+              cy="18"
+              r={r}
+              fill="none"
+              stroke="rgba(255,255,255,0.88)"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeDasharray={`${Math.max(0.4, dash)} ${circ}`}
+              transform="rotate(-90 18 18)"
+            />
+          </svg>
+          <span className="kin-run__pct-num">{pctRounded == null ? "–" : pctRounded}</span>
+        </span>
       </div>
       <div className="kin-run__pips">
         {pips.map((_, i) => <span key={`p-${i}`} className="kin-run__pip" />)}
@@ -3550,7 +3579,7 @@ function KinAnalyzeStageCapsule({ accent = "amber", pct = null, step = "Analyzin
   return (
     <div className="kin-analyze-stage" data-nl-stadium="1">
       <div className="kin-analyze-stage__capsule">
-        <KinRunMark />
+        <KinRunMark pct={pctRounded} />
       </div>
       <div className="kin-analyze-stage__stepper" aria-label="Analysis stages">
         <span className="kin-analyze-stage__rail" aria-hidden />

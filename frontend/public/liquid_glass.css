@@ -209,29 +209,25 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   0%, 32.9% { opacity: 1; }
   33%, 100% { opacity: 0; }
 }
-@keyframes kin-run-stride {
-  0%, 100% { transform: translateX(-50%) translateY(0); }
-  50% { transform: translateX(-50%) translateY(2px); }
-}
 .kin-run {
   display: flex;
   flex-direction: column;
   align-items: center;
   width: 100%;
-  gap: 8px;
+  gap: 6px;
 }
 .kin-run__stage {
   position: relative;
   overflow: visible;
   width: 100%;
-  height: 276px;
+  height: 148px;
 }
 .kin-run__figure {
   position: absolute;
   left: 50%;
-  bottom: 16px;
-  width: 248px;
-  height: 260px;
+  bottom: 10px;
+  width: 124px;
+  height: 130px;
   overflow: visible !important;
   pointer-events: none;
   -webkit-touch-callout: none;
@@ -241,7 +237,41 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   background-position: center bottom;
   background-size: contain;
   transform: translateX(-50%);
-  animation: kin-run-stride 0.66s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  opacity: 0;
+  animation: kin-run-pose 0.42s steps(1, end) infinite;
+}
+.kin-run__figure--a { animation-delay: 0s; }
+.kin-run__figure--b { animation-delay: -0.14s; }
+.kin-run__figure--c { animation-delay: -0.28s; }
+.kin-run__pct {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 -8px 14px rgba(70, 130, 180, 0.05);
+}
+.kin-run__pct-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.kin-run__pct-num {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.92);
+  font-variant-numeric: tabular-nums;
 }
 .kin-run__ground {
   position: absolute;
@@ -374,8 +404,11 @@ label[for^="kin-file-"]:has(.kin-film-strip) {
   .kin-run__figure,
   .kin-run__svg {
     animation: none !important;
-    opacity: 1 !important;
+    opacity: 0 !important;
     transform: translateX(-50%) !important;
+  }
+  .kin-run__figure--a {
+    opacity: 1 !important;
   }
 }
 

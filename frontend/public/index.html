@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.340" />
-    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.340" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/clinic_touch.css?v=32.341" />
+    <link rel="stylesheet" href="%PUBLIC_URL%/liquid_glass.css?v=32.341" />
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=32.86" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/logo192.png?v=32.86" type="image/png" sizes="192x192" />
     <link rel="icon" href="%PUBLIC_URL%/favicon-32.png?v=32.86" type="image/png" sizes="32x32" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta name="nl-version" content="32.340" />
+    <meta name="nl-version" content="32.341" />
     <meta name="theme-color" content="#121820" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#121820" />
     <style>html,body{margin:0;padding:0;background:#121820;color:#fff;color-scheme:dark;font-family:Inter,system-ui,sans-serif}#root{min-height:100vh}</style>
@@ -76,10 +76,10 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"><p style="padding:2rem;text-align:center;color:#fff9">Loading NeuroLab…</p></div>
-    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.340"></script>
+    <script src="%PUBLIC_URL%/pwa_ipad_sync.js?v=32.341"></script>
     <script>
       (function () {
-        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.340";
+        var href = "%PUBLIC_URL%/liquid_glass.css?v=32.341";
         function pin() {
           var el = document.getElementById("nl-liquid-glass-link");
           if (!el) {
@@ -118,19 +118,40 @@
             chips[i].classList.toggle("is-active", i === active);
             chips[i].classList.toggle("is-done", i < active);
           }
+          var n = pct != null && !isNaN(Number(pct)) ? Math.max(0, Math.min(100, Math.round(Number(pct)))) : null;
+          var num = host.querySelector(".kin-run__pct-num");
+          if (num) num.textContent = n == null ? "–" : String(n);
+          var ring = host.querySelector(".kin-run__pct-arc");
+          if (ring) {
+            var c = 2 * Math.PI * 15;
+            var dash = n == null ? 0 : (n / 100) * c;
+            ring.setAttribute("stroke-dasharray", Math.max(0.4, dash) + " " + c);
+          }
+          var pctEl = host.querySelector(".kin-run__pct");
+          if (pctEl) pctEl.classList.toggle("is-empty", n == null);
         }
         function ensureRun(host) {
           var cap = host.querySelector(".kin-analyze-stage__capsule") || host;
           var leftover = cap.querySelector(".kin-orbit, .kin-liquid-orb, .kin-run__svg");
           if (leftover && leftover.parentNode) leftover.parentNode.removeChild(leftover);
           var stale = cap.querySelector(".kin-run");
-          if (stale && (stale.querySelector(".kin-run__svg") || !stale.querySelector(".kin-run__figure"))) {
+          if (stale && (
+            stale.querySelector(".kin-run__svg")
+            || !stale.querySelector(".kin-run__figure--b")
+            || !stale.querySelector(".kin-run__pct")
+          )) {
             stale.parentNode.removeChild(stale);
           }
           if (cap.querySelector(".kin-run")) return;
           var html = '<div class="kin-run__stage">'
-            + '<span class="kin-run__figure" style="background-image:url(\'./static/kin-run/pose-a.png\')"></span>'
-            + '<span class="kin-run__ground"></span></div><div class="kin-run__pips">';
+            + '<span class="kin-run__figure kin-run__figure--a" style="background-image:url(\'./static/kin-run/pose-a.png?v=32.341\')"></span>'
+            + '<span class="kin-run__figure kin-run__figure--b" style="background-image:url(\'./static/kin-run/pose-b.png?v=32.341\')"></span>'
+            + '<span class="kin-run__figure kin-run__figure--c" style="background-image:url(\'./static/kin-run/pose-c.png?v=32.341\')"></span>'
+            + '<span class="kin-run__ground"></span>'
+            + '<span class="kin-run__pct is-empty"><svg class="kin-run__pct-svg" viewBox="0 0 36 36" aria-hidden="true">'
+            + '<circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.2"/>'
+            + '<circle class="kin-run__pct-arc" cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.88)" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0.4 94.2" transform="rotate(-90 18 18)"/>'
+            + '</svg><span class="kin-run__pct-num">–</span></span></div><div class="kin-run__pips">';
           for (var d = 0; d < 11; d += 1) html += '<span class="kin-run__pip"></span>';
           html += '</div>';
           var wrap = document.createElement("div");
