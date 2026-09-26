@@ -16,7 +16,7 @@ import {
   User, Activity, Sliders, TrendingUp, Heart, Timer, Cpu, FileText,
   Menu, X, ChevronRight, Play, Square, RotateCcw, Copy, Check,
   Info, Save, BarChart3, Brain, Image as ImageIcon,
-  RefreshCw, FileSpreadsheet, Upload, FileUp,
+  RefreshCw, FileSpreadsheet, Upload, FileUp, Crosshair,
   Database, Search, Edit3, Trash2, Archive, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles, Users, LogOut, MoreHorizontal, Download, HardDrive,
 } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -3416,83 +3416,53 @@ function KinSkeletonJoint({ cx, cy, stroke, r = 0.85 }) {
   return <circle cx={cx} cy={cy} r={r} fill={stroke} opacity="0.88" />;
 }
 
-const KIN_SKELETON_VIEWS = ["front", "posterior"];
+const KIN_SKELETON_VIEWS = ["front", "posterior", "right", "posterior", "left"];
+const KIN_LENS_STROKE = "rgba(226,232,240,0.86)";
 
 function KinSkeletonFront({ stroke }) {
-  const b = kinBone(stroke);
-  const bThin = kinBone(stroke, 1.05);
+  const b = kinBone(stroke, 1.2);
   return (
     <g>
-      <circle cx="16" cy="4.2" r="2.35" {...b} />
-      <line x1="16" y1="6.5" x2="16" y2="8" {...b} />
-      <line x1="11" y1="8.6" x2="21" y2="8.6" {...b} />
-      <line x1="16" y1="8" x2="16" y2="13.6" {...b} />
-      <line x1="13.2" y1="10.2" x2="18.8" y2="10.2" {...bThin} />
-      <line x1="13.2" y1="11.8" x2="18.8" y2="11.8" {...bThin} />
-      <line x1="11" y1="8.6" x2="9.2" y2="12.2" {...b} />
-      <line x1="21" y1="8.6" x2="22.8" y2="12.2" {...b} />
-      <KinSkeletonJoint cx={9.2} cy={12.2} stroke={stroke} r={0.72} />
-      <KinSkeletonJoint cx={22.8} cy={12.2} stroke={stroke} r={0.72} />
-      <line x1="13.2" y1="13.6" x2="18.8" y2="13.6" {...b} />
-      <line x1="14" y1="13.6" x2="13.2" y2="19.8" {...b} />
-      <line x1="18" y1="13.6" x2="18.8" y2="19.8" {...b} />
-      <KinSkeletonJoint cx={13.2} cy={19.8} stroke={stroke} r={0.68} />
-      <KinSkeletonJoint cx={18.8} cy={19.8} stroke={stroke} r={0.68} />
+      <circle cx="16" cy="5" r="2.55" {...b} />
+      <line x1="16" y1="7.55" x2="16" y2="9.5" {...b} />
+      <line x1="8.6" y1="9.85" x2="23.4" y2="9.85" {...b} />
+      <line x1="16" y1="9.5" x2="16" y2="21.8" {...b} />
+      <line x1="8.6" y1="9.85" x2="7.5" y2="21.1" {...b} />
+      <line x1="23.4" y1="9.85" x2="24.5" y2="21.1" {...b} />
+      <line x1="13.2" y1="21.8" x2="18.8" y2="21.8" {...b} />
+      <line x1="13.7" y1="21.8" x2="12.2" y2="36.8" {...b} />
+      <line x1="18.3" y1="21.8" x2="19.8" y2="36.8" {...b} />
     </g>
   );
 }
 
 function KinSkeletonPosterior({ stroke }) {
-  const b = kinBone(stroke);
-  const bThin = kinBone(stroke, 1.05);
+  const b = kinBone(stroke, 1.2);
   return (
     <g>
-      <circle cx="16" cy="4.2" r="2.35" {...b} />
-      <line x1="16" y1="6.5" x2="16" y2="8" {...b} />
-      <line x1="11" y1="8.6" x2="21" y2="8.6" {...b} />
-      <line x1="16" y1="8" x2="16" y2="13.6" {...b} strokeWidth="1.55" />
-      <line x1="13.2" y1="10.2" x2="18.8" y2="10.2" {...bThin} />
-      <line x1="13.2" y1="11.8" x2="18.8" y2="11.8" {...bThin} />
-      <line x1="16" y1="9.4" x2="10.6" y2="8.2" {...bThin} />
-      <line x1="16" y1="9.4" x2="21.4" y2="8.2" {...bThin} />
-      <line x1="11" y1="8.6" x2="9.2" y2="12.2" {...b} />
-      <line x1="21" y1="8.6" x2="22.8" y2="12.2" {...b} />
-      <KinSkeletonJoint cx={9.2} cy={12.2} stroke={stroke} r={0.72} />
-      <KinSkeletonJoint cx={22.8} cy={12.2} stroke={stroke} r={0.72} />
-      <line x1="13.2" y1="13.6" x2="18.8" y2="13.6" {...b} />
-      <line x1="14" y1="13.6" x2="13.2" y2="19.8" {...b} />
-      <line x1="18" y1="13.6" x2="18.8" y2="19.8" {...b} />
-      <KinSkeletonJoint cx={13.2} cy={19.8} stroke={stroke} r={0.68} />
-      <KinSkeletonJoint cx={18.8} cy={19.8} stroke={stroke} r={0.68} />
+      <circle cx="16" cy="5" r="2.55" {...b} />
+      <line x1="16" y1="7.55" x2="16" y2="9.5" {...b} />
+      <line x1="9.4" y1="9.85" x2="22.6" y2="9.85" {...b} />
+      <line x1="16" y1="9.5" x2="16" y2="21.8" {...b} />
+      <line x1="9.4" y1="9.85" x2="8.8" y2="20.6" {...b} />
+      <line x1="22.6" y1="9.85" x2="23.2" y2="20.6" {...b} />
+      <line x1="13.2" y1="21.8" x2="18.8" y2="21.8" {...b} />
+      <line x1="13.7" y1="21.8" x2="13" y2="36.8" {...b} />
+      <line x1="18.3" y1="21.8" x2="19" y2="36.8" {...b} />
     </g>
   );
 }
 
 function KinSkeletonProfile({ stroke, facing = "right" }) {
-  const b = kinBone(stroke);
-  const bThin = kinBone(stroke, 1.05);
+  const b = kinBone(stroke, 1.2);
   const body = (
     <g>
-      <circle cx="12.5" cy="4.2" r="2.35" {...b} />
-      <line x1="12.3" y1="6.5" x2="11.8" y2="8" {...b} />
-      <line x1="11.8" y1="8" x2="11.4" y2="13.6" {...b} />
-      <line x1="11.6" y1="10.2" x2="15.4" y2="10.5" {...bThin} />
-      <line x1="11.5" y1="11.8" x2="15.5" y2="11.3" {...bThin} />
-      <line x1="11.8" y1="8.6" x2="9" y2="9.4" {...b} />
-      <line x1="11.8" y1="8.8" x2="14.6" y2="8.2" {...b} />
-      <line x1="11.8" y1="9" x2="15.4" y2="8.4" {...b} />
-      <line x1="15.4" y1="8.4" x2="19" y2="9.2" {...b} />
-      <KinSkeletonJoint cx={19} cy={9.2} stroke={stroke} r={0.72} />
-      <line x1="11.6" y1="9.2" x2="8.2" y2="11.4" {...b} />
-      <line x1="8.2" y1="11.4" x2="7.2" y2="13.2" {...b} />
-      <KinSkeletonJoint cx={7.2} cy={13.2} stroke={stroke} r={0.68} />
-      <line x1="12" y1="13.6" x2="14.4" y2="13.8" {...b} />
-      <line x1="12.2" y1="13.8" x2="11.5" y2="16.4" {...b} />
-      <line x1="11.5" y1="16.4" x2="12.2" y2="19.8" {...b} />
-      <KinSkeletonJoint cx={12.2} cy={19.8} stroke={stroke} r={0.68} />
-      <line x1="13.6" y1="13.8" x2="14.4" y2="16.4" {...b} />
-      <line x1="14.4" y1="16.4" x2="15.2" y2="19.8" {...b} />
-      <KinSkeletonJoint cx={15.2} cy={19.8} stroke={stroke} r={0.68} />
+      <circle cx="16" cy="5" r="2.55" {...b} />
+      <line x1="16" y1="7.55" x2="16.5" y2="21.8" {...b} />
+      <line x1="16.2" y1="10.5" x2="23.8" y2="16.9" {...b} />
+      <line x1="16.2" y1="10.7" x2="8.6" y2="16.4" {...b} />
+      <line x1="16.5" y1="21.8" x2="22.4" y2="36.8" {...b} />
+      <line x1="16.5" y1="21.8" x2="10.8" y2="36.8" {...b} />
     </g>
   );
   if (facing === "left") {
@@ -3508,41 +3478,40 @@ function KinSkeletonFigure({ view, stroke }) {
   return <KinSkeletonFront stroke={stroke} />;
 }
 
-function KinFilmFrame({ viewIndex, accent = "amber" }) {
-  const col = KIN_FILM_ACCENT[accent] || KIN_FILM_ACCENT.amber;
+function KinFilmFrame({ viewIndex }) {
   const view = KIN_SKELETON_VIEWS[viewIndex % KIN_SKELETON_VIEWS.length];
   return (
     <div className="kin-film-frame">
-      <svg viewBox="0 0 32 24" aria-hidden>
-        <KinSkeletonFigure view={view} stroke={col.stroke} />
+      <svg viewBox="0 0 32 40" aria-hidden>
+        <KinSkeletonFigure view={view} stroke={KIN_LENS_STROKE} />
       </svg>
     </div>
   );
 }
 
-function KinFilmStripLoop({ accent = "amber" }) {
-  const pips = Array.from({ length: 9 });
-  const frames = Array.from({ length: 8 }, (_, i) => i);
+function KinFilmStripLoop() {
+  const pips = Array.from({ length: 11 });
+  const frames = Array.from({ length: 10 }, (_, i) => i);
   return (
     <div className="kin-film-strip" aria-hidden>
+      <div className="kin-film-strip__body">
+        <div className="kin-film-strip__track" style={{ "--nl-film-n": 20 }}>
+          {frames.map((i) => <KinFilmFrame key={`a-${i}`} viewIndex={i} />)}
+          {frames.map((i) => <KinFilmFrame key={`b-${i}`} viewIndex={i} />)}
+        </div>
+      </div>
       <div className="kin-film-strip__pips">
         {pips.map((_, i) => <span key={`p-${i}`} className="kin-film-strip__pip" />)}
-      </div>
-      <div className="kin-film-strip__body">
-        <div className="kin-film-strip__track">
-          {frames.map((i) => <KinFilmFrame key={`a-${i}`} viewIndex={i} accent={accent} />)}
-          {frames.map((i) => <KinFilmFrame key={`b-${i}`} viewIndex={i} accent={accent} />)}
-        </div>
       </div>
     </div>
   );
 }
 
 const KIN_ANALYZE_STAGES = [
-  { id: "upload", label: "Upload", re: /upload|send|transfer/i },
-  { id: "detect", label: "Detect", re: /detect|pose|hand|track|overlay|media/i },
-  { id: "analyze", label: "Analyze", re: /analy|kinem|sparc|nvp|metric|filter/i },
-  { id: "done", label: "Done", re: /done|complete|ready|finish/i },
+  { id: "upload", label: "Upload", re: /upload|send|transfer/i, Icon: Upload },
+  { id: "detect", label: "Detect", re: /detect|pose|hand|track|overlay|media/i, Icon: Crosshair },
+  { id: "analyze", label: "Analyze", re: /analy|kinem|sparc|nvp|metric|filter/i, Icon: BarChart3 },
+  { id: "done", label: "Done", re: /done|complete|ready|finish/i, Icon: Check },
 ];
 
 function kinAnalyzeStageIndex(step, pct) {
@@ -3557,38 +3526,31 @@ function kinAnalyzeStageIndex(step, pct) {
 }
 
 function KinAnalyzeStageCapsule({ accent = "amber", pct = null, step = "Analyzing video…" }) {
-  const pip = KIN_PHASE_PIP[accent] || KIN_PHASE_PIP.amber;
-  const film = KIN_FILM_ACCENT[accent] || KIN_FILM_ACCENT.amber;
+  void accent;
   const pctRounded = pct != null && !Number.isNaN(Number(pct)) ? Math.round(Number(pct)) : null;
   const active = kinAnalyzeStageIndex(step, pctRounded);
 
   return (
-    <div className="kin-analyze-stage">
+    <div className="kin-analyze-stage" data-nl-stadium="1">
       <div className="kin-analyze-stage__capsule">
-        <div className="kin-analyze-stage__row">
-          <KinAnalyzeProgressGlyph
-            pct={pctRounded}
-            stroke={film.stroke}
-            glow={film.glow}
-            sizeClass="w-11 h-11"
-            labelClass="text-[9px]"
-            indeterminate={pctRounded == null}
-          />
-          <div className="kin-analyze-stage__film">
-            <KinFilmStripLoop accent={accent} />
-          </div>
-        </div>
-        <div className="kin-analyze-stage__steps">
-          {KIN_ANALYZE_STAGES.map((s, i) => (
+        <KinFilmStripLoop />
+      </div>
+      <div className="kin-analyze-stage__stepper" aria-label="Analysis stages">
+        <span className="kin-analyze-stage__rail" aria-hidden />
+        {KIN_ANALYZE_STAGES.map((s, i) => {
+          const Icon = s.Icon;
+          return (
             <span
               key={s.id}
               className={`kin-analyze-stage__step ${i === active ? "is-active" : ""} ${i < active ? "is-done" : ""}`}
             >
-              <span className={`kin-analyze-stage__pip ${pip}`} />
-              {s.label}
+              <span className="kin-analyze-stage__icon">
+                <Icon className="w-3.5 h-3.5" strokeWidth={2.1} />
+              </span>
+              <span className="kin-analyze-stage__label">{s.label}</span>
             </span>
-          ))}
-        </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -5509,7 +5471,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                 </div>
 
                 <div className="px-4 py-2 flex flex-col flex-1 min-h-0">
-                  <label htmlFor={`kin-file-${ph.k}`} className={`${kinUploadZoneCls(ph.c, !!data[vidKey(ph.k)])} relative mb-3 min-h-[130px] overflow-hidden ${status === "analyzing" ? "pointer-events-none" : ""}`}>
+                  <label htmlFor={`kin-file-${ph.k}`} className={`${status === "analyzing" ? "kin-analyze-zone relative mb-3 pointer-events-none" : `${kinUploadZoneCls(ph.c, !!data[vidKey(ph.k)])} relative mb-3 min-h-[130px] overflow-hidden`}`}>
                   <div className="flex flex-col items-center justify-center gap-1.5 w-full">
                   <input
                       id={`kin-file-${ph.k}`}

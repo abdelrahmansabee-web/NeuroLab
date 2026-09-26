@@ -153,70 +153,27 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   to { transform: translateX(-50%); }
 }
 
-/* Live film strip becomes the glass capsule; keep the skeleton scroll moving. */
-.kin-film-strip {
-  max-width: 300px !important;
-  border-radius: 28px !important;
-  border: 1px solid rgba(255, 255, 255, 0.06) !important;
-  background: rgba(255, 255, 255, 0.028) !important;
-  backdrop-filter: blur(22px) saturate(3.25) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
-  box-shadow:
-    inset 0 -14px 26px rgba(70, 130, 180, 0.05),
-    0 12px 32px -16px rgba(0, 0, 0, 0.22) !important;
-  padding: 8px 10px 10px !important;
-}
-.kin-film-strip__holes {
-  display: none !important;
-}
-.kin-film-strip__pips {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 0 8px 2px;
-}
-.kin-film-strip__pip {
-  width: 4px;
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
-  flex-shrink: 0;
-}
-.kin-analyze-stage__row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.kin-analyze-stage__film {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.kin-film-strip__body {
-  border-radius: 18px !important;
-  border: none !important;
-  background: transparent !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  box-shadow: none !important;
-  margin: 2px 0 !important;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-}
-.kin-analyze-stage__capsule {
-  border-radius: 28px !important;
-  border: 1px solid rgba(255, 255, 255, 0.06) !important;
-  background: rgba(255, 255, 255, 0.028) !important;
-  backdrop-filter: blur(22px) saturate(3.25) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
-  box-shadow:
-    inset 0 -14px 26px rgba(70, 130, 180, 0.05),
-    0 12px 32px -16px rgba(0, 0, 0, 0.22) !important;
-  padding: 8px 10px 10px !important;
-  margin: 0 !important;
-}
-.kin-analyze-stage__capsule .kin-film-strip {
+/* Live film strip becomes the NeuroLab stadium capsule: 5 standing tiles + pips. */
+.kin-analyze-stage {
+  width: 100% !important;
   max-width: none !important;
+}
+.kin-analyze-stage__capsule,
+.kin-analyze-stage[data-nl-stadium="1"] .kin-film-strip,
+.kin-film-strip.nl-stadium-film {
+  max-width: none !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  background: rgba(255, 255, 255, 0.028) !important;
+  backdrop-filter: blur(22px) saturate(3.25) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
+  box-shadow:
+    inset 0 -14px 26px rgba(70, 130, 180, 0.05),
+    0 12px 32px -16px rgba(0, 0, 0, 0.22) !important;
+  padding: 16px 18px 12px !important;
+}
+.kin-analyze-stage__capsule .kin-film-strip,
+.kin-analyze-stage[data-nl-stadium="1"] .kin-film-strip {
   padding: 0 !important;
   border: none !important;
   background: transparent !important;
@@ -224,29 +181,93 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   -webkit-backdrop-filter: none !important;
   box-shadow: none !important;
 }
+.kin-film-strip__holes {
+  display: none !important;
+}
+.kin-film-strip__pips {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 10px 0;
+}
+.kin-film-strip__pip {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
+}
+.kin-analyze-stage__row,
+.kin-analyze-stage__film {
+  display: block;
+  min-width: 0;
+}
+.kin-film-strip__body {
+  border-radius: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
 .kin-film-strip__track {
   display: flex !important;
-  width: max-content !important;
+  width: calc(var(--nl-film-n, 8) / 5 * 100%) !important;
   justify-content: flex-start !important;
-  animation: kin-film-scroll 5.6s linear infinite !important;
+  padding: 0 !important;
+  animation: kin-film-scroll 7.2s linear infinite !important;
   transform: translateZ(0);
 }
 .kin-film-frame {
-  border-radius: 12px !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  background-color: rgba(255, 255, 255, 0.05) !important;
+  position: relative !important;
+  flex: 0 0 calc(100% / var(--nl-film-n, 8)) !important;
+  width: auto !important;
+  height: 52px !important;
+  margin: 0 !important;
+  padding: 0 4px !important;
+  border: none !important;
+  background: transparent !important;
   background-image: none !important;
+  border-radius: 0 !important;
+  box-sizing: border-box !important;
+}
+.kin-film-frame::after {
+  content: "";
+  position: absolute;
+  inset: 2px 6px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.045);
+  pointer-events: none;
 }
 .kin-film-frame svg {
+  position: relative;
+  z-index: 1;
   opacity: 1 !important;
   display: block !important;
-  width: 40px;
-  height: 30px;
+  width: 28px !important;
+  height: 36px !important;
+  margin: 0 auto;
 }
 label[for^="kin-file-"] {
   border-style: solid !important;
   border-radius: 24px !important;
 }
+label[for^="kin-file-"]:has(.kin-analyze-stage),
+label[for^="kin-file-"]:has(.kin-film-strip) {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 2px 0 0 !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+.kin-analyze-panel,
 .kin-analyze-panel.nl-analyze-absorbed {
   display: none !important;
 }
@@ -259,26 +280,65 @@ label[for^="kin-file-"] {
 .relative.flex.flex-col[class*="border-t-"] {
   border-top-width: 1px !important;
 }
-.kin-analyze-stage__steps {
+.kin-analyze-stage__steps,
+.kin-analyze-stage__stepper {
   position: relative;
   z-index: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 0 6px;
+}
+.kin-analyze-stage__rail {
+  position: absolute;
+  top: 14px;
+  left: 28px;
+  right: 28px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.16);
+  pointer-events: none;
 }
 .kin-analyze-stage__step {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 4px;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.38);
+  gap: 8px;
+  flex: 1 1 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.42);
+}
+.kin-analyze-stage__step.is-done {
+  color: rgba(255, 255, 255, 0.62);
 }
 .kin-analyze-stage__step.is-active {
   color: rgba(255, 255, 255, 0.92);
+}
+.kin-analyze-stage__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(8, 10, 16, 0.55);
+  color: rgba(255, 255, 255, 0.72);
+}
+.kin-analyze-stage__step.is-active .kin-analyze-stage__icon {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #0a0c12;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.06);
+}
+.kin-analyze-stage__label {
+  line-height: 1;
+  white-space: nowrap;
 }
 .kin-analyze-track {
   height: 6px;
@@ -441,7 +501,10 @@ html.nl-touch [role="dialog"][aria-label="Sessions recalled from Drive"] {
   .validation-metrics-gutter,
   .validation-player-controls,
   .validation-player-topbar,
-  .kin-film-strip__body {
+  .kin-film-strip__body,
+  .kin-analyze-stage__capsule,
+  .kin-analyze-stage[data-nl-stadium="1"] .kin-film-strip,
+  .kin-film-strip.nl-stadium-film {
     background-color: rgba(18, 24, 32, 0.78) !important;
   }
 }

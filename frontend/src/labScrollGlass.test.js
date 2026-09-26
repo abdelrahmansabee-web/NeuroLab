@@ -33,18 +33,25 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(css).toMatch(/\.kin-analyze-track-fill/);
   expect(css).not.toMatch(/rgba\(8,\s*10,\s*18,\s*0\.82\)/);
   expect(css).toMatch(/\.kin-analyze-stage__capsule[\s\S]*?rgba\(255,\s*255,\s*255,\s*0\.028\)/);
+  expect(css).toMatch(/\.kin-analyze-stage__capsule[\s\S]*?border-radius:\s*999px/);
+  expect(css).toMatch(/\.kin-analyze-stage__stepper/);
+  expect(css).toMatch(/\.kin-analyze-stage__rail/);
   expect(app).toMatch(/function KinAnalyzeStageCapsule/);
   expect(app).toMatch(/function KinFilmStripLoop/);
-  expect(app).toMatch(/<KinFilmStripLoop accent=\{accent\} \/>/);
-  expect(app).toMatch(/KinAnalyzeProgressGlyph/);
+  expect(app).toMatch(/<KinFilmStripLoop \/>/);
+  expect(app).toMatch(/kin-analyze-stage__stepper/);
   expect(app).toMatch(/kinAnalyzeStageIndex\(step, pctRounded\)/);
+  expect(app).toMatch(/KIN_SKELETON_VIEWS = \["front", "posterior", "right", "posterior", "left"\]/);
+  expect(app).toMatch(/viewBox="0 0 32 40"/);
   expect(app).not.toMatch(/logo192-white\.png/);
   expect(app).not.toMatch(/border border-dashed px-3 py-5/);
   expect(app).not.toMatch(/if \(hasResult\) return `\$\{base\} ring-1/);
-  expect(overlay).toMatch(/animation: kin-film-scroll 5\.6s linear infinite/);
+  expect(overlay).toMatch(/animation: kin-film-scroll 7\.2s linear infinite/);
   expect(overlay).not.toMatch(/logo192-white\.png/);
   expect(overlay).toMatch(/\.kin-film-strip__holes \{\s*display:\s*none/);
   expect(overlay).toMatch(/nl-analyze-absorbed/);
+  expect(overlay).toMatch(/kin-analyze-stage__stepper/);
+  expect(overlay).toMatch(/border-radius: 999px/);
 });
 
 test("validation video chrome uses muted glass bars and panels", () => {
