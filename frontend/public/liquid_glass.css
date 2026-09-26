@@ -219,114 +219,27 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   display: none !important;
 }
 
-/* Newton's cradle: end ball hits, middles stay, opposite ball leaves. Fastest at impact. */
-@keyframes nl-cradle-a {
-  0% {
-    transform: rotate(-32deg);
-    animation-timing-function: cubic-bezier(0.4, 0, 1, 0.4);
-    -webkit-animation-timing-function: cubic-bezier(0.4, 0, 1, 0.4);
-  }
-  25% {
-    transform: rotate(0deg);
-    animation-timing-function: linear;
-    -webkit-animation-timing-function: linear;
-  }
-  75% {
-    transform: rotate(0deg);
-    animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1);
-    -webkit-animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1);
-  }
-  100% { transform: rotate(-32deg); }
-}
-@keyframes nl-cradle-e {
-  0%, 25% {
-    transform: rotate(0deg);
-    animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1);
-    -webkit-animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1);
-  }
-  50% {
-    transform: rotate(32deg);
-    animation-timing-function: cubic-bezier(0.4, 0, 1, 0.4);
-    -webkit-animation-timing-function: cubic-bezier(0.4, 0, 1, 0.4);
-  }
-  75%, 100% { transform: rotate(0deg); }
-}
+/* Ready cropped Newton cradle GIF from the LottieFiles clip the user marked 100%. iPad plays <img> GIFs. */
 .nl-cradle {
   position: absolute;
   left: 0;
   right: 0;
-  top: 10px;
-  height: 128px;
+  top: 8px;
+  height: 148px;
   pointer-events: none;
   z-index: 2;
-  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
-.nl-cradle__bar {
-  position: absolute;
-  left: 50%;
-  top: 8px;
-  width: 142px;
-  height: 3px;
-  margin-left: -71px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.12));
-  box-shadow: 0 1px 0 rgba(255,255,255,0.2);
-}
-.nl-cradle__row {
-  position: absolute;
-  left: 50%;
-  top: 8px;
-  width: 140px;
-  height: 112px;
-  margin-left: -70px;
-  overflow: visible;
-}
-.nl-cradle__bob {
-  position: absolute;
-  top: 0;
-  width: 28px;
-  height: 112px;
-  transform-origin: 14px 3px;
-  -webkit-transform-origin: 14px 3px;
-  overflow: visible;
-}
-.nl-cradle__bob--0 { left: 0; }
-.nl-cradle__bob--1 { left: 28px; }
-.nl-cradle__bob--2 { left: 56px; }
-.nl-cradle__bob--3 { left: 84px; }
-.nl-cradle__bob--4 { left: 112px; }
-.nl-cradle__string {
-  position: absolute;
-  left: 13px;
-  top: 3px;
-  width: 1px;
-  height: 78px;
-  background: rgba(255,255,255,0.62);
-}
-.nl-cradle__ball {
-  position: absolute;
-  left: 0;
-  top: 76px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.34);
-  background:
-    radial-gradient(circle at 33% 28%, rgba(255,255,255,0.96) 0 2px, rgba(236,242,248,0.55) 14%, rgba(168,178,192,0.32) 46%, rgba(58,64,76,0.72) 78%, rgba(18,20,26,0.92) 100%);
-  box-shadow:
-    inset 0 -5px 7px rgba(0,0,0,0.28),
-    inset 0 2px 3px rgba(255,255,255,0.28),
-    0 8px 12px -6px rgba(0,0,0,0.5);
-}
-.nl-cradle__bob--a {
-  animation: nl-cradle-a 1.6s infinite;
-  -webkit-animation: nl-cradle-a 1.6s infinite;
-  will-change: transform;
-}
-.nl-cradle__bob--e {
-  animation: nl-cradle-e 1.6s infinite;
-  -webkit-animation: nl-cradle-e 1.6s infinite;
-  will-change: transform;
+.nl-cradle__gif {
+  display: block;
+  height: 140px;
+  width: auto;
+  max-width: 94%;
+  object-fit: contain;
+  background: transparent;
 }
 .kin-run__pct {
   position: absolute;
@@ -493,11 +406,8 @@ label[for^="kin-file-"]:has(.kin-film-strip) {
   border-radius: 999px;
 }
 @media (prefers-reduced-motion: reduce) {
-  .nl-cradle__bob--a,
-  .nl-cradle__bob--e {
-    animation: none !important;
-    -webkit-animation: none !important;
-    transform: rotate(0deg) !important;
+  .nl-cradle__gif {
+    content: url("/static/kin-run/cradle-still.png?v=32.372i");
   }
   .kin-film-strip__track,
   .kin-liquid-orb__blob,
