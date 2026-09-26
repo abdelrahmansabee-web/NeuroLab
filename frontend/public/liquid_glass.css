@@ -175,6 +175,16 @@ html.nl-overlay-expanded.nl-touch .content-shell .glass-float:not(.validation-pl
   border-radius: 999px;
 }
 
+/* 3-dot sheet slides with bottom, not transform, so the lens stays unflattened. */
+@keyframes nl-actions-sheet-in {
+  from { bottom: -100vh; }
+  to { bottom: 0px; }
+}
+@keyframes nl-actions-sheet-out {
+  from { bottom: 0px; }
+  to { bottom: -100vh; }
+}
+
 /* Compact glass lens — 3-dot Actions + Recalling. Transform stays off the glass. */
 @keyframes gselect-body-in {
   from {
@@ -220,6 +230,8 @@ button[aria-label="Close menu"],
   right: 12px !important;
   width: min(320px, calc(100vw - 24px)) !important;
   max-width: min(320px, calc(100vw - 24px)) !important;
+  top: auto !important;
+  bottom: 0;
   transform: none !important;
   filter: none !important;
   will-change: auto !important;
@@ -229,6 +241,10 @@ button[aria-label="Close menu"],
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  animation: nl-actions-sheet-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+[role="dialog"][aria-label="Actions menu"].nl-actions-sheet--out {
+  animation: nl-actions-sheet-out 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 [role="dialog"][aria-label="Actions menu"].nl-lens-menu,
@@ -266,9 +282,8 @@ button[aria-label="Close menu"],
 [role="dialog"][aria-label="Loaded sessions"] .gselect-menu-body:not(.gselect-menu-body--animate-out),
 [role="dialog"][aria-label="Sessions recalled from Drive"] .gselect-menu-body:not(.gselect-menu-body--animate-out),
 [role="dialog"][aria-label="Actions menu"].gselect-menu-portal > div:not(.gselect-menu-body--animate-out),
-[role="dialog"][aria-label="Actions menu"] .gselect-menu-portal > div:not(.gselect-menu-body--animate-out),
-[role="dialog"][aria-label="Actions menu"] > .mobile-actions-sheet > nav {
-  animation: gselect-body-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+[role="dialog"][aria-label="Actions menu"] .gselect-menu-portal > div:not(.gselect-menu-body--animate-out) {
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -278,7 +293,8 @@ button[aria-label="Close menu"],
   [role="dialog"][aria-label="Sessions recalled from Drive"] .gselect-menu-body,
   [role="dialog"][aria-label="Actions menu"].gselect-menu-portal > div,
   [role="dialog"][aria-label="Actions menu"] .gselect-menu-portal > div,
-  [role="dialog"][aria-label="Actions menu"] > .mobile-actions-sheet > nav {
+  [role="dialog"][aria-label="Actions menu"],
+  [role="dialog"][aria-label="Actions menu"].nl-actions-sheet--out {
     animation: none !important;
   }
 }

@@ -53,7 +53,13 @@ test("validation video chrome uses muted glass bars and panels", () => {
 test("three-dot menu is a compact glass lens, not a stadium plate", () => {
   expect(app).toMatch(/moreMenuBtnRef/);
   expect(app).toMatch(/desktop-more-menu/);
-  expect(app).toMatch(/transformOrigin: "top right"/);
+  expect(app).toMatch(/nl-actions-sheet/);
+  expect(app).toMatch(/nl-actions-sheet--out/);
+  expect(app).toMatch(/@keyframes nl-actions-sheet-in/);
+  expect(app).toMatch(/@keyframes nl-actions-sheet-out/);
+  expect(app).toMatch(/from \{ bottom: -100vh; \}/);
+  expect(css).toMatch(/@keyframes nl-actions-sheet-in/);
+  expect(css).toMatch(/@keyframes nl-actions-sheet-out/);
   expect(app).toMatch(/desktop-more-menu[\s\S]*?position: "absolute"/);
   expect(app).toMatch(/nl-lens-menu gselect-menu-portal glass-float/);
   expect(app).toMatch(/gselect-menu-body--animate-out/);
@@ -76,6 +82,9 @@ test("Recalling and GSelect keep liquid-glass motion on the inner body only", ()
   expect(overlay).toMatch(/\[role="dialog"\]\[aria-label="Actions menu"\]/);
   expect(overlay).toMatch(/\.mobile-actions-sheet\.sidebar-shell/);
   expect(overlay).toMatch(/\[role="dialog"\]\[aria-label="Actions menu"\] > \.mobile-actions-sheet/);
+  expect(overlay).toMatch(/@keyframes nl-actions-sheet-in/);
+  expect(overlay).toMatch(/@keyframes nl-actions-sheet-out/);
+  expect(overlay).toMatch(/nl-actions-sheet--out/);
   expect(overlay).toMatch(/html\.nl-overlay-expanded \.content-shell \.content-panel-glass:not\(\.validation-metrics-gutter\)[\s\S]*?backdrop-filter:\s*none/);
   expect(overlay).not.toMatch(/\[role="dialog"\]\[aria-label="Actions menu"\],\s*\[role="dialog"\]\[aria-label="Loaded sessions"\]/);
   expect(overlay).not.toMatch(/\.app-topbar-glass,\s*\.section-header \{\s*border-radius:\s*999px/);

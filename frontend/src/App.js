@@ -10672,6 +10672,21 @@ export default function App() {
           animation: gselect-body-out 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
 
+        @keyframes nl-actions-sheet-in {
+          from { bottom: -100vh; }
+          to { bottom: 0px; }
+        }
+        @keyframes nl-actions-sheet-out {
+          from { bottom: 0px; }
+          to { bottom: -100vh; }
+        }
+        [role="dialog"][aria-label="Actions menu"].nl-actions-sheet {
+          animation: nl-actions-sheet-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        [role="dialog"][aria-label="Actions menu"].nl-actions-sheet--out {
+          animation: nl-actions-sheet-out 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
         .gselect-menu-portal {
           contain: layout style;
         }
@@ -10810,34 +10825,28 @@ export default function App() {
                   className="absolute inset-0 bg-transparent"
                   onClick={closeMobileTopMenu}
                 />
-                <motion.div
+                <div
                   ref={mobileMenuRef}
                   role="dialog"
                   aria-modal="true"
                   aria-label="Actions menu"
-                  className={`nl-lens-menu gselect-menu-portal glass-float overflow-hidden ${GLASS_PANEL_CLS}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={NL_TWEEN_OVERLAY}
+                  className={`nl-actions-sheet absolute right-3 bottom-0 w-[min(320px,calc(100vw-24px))]${reduceMenuMotion ? "" : menuBodyOut ? " nl-actions-sheet--out" : ""}`}
                   style={{
                     position: "absolute",
-                    top: moreMenuPos.top,
-                    left: moreMenuPos.left == null ? "auto" : moreMenuPos.left,
-                    right: moreMenuPos.left == null ? 12 : "auto",
-                    width: moreMenuPos.width,
-                    maxWidth: "min(320px, calc(100vw - 24px))",
                     maxHeight: "min(78vh, calc(100dvh - 72px))",
-                    borderRadius: 28,
-                    boxShadow: FLOAT_M,
-                    transformOrigin: "top right",
+                    paddingBottom: "max(12px, env(safe-area-inset-bottom, 0px))",
                     zIndex: 1,
                   }}
                 >
-                  <div className={`gselect-menu-body flex flex-col max-h-full overflow-y-auto overscroll-contain px-2 py-1${reduceMenuMotion ? "" : menuBodyOut ? " gselect-menu-body--animate-out" : " gselect-menu-body--animate"}`}>
-                    <TopBarActions inMenu={true} />
+                  <div
+                    className={`nl-lens-menu gselect-menu-portal glass-float overflow-hidden ${GLASS_PANEL_CLS}`}
+                    style={{ borderRadius: 28, boxShadow: FLOAT_M }}
+                  >
+                    <div className="gselect-menu-body flex flex-col max-h-full overflow-y-auto overscroll-contain px-2 py-1">
+                      <TopBarActions inMenu={true} />
+                    </div>
                   </div>
-                </motion.div>
+                </div>
               </div>
             ) : (
               <div key="mobile-top-menu" className="fixed inset-0 z-[200]">
@@ -10852,7 +10861,7 @@ export default function App() {
                   role="dialog"
                   aria-modal="true"
                   aria-label="Actions menu"
-                  className="absolute right-3 bottom-0 w-[min(320px,calc(100vw-24px))]"
+                  className={`nl-actions-sheet absolute right-3 bottom-0 w-[min(320px,calc(100vw-24px))]${reduceMenuMotion ? "" : menuBodyOut ? " nl-actions-sheet--out" : ""}`}
                   style={{
                     maxHeight: "min(78vh, calc(100dvh - env(safe-area-inset-top, 0px) - 72px))",
                     paddingBottom: "max(12px, env(safe-area-inset-bottom, 0px))",
@@ -10860,10 +10869,10 @@ export default function App() {
                 >
                   <div
                     className={`nl-lens-menu gselect-menu-portal glass-float flex flex-col max-h-full overflow-hidden ${GLASS_PANEL_CLS}`}
-                    style={{ borderRadius: 28, boxShadow: FLOAT_M, transform: "translateZ(0)", WebkitTransform: "translateZ(0)" }}
+                    style={{ borderRadius: 28, boxShadow: FLOAT_M }}
                   >
                     <div
-                      className={`gselect-menu-body flex-1 min-h-0 px-2 pt-2 pb-2 overflow-y-auto overscroll-contain${reduceMenuMotion ? "" : menuBodyOut ? " gselect-menu-body--animate-out" : " gselect-menu-body--animate"}`}
+                      className="gselect-menu-body flex-1 min-h-0 px-2 pt-2 pb-2 overflow-y-auto overscroll-contain"
                       style={{
                         paddingBottom: "max(12px, calc(12px + env(safe-area-inset-bottom, 0px) * 0.35))",
                       }}

@@ -834,6 +834,28 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   height: 100%;
 }
 
+/* 3-dot Actions menu — slide from the bottom of the screen. Animate bottom, not transform. */
+@keyframes nl-actions-sheet-in {
+  from { bottom: -100vh; }
+  to { bottom: 0px; }
+}
+@keyframes nl-actions-sheet-out {
+  from { bottom: 0px; }
+  to { bottom: -100vh; }
+}
+[role="dialog"][aria-label="Actions menu"].nl-actions-sheet {
+  animation: nl-actions-sheet-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+[role="dialog"][aria-label="Actions menu"].nl-actions-sheet--out {
+  animation: nl-actions-sheet-out 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  [role="dialog"][aria-label="Actions menu"].nl-actions-sheet,
+  [role="dialog"][aria-label="Actions menu"].nl-actions-sheet--out {
+    animation: none !important;
+  }
+}
+
 /* Firefox / older browsers without backdrop-filter: keep the same dark glass read, not a clear hole. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .sidebar-shell,
