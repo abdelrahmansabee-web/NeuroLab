@@ -99,7 +99,7 @@ function SessionRow({ row, expanded, onToggle, onOpen }) {
           className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-2 text-left hover:bg-white/[0.06]"
         >
           <ChevronDown
-            className={`w-3.5 h-3.5 text-white/40 flex-shrink-0 transition-transform ${expanded ? "" : "-rotate-90"}`}
+            className={`w-3.5 h-3.5 text-white/40 flex-shrink-0 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${expanded ? "" : "-rotate-90"}`}
           />
           <div className="min-w-0 flex-1">
             <div className="text-[12px] font-semibold text-white/90 truncate">

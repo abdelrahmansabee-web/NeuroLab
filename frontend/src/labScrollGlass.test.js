@@ -17,6 +17,13 @@ test("iPad inner lab cards keep a light glass blur instead of a black plate", ()
   );
 });
 
+test("clinic chrome uses shared liquid section motion instead of a missing bounce", () => {
+  expect(css).toMatch(/@keyframes nl-bounce-in/);
+  expect(css).toMatch(/@keyframes nl-bounce-out/);
+  expect(app).toMatch(/const BOUNCE_OUT_MS = 420/);
+  expect(app).toMatch(/const BOUNCE_IN_MS = 520/);
+});
+
 test("analysis phase cards use muted glass instead of neon sky/emerald/amber plates", () => {
   expect(app).not.toMatch(/border-t-\[3px\] bg-gradient-to-b \$\{a\.top\}/);
   expect(app).not.toMatch(/from-sky-500\/14/);

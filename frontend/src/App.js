@@ -11,6 +11,7 @@ import {
   NL_SPRING_SNAPPY,
   NL_SPRING_TOAST,
   NL_TWEEN_MENU,
+  NL_TWEEN_OVERLAY,
 } from "./motionPresets";
 import {
   User, Activity, Sliders, TrendingUp, Heart, Timer, Cpu, FileText,
@@ -185,8 +186,8 @@ const SIDEBAR_W = 255;
 const SIDEBAR_X_HIDDEN = -280;
 const MOBILE_SIDEBAR_W = "75%";
 /** Sidebar aside slide (transform); main/top bar use width + inset for centered content. */
-const SIDEBAR_SHELL_TRANSITION = "transform 420ms cubic-bezier(0.22, 1, 0.36, 1)";
-const SIDEBAR_LAYOUT_TRANSITION = "left 420ms cubic-bezier(0.22, 1, 0.36, 1), width 420ms cubic-bezier(0.22, 1, 0.36, 1), margin-left 420ms cubic-bezier(0.22, 1, 0.36, 1)";
+const SIDEBAR_SHELL_TRANSITION = "transform 480ms cubic-bezier(0.22, 1, 0.36, 1)";
+const SIDEBAR_LAYOUT_TRANSITION = "left 480ms cubic-bezier(0.22, 1, 0.36, 1), width 480ms cubic-bezier(0.22, 1, 0.36, 1), margin-left 480ms cubic-bezier(0.22, 1, 0.36, 1)";
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
   if (window.matchMedia("(min-width: 768px)").matches) return SIDEBAR_W;
@@ -1584,7 +1585,7 @@ const GSelect = ({ en, tr, value, onChange, options, className = "" }) => {
                   backgroundColor: selected ? "rgba(255,255,255,0.08)" : "transparent",
                   color: selected ? "#ffffff" : "rgba(255,255,255,0.75)",
                   fontWeight: selected ? 700 : 400,
-                  transition: "background-color 0.15s, color 0.15s",
+                  transition: "background-color 0.32s cubic-bezier(0.22, 1, 0.36, 1), color 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
                 };
                 return (
                     <button
@@ -1714,7 +1715,7 @@ const PullToRefresh = ({ scrollRef, spinnerAnchorRef, onRefresh, disabled = fals
     if (content) {
       content.style.transform = ty ? `translate3d(0, ${ty}px, 0)` : "";
       content.style.transition = state === "idle"
-        ? "transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+        ? "transform 0.42s cubic-bezier(0.22, 1, 0.36, 1)"
         : "none";
       content.style.willChange = ty ? "transform" : "auto";
     }
@@ -2172,6 +2173,7 @@ const VASSlider = ({ value, onChange, color = "sky" }) => {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
+                  transition={NL_SPRING_SNAPPY}
                   className="text-[9px] font-bold text-center"
                   style={{ color: color === "sky" ? "#7dd3fc" : "#6ee7b7" }}
                 >
@@ -2226,6 +2228,7 @@ const VAMSSlider = ({ value, onChange, color = "sky" }) => {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
+                  transition={NL_SPRING_SNAPPY}
                   className="text-[9px] font-bold text-center"
                   style={{ color: color === "sky" ? "#7dd3fc" : "#6ee7b7" }}
                 >
@@ -2604,7 +2607,7 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
           })}
         </div>
         {(data.comorbidities || []).includes("other") && (
-          <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }} className="mt-3">
+          <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }} transition={NL_TWEEN_MENU} className="mt-3">
             <GI en="Specify other" tr="Specify other" value={data.otherComorbidity} onChange={(e) => s("otherComorbidity", e.target.value)} placeholder="Other conditions?" />
           </motion.div>
         )}
@@ -5572,7 +5575,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                               initial={{ height: 0, opacity: 0 }}
                               animate={{ height: "auto", opacity: 1 }}
                               exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.25 }}
+                              transition={NL_TWEEN_MENU}
                               className="overflow-hidden"
                             >
                               <div className="rounded-xl border border-white/[0.08] bg-black/30 overflow-hidden">
@@ -5996,7 +5999,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={NL_TWEEN_OVERLAY}
             className="fixed inset-0 z-[99998] flex flex-col bg-black/95 backdrop-blur-sm"
             onClick={() => setMediaPreview(null)}
           >
@@ -8019,7 +8022,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* PDF */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
+            whileHover={nlMotionHover(1.01)}
             whileTap={nlMotionTap(0.98)}
             onClick={exportGlassReport}
             className="flex flex-col gap-3 p-5 rounded-xl bg-rose-500/10 border border-rose-400/25 hover:bg-rose-500/15 hover:border-rose-400/40 transition-all text-left"
@@ -8040,7 +8043,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
           {/* Per-task Excel (clinic study) */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
+            whileHover={nlMotionHover(1.01)}
             whileTap={nlMotionTap(0.98)}
             onClick={exportTaskExcels}
             className="flex flex-col gap-3 p-5 rounded-xl bg-teal-500/10 border border-teal-400/25 hover:bg-teal-500/15 hover:border-teal-400/40 transition-all text-left"
@@ -8061,7 +8064,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
           {/* Current-patient Excel */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
+            whileHover={nlMotionHover(1.01)}
             whileTap={nlMotionTap(0.98)}
             onClick={exportExcel}
             className="flex flex-col gap-3 p-5 rounded-xl bg-sky-500/10 border border-sky-400/25 hover:bg-sky-500/15 hover:border-sky-400/40 transition-all text-left"
@@ -8082,7 +8085,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
           {/* SPSS */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
+            whileHover={nlMotionHover(1.01)}
             whileTap={nlMotionTap(0.98)}
             onClick={exportSPSS}
             className="flex flex-col gap-3 p-5 rounded-xl bg-violet-500/10 border border-violet-400/25 hover:bg-violet-500/15 hover:border-violet-400/40 transition-all text-left"
@@ -8103,7 +8106,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
           {/* JSON */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
+            whileHover={nlMotionHover(1.01)}
             whileTap={nlMotionTap(0.98)}
             onClick={exportJSON}
             className="flex flex-col gap-3 p-5 rounded-xl bg-emerald-500/10 border border-emerald-400/25 hover:bg-emerald-500/15 hover:border-emerald-400/40 transition-all text-left"
@@ -8124,7 +8127,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
           {/* SPSS Syntax */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
+            whileHover={nlMotionHover(1.01)}
             whileTap={nlMotionTap(0.98)}
             onClick={exportSPSSyntax}
             className="flex flex-col gap-3 p-5 rounded-xl bg-indigo-500/10 border border-indigo-400/25 hover:bg-indigo-500/15 hover:border-indigo-400/40 transition-all text-left"
@@ -8682,8 +8685,8 @@ const SECTION_NAV_ORDER = [
   "database",
   "users",
 ];
-const BOUNCE_OUT_MS = 150;
-const BOUNCE_IN_MS = 280;
+const BOUNCE_OUT_MS = 420;
+const BOUNCE_IN_MS = 520;
 const BOUNCE_OUT_FALLBACK_MS = BOUNCE_OUT_MS + 60;
 
 const StableSectionView = React.memo(
@@ -9631,7 +9634,7 @@ export default function App() {
   const topBarHardRefreshBtn = (
     <motion.button
       type="button"
-      whileHover={{ scale: 1.05 }}
+      whileHover={nlMotionHover(1.05)}
       whileTap={nlMotionTap(0.95)}
       onClick={runHardRefresh}
       className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0"
@@ -9739,7 +9742,7 @@ export default function App() {
               {topBarHardRefreshBtn}
 
               <motion.button
-                whileHover={{ scale: 1.05 }}
+                whileHover={nlMotionHover(1.05)}
                 whileTap={nlMotionTap(0.95)}
                 onClick={() => setMobileTopMenuOpen((p) => !p)}
                 className={`w-9 h-9 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
@@ -9786,7 +9789,7 @@ export default function App() {
           />
           {topBarHardRefreshBtn}
           <motion.button
-            whileHover={{ scale: 1.08 }}
+            whileHover={nlMotionHover(1.08)}
             whileTap={nlMotionTap(0.92)}
             onClick={() => setMobileTopMenuOpen((p) => !p)}
             className="w-9 h-9 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
@@ -10566,7 +10569,7 @@ export default function App() {
           }
         }
         .gselect-menu-body--animate {
-          animation: gselect-body-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+          animation: gselect-body-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
           transform: translateZ(0);
           backface-visibility: hidden;
           -webkit-backface-visibility: hidden;
@@ -10595,7 +10598,7 @@ export default function App() {
         }
 
         .gselect-menu-portal .gselect-option {
-          transition: background-color 0.12s, color 0.12s;
+          transition: background-color 0.32s cubic-bezier(0.22, 1, 0.36, 1), color 0.32s cubic-bezier(0.22, 1, 0.36, 1);
           color: rgba(255,255,255,0.85) !important;
           background-color: transparent !important;
           box-shadow: none !important;

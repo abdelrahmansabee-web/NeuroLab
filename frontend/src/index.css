@@ -363,7 +363,7 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.32s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.32s cubic-bezier(0.22, 1, 0.36, 1), color 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .validation-control-icon {
@@ -534,6 +534,63 @@ html.nl-overlay-expanded .content-shell .glass-float.nl-overlay-escape:not(.sect
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   transform: translateZ(0);
+}
+
+.section-nav-motion {
+  transform-origin: 50% 10%;
+  will-change: transform, opacity;
+}
+
+@keyframes nl-bounce-out {
+  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  to { opacity: 0; transform: translate3d(0, -12px, 0) scale(0.985); }
+}
+@keyframes nl-bounce-in {
+  from { opacity: 0; transform: translate3d(0, 18px, 0) scale(0.98); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes nl-mobile-fade-out {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(0, -8px, 0); }
+}
+@keyframes nl-mobile-fade-in {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.section-bounce-out {
+  animation: nl-bounce-out 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.section-bounce-in {
+  animation: nl-bounce-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.section-bounce-mount {
+  opacity: 0;
+  transform: translate3d(0, 16px, 0) scale(0.98);
+}
+.section-fade-out {
+  animation: nl-mobile-fade-out 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.section-fade-in {
+  animation: nl-mobile-fade-in 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.section-fade-mount {
+  opacity: 0;
+  transform: translate3d(0, 12px, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-bounce-out,
+  .section-bounce-in,
+  .section-fade-out,
+  .section-fade-in {
+    animation: none !important;
+  }
+  .section-bounce-mount,
+  .section-fade-mount {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Kinematics analysis — film strip animation */
