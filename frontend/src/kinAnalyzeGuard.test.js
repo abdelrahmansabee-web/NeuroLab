@@ -4,7 +4,10 @@ import {
   analyzePollExceeded,
   clearAnalyzeUi,
   isAnalyzeLeaveAbort,
+  isClinicFileLocked,
   isKinAnalyzeActive,
+  isRecallingBlocked,
+  setClinicFileLock,
   isTransientAnalyzePollError,
   readAnalyzeUi,
   isStaleAnalyzing,
@@ -19,6 +22,20 @@ test("analyze-active flag turns off after an explicit clear", () => {
   expect(isKinAnalyzeActive()).toBe(true);
   setKinAnalyzeActive(false);
   expect(isKinAnalyzeActive()).toBe(false);
+});
+
+test("Recalling law blocks Drive recall while a local file is staged or Analyze runs", () => {
+  setKinAnalyzeActive(false);
+  setClinicFileLock(false);
+  expect(isRecallingBlocked()).toBe(false);
+  setClinicFileLock(true);
+  expect(isClinicFileLocked()).toBe(true);
+  expect(isRecallingBlocked()).toBe(true);
+  setClinicFileLock(false);
+  setKinAnalyzeActive(true);
+  expect(isRecallingBlocked()).toBe(true);
+  setKinAnalyzeActive(false);
+  expect(isRecallingBlocked()).toBe(false);
 });
 
 test("server error payload is a thrown-message string, not a silent skip", () => {

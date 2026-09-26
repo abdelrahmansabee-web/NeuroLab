@@ -3,6 +3,7 @@
  * Hugging Face has no lasting video disk; Drive is the copy that must be fetched again.
  */
 import { clinicReportDriveName, documentKind, patientDriveKeyFromDemographics } from "./driveDocIdentity";
+import { isRecallingBlocked } from "./kinAnalyzeGuard";
 import {
   loadValidationSessionArtifact,
   saveValidationSessionArtifact,
@@ -511,6 +512,13 @@ let recallWaiters = [];
 
 export async function recallAnalyzedSessionsFromDrive(patients, opts = {}) {
   if (typeof opts === "function") opts = { onDone: opts };
+  if (isRecallingBlocked()) {
+    const waiters = recallWaiters.splice(0);
+    waiters.forEach((fn) => {
+      try { fn(lastSummary); } catch { /* ignore */ }
+    });
+    return lastSummary;
+  }
   if (opts.onDone) recallWaiters.push(opts.onDone);
   if (recallPromise) return recallPromise;
   if (shouldReuseRecentRecall(lastSummary, lastRecallAt, Date.now(), opts)) {
