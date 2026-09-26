@@ -70,7 +70,7 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   const sync = fs.readFileSync(path.join(__dirname, "..", "public", "pwa_ipad_sync.js"), "utf8");
   const auth = fs.readFileSync(path.join(__dirname, "AuthGate.jsx"), "utf8");
   expect(auth).toMatch(/\.catch\(\(\) => setState\("locked"\)\)/);
-  expect(html).toMatch(/nl-version" content="32\.372"/);
+  expect(html).toMatch(/nl-version" content="32\.372c"/);
   expect(html).toMatch(/nl_app_bust/);
   expect(html).toMatch(/function pin\(\)/);
   expect(html).toMatch(/new MutationObserver\(pin\)\.observe\(document\.documentElement/);
@@ -81,7 +81,7 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(html).not.toMatch(/__nlAuthMeTimeout/);
   expect(html).not.toMatch(/function ensureOrbit/);
   expect(sync).not.toMatch(/_iosbust=/);
-  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.372"/);
+  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.372c"/);
 });
 
 test("validation video chrome uses muted glass bars and panels", () => {
