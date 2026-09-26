@@ -7,14 +7,16 @@ import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMe
 import ReactDOM from "react-dom";
 import { motion, AnimatePresence, animate, useMotionValue, useReducedMotion } from "framer-motion";
 import {
+  NL_SPRING_SNAPPY,
   NL_SPRING_TOAST,
   NL_TWEEN_MENU,
+  NL_TWEEN_OVERLAY,
 } from "./motionPresets";
 import {
   User, Activity, Sliders, TrendingUp, Heart, Timer, Cpu, FileText,
   Menu, X, ChevronRight, Play, Square, RotateCcw, Copy, Check,
   Info, Save, BarChart3, Brain, Image as ImageIcon,
-  RefreshCw, FileSpreadsheet, Upload, FileUp,
+  RefreshCw, FileSpreadsheet, Upload, FileUp, Crosshair,
   Database, Search, Edit3, Trash2, Archive, PlusCircle, Activity as ActivityIcon, Video, FileCheck, Sparkles, Users, LogOut, MoreHorizontal, Download, HardDrive,
 } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -115,14 +117,14 @@ const showVal = (x) => (isMissing(x) ? NA : String(x));
 
 const BG = "/bg.jpg";
 
-/* ?? Uniform liquid glass ? sidebar and all panels share the same near-clear token ?? */
+/* Capsule shapes + original GitHub fill; liquidity from saturate/depth, no white streaks */
 const GLASS_CLS = "bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
 const GLASS_PANEL_CLS = "bg-white/[0.028] backdrop-blur-lg backdrop-saturate-[1.85] border border-white/[0.05]";
 const SIDEBAR_CLS = "bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
 const INPUT_CLS = "bg-[rgba(220,235,255,0.04)] border border-white/[0.03]";
 
 const GSELECT_MENU_BOX = {
-  borderRadius: "12px",
+  borderRadius: "24px",
 };
 
 /** Same class stack as DesktopUnifiedTopBar / app top chrome */
@@ -172,19 +174,19 @@ function isTouchUi() {
 }
 
 function nlMotionTap(scale = 0.97) {
-  return isTouchUi() ? undefined : { scale };
+  return isTouchUi() ? undefined : { scale, transition: NL_SPRING_SNAPPY };
 }
 
 function nlMotionHover(scale = 1.02) {
-  return isTouchUi() ? undefined : { scale };
+  return isTouchUi() ? undefined : { scale, transition: NL_SPRING_SNAPPY };
 }
 
 const SIDEBAR_W = 255;
 const SIDEBAR_X_HIDDEN = -280;
 const MOBILE_SIDEBAR_W = "75%";
 /** Sidebar aside slide (transform); main/top bar use width + inset for centered content. */
-const SIDEBAR_SHELL_TRANSITION = "transform 320ms cubic-bezier(0.32, 0.72, 0, 1)";
-const SIDEBAR_LAYOUT_TRANSITION = "left 320ms cubic-bezier(0.32, 0.72, 0, 1), width 320ms cubic-bezier(0.32, 0.72, 0, 1), margin-left 320ms cubic-bezier(0.32, 0.72, 0, 1)";
+const SIDEBAR_SHELL_TRANSITION = "transform 480ms cubic-bezier(0.22, 1, 0.36, 1)";
+const SIDEBAR_LAYOUT_TRANSITION = "left 480ms cubic-bezier(0.22, 1, 0.36, 1), width 480ms cubic-bezier(0.22, 1, 0.36, 1), margin-left 480ms cubic-bezier(0.22, 1, 0.36, 1)";
 function sidebarPushWidth() {
   if (typeof window === "undefined") return SIDEBAR_W;
   if (window.matchMedia("(min-width: 768px)").matches) return SIDEBAR_W;
@@ -1431,7 +1433,7 @@ async function restorePatientsFromDriveNow({ showToast } = {}) {
 
 const Glass = ({ children, className = "", style = {}, soft = false, ...r }) => (
   <div
-    className={`glass-float content-panel-glass rounded-2xl ${GLASS_PANEL_CLS} ${className}`}
+    className={`glass-float content-panel-glass rounded-[32px] ${GLASS_PANEL_CLS} ${className}`}
     style={{ overflow: "visible", boxShadow: soft ? FLOAT_M : FLOAT_M, ...style }}
     {...r}
   >
@@ -1446,9 +1448,9 @@ const BL = ({ en, tr, className = "" }) => (
 );
 
 const SH = ({ icon: Icon, en, tr, badge }) => (
-  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 mb-5 sm:mb-6 rounded-2xl p-4 glass-float section-header">
+  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 mb-5 sm:mb-6 rounded-full px-4 py-3 glass-float section-header">
     <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
-      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={GLASS_FIELD}>
+      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center flex-shrink-0" style={GLASS_FIELD}>
       <Icon className="w-5 h-5 text-white/80" />
     </div>
     <div className="min-w-0 flex-1">
@@ -1582,7 +1584,7 @@ const GSelect = ({ en, tr, value, onChange, options, className = "" }) => {
                   backgroundColor: selected ? "rgba(255,255,255,0.08)" : "transparent",
                   color: selected ? "#ffffff" : "rgba(255,255,255,0.75)",
                   fontWeight: selected ? 700 : 400,
-                  transition: "background-color 0.15s, color 0.15s",
+                  transition: "background-color 0.32s cubic-bezier(0.22, 1, 0.36, 1), color 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
                 };
                 return (
                     <button
@@ -1617,13 +1619,13 @@ const GSelect = ({ en, tr, value, onChange, options, className = "" }) => {
 
 const GBtn = ({ children, onClick, disabled, className = "", variant = "default" }) => {
   const v = {
-    default: "bg-white/10 border-white/20 text-white hover:bg-white/15",
-    sky: "bg-sky-500/20 border-sky-400/30 text-sky-200 hover:bg-sky-500/30",
-    emerald: "bg-emerald-500/20 border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/30",
-    amber: "bg-amber-500/20 border-amber-400/30 text-amber-200 hover:bg-amber-500/30",
-    violet: "bg-violet-500/20 border-violet-400/30 text-violet-200 hover:bg-violet-500/30",
-    rose: "bg-rose-500/20 border-rose-400/30 text-rose-200 hover:bg-rose-500/30",
-    danger: "bg-rose-500/20 border-rose-400/30 text-rose-200 hover:bg-rose-500/30",
+    default: "bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]",
+    sky: "bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]",
+    emerald: "bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]",
+    amber: "bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]",
+    violet: "bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]",
+    rose: "bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]",
+    danger: "bg-white/[0.06] border-white/[0.10] text-white/80 hover:bg-white/[0.10]",
   };
 
   return (
@@ -1632,7 +1634,7 @@ const GBtn = ({ children, onClick, disabled, className = "", variant = "default"
       whileTap={nlMotionTap(0.97)}
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed ${v[variant]} ${className}`}
+      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-full border font-semibold text-sm transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] disabled:opacity-40 disabled:cursor-not-allowed ${v[variant]} ${className}`}
     >
       {children}
     </motion.button>
@@ -1642,7 +1644,7 @@ const GBtn = ({ children, onClick, disabled, className = "", variant = "default"
 function TopBarSessionCapsule({ onNew, onSave, dirty }) {
   return (
     <div
-      className="flex items-stretch rounded-xl overflow-hidden border border-white/[0.06] bg-white/[0.04] backdrop-blur-sm flex-shrink-0"
+      className="flex items-stretch rounded-full overflow-hidden border border-white/[0.06] bg-white/[0.04] backdrop-blur-md backdrop-saturate-[2.25] flex-shrink-0"
       style={GLASS_FIELD}
       role="group"
       aria-label="Session actions"
@@ -1712,7 +1714,7 @@ const PullToRefresh = ({ scrollRef, spinnerAnchorRef, onRefresh, disabled = fals
     if (content) {
       content.style.transform = ty ? `translate3d(0, ${ty}px, 0)` : "";
       content.style.transition = state === "idle"
-        ? "transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
+        ? "transform 0.42s cubic-bezier(0.22, 1, 0.36, 1)"
         : "none";
       content.style.willChange = ty ? "transform" : "auto";
     }
@@ -1871,12 +1873,12 @@ const Toast = ({ msg, visible, variant = "success" }) => (
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -8, scale: 0.98 }}
         transition={NL_SPRING_TOAST}
-        className={`fixed bottom-8 right-8 z-[99999] flex items-center gap-2.5 px-5 py-3 rounded-2xl backdrop-blur-2xl border text-sm font-semibold shadow-2xl ${
+        className={`fixed bottom-8 right-8 z-[99999] flex items-center gap-2.5 px-5 py-3 rounded-full glass-float app-topbar-glass border text-sm font-semibold ${
           variant === "success"
-            ? "bg-emerald-500/20 border-emerald-400/30 text-emerald-200"
+            ? "bg-white/[0.008] border-white/[0.08] text-white/90"
             : variant === "info"
-            ? "bg-sky-500/20 border-sky-400/30 text-sky-200"
-            : "bg-rose-500/20 border-rose-400/30 text-rose-200"
+            ? "bg-white/[0.008] border-white/[0.08] text-white/90"
+            : "bg-white/[0.008] border-white/[0.08] text-white/90"
         }`}
       >
         <Check className="w-4 h-4" /> {formatUserMessage(msg)}
@@ -2162,7 +2164,7 @@ const VASSlider = ({ value, onChange, color = "sky" }) => {
             <motion.div
               key={face.val}
               animate={{ scale: active ? 1.3 : 1, opacity: active ? 1 : 0.3 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              transition={NL_SPRING_SNAPPY}
               className="flex flex-col items-center gap-1"
             >
               <span className="text-2xl">{face.emoji}</span>
@@ -2170,6 +2172,7 @@ const VASSlider = ({ value, onChange, color = "sky" }) => {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
+                  transition={NL_SPRING_SNAPPY}
                   className="text-[9px] font-bold text-center"
                   style={{ color: color === "sky" ? "#7dd3fc" : "#6ee7b7" }}
                 >
@@ -2216,7 +2219,7 @@ const VAMSSlider = ({ value, onChange, color = "sky" }) => {
             <motion.div
               key={face.val}
               animate={{ scale: active ? 1.3 : 1, opacity: active ? 1 : 0.3 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              transition={NL_SPRING_SNAPPY}
               className="flex flex-col items-center gap-1"
             >
               <span className="text-2xl">{face.emoji}</span>
@@ -2224,6 +2227,7 @@ const VAMSSlider = ({ value, onChange, color = "sky" }) => {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
+                  transition={NL_SPRING_SNAPPY}
                   className="text-[9px] font-bold text-center"
                   style={{ color: color === "sky" ? "#7dd3fc" : "#6ee7b7" }}
                 >
@@ -2602,7 +2606,7 @@ const DemoSection = ({ data, onChange, onBulkUpdate }) => {
           })}
         </div>
         {(data.comorbidities || []).includes("other") && (
-          <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }} className="mt-3">
+          <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }} transition={NL_TWEEN_MENU} className="mt-3">
             <GI en="Specify other" tr="Specify other" value={data.otherComorbidity} onChange={(e) => s("otherComorbidity", e.target.value)} placeholder="Other conditions?" />
           </motion.div>
         )}
@@ -3386,15 +3390,22 @@ const KIN_LS_KEY = KIN_RESULTS_LS_KEY;
 const KIN_LS_EXP_KEY = "neuro_kin_expanded";
 
 const KIN_PHASE_ACCENT = {
-  sky: { bar: "bg-sky-400", ring: "border-t-sky-400", glow: "shadow-sky-500/10", top: "border-t-sky-400/80 from-sky-500/14" },
-  emerald: { bar: "bg-emerald-400", ring: "border-t-emerald-400", glow: "shadow-emerald-500/10", top: "border-t-emerald-400/80 from-emerald-500/14" },
-  amber: { bar: "bg-amber-400", ring: "border-t-amber-400", glow: "shadow-amber-500/10", top: "border-t-amber-400/80 from-amber-500/14" },
+  sky: { bar: "bg-white/45", ring: "border-white/15", glow: "", top: "" },
+  emerald: { bar: "bg-white/45", ring: "border-white/15", glow: "", top: "" },
+  amber: { bar: "bg-white/45", ring: "border-white/15", glow: "", top: "" },
+};
+
+const KIN_PHASE_PIP = {
+  sky: "bg-sky-200/55",
+  emerald: "bg-emerald-200/50",
+  amber: "bg-amber-200/50",
+  violet: "bg-violet-200/50",
 };
 
 const KIN_FILM_ACCENT = {
-  sky: { stroke: "#38bdf8", glow: "rgba(56,189,248,0.45)" },
-  emerald: { stroke: "#34d399", glow: "rgba(52,211,153,0.45)" },
-  amber: { stroke: "#fbbf24", glow: "rgba(251,191,36,0.45)" },
+  sky: { stroke: "rgba(186,230,253,0.82)", glow: "rgba(186,230,253,0.16)" },
+  emerald: { stroke: "rgba(187,247,208,0.78)", glow: "rgba(187,247,208,0.14)" },
+  amber: { stroke: "rgba(253,230,188,0.78)", glow: "rgba(253,230,188,0.14)" },
 };
 
 function kinBone(stroke, w = 1.35) {
@@ -3405,83 +3416,53 @@ function KinSkeletonJoint({ cx, cy, stroke, r = 0.85 }) {
   return <circle cx={cx} cy={cy} r={r} fill={stroke} opacity="0.88" />;
 }
 
-const KIN_SKELETON_VIEWS = ["front", "posterior"];
+const KIN_SKELETON_VIEWS = ["front", "posterior", "right", "posterior", "left"];
+const KIN_LENS_STROKE = "rgba(226,232,240,0.86)";
 
 function KinSkeletonFront({ stroke }) {
-  const b = kinBone(stroke);
-  const bThin = kinBone(stroke, 1.05);
+  const b = kinBone(stroke, 1.2);
   return (
     <g>
-      <circle cx="16" cy="4.2" r="2.35" {...b} />
-      <line x1="16" y1="6.5" x2="16" y2="8" {...b} />
-      <line x1="11" y1="8.6" x2="21" y2="8.6" {...b} />
-      <line x1="16" y1="8" x2="16" y2="13.6" {...b} />
-      <line x1="13.2" y1="10.2" x2="18.8" y2="10.2" {...bThin} />
-      <line x1="13.2" y1="11.8" x2="18.8" y2="11.8" {...bThin} />
-      <line x1="11" y1="8.6" x2="9.2" y2="12.2" {...b} />
-      <line x1="21" y1="8.6" x2="22.8" y2="12.2" {...b} />
-      <KinSkeletonJoint cx={9.2} cy={12.2} stroke={stroke} r={0.72} />
-      <KinSkeletonJoint cx={22.8} cy={12.2} stroke={stroke} r={0.72} />
-      <line x1="13.2" y1="13.6" x2="18.8" y2="13.6" {...b} />
-      <line x1="14" y1="13.6" x2="13.2" y2="19.8" {...b} />
-      <line x1="18" y1="13.6" x2="18.8" y2="19.8" {...b} />
-      <KinSkeletonJoint cx={13.2} cy={19.8} stroke={stroke} r={0.68} />
-      <KinSkeletonJoint cx={18.8} cy={19.8} stroke={stroke} r={0.68} />
+      <circle cx="16" cy="5" r="2.55" {...b} />
+      <line x1="16" y1="7.55" x2="16" y2="9.5" {...b} />
+      <line x1="8.6" y1="9.85" x2="23.4" y2="9.85" {...b} />
+      <line x1="16" y1="9.5" x2="16" y2="21.8" {...b} />
+      <line x1="8.6" y1="9.85" x2="7.5" y2="21.1" {...b} />
+      <line x1="23.4" y1="9.85" x2="24.5" y2="21.1" {...b} />
+      <line x1="13.2" y1="21.8" x2="18.8" y2="21.8" {...b} />
+      <line x1="13.7" y1="21.8" x2="12.2" y2="36.8" {...b} />
+      <line x1="18.3" y1="21.8" x2="19.8" y2="36.8" {...b} />
     </g>
   );
 }
 
 function KinSkeletonPosterior({ stroke }) {
-  const b = kinBone(stroke);
-  const bThin = kinBone(stroke, 1.05);
+  const b = kinBone(stroke, 1.2);
   return (
     <g>
-      <circle cx="16" cy="4.2" r="2.35" {...b} />
-      <line x1="16" y1="6.5" x2="16" y2="8" {...b} />
-      <line x1="11" y1="8.6" x2="21" y2="8.6" {...b} />
-      <line x1="16" y1="8" x2="16" y2="13.6" {...b} strokeWidth="1.55" />
-      <line x1="13.2" y1="10.2" x2="18.8" y2="10.2" {...bThin} />
-      <line x1="13.2" y1="11.8" x2="18.8" y2="11.8" {...bThin} />
-      <line x1="16" y1="9.4" x2="10.6" y2="8.2" {...bThin} />
-      <line x1="16" y1="9.4" x2="21.4" y2="8.2" {...bThin} />
-      <line x1="11" y1="8.6" x2="9.2" y2="12.2" {...b} />
-      <line x1="21" y1="8.6" x2="22.8" y2="12.2" {...b} />
-      <KinSkeletonJoint cx={9.2} cy={12.2} stroke={stroke} r={0.72} />
-      <KinSkeletonJoint cx={22.8} cy={12.2} stroke={stroke} r={0.72} />
-      <line x1="13.2" y1="13.6" x2="18.8" y2="13.6" {...b} />
-      <line x1="14" y1="13.6" x2="13.2" y2="19.8" {...b} />
-      <line x1="18" y1="13.6" x2="18.8" y2="19.8" {...b} />
-      <KinSkeletonJoint cx={13.2} cy={19.8} stroke={stroke} r={0.68} />
-      <KinSkeletonJoint cx={18.8} cy={19.8} stroke={stroke} r={0.68} />
+      <circle cx="16" cy="5" r="2.55" {...b} />
+      <line x1="16" y1="7.55" x2="16" y2="9.5" {...b} />
+      <line x1="9.4" y1="9.85" x2="22.6" y2="9.85" {...b} />
+      <line x1="16" y1="9.5" x2="16" y2="21.8" {...b} />
+      <line x1="9.4" y1="9.85" x2="8.8" y2="20.6" {...b} />
+      <line x1="22.6" y1="9.85" x2="23.2" y2="20.6" {...b} />
+      <line x1="13.2" y1="21.8" x2="18.8" y2="21.8" {...b} />
+      <line x1="13.7" y1="21.8" x2="13" y2="36.8" {...b} />
+      <line x1="18.3" y1="21.8" x2="19" y2="36.8" {...b} />
     </g>
   );
 }
 
 function KinSkeletonProfile({ stroke, facing = "right" }) {
-  const b = kinBone(stroke);
-  const bThin = kinBone(stroke, 1.05);
+  const b = kinBone(stroke, 1.2);
   const body = (
     <g>
-      <circle cx="12.5" cy="4.2" r="2.35" {...b} />
-      <line x1="12.3" y1="6.5" x2="11.8" y2="8" {...b} />
-      <line x1="11.8" y1="8" x2="11.4" y2="13.6" {...b} />
-      <line x1="11.6" y1="10.2" x2="15.4" y2="10.5" {...bThin} />
-      <line x1="11.5" y1="11.8" x2="15.5" y2="11.3" {...bThin} />
-      <line x1="11.8" y1="8.6" x2="9" y2="9.4" {...b} />
-      <line x1="11.8" y1="8.8" x2="14.6" y2="8.2" {...b} />
-      <line x1="11.8" y1="9" x2="15.4" y2="8.4" {...b} />
-      <line x1="15.4" y1="8.4" x2="19" y2="9.2" {...b} />
-      <KinSkeletonJoint cx={19} cy={9.2} stroke={stroke} r={0.72} />
-      <line x1="11.6" y1="9.2" x2="8.2" y2="11.4" {...b} />
-      <line x1="8.2" y1="11.4" x2="7.2" y2="13.2" {...b} />
-      <KinSkeletonJoint cx={7.2} cy={13.2} stroke={stroke} r={0.68} />
-      <line x1="12" y1="13.6" x2="14.4" y2="13.8" {...b} />
-      <line x1="12.2" y1="13.8" x2="11.5" y2="16.4" {...b} />
-      <line x1="11.5" y1="16.4" x2="12.2" y2="19.8" {...b} />
-      <KinSkeletonJoint cx={12.2} cy={19.8} stroke={stroke} r={0.68} />
-      <line x1="13.6" y1="13.8" x2="14.4" y2="16.4" {...b} />
-      <line x1="14.4" y1="16.4" x2="15.2" y2="19.8" {...b} />
-      <KinSkeletonJoint cx={15.2} cy={19.8} stroke={stroke} r={0.68} />
+      <circle cx="16" cy="5" r="2.55" {...b} />
+      <line x1="16" y1="7.55" x2="16.5" y2="21.8" {...b} />
+      <line x1="16.2" y1="10.5" x2="23.8" y2="16.9" {...b} />
+      <line x1="16.2" y1="10.7" x2="8.6" y2="16.4" {...b} />
+      <line x1="16.5" y1="21.8" x2="22.4" y2="36.8" {...b} />
+      <line x1="16.5" y1="21.8" x2="10.8" y2="36.8" {...b} />
     </g>
   );
   if (facing === "left") {
@@ -3497,41 +3478,125 @@ function KinSkeletonFigure({ view, stroke }) {
   return <KinSkeletonFront stroke={stroke} />;
 }
 
-function KinFilmFrame({ viewIndex, accent = "amber" }) {
-  const col = KIN_FILM_ACCENT[accent] || KIN_FILM_ACCENT.amber;
+function KinFilmFrame({ viewIndex }) {
   const view = KIN_SKELETON_VIEWS[viewIndex % KIN_SKELETON_VIEWS.length];
   return (
     <div className="kin-film-frame">
-      <svg viewBox="0 0 32 24" aria-hidden>
-        <KinSkeletonFigure view={view} stroke={col.stroke} />
+      <svg viewBox="0 0 32 40" aria-hidden>
+        <KinSkeletonFigure view={view} stroke={KIN_LENS_STROKE} />
       </svg>
     </div>
   );
 }
 
-function KinFilmStripLoop({ accent = "amber" }) {
-  // Keep 8 frames (4? front/back pairs) so scroll distance matches the original 4-view strip speed.
-  const frameCount = 8;
-  const holes = Array.from({ length: 11 });
-
+function KinFilmStripLoop() {
+  const pips = Array.from({ length: 11 });
+  const frames = Array.from({ length: 10 }, (_, i) => i);
   return (
     <div className="kin-film-strip" aria-hidden>
-      <div className="kin-film-strip__holes">
-        {holes.map((_, i) => (
-          <span key={`t-${i}`} className="kin-film-strip__hole" />
-        ))}
-      </div>
       <div className="kin-film-strip__body">
-        <div className="kin-film-strip__track">
-          {Array.from({ length: frameCount }, (_, i) => (
-            <KinFilmFrame key={i} viewIndex={i} accent={accent} />
-          ))}
+        <div className="kin-film-strip__track" style={{ "--nl-film-n": 20 }}>
+          {frames.map((i) => <KinFilmFrame key={`a-${i}`} viewIndex={i} />)}
+          {frames.map((i) => <KinFilmFrame key={`b-${i}`} viewIndex={i} />)}
         </div>
       </div>
-      <div className="kin-film-strip__holes">
-        {holes.map((_, i) => (
-          <span key={`b-${i}`} className="kin-film-strip__hole" />
+      <div className="kin-film-strip__pips">
+        {pips.map((_, i) => <span key={`p-${i}`} className="kin-film-strip__pip" />)}
+      </div>
+    </div>
+  );
+}
+
+const KIN_ANALYZE_STAGES = [
+  { id: "upload", label: "Upload", re: /upload|send|transfer/i, Icon: Upload },
+  { id: "detect", label: "Detect", re: /detect|pose|hand|track|overlay|media/i, Icon: Crosshair },
+  { id: "analyze", label: "Analyze", re: /analy|kinem|sparc|nvp|metric|filter/i, Icon: BarChart3 },
+  { id: "done", label: "Done", re: /done|complete|ready|finish/i, Icon: Check },
+];
+
+function kinAnalyzeStageIndex(step, pct) {
+  const text = String(step || "");
+  const fromText = KIN_ANALYZE_STAGES.findIndex((s) => s.re.test(text));
+  if (fromText >= 0) return fromText;
+  const n = pct != null && !Number.isNaN(Number(pct)) ? Number(pct) : 0;
+  if (n >= 92) return 3;
+  if (n >= 55) return 2;
+  if (n >= 22) return 1;
+  return 0;
+}
+
+const KIN_RUN_BASE = `${process.env.PUBLIC_URL || ""}/static/kin-run`;
+const KIN_RUN_FRAMES = ["a", "b", "c"];
+
+function KinRunMark({ pct = null }) {
+  const pips = Array.from({ length: 11 });
+  const pctRounded = pct != null && !Number.isNaN(Number(pct)) ? Math.max(0, Math.min(100, Math.round(Number(pct)))) : null;
+  const r = 15;
+  const circ = 2 * Math.PI * r;
+  const dash = pctRounded == null ? 0 : (pctRounded / 100) * circ;
+  return (
+    <div className="kin-run" aria-hidden>
+      <div className="kin-run__stage">
+        {KIN_RUN_FRAMES.map((id) => (
+          <span
+            key={id}
+            className={`kin-run__figure kin-run__figure--${id}`}
+            style={{ backgroundImage: `url("${KIN_RUN_BASE}/pose-${id}.png")` }}
+          />
         ))}
+        <span className="kin-run__ground" />
+        <span className={`kin-run__pct${pctRounded == null ? " is-empty" : ""}`}>
+          <svg className="kin-run__pct-svg" viewBox="0 0 36 36" aria-hidden>
+            <circle cx="18" cy="18" r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="2.2" />
+            <circle
+              className="kin-run__pct-arc"
+              cx="18"
+              cy="18"
+              r={r}
+              fill="none"
+              stroke="rgba(255,255,255,0.88)"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeDasharray={`${Math.max(0.4, dash)} ${circ}`}
+              transform="rotate(-90 18 18)"
+            />
+          </svg>
+          <span className="kin-run__pct-num">{pctRounded == null ? "–" : pctRounded}</span>
+        </span>
+      </div>
+      <div className="kin-run__pips">
+        {pips.map((_, i) => <span key={`p-${i}`} className="kin-run__pip" />)}
+      </div>
+    </div>
+  );
+}
+
+function KinAnalyzeStageCapsule({ accent = "amber", pct = null, step = "Analyzing video…" }) {
+  void accent;
+  const pctRounded = pct != null && !Number.isNaN(Number(pct)) ? Math.round(Number(pct)) : null;
+  const active = kinAnalyzeStageIndex(step, pctRounded);
+
+  return (
+    <div className="kin-analyze-stage" data-nl-stadium="1">
+      <div className="kin-analyze-stage__capsule">
+        <KinRunMark pct={pctRounded} />
+      </div>
+      <div className="kin-analyze-stage__stepper" aria-label="Analysis stages">
+        <span className="kin-analyze-stage__rail" aria-hidden />
+        {KIN_ANALYZE_STAGES.map((s, i) => {
+          const Icon = s.Icon;
+          return (
+            <span
+              key={s.id}
+              className={`kin-analyze-stage__step ${i === active ? "is-active" : ""} ${i < active ? "is-done" : ""}`}
+            >
+              <span className="kin-analyze-stage__icon">
+                <Icon className="w-3.5 h-3.5" strokeWidth={2.1} />
+              </span>
+              <span className="kin-analyze-stage__label">{s.label}</span>
+            </span>
+          );
+        })}
       </div>
     </div>
   );
@@ -3626,11 +3691,11 @@ function InlineValidationVideo({ src, phaseLabel, autoPlay = false, onEnded, onE
           </button>
         </div>
         <div
-          className="mt-1 h-1 bg-white/20 rounded cursor-pointer pointer-events-auto"
+          className="mt-1 h-1.5 bg-white/15 rounded-full cursor-pointer pointer-events-auto"
           onClick={handleSeek}
         >
           <div
-            className="h-full bg-sky-400 rounded"
+            className="h-full bg-white/45 rounded-full"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -3668,10 +3733,10 @@ function KinAnalyzeProgressGlyph({
           strokeWidth="2.75"
           strokeLinecap="round"
           strokeDasharray={`${Math.max(0.5, dash)} ${circumference}`}
-          className={`kin-analyze-glyph-ring transition-[stroke-dasharray] duration-700 ease-out ${
+          className={`kin-analyze-glyph-ring ${
             indeterminate && pctClamped == null ? "is-indeterminate" : ""
           }`}
-          style={{ filter: `drop-shadow(0 0 10px ${glow})` }}
+          style={glow ? { filter: `drop-shadow(0 0 5px ${glow})` } : undefined}
         />
       </svg>
       <span className={`relative z-[1] ${labelClass} font-extrabold tabular-nums text-white tracking-tight`}>
@@ -3683,52 +3748,41 @@ function KinAnalyzeProgressGlyph({
 
 function KinPhaseAnalyzeProgressBar({ accent = "sky", pct = null, step = "Analyzing video…" }) {
   const a = KIN_PHASE_ACCENT[accent] || KIN_PHASE_ACCENT.sky;
-  const film = KIN_FILM_ACCENT[accent] || KIN_FILM_ACCENT.sky;
   const pctRounded = pct != null && !Number.isNaN(Number(pct)) ? Math.round(Number(pct)) : null;
   const barPct = pctRounded != null ? Math.max(0, Math.min(100, pctRounded)) : 8;
+  const shown = pctRounded != null ? `${pctRounded}%` : "";
 
   return (
-    <div className={`w-full rounded-xl kin-analyze-panel px-3 py-2.5 flex items-center gap-2.5 border-t-[2px] ${a.ring}`}>
-      <KinAnalyzeProgressGlyph
-        pct={pct}
-        stroke={film.stroke}
-        glow={film.glow}
-        sizeClass="w-10 h-10 shrink-0"
-        labelClass="text-[9px]"
-      />
+    <div className="w-full rounded-[999px] kin-analyze-panel px-3.5 py-2 flex items-center gap-2.5 border border-white/[0.06]">
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-semibold text-white/90 truncate">{step}</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold text-white/90 truncate">{step}</p>
+          {shown ? <p className="text-[10px] font-bold tabular-nums text-white/55 shrink-0">{shown}</p> : null}
+        </div>
         <div className="mt-1.5 kin-analyze-track">
           <motion.div
             className={`kin-analyze-track-fill ${a.bar}`}
             initial={false}
             animate={{ width: `${Math.max(5, barPct)}%` }}
-            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-            style={{ boxShadow: `0 0 10px ${film.glow}` }}
+            transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
           />
         </div>
-        <p className="text-[8px] text-white/35 mt-1">Server processing — you can change sections</p>
       </div>
     </div>
   );
 }
 
 const kinPhaseCardCls = (c, status, hasResult) => {
-  const a = KIN_PHASE_ACCENT[c] || KIN_PHASE_ACCENT.amber;
-  const base = `relative flex flex-col rounded-2xl border border-t-[3px] bg-gradient-to-b ${a.top} to-white/[0.02] min-h-[240px] transition-all duration-300 overflow-hidden`;
-  if (status === "analyzing") return `${base} border-white/[0.12] ring-1 ring-white/[0.06]`;
-  if (hasResult) return `${base} border-emerald-400/35 ring-1 ring-emerald-400/20`;
-  return `${base} border-white/[0.07] hover:border-white/12`;
+  const base = "glass-float relative flex flex-col rounded-[28px] border border-white/[0.06] bg-white/[0.028] min-h-[240px] transition-all duration-300";
+  if (status === "analyzing") return `${base} overflow-visible ring-1 ring-white/[0.06]`;
+  if (hasResult) return `${base} overflow-hidden`;
+  return `${base} overflow-hidden hover:border-white/[0.10]`;
 };
 
 const kinUploadZoneCls = (c, hasFile) => {
-  const base = "group relative flex flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed px-3 py-5 cursor-pointer transition-all duration-200";
-  if (hasFile) {
-    if (c === "sky") return `${base} border-sky-400/30 bg-sky-400/[0.06] hover:bg-sky-400/10`;
-    if (c === "emerald") return `${base} border-emerald-400/30 bg-emerald-400/[0.06] hover:bg-emerald-400/10`;
-    return `${base} border-amber-400/30 bg-amber-400/[0.06] hover:bg-amber-400/10`;
-  }
-  return `${base} border-white/10 bg-white/[0.02] hover:border-white/18 hover:bg-white/[0.04]`;
+  const base = "group relative flex flex-col items-center justify-center gap-1.5 rounded-[24px] border border-solid px-3 py-5 cursor-pointer transition-all duration-200";
+  if (hasFile) return `${base} border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.06]`;
+  return `${base} border-white/[0.08] bg-white/[0.015] hover:border-white/[0.14] hover:bg-white/[0.04]`;
 };
 
 const kinShortFileName = (name, max = 22) => {
@@ -5280,20 +5334,13 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
   })();
   const hasKinTriple =
     kinematicsResults.pre && kinematicsResults.post && kinematicsResults.baseline;
-  const phaseChipCls = (c, on) => {
-    if (c === "sky") return on ? "bg-sky-400/20 border-sky-400/40 text-sky-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
-    if (c === "violet") return on ? "bg-violet-400/20 border-violet-400/40 text-violet-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
-    if (c === "emerald") return on ? "bg-emerald-400/20 border-emerald-400/40 text-emerald-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
-    return on ? "bg-amber-400/20 border-amber-400/40 text-amber-200" : "bg-white/[0.04] border-white/[0.08] text-white/50";
-  };
-  const phaseValueCls = (c) =>
-    c === "sky" ? "border-sky-400/25 bg-sky-400/10" :
-    c === "violet" ? "border-violet-400/25 bg-violet-400/10" :
-    c === "emerald" ? "border-emerald-400/25 bg-emerald-400/10" :
-    "border-amber-400/25 bg-amber-400/10";
-  const phaseLabelCls = (c) =>
-    c === "sky" ? "text-sky-300" : c === "violet" ? "text-violet-300" :
-    c === "emerald" ? "text-emerald-300" : "text-amber-300";
+  const phaseChipCls = (c, on) => (
+    on
+      ? "bg-white/[0.08] border-white/[0.12] text-white/85"
+      : "bg-white/[0.03] border-white/[0.06] text-white/50"
+  );
+  const phaseValueCls = (c) => "border-white/[0.06] bg-white/[0.04]";
+  const phaseLabelCls = (c) => "text-white/70";
 
   const kinDirArrow = (dir) => {
     if (dir === "higher") return { sym: "\u2191", tip: "Higher is better" };
@@ -5419,12 +5466,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                     key={domain}
                     type="button"
                     onClick={() => selectKinematicDomain(domain)}
-                    className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                    className={`rounded-full border px-3 py-2.5 text-left transition-colors ${
                       active
-                        ? domain === "ue"
-                          ? "bg-sky-500/20 border-sky-400/40 text-sky-100"
-                          : "bg-violet-500/20 border-violet-400/40 text-violet-100"
-                        : "bg-white/[0.03] border-white/[0.08] text-white/55 hover:bg-white/[0.06]"
+                        ? "bg-white/[0.08] border-white/[0.12] text-white"
+                        : "bg-white/[0.03] border-white/[0.06] text-white/55 hover:bg-white/[0.06]"
                     }`}
                   >
                     <span className="block text-xs font-extrabold tracking-wide">{meta.en}</span>
@@ -5453,7 +5498,10 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
             return (
               <div key={ph.k} className={kinPhaseCardCls(ph.c, status, hasResult)}>
                 <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-2">
-                  <span className={`text-xs font-extrabold uppercase tracking-widest ${phaseLabelCls(ph.c)}`}>{ph.l}</span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full ${KIN_PHASE_PIP[ph.c] || KIN_PHASE_PIP.amber}`} />
+                    <span className={`text-xs font-extrabold uppercase tracking-widest ${phaseLabelCls(ph.c)}`}>{ph.l}</span>
+                  </span>
                   <div className="flex items-center gap-2 shrink-0">
                     {(hasResult || status === "analyzing") && (
                       <button
@@ -5469,7 +5517,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                 </div>
 
                 <div className="px-4 py-2 flex flex-col flex-1 min-h-0">
-                  <label htmlFor={`kin-file-${ph.k}`} className={`${kinUploadZoneCls(ph.c, !!data[vidKey(ph.k)])} relative mb-3 min-h-[130px] overflow-hidden ${status === "analyzing" ? "pointer-events-none" : ""}`}>
+                  <label htmlFor={`kin-file-${ph.k}`} className={`${status === "analyzing" ? "kin-analyze-zone relative mb-3 pointer-events-none" : `${kinUploadZoneCls(ph.c, !!data[vidKey(ph.k)])} relative mb-3 min-h-[130px] overflow-hidden`}`}>
                   <div className="flex flex-col items-center justify-center gap-1.5 w-full">
                   <input
                       id={`kin-file-${ph.k}`}
@@ -5481,7 +5529,11 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                     />
                     {status === "analyzing" ? (
                       <>
-                        <KinFilmStripLoop accent={ph.c} />
+                        <KinAnalyzeStageCapsule
+                          accent={ph.c}
+                          pct={analysisProgress[ph.k]?.pct}
+                          step={analysisProgress[ph.k]?.step || "Analyzing video…"}
+                        />
                         {data[vidKey(ph.k)] && (
                           <span className="text-[10px] font-medium text-white/55 truncate max-w-full px-1" title={data[vidKey(ph.k)]}>
                             {kinShortFileName(data[vidKey(ph.k)])}
@@ -5510,14 +5562,8 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                   </label>
 
                   <div className="mt-auto flex flex-col gap-2">
-                    {status === "analyzing" ? (
-                      <KinPhaseAnalyzeProgressBar
-                        accent={ph.c}
-                        pct={analysisProgress[ph.k]?.pct}
-                        step={analysisProgress[ph.k]?.step || "Analyzing video…"}
-                      />
-                    ) : (
-                    <GBtn variant={ph.c} onClick={() => analyzeVideo(ph.k)} disabled={!data[vidKey(ph.k)]} className="w-full text-xs py-2.5" title="Analyze">
+                    {status === "analyzing" ? null : (
+                    <GBtn variant="default" onClick={() => analyzeVideo(ph.k)} disabled={!data[vidKey(ph.k)]} className="w-full text-xs py-2.5 !rounded-full bg-white/[0.06] border-white/[0.08] text-white/85 hover:bg-white/[0.10]" title="Analyze">
                         <Play className="w-4 h-4 mx-auto" />
                   </GBtn>
                     )}
@@ -5575,7 +5621,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                               initial={{ height: 0, opacity: 0 }}
                               animate={{ height: "auto", opacity: 1 }}
                               exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.25 }}
+                              transition={NL_TWEEN_MENU}
                               className="overflow-hidden"
                             >
                               <div className="rounded-xl border border-white/[0.08] bg-black/30 overflow-hidden">
@@ -5609,9 +5655,12 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {phases.filter((ph) => kinematicsResults[ph.k]).map((ph) => (
-              <div key={ph.k} className="rounded-xl border border-white/10 bg-black/20 p-3 overflow-hidden">
+              <div key={ph.k} className="rounded-[24px] border border-white/[0.06] bg-white/[0.028] p-3 overflow-hidden">
                 <div className="flex items-center justify-between mb-2 gap-2">
-                  <p className={`text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>{`${ph.l} \u00b7 Validation`}</p>
+                  <p className={`inline-flex items-center gap-2 text-[10px] font-extrabold uppercase ${phaseLabelCls(ph.c)}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${KIN_PHASE_PIP[ph.c] || KIN_PHASE_PIP.amber}`} />
+                    {`${ph.l} \u00b7 Validation`}
+                  </p>
                 </div>
                 {overlaySourceBad[ph.k] && originalVideoBlobs[ph.k] ? (
                     <InlineValidationVideo
@@ -5827,27 +5876,19 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
                   {phases.filter((ph) => kinematicsResults[ph.k]).map((ph) => (
                     <th
                       key={ph.k}
-                      className={`text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap ${
-                        ph.c === "sky"
-                          ? "text-sky-300"
-                          : ph.c === "violet"
-                          ? "text-violet-300"
-                          : ph.c === "emerald"
-                          ? "text-emerald-300"
-                          : "text-amber-300"
-                      }`}
+                      className="text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap text-white/60"
                     >
                       {ph.l}
                     </th>
                   ))}
                   {kinematicsResults.pre && kinematicsResults.post && (
                     <th className="text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap">
-                      <span className="text-sky-300">Pre</span> <span className="text-white/60">→</span> <span className="text-emerald-300">Post</span>
+                      <span className="text-white/65">Pre</span> <span className="text-white/40">→</span> <span className="text-white/65">Post</span>
                     </th>
                   )}
                   {kinematicsResults.post && kinematicsResults.baseline && (
                     <th className="text-center px-2 py-3 font-extrabold text-[10px] uppercase whitespace-nowrap">
-                      <span className="text-emerald-300">Post</span> <span className="text-white/60">→</span> <span className="text-amber-300">Healthy</span>
+                      <span className="text-white/65">Post</span> <span className="text-white/40">→</span> <span className="text-white/65">Healthy</span>
                     </th>
                   )}
                 </tr>
@@ -6004,7 +6045,7 @@ const KinSection = React.memo(function KinSection({ data, demographics, onChange
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={NL_TWEEN_OVERLAY}
             className="fixed inset-0 z-[99998] flex flex-col bg-black/95 backdrop-blur-sm"
             onClick={() => setMediaPreview(null)}
           >
@@ -8027,7 +8068,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* PDF */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
+            whileHover={nlMotionHover(1.01)}
             whileTap={nlMotionTap(0.98)}
             onClick={exportGlassReport}
             className="flex flex-col gap-3 p-5 rounded-xl bg-rose-500/10 border border-rose-400/25 hover:bg-rose-500/15 hover:border-rose-400/40 transition-all text-left"
@@ -8048,7 +8089,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
           {/* Per-task Excel (clinic study) */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
+            whileHover={nlMotionHover(1.01)}
             whileTap={nlMotionTap(0.98)}
             onClick={exportTaskExcels}
             className="flex flex-col gap-3 p-5 rounded-xl bg-teal-500/10 border border-teal-400/25 hover:bg-teal-500/15 hover:border-teal-400/40 transition-all text-left"
@@ -8069,7 +8110,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
           {/* Current-patient Excel */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
+            whileHover={nlMotionHover(1.01)}
             whileTap={nlMotionTap(0.98)}
             onClick={exportExcel}
             className="flex flex-col gap-3 p-5 rounded-xl bg-sky-500/10 border border-sky-400/25 hover:bg-sky-500/15 hover:border-sky-400/40 transition-all text-left"
@@ -8090,7 +8131,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
           {/* SPSS */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
+            whileHover={nlMotionHover(1.01)}
             whileTap={nlMotionTap(0.98)}
             onClick={exportSPSS}
             className="flex flex-col gap-3 p-5 rounded-xl bg-violet-500/10 border border-violet-400/25 hover:bg-violet-500/15 hover:border-violet-400/40 transition-all text-left"
@@ -8111,7 +8152,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
           {/* JSON */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
+            whileHover={nlMotionHover(1.01)}
             whileTap={nlMotionTap(0.98)}
             onClick={exportJSON}
             className="flex flex-col gap-3 p-5 rounded-xl bg-emerald-500/10 border border-emerald-400/25 hover:bg-emerald-500/15 hover:border-emerald-400/40 transition-all text-left"
@@ -8132,7 +8173,7 @@ const ReportSection = ({ fd, onChange, showToast }) => {
 
           {/* SPSS Syntax */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
+            whileHover={nlMotionHover(1.01)}
             whileTap={nlMotionTap(0.98)}
             onClick={exportSPSSyntax}
             className="flex flex-col gap-3 p-5 rounded-xl bg-indigo-500/10 border border-indigo-400/25 hover:bg-indigo-500/15 hover:border-indigo-400/40 transition-all text-left"
@@ -8690,8 +8731,8 @@ const SECTION_NAV_ORDER = [
   "database",
   "users",
 ];
-const BOUNCE_OUT_MS = 150;
-const BOUNCE_IN_MS = 280;
+const BOUNCE_OUT_MS = 420;
+const BOUNCE_IN_MS = 520;
 const BOUNCE_OUT_FALLBACK_MS = BOUNCE_OUT_MS + 60;
 
 const StableSectionView = React.memo(
@@ -8903,6 +8944,10 @@ export default function App() {
   const [importPreview, setImportPreview] = useState(null);
   const [user, setUser] = useState(null);
   const [mobileTopMenuOpen, setMobileTopMenuOpen] = useState(false);
+  const [menuBodyOut, setMenuBodyOut] = useState(false);
+  const reduceMenuMotion = useReducedMotion();
+  const menuLeaveTimer = useRef(null);
+  const [moreMenuPos, setMoreMenuPos] = useState({ top: 56, left: null, width: 300 });
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
   const [originRestoreBanner, setOriginRestoreBanner] = useState("");
   const bgRef = useRef(null);
@@ -8912,6 +8957,7 @@ export default function App() {
   const appScrollRef = useRef(null);
   const ptrSpinnerAnchorRef = useRef(null);
   const mobileMenuRef = useRef(null);
+  const moreMenuBtnRef = useRef(null);
   const iosPullScroll =
     typeof window !== "undefined" && (isIOSDevice() || isStandalonePWA());
   const touchUi = typeof window !== "undefined" && isTouchUi();
@@ -9012,8 +9058,25 @@ export default function App() {
     };
   }, [isDesktop, sidebar]);
 
+  const placeMoreMenu = useCallback(() => {
+    const el =
+      moreMenuBtnRef.current ||
+      document.querySelector('button[aria-label="More actions"], button[aria-label="Menu"]');
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = Math.min(320, window.innerWidth - 16);
+    let left = r.right - width;
+    if (left < 8) left = 8;
+    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+    setMoreMenuPos({
+      top: Math.round(r.bottom + 8),
+      left: Math.round(left),
+      width,
+    });
+  }, []);
+
   useEffect(() => {
-    if (!mobileTopMenuOpen || !useMobileMenuPortal) return;
+    if (!mobileTopMenuOpen || !useMobileMenuPortal || isDesktop) return undefined;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const scroller = appScrollRef.current;
@@ -9029,7 +9092,28 @@ export default function App() {
         scroller.style.touchAction = "";
       }
     };
-  }, [mobileTopMenuOpen, useMobileMenuPortal]);
+  }, [mobileTopMenuOpen, useMobileMenuPortal, isDesktop]);
+
+  useEffect(() => {
+    if (!mobileTopMenuOpen || !isDesktop) return undefined;
+    placeMoreMenu();
+    const onWin = () => placeMoreMenu();
+    window.addEventListener("resize", onWin);
+    window.addEventListener("scroll", onWin, true);
+    return () => {
+      window.removeEventListener("resize", onWin);
+      window.removeEventListener("scroll", onWin, true);
+    };
+  }, [mobileTopMenuOpen, isDesktop, placeMoreMenu]);
+
+  useEffect(() => {
+    if (!mobileTopMenuOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") closeMobileTopMenu();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mobileTopMenuOpen]);
 
   useEffect(() => {
     if (active === "bbt") goToSection("demographics", { force: true });
@@ -9512,7 +9596,36 @@ export default function App() {
     setImportPreview(null);
   };
 
-  const closeMobileTopMenu = () => setMobileTopMenuOpen(false);
+  const closeMobileTopMenu = () => {
+    if (!mobileTopMenuOpen || menuBodyOut) return;
+    if (reduceMenuMotion) {
+      setMobileTopMenuOpen(false);
+      setMenuBodyOut(false);
+      return;
+    }
+    setMenuBodyOut(true);
+    if (menuLeaveTimer.current) clearTimeout(menuLeaveTimer.current);
+    menuLeaveTimer.current = setTimeout(() => {
+      setMobileTopMenuOpen(false);
+      setMenuBodyOut(false);
+      menuLeaveTimer.current = null;
+    }, 280);
+  };
+
+  const openMobileTopMenu = () => {
+    if (menuLeaveTimer.current) {
+      clearTimeout(menuLeaveTimer.current);
+      menuLeaveTimer.current = null;
+    }
+    setMenuBodyOut(false);
+    placeMoreMenu();
+    setMobileTopMenuOpen(true);
+  };
+
+  const toggleMobileTopMenu = () => {
+    if (mobileTopMenuOpen) closeMobileTopMenu();
+    else openMobileTopMenu();
+  };
 
   function TopBarActions({ inMenu }) {
     const btnBase = inMenu
@@ -9560,21 +9673,11 @@ export default function App() {
     if (!inMenu) return null;
 
     return (
-      <>
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={NL_TWEEN_MENU}
-          className={`rounded-2xl sidebar-shell ${SIDEBAR_CLS}`}
-          style={{ boxShadow: FLOAT_M }}
-        >
-          <nav className="py-3 px-1 flex flex-col">
-            {menuItems.map((item) => (
-              <Action key={item.label} onClick={item.onClick} icon={item.icon} label={item.label} colorClass={item.colorClass} />
-            ))}
-          </nav>
-        </motion.div>
-      </>
+      <nav className="py-2 px-1 flex flex-col">
+        {menuItems.map((item) => (
+          <Action key={item.label} onClick={item.onClick} icon={item.icon} label={item.label} colorClass={item.colorClass} />
+        ))}
+      </nav>
     );
   }
 
@@ -9639,7 +9742,7 @@ export default function App() {
   const topBarHardRefreshBtn = (
     <motion.button
       type="button"
-      whileHover={{ scale: 1.05 }}
+      whileHover={nlMotionHover(1.05)}
       whileTap={nlMotionTap(0.95)}
       onClick={runHardRefresh}
       className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0"
@@ -9718,7 +9821,7 @@ export default function App() {
     return (
       <div
         ref={shellRef}
-        className={`relative w-full overflow-hidden app-topbar-glass glass-float ${GLASS_CLS}`}
+        className={`relative w-full overflow-hidden app-topbar-glass glass-float rounded-full ${GLASS_CLS}`}
         style={{ boxShadow: FLOAT_M }}
       >
         <div className="relative z-[1] flex items-start w-full min-w-0 flex-nowrap">
@@ -9746,11 +9849,12 @@ export default function App() {
               />
               {topBarHardRefreshBtn}
 
+              <span ref={moreMenuBtnRef} className="inline-flex flex-shrink-0">
               <motion.button
-                whileHover={{ scale: 1.05 }}
+                whileHover={nlMotionHover(1.05)}
                 whileTap={nlMotionTap(0.95)}
-                onClick={() => setMobileTopMenuOpen((p) => !p)}
-                className={`w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
+                onClick={toggleMobileTopMenu}
+                className={`w-9 h-9 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
                 style={GLASS_FIELD}
                 title="More actions"
                 aria-label="More actions"
@@ -9761,6 +9865,7 @@ export default function App() {
               >
                 <MoreHorizontal className="w-4 h-4" />
               </motion.button>
+              </span>
             </div>
           </div>
         </div>
@@ -9772,7 +9877,7 @@ export default function App() {
     <DesktopUnifiedTopBar />
   ) : (
     <div
-      className={`app-topbar-glass glass-float relative flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl overflow-visible ${sidebar && !isDesktop ? "" : "pr-[10.75rem]"} ${GLASS_CLS}`}
+      className={`app-topbar-glass glass-float relative flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-full overflow-visible ${sidebar && !isDesktop ? "" : "pr-[10.75rem]"} ${GLASS_CLS}`}
       style={{ boxShadow: FLOAT_M }}
     >
       {topBarMenuBtn}
@@ -9793,17 +9898,23 @@ export default function App() {
             onOpenSession={(record) => handleLoadSession(record, { section: "kinematics" })}
           />
           {topBarHardRefreshBtn}
+          <span ref={moreMenuBtnRef} className="inline-flex flex-shrink-0">
           <motion.button
-            whileHover={{ scale: 1.08 }}
+            whileHover={nlMotionHover(1.08)}
             whileTap={nlMotionTap(0.92)}
-            onClick={() => setMobileTopMenuOpen((p) => !p)}
-            className="w-9 h-9 rounded-lg flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0"
+            onClick={toggleMobileTopMenu}
+            className={`w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
             style={GLASS_FIELD}
             title="Menu"
             aria-label="Menu"
+            aria-expanded={mobileTopMenuOpen}
+            aria-haspopup="dialog"
+            animate={{ rotate: mobileTopMenuOpen ? 90 : 0 }}
+            transition={NL_TWEEN_MENU}
           >
             <MoreHorizontal className="w-4 h-4" />
           </motion.button>
+          </span>
         </div>
       </div>
     </div>
@@ -9819,7 +9930,7 @@ export default function App() {
     const [mfaCode, setMfaCode] = useState("");
     const [mfaError, setMfaError] = useState("");
     const [mfaLoading, setMfaLoading] = useState(false);
-    const MFA_INPUT = "w-full bg-[rgba(220,235,255,0.04)] border border-white/[0.03] rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/30";
+    const MFA_INPUT = "w-full bg-white/[0.10] border border-white/15 rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/40 focus:ring-1 focus:ring-white/25";
 
     const loadUsers = async () => {
       setLoading(true);
@@ -10188,7 +10299,7 @@ export default function App() {
       )}
 
       <aside
-        className={`fixed left-0 top-0 h-full ${isDesktop ? "z-50" : "z-[100]"} flex flex-col px-3 pb-3`}
+        className={`fixed left-0 top-0 h-full ${isDesktop ? "z-50" : "z-[100]"} flex flex-col px-4 pb-4`}
         style={{
           width: isDesktop ? sidebarPush : MOBILE_SIDEBAR_W,
           paddingTop: SAFE_TOP,
@@ -10199,8 +10310,8 @@ export default function App() {
           isolation: undefined,
         }}
       >
-            <div className={`sidebar-shell flex-1 flex flex-col min-h-0 rounded-2xl overflow-hidden ${SIDEBAR_CLS}`} style={{ boxShadow: FLOAT_M }}>
-              <div className="px-5 pt-7 pb-5 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+            <div className={`sidebar-shell flex-1 flex flex-col min-h-0 rounded-[36px] overflow-hidden ${SIDEBAR_CLS}`} style={{ boxShadow: FLOAT_M }}>
+              <div className="px-5 pt-7 pb-5 flex-shrink-0">
                   <div className="relative flex flex-col items-center text-center gap-2 mb-4">
                     {!isDesktop && (
                       <button
@@ -10220,13 +10331,13 @@ export default function App() {
                     />
                     <p className="text-base font-extrabold text-white leading-tight tracking-wide">RA.ED AI</p>
                   </div>
-                <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl" style={GLASS_FIELD}>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={GLASS_FIELD}>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
                   <span className="text-xs font-light text-white/50 truncate">Pre / Post Longitudinal</span>
               </div>
             </div>
 
-              <nav className="flex-1 min-h-0 p-3 space-y-0.5 overflow-y-auto">
+              <nav className="flex-1 min-h-0 p-3 space-y-2 overflow-y-auto">
                 {NAV_ITEMS.filter((item) => !item.topBarOnly && (!item.adminOnly || user?.is_admin)).map((item) => {
                   const on = sidebarActiveId === item.id;
                   const Icon = item.icon;
@@ -10237,12 +10348,12 @@ export default function App() {
                       whileTap={sectionNavLocked ? undefined : nlMotionTap(0.97)}
                       onClick={() => { goToSection(item.id); if (!isDesktop) setSidebar(false); }}
                       disabled={sectionNavLocked}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors duration-200 relative group ${
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-full text-left transition-colors duration-200 relative group ${
                         on ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
                       }${sectionNavLocked ? " pointer-events-none" : ""}`}
                       style={on ? { backgroundColor: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.06)", boxShadow: "none" } : { border: "1px solid transparent" }}
                     >
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 relative z-10 transition-all ${
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 relative z-10 transition-all ${
                         on ? "bg-white/10" : "bg-white/[0.04] group-hover:bg-white/[0.07]"
                       }`} style={GLASS_FIELD}>
                         <Icon className={`w-4 h-4 ${on ? "text-white" : "text-white/45 group-hover:text-white/70"}`} />
@@ -10313,7 +10424,27 @@ export default function App() {
           text-shadow: 0 1px 2px rgba(0,0,0,0.12);
         }
 
-        /* Design tokens ? very muted liquid glass: minimal light/shine */
+        /* Capsule geometry on original GitHub glass degree */
+        .sidebar-shell {
+          border-radius: 36px !important;
+        }
+        .app-topbar-glass:not(.gselect-menu-portal):not(.nl-lens-menu):not([role="dialog"]):not(.validation-player-topbar):not(.validation-player-controls),
+        .section-header {
+          border-radius: 999px !important;
+        }
+        .content-panel-glass {
+          border-radius: 32px !important;
+        }
+        .gselect-trigger-shell,
+        .glass-field,
+        input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+        select {
+          border-radius: 999px !important;
+        }
+        textarea {
+          border-radius: 24px !important;
+        }
+
         [class*="border-white"] {
           border-color: rgba(255,255,255,0.03) !important;
         }
@@ -10323,44 +10454,40 @@ export default function App() {
           box-shadow: none !important;
         }
 
+        @keyframes nl-liquid-orbit {
+          to { transform: rotate(360deg); }
+        }
+
         .sidebar-shell,
-        .glass-float,
-        .content-shell {
+        .glass-float:not(.nl-lens-menu) {
           position: relative;
-          border-color: rgba(255,255,255,0.03) !important;
-          backdrop-filter: blur(12px) saturate(2.25) !important;
-          -webkit-backdrop-filter: blur(12px) saturate(2.25) !important;
+          isolation: isolate;
+          border-color: rgba(255,255,255,0.04) !important;
+          backdrop-filter: blur(22px) saturate(3.25) !important;
+          -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
           background-color: rgba(255,255,255,0.008) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
-          background-image:
-            radial-gradient(ellipse 150% 60% at 50% 0%, rgba(255,255,255,0.015) 0%, transparent 65%),
-            radial-gradient(ellipse 150% 70% at 50% 100%, rgba(200,230,255,0.015) 0%, transparent 60%),
-            radial-gradient(circle at 0% 25%, rgba(255,255,255,0.008) 0%, transparent 40%),
-            radial-gradient(circle at 100% 75%, rgba(255,255,255,0.008) 0%, transparent 40%),
-            linear-gradient(175deg, rgba(255,255,255,0.005) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.00) 65%, rgba(255,255,255,0.004) 100%) !important;
-          background-blend-mode: overlay, overlay, overlay, overlay, normal;
+          box-shadow:
+            inset 0 -18px 32px rgba(70, 130, 180, 0.06),
+            0 22px 52px -26px rgba(0,0,0,0.28) !important;
+          background-image: none !important;
         }
 
         .sidebar-shell::before,
         .glass-float::before,
-        .gselect-menu-portal::before,
-        .content-shell::before {
+        .gselect-menu-portal::before {
           content: "";
           position: absolute;
           inset: 0;
           border-radius: inherit;
-          padding: 2px;
+          padding: 1px;
           background: conic-gradient(
             from 180deg at 50% 50%,
-            rgba(255,255,255,0.25) 0deg,
-            rgba(160,225,255,0.12) 45deg,
-            rgba(210,190,255,0.08) 90deg,
-            rgba(255,255,255,0.03) 135deg,
-            rgba(160,225,255,0.12) 180deg,
-            rgba(255,255,255,0.03) 225deg,
-            rgba(210,190,255,0.08) 270deg,
-            rgba(160,225,255,0.12) 315deg,
-            rgba(255,255,255,0.25) 360deg
+            rgba(140,210,240,0.28) 0deg,
+            rgba(170,150,230,0.14) 70deg,
+            rgba(140,210,240,0.06) 140deg,
+            rgba(170,150,230,0.16) 210deg,
+            rgba(140,210,240,0.08) 280deg,
+            rgba(140,210,240,0.28) 360deg
           );
           -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
           -webkit-mask-composite: xor;
@@ -10368,48 +10495,49 @@ export default function App() {
           mask-composite: exclude;
           pointer-events: none;
           z-index: 0;
-          opacity: 0.05;
+          opacity: 0.22;
+          animation: nl-liquid-orbit 28s linear infinite;
         }
 
         .sidebar-shell::after,
         .glass-float::after,
-        .gselect-menu-portal::after,
-        .content-shell::after {
-          content: "";
-          position: absolute;
-          inset: 0;
-          border-radius: inherit;
-          pointer-events: none;
-          z-index: 0;
-          background:
-            linear-gradient(180deg, rgba(255,255,255,0.008) 0%, rgba(255,255,255,0.00) 40%, rgba(255,255,255,0.00) 70%, rgba(255,255,255,0.005) 100%);
-          mix-blend-mode: overlay;
+        .gselect-menu-portal::after {
+          content: none;
         }
 
         .content-shell {
-          background: transparent;
+          background: transparent !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+          box-shadow: none !important;
+          border-color: transparent !important;
+          background-image: none !important;
+        }
+        .content-shell::before,
+        .content-shell::after {
+          display: none !important;
         }
 
-        /* Inner section panels ? frosted cards (same on iPad and desktop) */
         .content-shell .content-panel-glass,
         .content-shell .glass-float:not(.section-header):not(.app-topbar-glass) {
-          backdrop-filter: blur(16px) saturate(1.85) !important;
-          -webkit-backdrop-filter: blur(16px) saturate(1.85) !important;
+          backdrop-filter: blur(24px) saturate(2.85) !important;
+          -webkit-backdrop-filter: blur(24px) saturate(2.85) !important;
           background-color: rgba(255,255,255,0.028) !important;
           border-color: rgba(255,255,255,0.05) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.018), 0 10px 28px -6px rgba(0,0,0,0.12), 0 22px 52px -14px rgba(0,0,0,0.10), 0 36px 72px -24px rgba(0,0,0,0.07) !important;
+          box-shadow:
+            inset 0 -16px 28px rgba(70, 130, 180, 0.045),
+            0 12px 32px -10px rgba(0,0,0,0.14),
+            0 24px 56px -18px rgba(0,0,0,0.10) !important;
         }
 
         .content-shell .content-panel-glass::before,
         .content-shell .glass-float:not(.section-header)::before {
-          opacity: 0.025;
+          opacity: 0.18;
         }
 
         .content-shell .content-panel-glass::after,
         .content-shell .glass-float:not(.section-header)::after {
-          opacity: 0.35;
-          background:
-            linear-gradient(180deg, rgba(255,255,255,0.006) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.00) 100%);
+          content: none;
         }
 
         .app-main-inner {
@@ -10417,21 +10545,27 @@ export default function App() {
         }
 
         .glass-float .glass-float {
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), inset 0 -1px 0 rgba(255,255,255,0.01), 0 20px 50px -24px rgba(0,0,0,0.10) !important;
+          box-shadow:
+            inset 0 -12px 22px rgba(70, 130, 180, 0.04),
+            0 14px 32px -20px rgba(0,0,0,0.16) !important;
         }
 
-        /* Section headers ? stronger frosted glass */
         .section-header {
-          backdrop-filter: blur(24px) saturate(2.25) !important;
-          -webkit-backdrop-filter: blur(24px) saturate(2.25) !important;
+          backdrop-filter: blur(24px) saturate(3.1) !important;
+          -webkit-backdrop-filter: blur(24px) saturate(3.1) !important;
         }
 
-        /* Inputs ? neutral dark glass, less blue */
         .glass-field,
         input, select, textarea {
+          color: rgba(255,255,255,0.92) !important;
           background-color: rgba(255,255,255,0.06) !important;
           border-color: rgba(255,255,255,0.04) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.02) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
+        }
+        .glass-field::placeholder,
+        input::placeholder,
+        textarea::placeholder {
+          color: rgba(255,255,255,0.30) !important;
         }
         .glass-float input,
         .glass-float select,
@@ -10533,7 +10667,7 @@ export default function App() {
         button { min-height: 44px !important; }
 
         .gselect-chevron {
-          transition: transform 0.24s cubic-bezier(0.33, 1, 0.68, 1);
+          transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
           transform: translateZ(0);
         }
         .gselect-chevron-open {
@@ -10543,18 +10677,46 @@ export default function App() {
         @keyframes gselect-body-in {
           from {
             opacity: 0;
-            transform: translate3d(0, -8px, 0);
+            transform: translate3d(0, -10px, 0) scale(0.98);
           }
           to {
             opacity: 1;
-            transform: translate3d(0, 0, 0);
+            transform: translate3d(0, 0, 0) scale(1);
+          }
+        }
+        @keyframes gselect-body-out {
+          from {
+            opacity: 1;
+            transform: translate3d(0, 0, 0) scale(1);
+          }
+          to {
+            opacity: 0;
+            transform: translate3d(0, -8px, 0) scale(0.97);
           }
         }
         .gselect-menu-body--animate {
-          animation: gselect-body-in 0.24s cubic-bezier(0.33, 1, 0.68, 1) both;
+          animation: gselect-body-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
           transform: translateZ(0);
           backface-visibility: hidden;
           -webkit-backface-visibility: hidden;
+        }
+        .gselect-menu-body--animate-out {
+          animation: gselect-body-out 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        @keyframes nl-actions-sheet-in {
+          from { bottom: -100vh; }
+          to { bottom: 0px; }
+        }
+        @keyframes nl-actions-sheet-out {
+          from { bottom: 0px; }
+          to { bottom: -100vh; }
+        }
+        [role="dialog"][aria-label="Actions menu"].nl-actions-sheet {
+          animation: nl-actions-sheet-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        [role="dialog"][aria-label="Actions menu"].nl-actions-sheet--out {
+          animation: nl-actions-sheet-out 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
 
         .gselect-menu-portal {
@@ -10562,28 +10724,44 @@ export default function App() {
         }
 
         .gselect-trigger-shell.glass-float {
-          transition: border-color 0.28s cubic-bezier(0.33, 1, 0.68, 1), box-shadow 0.28s cubic-bezier(0.33, 1, 0.68, 1);
+          transition: border-color 0.36s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.36s cubic-bezier(0.22, 1, 0.36, 1);
         }
         .gselect-trigger-shell.glass-float[aria-expanded="true"] {
           border-color: rgba(255,255,255,0.05) !important;
         }
 
-        .gselect-menu-portal.glass-float {
-          border-color: rgba(255,255,255,0.03) !important;
-          backdrop-filter: blur(12px) saturate(2.25) !important;
-          -webkit-backdrop-filter: blur(12px) saturate(2.25) !important;
+        .gselect-menu-portal:not(.nl-lens-menu) {
+          border-radius: 24px !important;
+        }
+        .gselect-menu-portal.glass-float:not(.nl-lens-menu) {
+          border-color: rgba(255,255,255,0.04) !important;
+          backdrop-filter: blur(22px) saturate(3.25) !important;
+          -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
           background-color: rgba(255,255,255,0.008) !important;
-          background-image:
-            radial-gradient(ellipse 150% 60% at 50% 0%, rgba(255,255,255,0.015) 0%, transparent 65%),
-            radial-gradient(ellipse 150% 70% at 50% 100%, rgba(200,230,255,0.015) 0%, transparent 60%),
-            radial-gradient(circle at 0% 25%, rgba(255,255,255,0.008) 0%, transparent 40%),
-            radial-gradient(circle at 100% 75%, rgba(255,255,255,0.008) 0%, transparent 40%),
-            linear-gradient(175deg, rgba(255,255,255,0.005) 0%, rgba(255,255,255,0.00) 45%, rgba(255,255,255,0.00) 65%, rgba(255,255,255,0.004) 100%) !important;
-          background-blend-mode: overlay, overlay, overlay, overlay, normal;
+          background-image: none !important;
+        }
+        .nl-lens-menu.gselect-menu-portal,
+        .nl-lens-menu.glass-float {
+          position: relative;
+          isolation: isolate;
+          transform: none !important;
+          will-change: auto !important;
+          contain: none !important;
+          border-radius: 28px !important;
+          border-color: rgba(255,255,255,0.05) !important;
+          backdrop-filter: blur(24px) saturate(2.85) !important;
+          -webkit-backdrop-filter: blur(24px) saturate(2.85) !important;
+          background-color: rgba(255,255,255,0.028) !important;
+          background-image: none !important;
+          box-shadow:
+            inset 0 -16px 28px rgba(70, 130, 180, 0.045),
+            0 12px 32px -10px rgba(0,0,0,0.14),
+            0 24px 56px -18px rgba(0,0,0,0.10) !important;
         }
 
         .gselect-menu-portal .gselect-option {
-          transition: background-color 0.12s, color 0.12s;
+          transition: background-color 0.32s cubic-bezier(0.22, 1, 0.36, 1), color 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+          color: rgba(255,255,255,0.85) !important;
           background-color: transparent !important;
           box-shadow: none !important;
           border: none !important;
@@ -10597,32 +10775,54 @@ export default function App() {
         /* GSelect portal ? identical liquid glass tokens as .app-topbar-glass (transform anim on inner body only ? keeps backdrop-filter) */
         @media (prefers-reduced-motion: reduce) {
           .gselect-menu-body--animate,
-          .gselect-chevron {
+          .gselect-menu-body--animate-out,
+          .gselect-chevron,
+          .sidebar-shell::before,
+          .glass-float::before,
+          .gselect-menu-portal::before,
+          .sidebar-shell::after,
+          .glass-float::after,
+          .gselect-menu-portal::after {
             animation: none !important;
             transition: none !important;
           }
         }
 
         html.nl-touch .sidebar-shell,
-        html.nl-touch .glass-float,
+        html.nl-touch .glass-float:not(.nl-lens-menu) {
+          backdrop-filter: blur(22px) saturate(3.25) !important;
+          -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
+          background-color: rgba(255,255,255,0.008) !important;
+          box-shadow:
+            inset 0 -18px 32px rgba(70, 130, 180, 0.06),
+            0 22px 52px -26px rgba(0,0,0,0.28) !important;
+        }
+        html.nl-touch .nl-lens-menu.glass-float,
+        html.nl-touch .nl-lens-menu.gselect-menu-portal {
+          backdrop-filter: blur(24px) saturate(2.85) !important;
+          -webkit-backdrop-filter: blur(24px) saturate(2.85) !important;
+          background-color: rgba(255,255,255,0.028) !important;
+        }
         html.nl-touch .content-shell {
-          backdrop-filter: blur(8px) saturate(1.45) !important;
-          -webkit-backdrop-filter: blur(8px) saturate(1.45) !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+          background-color: transparent !important;
         }
         html.nl-touch .content-shell .glass-float:not(.section-header):not(.app-topbar-glass),
         html.nl-touch .content-shell .content-panel-glass {
-          backdrop-filter: blur(6px) saturate(1.25) !important;
-          -webkit-backdrop-filter: blur(6px) saturate(1.25) !important;
+          backdrop-filter: blur(24px) saturate(2.85) !important;
+          -webkit-backdrop-filter: blur(24px) saturate(2.85) !important;
+          background-color: rgba(255,255,255,0.028) !important;
         }
-        html.nl-touch .sidebar-shell::before,
-        html.nl-touch .sidebar-shell::after,
         html.nl-touch .content-shell::before,
-        html.nl-touch .content-shell::after,
-        html.nl-touch .content-shell .glass-float::before,
-        html.nl-touch .content-shell .glass-float::after,
-        html.nl-touch .content-shell .content-panel-glass::before,
-        html.nl-touch .content-shell .content-panel-glass::after {
+        html.nl-touch .content-shell::after {
           display: none !important;
+        }
+        html.nl-touch .content-shell .glass-float.rounded-xl,
+        html.nl-touch .content-shell .glass-float.rounded-2xl,
+        .content-shell .glass-float.rounded-xl,
+        .content-shell .glass-float.rounded-2xl {
+          border-radius: 24px !important;
         }
         html.nl-touch h1,
         html.nl-touch h2,
@@ -10649,48 +10849,72 @@ export default function App() {
       {useMobileMenuPortal && typeof document !== "undefined" && ReactDOM.createPortal(
         <AnimatePresence>
           {mobileTopMenuOpen && (
-            <div key="mobile-top-menu" className="fixed inset-0 z-[200]">
-              <motion.button
-                type="button"
-                aria-label="Close menu"
-                className="absolute inset-0 bg-black/50 backdrop-blur-[3px]"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                onClick={closeMobileTopMenu}
-              />
-              <motion.div
-                ref={mobileMenuRef}
-                role="dialog"
-                aria-modal="true"
-                aria-label="Actions menu"
-                className="absolute left-0 right-0 bottom-0 px-3"
-                initial={{ y: "50vh" }}
-                animate={{ y: 0 }}
-                exit={{ y: "50vh" }}
-                transition={{ type: "tween", duration: 0.34, ease: [0.32, 0.72, 0, 1] }}
-                style={{
-                  maxHeight: "min(78vh, calc(100dvh - env(safe-area-inset-top, 0px) - 72px))",
-                  paddingBottom: "max(12px, env(safe-area-inset-bottom, 0px))",
-                  willChange: "transform",
-                }}
-              >
+            isDesktop ? (
+              <div key="desktop-more-menu" className="fixed inset-0 z-[200]">
+                <button
+                  type="button"
+                  aria-label="Close menu"
+                  className="absolute inset-0 bg-transparent"
+                  onClick={closeMobileTopMenu}
+                />
                 <div
-                  className={`sidebar-shell flex flex-col max-h-full rounded-2xl overflow-hidden ${SIDEBAR_CLS}`}
-                  style={{ boxShadow: FLOAT_M }}
+                  ref={mobileMenuRef}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Actions menu"
+                  className={`nl-actions-sheet absolute right-3 bottom-0 w-[min(320px,calc(100vw-24px))]${reduceMenuMotion ? "" : menuBodyOut ? " nl-actions-sheet--out" : ""}`}
+                  style={{
+                    position: "absolute",
+                    maxHeight: "min(78vh, calc(100dvh - 72px))",
+                    paddingBottom: "max(12px, env(safe-area-inset-bottom, 0px))",
+                    zIndex: 1,
+                  }}
                 >
-                  <nav
-                    className="flex-1 min-h-0 px-3 pt-3 pb-3 flex flex-col gap-3 overflow-y-auto overscroll-contain"
-                    style={{
-                      paddingBottom: "max(12px, calc(12px + env(safe-area-inset-bottom, 0px) * 0.35))",
-                    }}
+                  <div
+                    className={`nl-lens-menu gselect-menu-portal glass-float overflow-hidden ${GLASS_PANEL_CLS}`}
+                    style={{ borderRadius: 28, boxShadow: FLOAT_M }}
                   >
-                    <TopBarActions inMenu={true} />
-                  </nav>
+                    <div className="gselect-menu-body flex flex-col max-h-full overflow-y-auto overscroll-contain px-2 py-1">
+                      <TopBarActions inMenu={true} />
+                    </div>
+                  </div>
                 </div>
-              </motion.div>
-            </div>
+              </div>
+            ) : (
+              <div key="mobile-top-menu" className="fixed inset-0 z-[200]">
+                <button
+                  type="button"
+                  aria-label="Close menu"
+                  className="absolute inset-0 bg-transparent"
+                  onClick={closeMobileTopMenu}
+                />
+                <div
+                  ref={mobileMenuRef}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Actions menu"
+                  className={`nl-actions-sheet absolute right-3 bottom-0 w-[min(320px,calc(100vw-24px))]${reduceMenuMotion ? "" : menuBodyOut ? " nl-actions-sheet--out" : ""}`}
+                  style={{
+                    maxHeight: "min(78vh, calc(100dvh - env(safe-area-inset-top, 0px) - 72px))",
+                    paddingBottom: "max(12px, env(safe-area-inset-bottom, 0px))",
+                  }}
+                >
+                  <div
+                    className={`nl-lens-menu gselect-menu-portal glass-float flex flex-col max-h-full overflow-hidden ${GLASS_PANEL_CLS}`}
+                    style={{ borderRadius: 28, boxShadow: FLOAT_M }}
+                  >
+                    <div
+                      className="gselect-menu-body flex-1 min-h-0 px-2 pt-2 pb-2 overflow-y-auto overscroll-contain"
+                      style={{
+                        paddingBottom: "max(12px, calc(12px + env(safe-area-inset-bottom, 0px) * 0.35))",
+                      }}
+                    >
+                      <TopBarActions inMenu={true} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
           )}
         </AnimatePresence>,
         document.body

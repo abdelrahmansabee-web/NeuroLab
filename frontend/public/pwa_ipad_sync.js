@@ -1,29 +1,3 @@
-/* iPad only: if this icon is on an old document, jump to the live bundle.
-   Laptop is not iOS, so this block does not run there. */
-(function () {
-  var ua = navigator.userAgent || "";
-  var isIOS = /iPad|iPhone|iPod/.test(ua)
-    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  if (isIOS && (location.search || "").indexOf("_iosbust=") === -1) {
-    var meta = document.querySelector('meta[name="nl-version"]');
-    var here = meta && meta.content;
-    fetch("/?_v=check&_r=" + Date.now(), { cache: "reload", credentials: "same-origin" })
-      .then(function (res) { return res.text(); })
-      .then(function (html) {
-        var match = /nl-version" content="([^"]+)"/.exec(html || "");
-        var live = match && match[1];
-        if (!live || !here || live === here) return;
-        location.replace(
-          "/?_v=" + encodeURIComponent(live)
-          + "&_r=" + Date.now()
-          + "&_ios=" + encodeURIComponent(live)
-          + "&_iosbust=1"
-        );
-      })
-      .catch(function () {});
-  }
-})();
-
 /* Home Screen app only: upload overlay validation videos into Drive patient folders. */
 (function () {
   function standalone() {
@@ -260,7 +234,7 @@
     }
     try {
       var dump = {};
-      var keys = ["stroke_rehab_patients_v6", "neuro_fd_data", "neurolab_token"];
+      var keys = ["stroke_rehab_patients_v6", "neuro_kin_results", "neuro_fd_data", "neurolab_token"];
       for (var i = 0; i < keys.length; i++) dump[keys[i]] = localStorage.getItem(keys[i]);
       var fd = new FormData();
       fd.append("payload", new Blob([JSON.stringify(dump)], { type: "application/json" }), "localstorage.json");

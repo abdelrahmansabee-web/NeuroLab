@@ -1,63 +1,73 @@
 /**
  * High-performance motion tokens: opacity + transform only (avoid filter/height/width).
- * Springs tuned for snappy, low-latency feel on high-refresh displays.
+ * Springs follow iOS 26 Liquid Glass: soft settle, light bounce, no snap.
  */
+
+export const NL_IOS_EASE = [0.22, 1, 0.36, 1];
+export const NL_IOS_EASE_CSS = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 export const NL_SPRING_SNAPPY = {
   type: "spring",
-  stiffness: 520,
-  damping: 42,
-  mass: 0.55,
+  stiffness: 200,
+  damping: 22,
+  mass: 0.96,
   restDelta: 0.001,
   restSpeed: 0.001,
 };
 
 export const NL_SPRING_SHEET = {
   type: "spring",
-  stiffness: 400,
-  damping: 38,
-  mass: 0.68,
+  stiffness: 170,
+  damping: 22,
+  mass: 1.08,
   restDelta: 0.001,
   restSpeed: 0.001,
 };
 
 export const NL_SPRING_TOAST = {
   type: "spring",
-  stiffness: 460,
-  damping: 34,
-  mass: 0.58,
+  stiffness: 210,
+  damping: 24,
+  mass: 0.96,
 };
 
 export const NL_TWEEN_OVERLAY = {
   type: "tween",
-  duration: 0.18,
-  ease: [0.33, 1, 0.68, 1],
+  duration: 0.38,
+  ease: NL_IOS_EASE,
 };
 
 export const NL_TWEEN_MENU = {
   type: "tween",
+  duration: 0.48,
+  ease: NL_IOS_EASE,
+};
+
+/** Menu / Recalling hide — same curve as gselect-body-in, shorter. */
+export const NL_TWEEN_MENU_EXIT = {
+  type: "tween",
   duration: 0.28,
-  ease: [0.33, 1, 0.68, 1],
+  ease: NL_IOS_EASE,
 };
 
 /** Section pane enter/exit — ease-out, no spring overshoot */
 export const NL_TWEEN_SECTION = {
   type: "tween",
-  duration: 0.34,
-  ease: [0.22, 1, 0.36, 1],
+  duration: 0.52,
+  ease: NL_IOS_EASE,
 };
 
 export const NL_TWEEN_SECTION_EXIT = {
   type: "tween",
-  duration: 0.22,
-  ease: [0.4, 0, 0.6, 1],
+  duration: 0.36,
+  ease: NL_IOS_EASE,
 };
 
 export const NL_TRANSFORM_TRANSITION =
-  "transform 0.26s cubic-bezier(0.33, 1, 0.68, 1)";
+  "transform 0.48s cubic-bezier(0.22, 1, 0.36, 1)";
 
 export const NL_LAYOUT_TRANSITION =
-  "left 0.26s cubic-bezier(0.33, 1, 0.68, 1), width 0.26s cubic-bezier(0.33, 1, 0.68, 1)";
+  "left 0.48s cubic-bezier(0.22, 1, 0.36, 1), width 0.48s cubic-bezier(0.22, 1, 0.36, 1)";
 
 export const NL_GPU_LAYER = {
   willChange: "transform, opacity",
@@ -69,8 +79,8 @@ export const NL_GPU_LAYER = {
 /** Full horizontal slide — transform only, smooth ease-out */
 export const NL_TWEEN_SECTION_SLIDE = {
   type: "tween",
-  duration: 0.42,
-  ease: [0.22, 1, 0.36, 1],
+  duration: 0.56,
+  ease: NL_IOS_EASE,
 };
 
 const SLIDE_PANE_ABSOLUTE = {
