@@ -8898,7 +8898,7 @@ export default function App() {
   const [importPreview, setImportPreview] = useState(null);
   const [user, setUser] = useState(null);
   const [mobileTopMenuOpen, setMobileTopMenuOpen] = useState(false);
-  const [moreMenuPos, setMoreMenuPos] = useState({ top: 56, right: 12, width: 300 });
+  const [moreMenuPos, setMoreMenuPos] = useState({ top: 56, left: null, width: 300 });
   const [toast, setToast] = useState({ visible: false, msg: "", variant: "success" });
   const [originRestoreBanner, setOriginRestoreBanner] = useState("");
   const bgRef = useRef(null);
@@ -9010,15 +9010,18 @@ export default function App() {
   }, [isDesktop, sidebar]);
 
   const placeMoreMenu = useCallback(() => {
-    const el = moreMenuBtnRef.current;
+    const el =
+      moreMenuBtnRef.current ||
+      document.querySelector('button[aria-label="More actions"], button[aria-label="Menu"]');
     if (!el) return;
     const r = el.getBoundingClientRect();
     const width = Math.min(320, window.innerWidth - 16);
-    let right = window.innerWidth - r.right;
-    if (right + width > window.innerWidth - 8) right = 8;
+    let left = r.right - width;
+    if (left < 8) left = 8;
+    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
     setMoreMenuPos({
       top: Math.round(r.bottom + 8),
-      right: Math.round(Math.max(8, right)),
+      left: Math.round(left),
       width,
     });
   }, []);
@@ -9768,11 +9771,14 @@ export default function App() {
               />
               {topBarHardRefreshBtn}
 
+              <span ref={moreMenuBtnRef} className="inline-flex flex-shrink-0">
               <motion.button
-                ref={moreMenuBtnRef}
                 whileHover={nlMotionHover(1.05)}
                 whileTap={nlMotionTap(0.95)}
-                onClick={() => setMobileTopMenuOpen((p) => !p)}
+                onClick={() => {
+                  placeMoreMenu();
+                  setMobileTopMenuOpen((p) => !p);
+                }}
                 className={`w-9 h-9 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
                 style={GLASS_FIELD}
                 title="More actions"
@@ -9784,6 +9790,7 @@ export default function App() {
               >
                 <MoreHorizontal className="w-4 h-4" />
               </motion.button>
+              </span>
             </div>
           </div>
         </div>
@@ -9816,11 +9823,14 @@ export default function App() {
             onOpenSession={(record) => handleLoadSession(record, { section: "kinematics" })}
           />
           {topBarHardRefreshBtn}
+          <span ref={moreMenuBtnRef} className="inline-flex flex-shrink-0">
           <motion.button
-            ref={moreMenuBtnRef}
             whileHover={nlMotionHover(1.08)}
             whileTap={nlMotionTap(0.92)}
-            onClick={() => setMobileTopMenuOpen((p) => !p)}
+            onClick={() => {
+              placeMoreMenu();
+              setMobileTopMenuOpen((p) => !p);
+            }}
             className={`w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0 ${mobileTopMenuOpen ? "text-white bg-white/[0.10]" : ""}`}
             style={GLASS_FIELD}
             title="Menu"
@@ -9832,6 +9842,7 @@ export default function App() {
           >
             <MoreHorizontal className="w-4 h-4" />
           </motion.button>
+          </span>
         </div>
       </div>
     </div>
@@ -10724,14 +10735,16 @@ export default function App() {
                   role="dialog"
                   aria-modal="true"
                   aria-label="Actions menu"
-                  className={`absolute gselect-menu-portal app-topbar-glass glass-float overflow-hidden ${SIDEBAR_CLS}`}
+                  className={`gselect-menu-portal app-topbar-glass glass-float overflow-hidden ${SIDEBAR_CLS}`}
                   initial={{ opacity: 0, y: -10, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -8, scale: 0.97 }}
                   transition={NL_SPRING_SNAPPY}
                   style={{
+                    position: "absolute",
                     top: moreMenuPos.top,
-                    right: moreMenuPos.right,
+                    left: moreMenuPos.left == null ? "auto" : moreMenuPos.left,
+                    right: moreMenuPos.left == null ? 12 : "auto",
                     width: moreMenuPos.width,
                     maxHeight: "min(78vh, calc(100dvh - 72px))",
                     borderRadius: 24,

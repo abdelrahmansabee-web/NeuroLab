@@ -42,6 +42,7 @@ test("three-dot menu is a desktop popover from the button, not only a bottom she
   expect(app).toMatch(/moreMenuBtnRef/);
   expect(app).toMatch(/desktop-more-menu/);
   expect(app).toMatch(/transformOrigin: "top right"/);
+  expect(app).toMatch(/desktop-more-menu[\s\S]*?position: "absolute"/);
   expect(app).not.toMatch(/className=\{`rounded-\[28px\] sidebar-shell \$\{SIDEBAR_CLS\}`\}/);
 });
 
