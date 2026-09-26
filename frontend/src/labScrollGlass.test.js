@@ -72,10 +72,12 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(auth).toMatch(/\.catch\(\(\) => setState\("locked"\)\)/);
   expect(html).toMatch(/nl-version" content="32\.372"/);
   expect(html).toMatch(/nl_app_bust/);
-  expect(html).toMatch(/function ensureRun/);
-  expect(html).toMatch(/function tick\(\)\{pin\(\);if\(document\.querySelector\("\.kin-film-strip"\)\)enhanceAnalyzeCapsule\(\)\}/);
+  expect(html).toMatch(/function pin\(\)/);
+  expect(html).toMatch(/new MutationObserver\(pin\)\.observe\(document\.documentElement/);
+  expect(html).not.toMatch(/function ensureRun/);
+  expect(html).not.toMatch(/function enhanceAnalyzeCapsule/);
+  expect(html).not.toMatch(/function tick\(/);
   expect(html).toMatch(/nl_clinic_file_lock/);
-  expect(html).toMatch(/static\/kin-run\/pose-a\.png/);
   expect(html).not.toMatch(/__nlAuthMeTimeout/);
   expect(html).not.toMatch(/function ensureOrbit/);
   expect(sync).not.toMatch(/_iosbust=/);
