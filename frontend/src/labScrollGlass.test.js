@@ -42,12 +42,30 @@ test("validation video chrome uses muted glass bars and panels", () => {
   expect(css).toMatch(/\.validation-player-controls[\s\S]*?border-radius:\s*24px/);
 });
 
-test("three-dot menu is a desktop popover from the button, not only a bottom sheet", () => {
+test("three-dot menu is a compact glass lens, not a stadium plate", () => {
   expect(app).toMatch(/moreMenuBtnRef/);
   expect(app).toMatch(/desktop-more-menu/);
   expect(app).toMatch(/transformOrigin: "top right"/);
   expect(app).toMatch(/desktop-more-menu[\s\S]*?position: "absolute"/);
+  expect(app).toMatch(/nl-lens-menu gselect-menu-portal glass-float/);
+  expect(app).toMatch(/gselect-menu-body gselect-menu-body--animate/);
+  expect(app).toMatch(/w-\[min\(320px,calc\(100vw-24px\)\)\]/);
   expect(app).not.toMatch(/className=\{`rounded-\[28px\] sidebar-shell \$\{SIDEBAR_CLS\}`\}/);
+});
+
+test("Recalling and GSelect keep liquid-glass motion on the inner body only", () => {
+  expect(app).toMatch(/@keyframes gselect-body-in/);
+  expect(app).toMatch(/@keyframes gselect-body-out/);
+  expect(app).toMatch(/animation: gselect-body-in 0\.48s cubic-bezier\(0\.22, 1, 0\.36, 1\) both/);
+  expect(app).toMatch(/animation: gselect-body-out 0\.28s cubic-bezier\(0\.22, 1, 0\.36, 1\) both/);
+  expect(app).toMatch(/gselect-menu-body--animate-out/);
+  const status = fs.readFileSync(path.join(__dirname, "SessionStatusBar.jsx"), "utf8");
+  expect(status).toMatch(/gselect-menu-body--animate-out/);
+  expect(status).toMatch(/nl-lens-menu/);
+  expect(status).not.toMatch(/NL_SPRING_SHEET/);
+  expect(overlay).toMatch(/@keyframes gselect-body-out/);
+  expect(overlay).toMatch(/\[role="dialog"\]\[aria-label="Actions menu"\]/);
+  expect(overlay).not.toMatch(/\.app-topbar-glass,\s*\.section-header \{\s*border-radius:\s*999px/);
 });
 
 test("analysis phase cards use muted glass instead of neon sky/emerald/amber plates", () => {
@@ -83,5 +101,5 @@ test("clinic chrome keeps original GitHub glass degree, not milky lens brighteni
   expect(app).not.toMatch(/brightness\(1\.08\)/);
   expect(app).not.toMatch(/bg-white\/70/);
   expect(app).toMatch(/\.sidebar-shell \{\s*border-radius: 36px !important;/);
-  expect(app).toMatch(/\.app-topbar-glass,\s*\.section-header \{\s*border-radius: 999px !important;/);
+  expect(app).toMatch(/\.app-topbar-glass:not\(\.gselect-menu-portal\):not\(\.nl-lens-menu\):not\(\[role="dialog"\]\),\s*\.section-header \{\s*border-radius: 999px !important;/);
 });

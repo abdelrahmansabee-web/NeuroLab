@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { NL_SPRING_SHEET } from "./motionPresets";
+import { useReducedMotion } from "framer-motion";
 import {
   AlertCircle,
   Check,
@@ -26,10 +25,11 @@ import {
 
 const PATIENTS_SYNC_EVENT = "neurolab-patients-synced";
 
-/** Same liquid-glass shell as GSelect dropdown menus in App.js. */
+/** Same liquid-glass lens as clinic cards. Motion stays on the inner body (GSelect). */
 const MENU_GLASS_CLS =
-  "gselect-menu-portal relative overflow-hidden app-topbar-glass glass-float bg-white/[0.008] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.03]";
+  "nl-lens-menu gselect-menu-portal relative overflow-hidden glass-float bg-white/[0.028] backdrop-blur-md backdrop-saturate-[2.25] border border-white/[0.06]";
 const MENU_GLASS_SHADOW = "0 24px 60px -30px rgba(0,0,0,0.18)";
+const GSELECT_BODY_OUT_MS = 280;
 
 const TONE_DOT = {
   ready: "bg-emerald-400",
@@ -187,6 +187,8 @@ export default function SessionStatusBar({
   const [noAutoOpen, setNoAutoOpen] = useState(() => lsGet(SESSION_STATUS_LS.noAutoOpen));
   const [panelPos, setPanelPos] = useState({ top: 56, right: 12 });
   const [recalling, setRecalling] = useState(() => isDriveRecallRunning());
+  const [panelMount, setPanelMount] = useState(false);
+  const [panelOut, setPanelOut] = useState(false);
   const reduceMotion = useReducedMotion();
 
   const refresh = useCallback(() => {
@@ -224,6 +226,26 @@ export default function SessionStatusBar({
       width,
     });
   }, []);
+
+  useEffect(() => {
+    if (open) {
+      setPanelOut(false);
+      setPanelMount(true);
+      return undefined;
+    }
+    if (!panelMount) return undefined;
+    if (reduceMotion) {
+      setPanelMount(false);
+      setPanelOut(false);
+      return undefined;
+    }
+    setPanelOut(true);
+    const t = setTimeout(() => {
+      setPanelMount(false);
+      setPanelOut(false);
+    }, GSELECT_BODY_OUT_MS);
+    return () => clearTimeout(t);
+  }, [open, panelMount, reduceMotion]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -361,17 +383,12 @@ export default function SessionStatusBar({
 
       {typeof document !== "undefined" &&
         createPortal(
-          <AnimatePresence>
-            {open && (
-          <motion.div
+          panelMount ? (
+          <div
             ref={panelRef}
             role="dialog"
             aria-label={inventory.fromDrive ? "Sessions recalled from Drive" : "Loaded sessions"}
-            className={`${MENU_GLASS_CLS} rounded-[24px]`}
-            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -10, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.97 }}
-            transition={reduceMotion ? { duration: 0.12 } : NL_SPRING_SHEET}
+            className={`${MENU_GLASS_CLS} rounded-[28px]`}
             style={{
               position: "fixed",
               top: panelPos.top,
@@ -379,17 +396,23 @@ export default function SessionStatusBar({
               width: panelPos.width || 360,
               maxHeight: "min(70vh, calc(100dvh - 72px))",
               zIndex: 999999,
-              borderRadius: 24,
+              borderRadius: 28,
               boxShadow: MENU_GLASS_SHADOW,
-              transformOrigin: "top right",
               isolation: "isolate",
               display: "flex",
               flexDirection: "column",
-              willChange: "transform, opacity",
+              transform: "translateZ(0)",
+              WebkitTransform: "translateZ(0)",
             }}
           >
             <div
-              className="gselect-menu-body relative z-[1] flex min-h-0 flex-1 flex-col overflow-hidden"
+              className={`gselect-menu-body relative z-[1] flex min-h-0 flex-1 flex-col overflow-hidden${
+                reduceMotion
+                  ? ""
+                  : panelOut
+                    ? " gselect-menu-body--animate-out"
+                    : " gselect-menu-body--animate"
+              }`}
             >
                 <div className="flex items-start justify-between gap-2 px-3 pt-3 pb-2">
                   <div>
@@ -480,9 +503,8 @@ export default function SessionStatusBar({
                   </div>
                 </div>
             </div>
-          </motion.div>
-            )}
-          </AnimatePresence>,
+          </div>
+          ) : null,
           document.body,
         )}
     </>

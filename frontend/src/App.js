@@ -7,7 +7,6 @@ import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMe
 import ReactDOM from "react-dom";
 import { motion, AnimatePresence, animate, useMotionValue, useReducedMotion } from "framer-motion";
 import {
-  NL_SPRING_SHEET,
   NL_SPRING_SNAPPY,
   NL_SPRING_TOAST,
   NL_TWEEN_MENU,
@@ -10356,7 +10355,7 @@ export default function App() {
         .sidebar-shell {
           border-radius: 36px !important;
         }
-        .app-topbar-glass,
+        .app-topbar-glass:not(.gselect-menu-portal):not(.nl-lens-menu):not([role="dialog"]),
         .section-header {
           border-radius: 999px !important;
         }
@@ -10387,7 +10386,7 @@ export default function App() {
         }
 
         .sidebar-shell,
-        .glass-float {
+        .glass-float:not(.nl-lens-menu) {
           position: relative;
           isolation: isolate;
           border-color: rgba(255,255,255,0.04) !important;
@@ -10612,11 +10611,24 @@ export default function App() {
             transform: translate3d(0, 0, 0) scale(1);
           }
         }
+        @keyframes gselect-body-out {
+          from {
+            opacity: 1;
+            transform: translate3d(0, 0, 0) scale(1);
+          }
+          to {
+            opacity: 0;
+            transform: translate3d(0, -8px, 0) scale(0.97);
+          }
+        }
         .gselect-menu-body--animate {
           animation: gselect-body-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
           transform: translateZ(0);
           backface-visibility: hidden;
           -webkit-backface-visibility: hidden;
+        }
+        .gselect-menu-body--animate-out {
+          animation: gselect-body-out 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
 
         .gselect-menu-portal {
@@ -10630,15 +10642,30 @@ export default function App() {
           border-color: rgba(255,255,255,0.05) !important;
         }
 
-        .gselect-menu-portal {
+        .gselect-menu-portal:not(.nl-lens-menu) {
           border-radius: 24px !important;
         }
-        .gselect-menu-portal.glass-float {
+        .gselect-menu-portal.glass-float:not(.nl-lens-menu) {
           border-color: rgba(255,255,255,0.04) !important;
           backdrop-filter: blur(22px) saturate(3.25) !important;
           -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
           background-color: rgba(255,255,255,0.008) !important;
           background-image: none !important;
+        }
+        .nl-lens-menu.gselect-menu-portal,
+        .nl-lens-menu.glass-float {
+          position: relative;
+          isolation: isolate;
+          border-radius: 28px !important;
+          border-color: rgba(255,255,255,0.05) !important;
+          backdrop-filter: blur(24px) saturate(2.85) !important;
+          -webkit-backdrop-filter: blur(24px) saturate(2.85) !important;
+          background-color: rgba(255,255,255,0.028) !important;
+          background-image: none !important;
+          box-shadow:
+            inset 0 -16px 28px rgba(70, 130, 180, 0.045),
+            0 12px 32px -10px rgba(0,0,0,0.14),
+            0 24px 56px -18px rgba(0,0,0,0.10) !important;
         }
 
         .gselect-menu-portal .gselect-option {
@@ -10657,6 +10684,7 @@ export default function App() {
         /* GSelect portal ? identical liquid glass tokens as .app-topbar-glass (transform anim on inner body only ? keeps backdrop-filter) */
         @media (prefers-reduced-motion: reduce) {
           .gselect-menu-body--animate,
+          .gselect-menu-body--animate-out,
           .gselect-chevron,
           .sidebar-shell::before,
           .glass-float::before,
@@ -10670,13 +10698,19 @@ export default function App() {
         }
 
         html.nl-touch .sidebar-shell,
-        html.nl-touch .glass-float {
+        html.nl-touch .glass-float:not(.nl-lens-menu) {
           backdrop-filter: blur(22px) saturate(3.25) !important;
           -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
           background-color: rgba(255,255,255,0.008) !important;
           box-shadow:
             inset 0 -18px 32px rgba(70, 130, 180, 0.06),
             0 22px 52px -26px rgba(0,0,0,0.28) !important;
+        }
+        html.nl-touch .nl-lens-menu.glass-float,
+        html.nl-touch .nl-lens-menu.gselect-menu-portal {
+          backdrop-filter: blur(24px) saturate(2.85) !important;
+          -webkit-backdrop-filter: blur(24px) saturate(2.85) !important;
+          background-color: rgba(255,255,255,0.028) !important;
         }
         html.nl-touch .content-shell {
           backdrop-filter: none !important;
@@ -10737,26 +10771,26 @@ export default function App() {
                   role="dialog"
                   aria-modal="true"
                   aria-label="Actions menu"
-                  className={`gselect-menu-portal app-topbar-glass glass-float overflow-hidden ${SIDEBAR_CLS}`}
-                  initial={{ opacity: 0, y: -10, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.97 }}
-                  transition={NL_SPRING_SNAPPY}
+                  className={`nl-lens-menu gselect-menu-portal glass-float overflow-hidden ${GLASS_PANEL_CLS}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={NL_TWEEN_OVERLAY}
                   style={{
                     position: "absolute",
                     top: moreMenuPos.top,
                     left: moreMenuPos.left == null ? "auto" : moreMenuPos.left,
                     right: moreMenuPos.left == null ? 12 : "auto",
                     width: moreMenuPos.width,
+                    maxWidth: "min(320px, calc(100vw - 24px))",
                     maxHeight: "min(78vh, calc(100dvh - 72px))",
-                    borderRadius: 24,
+                    borderRadius: 28,
                     boxShadow: FLOAT_M,
                     transformOrigin: "top right",
-                    willChange: "transform, opacity",
                     zIndex: 1,
                   }}
                 >
-                  <div className="flex flex-col max-h-full overflow-y-auto overscroll-contain px-2 py-1">
+                  <div className="gselect-menu-body gselect-menu-body--animate flex flex-col max-h-full overflow-y-auto overscroll-contain px-2 py-1">
                     <TopBarActions inMenu={true} />
                   </div>
                 </motion.div>
@@ -10778,23 +10812,22 @@ export default function App() {
                   role="dialog"
                   aria-modal="true"
                   aria-label="Actions menu"
-                  className="absolute left-0 right-0 bottom-0 px-3"
-                  initial={{ y: "42vh" }}
-                  animate={{ y: 0 }}
-                  exit={{ y: "42vh" }}
-                  transition={NL_SPRING_SHEET}
+                  className="absolute right-3 bottom-0 w-[min(320px,calc(100vw-24px))]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={NL_TWEEN_OVERLAY}
                   style={{
                     maxHeight: "min(78vh, calc(100dvh - env(safe-area-inset-top, 0px) - 72px))",
                     paddingBottom: "max(12px, env(safe-area-inset-bottom, 0px))",
-                    willChange: "transform",
                   }}
                 >
                   <div
-                    className={`gselect-menu-portal app-topbar-glass glass-float flex flex-col max-h-full overflow-hidden ${SIDEBAR_CLS}`}
+                    className={`nl-lens-menu gselect-menu-portal glass-float flex flex-col max-h-full overflow-hidden ${GLASS_PANEL_CLS}`}
                     style={{ borderRadius: 28, boxShadow: FLOAT_M }}
                   >
                     <div
-                      className="flex-1 min-h-0 px-2 pt-2 pb-2 overflow-y-auto overscroll-contain"
+                      className="gselect-menu-body gselect-menu-body--animate flex-1 min-h-0 px-2 pt-2 pb-2 overflow-y-auto overscroll-contain"
                       style={{
                         paddingBottom: "max(12px, calc(12px + env(safe-area-inset-bottom, 0px) * 0.35))",
                       }}

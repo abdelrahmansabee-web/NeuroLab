@@ -26,8 +26,12 @@ describe("SessionStatusBar", () => {
     fireEvent.click(screen.getByRole("button", { name: /incomplete/i }));
     const panel = screen.getByRole("dialog", { name: /sessions/i });
     expect(panel.className).toMatch(/gselect-menu-portal/);
-    expect(panel.className).toMatch(/app-topbar-glass/);
+    expect(panel.className).toMatch(/nl-lens-menu/);
     expect(panel.className).toMatch(/glass-float/);
-    expect(panel.className).toMatch(/rounded-\[24px\]/);
+    expect(panel.className).toMatch(/rounded-\[28px\]/);
+    expect(panel.className).not.toMatch(/app-topbar-glass/);
+    const body = panel.querySelector(".gselect-menu-body");
+    expect(body).toBeTruthy();
+    expect(body.className).toMatch(/gselect-menu-body--animate/);
   });
 });

@@ -43,6 +43,13 @@ export const NL_TWEEN_MENU = {
   ease: NL_IOS_EASE,
 };
 
+/** Menu / Recalling hide — same curve as gselect-body-in, shorter. */
+export const NL_TWEEN_MENU_EXIT = {
+  type: "tween",
+  duration: 0.28,
+  ease: NL_IOS_EASE,
+};
+
 /** Section pane enter/exit — ease-out, no spring overshoot */
 export const NL_TWEEN_SECTION = {
   type: "tween",

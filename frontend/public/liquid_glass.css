@@ -3,14 +3,14 @@
 .sidebar-shell {
   border-radius: 36px !important;
 }
-.app-topbar-glass,
+.app-topbar-glass:not(.gselect-menu-portal):not(.nl-lens-menu):not([role="dialog"]),
 .section-header {
   border-radius: 999px !important;
 }
 .content-panel-glass {
   border-radius: 32px !important;
 }
-.gselect-menu-portal {
+.gselect-menu-portal:not(.nl-lens-menu):not([role="dialog"]) {
   border-radius: 24px !important;
 }
 .gselect-trigger-shell,
@@ -24,9 +24,9 @@ textarea {
 }
 
 .sidebar-shell,
-.glass-float,
-.app-topbar-glass,
-.gselect-menu-portal {
+.glass-float:not(.nl-lens-menu):not([role="dialog"]),
+.app-topbar-glass:not(.gselect-menu-portal):not(.nl-lens-menu):not([role="dialog"]),
+.gselect-menu-portal:not(.nl-lens-menu):not([role="dialog"]) {
   position: relative;
   isolation: isolate;
   border-color: rgba(255, 255, 255, 0.04) !important;
@@ -66,7 +66,7 @@ textarea {
 }
 
 html.nl-touch .sidebar-shell,
-html.nl-touch .glass-float {
+html.nl-touch .glass-float:not(.nl-lens-menu):not([role="dialog"]) {
   backdrop-filter: blur(22px) saturate(3.25) !important;
   -webkit-backdrop-filter: blur(22px) saturate(3.25) !important;
   background-color: rgba(255, 255, 255, 0.008) !important;
@@ -142,12 +142,115 @@ button[class*="bg-teal-500"] {
   border-radius: 999px;
 }
 
+/* Compact glass lens — 3-dot Actions + Recalling. Transform stays off the glass. */
+@keyframes gselect-body-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+@keyframes gselect-body-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0) scale(0.97);
+  }
+}
+.gselect-menu-body--animate {
+  animation: gselect-body-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.gselect-menu-body--animate-out {
+  animation: gselect-body-out 0.28s cubic-bezier(0.22, 1, 0.36, 1) both !important;
+}
+
+.nl-lens-menu,
+[role="dialog"][aria-label="Actions menu"],
+[role="dialog"][aria-label="Loaded sessions"],
+[role="dialog"][aria-label="Sessions recalled from Drive"] {
+  border-radius: 28px !important;
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  background-color: rgba(255, 255, 255, 0.028) !important;
+  background-image: none !important;
+  backdrop-filter: blur(24px) saturate(2.85) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(2.85) !important;
+  box-shadow:
+    inset 0 -16px 28px rgba(70, 130, 180, 0.045),
+    0 12px 32px -10px rgba(0, 0, 0, 0.14),
+    0 24px 56px -18px rgba(0, 0, 0, 0.10) !important;
+}
+
+[role="dialog"][aria-label="Actions menu"] {
+  left: auto !important;
+  right: 12px !important;
+  width: min(320px, calc(100vw - 24px)) !important;
+  max-width: min(320px, calc(100vw - 24px)) !important;
+  transform: none !important;
+}
+
+[role="dialog"][aria-label="Actions menu"] .app-topbar-glass,
+[role="dialog"][aria-label="Actions menu"] .gselect-menu-portal,
+[role="dialog"][aria-label="Actions menu"] .glass-float,
+[role="dialog"][aria-label="Actions menu"] .nl-lens-menu {
+  border-radius: 28px !important;
+  background-color: rgba(255, 255, 255, 0.028) !important;
+  backdrop-filter: blur(24px) saturate(2.85) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(2.85) !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+[role="dialog"][aria-label="Loaded sessions"],
+[role="dialog"][aria-label="Sessions recalled from Drive"] {
+  transform: none !important;
+}
+
+[role="dialog"][aria-label="Loaded sessions"] .gselect-menu-body:not(.gselect-menu-body--animate-out),
+[role="dialog"][aria-label="Sessions recalled from Drive"] .gselect-menu-body:not(.gselect-menu-body--animate-out),
+[role="dialog"][aria-label="Actions menu"].gselect-menu-portal > div:not(.gselect-menu-body--animate-out),
+[role="dialog"][aria-label="Actions menu"] .gselect-menu-portal > div:not(.gselect-menu-body--animate-out) {
+  animation: gselect-body-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gselect-menu-body--animate,
+  .gselect-menu-body--animate-out,
+  [role="dialog"][aria-label="Loaded sessions"] .gselect-menu-body,
+  [role="dialog"][aria-label="Sessions recalled from Drive"] .gselect-menu-body,
+  [role="dialog"][aria-label="Actions menu"].gselect-menu-portal > div,
+  [role="dialog"][aria-label="Actions menu"] .gselect-menu-portal > div {
+    animation: none !important;
+  }
+}
+
+html.nl-touch .nl-lens-menu,
+html.nl-touch [role="dialog"][aria-label="Actions menu"],
+html.nl-touch [role="dialog"][aria-label="Loaded sessions"],
+html.nl-touch [role="dialog"][aria-label="Sessions recalled from Drive"] {
+  backdrop-filter: blur(24px) saturate(2.85) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(2.85) !important;
+  background-color: rgba(255, 255, 255, 0.028) !important;
+}
+
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .sidebar-shell,
   .glass-float,
   .app-topbar-glass,
   .content-panel-glass,
   .gselect-menu-portal,
+  .nl-lens-menu,
+  [role="dialog"][aria-label="Actions menu"],
+  [role="dialog"][aria-label="Loaded sessions"],
+  [role="dialog"][aria-label="Sessions recalled from Drive"],
   .validation-metrics-gutter,
   .validation-player-controls,
   .validation-player-topbar,
