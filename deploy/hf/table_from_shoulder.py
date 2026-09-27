@@ -1,6 +1,6 @@
-"""Table Y lock: halfway from the rest shoulder to the bottom of the frame."""
+"""Table Y lock: 37.5 percent of the span from the rest shoulder to the frame bottom."""
 
-TABLE_BELOW_SHOULDER_RATIO = 0.5
+TABLE_BELOW_SHOULDER_RATIO = 0.375
 
 
 def table_y_from_shoulder_ratio(shoulder_y, ratio=TABLE_BELOW_SHOULDER_RATIO):

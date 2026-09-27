@@ -436,7 +436,7 @@ label[for^="kin-file-"]:has(.kin-film-strip) {
 }
 @media (prefers-reduced-motion: reduce) {
   .nl-cradle__gif {
-    content: url("/static/kin-run/cradle-still.png?v=32.372p");
+    content: url("/static/kin-run/cradle-still.png?v=32.372q");
   }
   .kin-film-strip__track,
   .kin-liquid-orb__blob,

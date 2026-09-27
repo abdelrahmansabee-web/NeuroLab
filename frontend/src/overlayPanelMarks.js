@@ -20,7 +20,7 @@ const TRUNK = "rgba(250,204,21,0.92)";
 const SHOULDER = "rgba(245,158,11,0.9)";
 
 /** Table sits this fraction of the way from the rest shoulder to the bottom of the frame. */
-export const TABLE_BELOW_SHOULDER_RATIO = 0.5;
+export const TABLE_BELOW_SHOULDER_RATIO = 0.375;
 
 export function tableYFromShoulderRatio(shoulderY, ratio = TABLE_BELOW_SHOULDER_RATIO) {
   const sy = Number(shoulderY);

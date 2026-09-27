@@ -84,7 +84,7 @@ test("trunk arrow length is horizontal Δx only (same as panel trunkDisp)", () =
   expect(t.dx).toBeCloseTo(overlay.frames[14].trunk[0] - overlay.frames[4].trunk[0], 8);
 });
 
-test("table line is halfway from the rest shoulder to the bottom of the frame", () => {
+test("table line is 37.5 percent from the rest shoulder to the bottom of the frame", () => {
   const overlay = makeOverlay();
   const line = tableLineUnderShoulder(overlay, {
     shoulder: [0.32 * 200, 0.24 * 100],
@@ -94,9 +94,9 @@ test("table line is halfway from the rest shoulder to the bottom of the frame", 
     ch: 100,
     shoulderWidthPx: 40,
   });
-  expect(tableYFromShoulderRatio(0.24)).toBeCloseTo(0.62, 8);
-  expect(tableYFromShoulderRatio(0.30)).toBeCloseTo(0.65, 8);
-  expect(line.y).toBeCloseTo(0.62 * 100, 8);
+  expect(tableYFromShoulderRatio(0.24)).toBeCloseTo(0.525, 8);
+  expect(tableYFromShoulderRatio(0.30)).toBeCloseTo(0.5625, 8);
+  expect(line.y).toBeCloseTo(0.525 * 100, 8);
   expect(line.x).toBeCloseTo(0.32 * 200, 8);
   expect(line.x0).toBeLessThan(line.x);
   expect(line.x1).toBeGreaterThan(line.x);
@@ -112,11 +112,11 @@ test("table_edge_y is sampled at the shoulder x, not a full-frame median", () =>
   expect(tableSurfaceYAtX(overlay, 0.5)).toBeCloseTo(0.60, 8);
 });
 
-test("without a table edge, rest y is 50 percent below the rest shoulder", () => {
+test("without a table edge, rest y is 37.5 percent below the rest shoulder", () => {
   const overlay = makeOverlay();
-  expect(resolveShoulderRestY(overlay, overlay.frames, 4)).toBeCloseTo(0.62, 8);
+  expect(resolveShoulderRestY(overlay, overlay.frames, 4)).toBeCloseTo(0.525, 8);
   const noTable = { ...overlay, table_surface_y: null };
-  expect(resolveShoulderRestY(noTable, overlay.frames, 4)).toBeCloseTo(0.62, 8);
+  expect(resolveShoulderRestY(noTable, overlay.frames, 4)).toBeCloseTo(0.525, 8);
 });
 
 test("a table edge on the chest snaps down to the resting palm", () => {
@@ -149,7 +149,7 @@ test("gold table mark follows the live shoulder x and keeps table Y", () => {
   });
   expect(live.x / 200).toBeCloseTo(0.55, 8);
   expect(live.colX / 200).toBeCloseTo(0.55, 8);
-  expect(live.y).toBeCloseTo(0.62 * 100, 8);
+  expect(live.y).toBeCloseTo(0.525 * 100, 8);
 });
 
 test("drink occlusion does not drop the shoulder height mark", () => {
@@ -192,7 +192,7 @@ test("shoulder column sticks to the live skeleton landmark, table Y stays put", 
   expect(down.y).toBeCloseTo(0.86 * 100, 8);
 });
 
-test("cream and frozen table Y do not move the 50 percent shoulder lock", () => {
+test("cream and frozen table Y do not move the shoulder-ratio lock", () => {
   const overlay = makeOverlay();
   overlay.table_under_shoulder = { x: 0.30, y: 0.48 };
   overlay.table_surface_y = 0.48;
@@ -208,7 +208,7 @@ test("cream and frozen table Y do not move the 50 percent shoulder lock", () => 
     0.67,
     null,
   );
-  expect(pt.y).toBeCloseTo(0.62, 8);
+  expect(pt.y).toBeCloseTo(0.525, 8);
 });
 
 test("a clinician table mark sits where it was placed, not on the chair", () => {
@@ -222,7 +222,7 @@ test("a clinician table mark sits where it was placed, not on the chair", () => 
   expect(pt.y).toBeCloseTo(0.86, 8);
 });
 
-test("cup base does not override the 50 percent shoulder lock", () => {
+test("cup base does not override the shoulder-ratio lock", () => {
   const overlay = makeOverlay();
   overlay.table_surface_y = 0.55;
   overlay.table_under_shoulder = { x: 0.72, y: 0.55 };
@@ -234,11 +234,11 @@ test("cup base does not override the 50 percent shoulder lock", () => {
   overlay.frames[4].lshoulder = [0.72, 0.40];
   overlay.cup = { x: 0.14, x0: 0.10, x1: 0.18, y_top: 0.62, y_base: 0.88 };
   const pt = tablePointUnderShoulder(overlay, overlay.frames, 4, 10);
-  expect(pt.y).toBeCloseTo(0.62, 8);
+  expect(pt.y).toBeCloseTo(0.525, 8);
   expect(pt.x).toBeCloseTo(0.32, 8);
 });
 
-test("table mark stays 50 percent below the rest shoulder, not on a cream band", () => {
+test("table mark stays on the shoulder-ratio lock, not on a cream band", () => {
   const overlay = makeOverlay();
   overlay.table_surface_y = 0.55;
   overlay.table_under_shoulder = { x: 0.72, y: 0.55 };

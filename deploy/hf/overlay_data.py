@@ -20,7 +20,7 @@ from table_calibrator import find_video_for_csv
 from hl_overlay_resample import MAX_HL_POSE_WRIST, resample_with_max_gap, smooth_xy_zero_phase
 from pose_xyz_fill import overlay_blank_unseen_wrist, overlay_hide_unseen, resample_visibility
 
-OVERLAY_VERSION = 55
+OVERLAY_VERSION = 56
 
 # Shown on validation overlay (reach window + optional ADL transport phase).
 OVERLAY_JOINT_METRIC_KEYS = (
@@ -494,7 +494,7 @@ def _is_seated_table_y(y: Optional[float]) -> bool:
     return y is not None and np.isfinite(y) and 0.56 <= float(y) <= 0.90
 
 
-TABLE_BELOW_SHOULDER_RATIO = 0.5
+TABLE_BELOW_SHOULDER_RATIO = 0.375
 
 
 def table_y_from_shoulder_ratio(
