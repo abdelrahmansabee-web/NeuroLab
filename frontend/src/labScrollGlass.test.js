@@ -73,11 +73,11 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   const auth = fs.readFileSync(path.join(__dirname, "AuthGate.jsx"), "utf8");
   expect(auth).toMatch(/fetch\("\/auth\/me", \{ credentials: "same-origin", headers: authHeaders\(\) \}\)/);
   expect(auth).not.toMatch(/AbortController/);
-  expect(html).toMatch(/nl-version" content="32\.372o"/);
+  expect(html).toMatch(/nl-version" content="32\.372q"/);
   expect(html).toMatch(/nl_app_bust/);
   expect(html).toMatch(/location\.replace/);
   expect(html).toMatch(/_r=" \+ Date\.now\(\)/);
-  expect(html).toMatch(/static\/js\/main\.48f76699\.js\?v=32\.372b/);
+  expect(html).toMatch(/static\/js\/main\.48f76699\.js\?v=32\.372q/);
   expect(html).toMatch(/static\/css\/main\.2c1ebbfb\.css/);
   expect(html).toMatch(/function pin\(\)/);
   expect(html).not.toMatch(/rel="preload"/);
@@ -103,7 +103,7 @@ test("analysis stage capsule is muted glass and keeps the film-strip motion", ()
   expect(html).not.toMatch(/__nlAuthMeTimeout/);
   expect(html).not.toMatch(/function ensureOrbit/);
   expect(sync).not.toMatch(/_iosbust=/);
-  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.372o"/);
+  expect(fs.readFileSync(path.join(__dirname, "..", "public", "manifest.json"), "utf8")).toMatch(/"start_url": "\.\/\?_v=32\.372q"/);
 });
 
 test("Home Screen boot matches the 32.348 cache bust", () => {
@@ -116,7 +116,7 @@ test("Home Screen boot matches the 32.348 cache bust", () => {
   function runBoot(store, nav) {
     const replaced = [];
     vm.runInNewContext(match[1], {
-      document: { querySelector: () => ({ content: "32.372o" }) },
+      document: { querySelector: () => ({ content: "32.372q" }) },
       localStorage: {
         getItem: (k) => (Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null),
         setItem: (k, v) => {
@@ -140,7 +140,7 @@ test("Home Screen boot matches the 32.348 cache bust", () => {
   }
   const desktop = {};
   expect(runBoot(desktop, { userAgent: "Mozilla/5.0", platform: "MacIntel", maxTouchPoints: 0, standalone: false })).toEqual([]);
-  expect(desktop.nl_app_v).toBe("32.372o");
+  expect(desktop.nl_app_v).toBe("32.372q");
   expect(desktop.nl_app_bust).toBeUndefined();
   const ipadStale = { nl_app_v: "32.372n", nl_app_bust: "32.372n" };
   const replaced = runBoot(ipadStale, {
@@ -150,10 +150,10 @@ test("Home Screen boot matches the 32.348 cache bust", () => {
     standalone: true,
   });
   expect(replaced).toHaveLength(1);
-  expect(replaced[0]).toMatch(/^\/\?_v=32\.372o&_r=\d+$/);
-  expect(ipadStale.nl_app_v).toBe("32.372o");
-  expect(ipadStale.nl_app_bust).toBe("32.372o");
-  const ipadFresh = { nl_app_v: "32.372o", nl_app_bust: "32.372o" };
+  expect(replaced[0]).toMatch(/^\/\?_v=32\.372q&_r=\d+$/);
+  expect(ipadStale.nl_app_v).toBe("32.372q");
+  expect(ipadStale.nl_app_bust).toBe("32.372q");
+  const ipadFresh = { nl_app_v: "32.372q", nl_app_bust: "32.372q" };
   expect(runBoot(ipadFresh, {
     userAgent: "Mozilla/5.0 (iPad)",
     platform: "iPad",
